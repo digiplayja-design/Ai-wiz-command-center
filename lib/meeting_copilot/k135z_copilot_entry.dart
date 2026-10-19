@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
+import '../auth/korlix_session_refresh.dart' show korlixSessionIdentity;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'k135z_zoom_runtime_binding.dart';
 import 'korlix_meeting_copilot_access.dart';
@@ -23,7 +24,7 @@ class K135zCopilotEntry extends StatefulWidget {
 }
 
 class _K135zCopilotEntryState extends State<K135zCopilotEntry> {
-  late final http.Client _client = widget.client ?? http.Client();
+  late final http.Client _client = widget.client ?? http.createClient();
   K135zZoomLaunch? _launch, _incoming;
   List<Map<String, String>> _agents = [];
   String? _preferenceKey, _authorization;
@@ -49,19 +50,25 @@ class _K135zCopilotEntryState extends State<K135zCopilotEntry> {
     try { return K135zZoomLaunch.authorization(widget.headersBuilder()); }
     catch (_) { return null; }
   }
+  String? _sessionIdentity(String? authorization) => authorization == null
+      ? null : korlixSessionIdentity(authorization.substring(7));
   bool _current(int epoch, String authorization) => mounted && epoch == _epoch &&
-    _currentAuthorization() == authorization;
+    _sessionIdentity(_currentAuthorization()) == _sessionIdentity(authorization);
   void _authChanged() {
-    if (_currentAuthorization() != _authorization) unawaited(_restore());
+    if (_sessionIdentity(_currentAuthorization()) != _sessionIdentity(_authorization)) unawaited(_restore());
   }
   Future<Map<String, dynamic>> _read(String path, String authorization) async {
     final base = widget.backendBaseUri;
     if (base.scheme != 'https' || base.host.isEmpty || base.userInfo.isNotEmpty) throw StateError('Invalid backend');
+    final currentAuthorization = _currentAuthorization();
+    if (currentAuthorization == null || _sessionIdentity(currentAuthorization) != _sessionIdentity(authorization)) {
+      throw StateError('Session changed');
+    }
     final req = http.Request('GET', base.resolve(path))..followRedirects = false;
     req.headers.addAll({
       for (final entry in widget.headersBuilder().entries)
         if (entry.key.toLowerCase() != 'authorization') entry.key: entry.value,
-      'Authorization': authorization,
+      'Authorization': currentAuthorization,
     });
     final res = await _client.send(req).then(http.Response.fromStream).timeout(const Duration(seconds: 15));
     if (res.statusCode != 200 || res.bodyBytes.length > 2 * 1024 * 1024) throw StateError('Request unavailable');
@@ -105,7 +112,7 @@ class _K135zCopilotEntryState extends State<K135zCopilotEntry> {
       if (!_current(epoch, authorization)) return;
       final incoming = _incoming;
       final preferred = incoming?.current == true &&
-          K135zZoomLaunch.authorization(incoming!.headersBuilder()) == authorization
+          _sessionIdentity(K135zZoomLaunch.authorization(incoming!.headersBuilder())) == _sessionIdentity(authorization)
           ? incoming.agentId : saved;
       _incoming = null;
       setState(() {

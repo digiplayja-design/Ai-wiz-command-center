@@ -18,6 +18,11 @@ if (( next <= source_build )); then
   exit 1
 fi
 
+# Also validate a direct release build, including an explicit public client
+# file. Missing optional configuration preserves the no-FCM build path.
+python3 scripts/prepare-android-firebase.py "$PWD" "$PWD"
+python3 -m unittest discover -s scripts -p 'test_prepare_android_firebase.py'
+
 # Authentication uses compile-time Flutter settings. Preserve the existing
 # public client configuration; never put a Supabase service-role key in an app.
 defines_file="$(mktemp)"
@@ -58,7 +63,17 @@ pathlib.Path(sys.argv[1]).write_text(json.dumps(config))
 PY
 
 flutter pub get
+flutter analyze lib/analytics lib/onboarding lib/auth/korlix_signup_presentation.dart lib/auth/korlix_entry_welcome.dart lib/auth/korlix_entry_intro.dart lib/auth/korlix_entry_intro_controller.dart lib/billing/korlix_plan_prompt.dart test/korlix_onboarding_test.dart test/registration_discovery_test.dart test/korlix_entry_intro_test.dart
+flutter test test/korlix_onboarding_test.dart test/registration_discovery_test.dart test/korlix_entry_intro_test.dart test/auth_welcome_test.dart test/auth_remember_login_test.dart test/auth_october_integration_test.dart test/signup_eligibility_test.dart test/auth_device_session_test.dart
+flutter analyze lib/auth/korlix_session_refresh.dart lib/auth/korlix_http.dart test/auth/korlix_session_refresh_test.dart test/auth/korlix_http_test.dart
+flutter test test/auth/korlix_session_refresh_test.dart test/auth/korlix_http_test.dart test/meeting_copilot/k135z_copilot_entry_test.dart test/meeting_copilot/k135z_zoom_runtime_binding_test.dart
 flutter analyze lib/billing/korlix_apple_billing.dart test/google_play_billing_test.dart
 flutter test test/apple_billing_test.dart test/google_play_billing_test.dart test/web_billing_test.dart
+flutter analyze lib/navigation/home_tool_catalog.dart test/home_tool_catalog_test.dart test/home_navigation_test.dart
+flutter test test/home_tool_catalog_test.dart test/home_navigation_test.dart
+flutter test test/fixed_plan_bar_test.dart test/rici_background_audio_test.dart test/k136s_f5_live_convo_integration_test.dart test/korlix_smoke_screensaver_test.dart test/social_communication_upgrade_test.dart
+# Match CI: style-only informational lints are nonfatal; errors/warnings fail.
+flutter analyze --no-fatal-infos lib/social/social_native_bridge.dart lib/social/social_native_actions.dart lib/social/social_push_native.dart lib/social/social_floating_chat.dart lib/social/social_notification_settings.dart test/social_native_actions_test.dart test/social_native_routing_test.dart test/social_native_settings_test.dart test/social_floating_chat_test.dart test/auth/korlix_token_store_test.dart
+flutter test test/social_native_actions_test.dart test/social_native_routing_test.dart test/social_native_settings_test.dart test/social_floating_chat_test.dart test/auth/korlix_token_store_test.dart
 flutter build appbundle --release --build-name="${version%%+*}" --build-number="$next" --dart-define-from-file="$defines_file"
 echo "Built Android version ${version%%+*} ($next). Upload build/app/outputs/bundle/release/app-release.aab to Internal testing."

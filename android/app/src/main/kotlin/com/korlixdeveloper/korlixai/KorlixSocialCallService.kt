@@ -9,9 +9,13 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.media.MediaMetadata
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
 
 /** Holds an explicitly started call, never starts capture or answers a call. */
 class KorlixSocialCallService : Service() {
+    private var mediaSession: MediaSession? = null
     companion object {
         const val CHANNEL = "korlix_social_active_call"
         const val NOTIFICATION = 4815
@@ -33,21 +37,38 @@ class KorlixSocialCallService : Service() {
             return START_NOT_STICKY
         }
         try {
+            val rici = intent.getStringExtra("kind") == "rici"
+            val channel = if (rici) "korlix_rici_voice" else CHANNEL
             val manager = getSystemService(NotificationManager::class.java)
             if (Build.VERSION.SDK_INT >= 26) {
-                manager.createNotificationChannel(NotificationChannel(CHANNEL, "Active Social calls", NotificationManager.IMPORTANCE_LOW))
+                manager.createNotificationChannel(NotificationChannel(channel, if (rici) "Rici voice conversations" else "Active Social calls", NotificationManager.IMPORTANCE_LOW))
             }
             val open = Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             val openIntent = PendingIntent.getActivity(this, 4815, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
             val end = Intent(this, KorlixSocialCallService::class.java).setAction("stop").putExtra("id", id)
             val endIntent = PendingIntent.getService(this, 4816, end, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-            val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, CHANNEL) else Notification.Builder(this)
+            val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, channel) else Notification.Builder(this)
+            if (rici) {
+                mediaSession?.release()
+                mediaSession = MediaSession(this, "KorlixRici").apply {
+                    setCallback(object : MediaSession.Callback() {
+                        override fun onStop() { stopSelf() }
+                        override fun onPause() { stopSelf() }
+                    })
+                    setMetadata(MediaMetadata.Builder().putString(MediaMetadata.METADATA_KEY_TITLE, "Rici live voice").build())
+                    setPlaybackState(PlaybackState.Builder()
+                        .setActions(PlaybackState.ACTION_STOP or PlaybackState.ACTION_PAUSE)
+                        .setState(PlaybackState.STATE_PLAYING, PlaybackState.PLAYBACK_POSITION_UNKNOWN, 1f).build())
+                    isActive = true
+                }
+                builder.setStyle(Notification.MediaStyle().setMediaSession(mediaSession!!.sessionToken).setShowActionsInCompactView(0))
+            }
             val notification = builder.setSmallIcon(android.R.drawable.sym_action_call)
-                .setContentTitle("KORLIX call in progress")
-                .setContentText("Audio call active. Tap to return to KORLIX.")
+                .setContentTitle(if (rici) "Rici voice is active" else "KORLIX call in progress")
+                .setContentText(if (rici) "Voice conversation continues with the screen locked." else "Audio call active. Tap to return to KORLIX.")
                 .setContentIntent(openIntent).setOngoing(true).setCategory(Notification.CATEGORY_CALL)
                 .setVisibility(Notification.VISIBILITY_PRIVATE)
-                .addAction(Notification.Action.Builder(null, "End call", endIntent).build()).build()
+                .addAction(Notification.Action.Builder(android.R.drawable.ic_media_pause, if (rici) "Stop voice" else "End call", endIntent).build()).build()
             if (Build.VERSION.SDK_INT >= 30) {
                 startForeground(NOTIFICATION, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
             } else if (Build.VERSION.SDK_INT >= 29) {
@@ -64,6 +85,8 @@ class KorlixSocialCallService : Service() {
     }
     override fun onTaskRemoved(rootIntent: Intent?) { stopSelf(); super.onTaskRemoved(rootIntent) }
     override fun onDestroy() {
+        mediaSession?.release()
+        mediaSession = null
         val id = activeId
         activeId = null
         if (id != null) authorized.remove(id)

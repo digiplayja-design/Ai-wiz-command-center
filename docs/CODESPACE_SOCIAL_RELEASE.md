@@ -1,0 +1,155 @@
+# Build KORLIX Social, session renewal and signup branding, then save the AAB in your browser
+
+This handoff builds application commit
+`728c43d50b4a6d4f265950b58e23a161cae8ee8d`, which changes the signup
+confirmation instructions to match the KORLIX AI sender and email subject.
+The copy change and existing test assertion were reviewed, and `git diff --check`
+passed. Flutter was unavailable locally; automated validation for this revision
+has not yet been confirmed.
+
+The earlier application baseline `d6e9251f433a6959fa03be42190b1ad9ca4697ea`
+passed validation run
+[39145471909](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/39145471909).
+For that earlier baseline, all 589 regression tests passed, plus the separate build-mode layout check;
+one existing optional visual test was skipped. Android arm64 debug builds passed
+with and without Firebase, and the unsigned iOS simulator build passed.
+Complete the signed-device checks below before store rollout; this does not
+establish a signed release or publication.
+The release script uses the same analyzer setting as CI: informational style
+messages are nonfatal, while analyzer errors and warnings still fail the build.
+
+Use the existing **super bassoon** Codespace. The command builds a separate
+detached worktree under `/tmp`, preserving your original workspace branch and
+local edits. It reuses the saved public Android client configuration at
+`$HOME/.config/korlix/android-build134.json` and your existing signing setup.
+
+This update adds Android 11+ **Keep this chat floating** for direct and group
+conversations, compact authenticated chat outside the main app, and native
+notification/reply support when the required providers are configured. The
+existing signup, fixed Upgrade/My Plan button and Rici voice changes remain.
+
+It also adds automatic login renewal across feature screens and uploads, retains
+credentials during temporary outages, and preserves active work during ordinary
+token rotation. The live server setting is now **12 hours of inactivity**, measured
+since the last session refresh. The app changes require installing this new build;
+they are not delivered by changing the server setting alone. See
+[the session release notes](AUTH_SESSION_12H_RELEASE.md).
+
+## Optional Firebase client file
+
+If `android/app/google-services.json` already exists in your original Codespace,
+the release helper automatically validates and copies it into the isolated build.
+No manual copying into the temporary worktree is needed. To use a public client
+file stored elsewhere, set `KORLIX_FIREBASE_ANDROID_CONFIG` to its absolute path
+in the terminal before pasting the block below. The file must belong to Android
+package `com.korlixdeveloper.korlixai`. Invalid files and service-account/private
+credentials are rejected without printing their contents.
+
+**Without this optional Firebase client file, you can still test pinning and
+using the floating chat. The build cannot receive new background push alerts.**
+An expanded bubble can load messages through the existing authenticated chat
+API; a collapsed bubble does not continuously poll. Receiving background pushes
+also needs the companion backend's native-push migration, provider credentials
+and deployment. See [the release guide](SOCIAL_FLOATING_CHAT_RELEASE.md).
+
+## One paste: signed build and browser download
+
+First check the highest version code in **all Google Play tracks and drafts**.
+The last user-provided Play Console screenshot showed production build **138**; verify the current highest Play
+code instead of assuming that number. The command asks for it and builds the
+next code. If the highest Play code is 138, the resulting file is KORLIX-139.aab.
+
+Paste the entire block into the Codespace **Terminal**:
+
+```bash
+env -u BASH_ENV -u ENV bash --noprofile --norc <<'KORLIX_SOCIAL_BUILD_AND_SAVE'
+unset -f cd pushd popd 2>/dev/null || true
+set -euo pipefail
+umask 077
+builtin cd /workspaces/Ai-wiz-command-center
+export KORLIX_ANDROID_BUILD_PARENT=/tmp
+export KORLIX_ANDROID_DEFINES_FILE="$HOME/.config/korlix/android-build134.json"
+if [[ ! -r "$KORLIX_ANDROID_DEFINES_FILE" ]]; then
+  echo 'The saved Android client configuration is missing.' >&2
+  exit 1
+fi
+KORLIX_RELEASE_REV=728c43d50b4a6d4f265950b58e23a161cae8ee8d
+read -r -p 'Highest version code in all Play tracks and drafts: ' KORLIX_HIGHEST </dev/tty
+if [[ ! "$KORLIX_HIGHEST" =~ ^[1-9][0-9]{0,9}$ ]] || (( 10#$KORLIX_HIGHEST >= 2100000000 )); then
+  echo 'Enter the highest version code verified in Play Console.' >&2
+  exit 1
+fi
+git -c gc.auto=0 fetch --no-auto-maintenance --no-tags --no-write-fetch-head \
+  https://github.com/digiplayja-design/Ai-wiz-command-center.git "$KORLIX_RELEASE_REV"
+KORLIX_BUILD_SCRIPT="$(mktemp /tmp/korlix-social-build.XXXXXX.sh)"
+trap 'rm -f "$KORLIX_BUILD_SCRIPT"' EXIT
+git show "$KORLIX_RELEASE_REV:scripts/prepare-google-play-billing-build.sh" > "$KORLIX_BUILD_SCRIPT"
+bash "$KORLIX_BUILD_SCRIPT" "$KORLIX_HIGHEST" "$KORLIX_RELEASE_REV"
+python3 - "$KORLIX_RELEASE_REV" "$KORLIX_HIGHEST" <<'KORLIX_SOCIAL_DOWNLOAD'
+from pathlib import Path
+import subprocess
+import sys
+
+revision, highest = sys.argv[1:]
+build = int(highest) + 1
+matches = []
+for source in Path('/tmp').glob(f'korlix-play-billing-{build}.*/source'):
+    bundle = source / 'build/app/outputs/bundle/release/app-release.aab'
+    head = subprocess.run(['git', '-C', str(source), 'rev-parse', 'HEAD'],
+                          capture_output=True, text=True)
+    if head.returncode == 0 and head.stdout.strip() == revision and bundle.is_file():
+        matches.append((bundle.stat().st_mtime_ns, source, bundle))
+if not matches:
+    raise SystemExit('No completed AAB for this exact source was found. Keep the build output.')
+_, source, bundle = max(matches, key=lambda item: item[0])
+subprocess.run([sys.executable, str(source / 'scripts/download-android-aab.py'),
+                str(bundle), '--build-number', str(build), '--port', '8790'], check=True)
+KORLIX_SOCIAL_DOWNLOAD
+KORLIX_SOCIAL_BUILD_AND_SAVE
+```
+
+The release script runs the existing checks plus the new Social/native tests,
+builds the signed AAB, and starts a server for that completed bundle. A failed
+check stops the block before it starts the download server. Keep the terminal
+open while the build is running.
+
+## Save from the iPad browser
+
+When the terminal says **Serving KORLIX-…aab**, leave it running:
+
+1. Open the Codespace **Ports** tab. Forward **8790** if it is not already listed.
+2. Keep the port visibility **Private**, then choose **Open in Browser**.
+3. Tap **Download KORLIX-…aab** and check the build number matches the terminal.
+4. Choose **Save to Files → Downloads → Save** on the iPad. If a preview opens,
+   use its Share menu and **Save to Files**.
+5. Wait for the file to finish saving before pressing **Ctrl+C** in the terminal.
+
+The helper serves only the selected AAB, not your source tree, signing files or
+backend credentials. Keep the Codespace running until the download finishes.
+
+## Internal testing before rollout
+
+Upload the saved AAB to **Internal testing** first. Install it on the Samsung
+and confirm that signup now says **Look for KORLIX AI**, identifies the subject
+**Confirm your KORLIX AI email address**, and recommends searching for
+**KORLIX AI**. With a test email address you control, check that the branded
+confirmation email arrives, its button confirms the account, and sign-in works.
+
+Verify a direct chat and group chat: choose **Keep this chat floating**,
+allow notifications/bubbles, switch to another app, expand, reply, collapse and
+dismiss. Check that logout/account switching invalidates old bubbles and actions.
+Recheck normal Social messages/calls and Rici lock-screen Mute/Stop behavior.
+
+Keep a signed-in session open across the one-hour access-token boundary, lock and
+unlock the device, and switch between feature screens. Verify that requests renew
+silently, temporary offline periods offer retry without losing the login, and
+explicit logout stays logged out after restart. Separately verify a return within
+twelve hours of the last refresh and expiry after twelve hours without refresh.
+An automated short test does not establish a twelve-hour physical-device run.
+
+For background-delivery tests, first confirm the Firebase client and companion
+backend setup are enabled. Then receive a message with KORLIX backgrounded,
+open its alert, and test one explicit notification reply without duplication.
+A successful Android AAB does not verify iPhone/iPad push delivery. iOS requires
+its separate APNs configuration and signed-device testing; video PiP is not
+included in this update.

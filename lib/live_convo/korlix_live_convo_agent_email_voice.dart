@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
 
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 
 typedef KorlixLiveConvoAgentEmailHeadersBuilder =
     Map<String, String> Function();
@@ -716,7 +716,7 @@ class KorlixLiveConvoAgentEmailVoiceClient {
     required this.headersBuilder,
     http.Client? client,
     this.timeout = const Duration(seconds: 45),
-  }) : _client = client ?? http.Client(),
+  }) : _client = client ?? http.createClient(),
        _ownsClient = client == null;
 
   final String backendBaseUrl;

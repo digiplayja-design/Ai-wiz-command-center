@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 
 import '../sounds/korlix_sound_actions.dart';
 import '../support/korlix_ai_report_client.dart';

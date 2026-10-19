@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../live_convo/agent_studio_client.dart'
     show agentAccountScope, agentStudioKey;
@@ -104,7 +104,7 @@ class ImagineClient extends ChangeNotifier {
     http.Client? client,
     ImagineRecipeStore? store,
     this.logoPollInterval = const Duration(seconds: 4),
-  }) : _http = client ?? http.Client(),
+  }) : _http = client ?? http.createClient(),
        _store = store ?? ImaginePreferences() {
     _scope = agentAccountScope(headersBuilder());
     _key =

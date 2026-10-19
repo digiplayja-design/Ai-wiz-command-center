@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 
 import 'korlix_live_convo_agent.dart';
 import '../theme/korlix_action_button.dart';

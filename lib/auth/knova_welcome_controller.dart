@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 import '../sounds/korlix_sound_service.dart';
 import 'knova_welcome_player.dart';
 
@@ -17,7 +17,7 @@ class KnovaWelcomeController extends ChangeNotifier {
     http.Client? client,
   }) : _url = Uri.parse('$backendBaseUrl/api/welcome/rici-v3.wav'),
        _player = player ?? createKnovaWelcomePlayer(),
-       _client = client ?? http.Client() {
+       _client = client ?? http.createClient() {
     sounds.addListener(_soundChanged);
   }
   final Uri _url;

@@ -1,0 +1,185 @@
+name: Isolated onboarding validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [fix/image-to-video-session-20261016]
+    paths:
+      - 'lib/**'
+      - 'android/app/src/main/**'
+      - 'android/app/src/fcm/**'
+      - 'android/app/src/noFcm/**'
+      - 'android/*.gradle.kts'
+      - 'android/app/*.gradle.kts'
+      - 'ios/Runner/**'
+      - 'assets/onboarding/**'
+      - 'test/**'
+      - 'pubspec.*'
+      - 'third_party/**'
+      - 'scripts/ci/validate-onboarding-offline.sh'
+      - '.github/workflows/onboarding-validation.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: onboarding-validation-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  flutter-checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      # Pinned to the verified Flutter stable ref on 2026-10-17.
+      FLUTTER_REVISION: abaf9c523780a608bd46686fd5e53740a07077f8
+      FLUTTER_RELEASE: '3.47.7'
+    steps:
+      - name: Block cloud metadata before SDK setup
+        shell: bash
+        run: |
+          set -euo pipefail
+          for network in 169.254.0.0/16 100.100.100.200/32; do
+            sudo iptables -I OUTPUT 1 -d "$network" -j REJECT
+            sudo iptables -C OUTPUT -d "$network" -j REJECT
+          done
+          for network in fe80::/10 fd00:ec2::254/128; do
+            sudo ip6tables -I OUTPUT 1 -d "$network" -j REJECT
+            sudo ip6tables -C OUTPUT -d "$network" -j REJECT
+          done
+          # Prove namespaces are supported before any Flutter command runs.
+          sudo unshare --net bash -c 'test -z "$(ip route show default)"'
+          echo 'Metadata firewall verified; no metadata endpoint was contacted.'
+
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Prepare pinned SDK and locked dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
+          export NO_PROXY='*' no_proxy='*'
+          sudo iptables -C OUTPUT -d 169.254.0.0/16 -j REJECT
+          sudo ip6tables -C OUTPUT -d fd00:ec2::254/128 -j REJECT
+          sdk="$RUNNER_TEMP/korlix-flutter"
+          git init "$sdk"
+          git -C "$sdk" remote add origin https://github.com/flutter/flutter.git
+          git -C "$sdk" fetch --depth=1 origin "refs/tags/$FLUTTER_RELEASE:refs/tags/$FLUTTER_RELEASE"
+          git -C "$sdk" checkout --detach "refs/tags/$FLUTTER_RELEASE"
+          test "$(git -C "$sdk" rev-parse HEAD)" = "$FLUTTER_REVISION"
+          export PATH="$sdk/bin:$PATH"
+          export PUB_CACHE="$RUNNER_TEMP/korlix-pub-cache"
+          printf '%s\n' "$sdk/bin" >> "$GITHUB_PATH"
+          printf 'PUB_CACHE=%s\n' "$PUB_CACHE" >> "$GITHUB_ENV"
+          flutter --suppress-analytics --no-version-check --version
+          flutter --suppress-analytics --no-version-check precache --linux --no-android --no-ios --no-web --no-macos --no-windows
+          flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
+          git diff --exit-code -- pubspec.lock
+
+      - name: Analyze and test with loopback-only networking
+        shell: bash
+        run: |
+          set -euo pipefail
+          # A fresh namespace has no external interface or route. The script
+          # verifies that boundary and drops root before invoking Flutter.
+          sudo unshare --net env PATH="$PATH" PUB_CACHE="$PUB_CACHE" \
+            bash scripts/ci/validate-onboarding-offline.sh "$(id -un)"
+
+      - name: Compile Android debug app without release credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Compile the platform channel, service and merged manifest too. No
+          # signing secrets, production definitions or install are required.
+          unset HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
+          export NO_PROXY='*' no_proxy='*'
+          sudo iptables -C OUTPUT -d 169.254.0.0/16 -j REJECT
+          sudo ip6tables -C OUTPUT -d fd00:ec2::254/128 -j REJECT
+          flutter --suppress-analytics --no-version-check precache --android --no-ios --no-web --no-linux --no-macos --no-windows
+          flutter --suppress-analytics --no-version-check build apk --debug --no-pub --target-platform android-arm64 2>&1 | tee validation-logs/android-debug-build.log
+
+      - name: Compile the optional FCM integration with a synthetic configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          trap 'rm -f android/app/google-services.json' EXIT
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          # Public-format compile fixture only; no live project or device token.
+          data = {
+            'project_info': {'project_number': '123456789012', 'project_id': 'korlix-ci-fixture', 'storage_bucket': 'korlix-ci-fixture.appspot.com'},
+            'client': [{'client_info': {'mobilesdk_app_id': '1:123456789012:android:0123456789abcdef012345', 'android_client_info': {'package_name': 'com.korlixdeveloper.korlixai'}},
+                        'api_key': [{'current_key': 'AIzaSyCompileFixtureOnly000000000000000'}]}],
+            'configuration_version': '1'
+          }
+          Path('android/app/google-services.json').write_text(json.dumps(data))
+          PY
+          flutter --suppress-analytics --no-version-check build apk --debug --no-pub --target-platform android-arm64 2>&1 | tee validation-logs/android-fcm-build.log
+
+      - name: Preserve validation logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: onboarding-validation-${{ github.run_id }}
+          path: validation-logs/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  ios-social-compile:
+    runs-on: macos-15
+    timeout-minutes: 45
+    env:
+      FLUTTER_REVISION: abaf9c523780a608bd46686fd5e53740a07077f8
+      FLUTTER_RELEASE: '3.47.7'
+      # macos-15 defaults to Xcode 16.4. The locked device_info_plus 12.4.0
+      # references isiOSAppOnVision and needs the newer SDK declarations.
+      # Xcode 26.2 is explicitly listed on the macos-15 runner image.
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify the selected iOS SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -d "$DEVELOPER_DIR"
+          mkdir -p validation-logs
+          xcodebuild -version | tee validation-logs/ios-toolchain.log
+          xcrun --sdk iphonesimulator --show-sdk-version | tee -a validation-logs/ios-toolchain.log
+          test "$(xcrun --sdk iphonesimulator --show-sdk-version)" = '26.2'
+      - name: Prepare pinned Flutter for an unsigned simulator build
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdk="$RUNNER_TEMP/korlix-flutter"
+          git init "$sdk"
+          git -C "$sdk" remote add origin https://github.com/flutter/flutter.git
+          git -C "$sdk" fetch --depth=1 origin "refs/tags/$FLUTTER_RELEASE:refs/tags/$FLUTTER_RELEASE"
+          git -C "$sdk" checkout --detach "refs/tags/$FLUTTER_RELEASE"
+          test "$(git -C "$sdk" rev-parse HEAD)" = "$FLUTTER_REVISION"
+          export PATH="$sdk/bin:$PATH"
+          export PUB_CACHE="$RUNNER_TEMP/korlix-pub-cache"
+          printf '%s\n' "$sdk/bin" >> "$GITHUB_PATH"
+          printf 'PUB_CACHE=%s\n' "$PUB_CACHE" >> "$GITHUB_ENV"
+          flutter --suppress-analytics --no-version-check precache --ios
+          flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
+          git diff --exit-code -- pubspec.lock
+      - name: Compile iOS without signing or push credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p validation-logs
+          flutter --suppress-analytics --no-version-check build ios --simulator --debug --no-codesign --no-pub 2>&1 | tee validation-logs/ios-social-build.log
+      - name: Preserve iOS compile log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-social-validation-${{ github.run_id }}
+          path: validation-logs/
+          if-no-files-found: ignore
+          retention-days: 7

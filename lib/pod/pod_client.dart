@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 
 String podRequestId() {
   final random = Random.secure();
@@ -31,7 +31,7 @@ class PodClient {
     required this.headersBuilder,
     this.sessionChanges,
     http.Client? client,
-  }) : _http = client ?? http.Client(),
+  }) : _http = client ?? http.createClient(),
        _ownsClient = client == null {
     _scope = _readScope();
     sessionChanges?.addListener(_checkSession);

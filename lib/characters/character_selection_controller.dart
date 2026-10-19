@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 import 'character_catalog.dart';
 
 /// The server owns availability; account and request revisions discard stale replies.
@@ -12,7 +12,7 @@ class CharacterSelectionController extends ChangeNotifier {
     required this.selected,
     required this.sessionChanges,
     http.Client? client,
-  }) : _client = client ?? http.Client() {
+  }) : _client = client ?? http.createClient() {
     sessionChanges.addListener(_sessionChanged);
     selected.addListener(_selectedChanged);
   }

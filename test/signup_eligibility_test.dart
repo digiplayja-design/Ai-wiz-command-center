@@ -75,11 +75,11 @@ void main() {
           .value,
       isFalse,
     );
-    await tap(tester, find.text('Create account'));
+    await tap(tester, find.text('Create free account'));
     expect(requests, isEmpty);
     expect(find.text('Select your age range to continue.'), findsOneWidget);
     await selectSignupAge(tester, '18 or older');
-    await tap(tester, find.text('Create account'));
+    await tap(tester, find.text('Create free account'));
     expect(requests, isEmpty);
     expect(
       find.text(
@@ -88,7 +88,7 @@ void main() {
       findsOneWidget,
     );
     await tap(tester, find.byKey(const Key('signup-policy-acceptance')));
-    await tap(tester, find.text('Create account'));
+    await tap(tester, find.text('Create free account'));
     expect(requests.single.url.path, '/api/auth/signup');
     final signupBody = jsonDecode(requests.single.body);
     final deviceId = app.KorlixDeviceStore.headers()['X-Korlix-Device-Id'];
@@ -110,8 +110,8 @@ void main() {
     await mountSignup(tester, requests);
     await selectSignupAge(tester, 'Under 16');
     expect(find.byKey(const Key('signup-underage-message')), findsOneWidget);
-    final button = tester.widget<ElevatedButton>(
-      find.widgetWithText(ElevatedButton, 'Create account'),
+    final button = tester.widget<FilledButton>(
+      find.byKey(const Key('auth-submit')),
     );
     expect(button.onPressed, isNull);
     await tester.ensureVisible(find.byKey(const Key('auth-password')));
@@ -137,7 +137,7 @@ void main() {
         isFalse,
       );
       await tap(tester, find.byKey(const Key('signup-policy-acceptance')));
-      await tap(tester, find.text('Create account'));
+      await tap(tester, find.text('Create free account'));
       expect(requests, isEmpty);
       expect(
         find.text(
@@ -146,7 +146,7 @@ void main() {
         findsOneWidget,
       );
       await tap(tester, find.byKey(const Key('signup-parent-permission')));
-      await tap(tester, find.text('Create account'));
+      await tap(tester, find.text('Create free account'));
       final eligibility = jsonDecode(
         requests.single.body,
       )['signup_eligibility'];
@@ -183,25 +183,22 @@ void main() {
     );
   });
 
-  test(
-    'web policy URLs stay on the serving origin and native URLs use the website',
-    () {
-      expect(
-        korlixSignupPolicyUri(
-          'terms.html',
-          isWeb: true,
-          webBase: Uri.parse(
-            'https://korlixdeveloper-website.onrender.com/app/?old=true#route',
-          ),
-        ).toString(),
-        'https://korlixdeveloper-website.onrender.com/terms.html',
-      );
-      expect(
-        korlixSignupPolicyUri('privacy-policy.html', isWeb: false).toString(),
-        'https://www.korlixdeveloper.com/privacy-policy.html',
-      );
-    },
-  );
+  test('web policy URLs stay on the serving origin and native URLs use the website', () {
+    expect(
+      korlixSignupPolicyUri(
+        'terms.html',
+        isWeb: true,
+        webBase: Uri.parse(
+          'https://korlixdeveloper-website.onrender.com/app/?old=true#route',
+        ),
+      ).toString(),
+      'https://korlixdeveloper-website.onrender.com/terms.html',
+    );
+    expect(
+      korlixSignupPolicyUri('privacy-policy.html', isWeb: false).toString(),
+      'https://www.korlixdeveloper.com/privacy-policy.html',
+    );
+  });
 
   testWidgets(
     'policy links open independently and failed launch keeps a visible address',
@@ -262,9 +259,9 @@ void main() {
         await selectSignupAge(tester, '16–17');
         await tap(tester, find.byKey(const Key('signup-parent-permission')));
         await tap(tester, find.byKey(const Key('signup-policy-acceptance')));
-        await tester.ensureVisible(find.text('Create account'));
+        await tester.ensureVisible(find.text('Create free account'));
         await tester.pumpAndSettle();
-        expect(find.text('Create account').hitTestable(), findsOneWidget);
+        expect(find.text('Create free account').hitTestable(), findsOneWidget);
         expect(tester.takeException(), isNull);
       },
     );

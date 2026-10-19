@@ -1,4 +1,6 @@
 import 'social/social_appearance.dart';
+import 'analytics/korlix_onboarding.dart';
+import 'analytics/korlix_onboarding_report.dart';
 import 'sounds/korlix_sound_service.dart';
 import 'sounds/korlix_sound_host.dart';
 import 'sounds/korlix_sound_actions.dart';
@@ -19,6 +21,7 @@ import 'social/social_notifications.dart';
 import 'social/social_notification_banner.dart';
 import 'social/social_alert_scope.dart';
 import 'social/social_app_alerts.dart';
+import 'social/social_bubble_app.dart';
 import 'camera_ask/camera_ask_client.dart';
 import 'camera_ask/camera_ask_screen.dart';
 import 'inventory/inventory_client.dart';
@@ -38,7 +41,11 @@ import 'theme/korlix_theme.dart';
 import 'theme/korlix_action_button.dart';
 import 'theme/korlix_action_grid.dart';
 import 'auth/korlix_welcome_confirmation.dart';
+import 'auth/korlix_entry_welcome.dart';
+import 'onboarding/korlix_starter_tasks.dart';
+import 'billing/korlix_plan_prompt.dart';
 import 'auth/korlix_signup_eligibility.dart';
+import 'auth/korlix_signup_presentation.dart';
 import 'auth/knova_welcome_controller.dart';
 import 'auth/rici_welcome_button.dart';
 import 'navigation/home_tool_catalog.dart';
@@ -53,6 +60,8 @@ export 'characters/character_catalog.dart' show normalizeKorlixCharacterId;
 import 'auth/korlix_october_welcome.dart';
 import 'auth/korlix_login_preferences.dart';
 import 'auth/korlix_token_store.dart';
+import 'auth/korlix_session_refresh.dart';
+export 'auth/korlix_session_refresh.dart' show KorlixAuthSession;
 import 'ads/korlix_ad_consent.dart';
 import 'account/korlix_account_deletion_dialog.dart';
 import 'support/korlix_ai_report_client.dart';
@@ -71,6 +80,7 @@ import 'theme/korlix_screen_skin.dart';
 import 'theme/korlix_appearance_preferences.dart';
 import 'theme/korlix_appearance_picker.dart';
 import 'theme/korlix_screensaver_controller.dart';
+import 'billing/korlix_fixed_plan_bar.dart';
 import 'theme/korlix_smoke_screensaver.dart';
 export 'theme/korlix_theme.dart';
 import 'chat/chat_request.dart';
@@ -115,7 +125,8 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
+import 'auth/korlix_http.dart' as http;
+import 'package:http/http.dart' as raw_http;
 import 'package:http_parser/http_parser.dart' as http_parser;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -178,6 +189,7 @@ bool kSupabaseReady = false;
 String? kKorlixAccessToken;
 String? kKorlixRefreshToken;
 String? kKorlixUserEmail;
+Future<void>? _korlixPendingSignOut;
 String? _korlixReviewAccountScope;
 KorlixPortalLaunch? _korlixInitialPortalLaunch;
 bool _korlixPortalLaunchRequested = false;
@@ -218,12 +230,53 @@ void korlixSetInMemorySession(KorlixAuthSession? session) {
 Future<void> korlixClearLocalAuthSession() async {
   // Invalidate visible sessions before waiting on a locked device's storage.
   korlixSetInMemorySession(null);
+  final marked = KorlixTokenStore.instance.markSignedOut();
+  // Queue deletion before yielding so a subsequent sign-in save is ordered
+  // after this logout, even when preferences or secure storage are slow.
+  final clearing = KorlixSessionStore.clear();
   try {
-    await KorlixSessionStore.clear().timeout(const Duration(seconds: 5));
+    await Future.wait([marked, clearing]).timeout(const Duration(seconds: 5));
   } catch (_) {
     kKorlixBootWarnings.add(
       'Session storage could not be cleared. Unlock your device and try again.',
     );
+  }
+}
+
+/// Fence refresh immediately and let ordinary device cleanup complete before
+/// another sign-in request. A network timeout keeps the UI usable; server-side
+/// session-bound revocation is required to fence cleanup that outlives timeout.
+Future<void> korlixSignOut({http.Client? client}) async {
+  final pending = _korlixPendingSignOut;
+  if (pending != null) return pending;
+  final signedOutToken = kKorlixAccessToken;
+  final localClear = korlixClearLocalAuthSession();
+  final cleanup = () async {
+    await localClear;
+    try {
+      await KorlixDeviceStore.ensureLoaded();
+      final post = client?.post ?? http.post;
+      await post(
+        _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/auth/signout'),
+        headers: {
+          'Content-Type': 'application/json',
+          if (signedOutToken?.isNotEmpty == true)
+            'Authorization': 'Bearer $signedOutToken',
+          ...KorlixDeviceStore.headers(),
+        },
+        body: jsonEncode(KorlixDeviceStore.bodyFields()),
+      ).timeout(const Duration(seconds: 8));
+    } catch (_) {
+      // Credentials are already invalid locally; cleanup is best effort.
+    }
+  }();
+  _korlixPendingSignOut = cleanup;
+  try {
+    await cleanup;
+  } finally {
+    if (identical(_korlixPendingSignOut, cleanup)) {
+      _korlixPendingSignOut = null;
+    }
   }
 }
 
@@ -256,14 +309,31 @@ const String _kKorlixBackendOverrideUrl = String.fromEnvironment(
 const String kKorlixBackendBaseUrl = _kKorlixBackendOverrideDeclared
     ? _kKorlixBackendOverrideUrl
     : 'https://chee-chai-chee-backend.onrender.com';
+@pragma('vm:entry-point')
+void socialBubbleMain() => runSocialBubble();
+
 Future<void> main() async {
   await runZonedGuarded<Future<void>>(
     () async {
+      http.configureClientFactory(() => KorlixSessionHttpClient(
+        inner: raw_http.Client(),
+        sessions: kKorlixSessionRefresh,
+        baseUrl: kKorlixBackendBaseUrl,
+      ));
       WidgetsFlutterBinding.ensureInitialized();
       _installKorlixErrorSurface();
       _korlixPortalLaunchRequested =
           Uri.base.queryParametersAll.containsKey('app_portal');
       _korlixInitialPortalLaunch = captureKorlixPortalLaunch();
+
+      unawaited(KorlixOnboarding.instance.start(
+        baseUrl: kKorlixBackendBaseUrl,
+        context: () async {
+          await KorlixDeviceStore.ensureLoaded();
+          return KorlixOnboardingContext(KorlixDeviceStore.headers(),
+            newSetup: KorlixDeviceStore.createdDuringThisRun);
+        },
+      ));
 
       // Paint the app immediately. On web, waiting for startup services before
       // runApp can create a white screen if a plugin/storage/network step stalls.
@@ -473,6 +543,7 @@ class CheeChaiCheeApp extends StatelessWidget {
         },
         child: KorlixSoundHost(child: SocialAppAlerts(
         baseUrl: kKorlixBackendBaseUrl,
+        sessionReady: () => kKorlixAuthRevision.value > 0,
         headersBuilder: () => {
           ...KorlixDeviceStore.headers(),
           if (kKorlixAccessToken?.isNotEmpty == true)
@@ -509,6 +580,8 @@ class CheeChaiCheeApp extends StatelessWidget {
 class KorlixDeviceStore {
   static const String deviceIdKey = 'korlix_device_id';
   static const String deviceLabelKey = 'korlix_device_label';
+  static bool createdDuringThisRun = false;
+  static Future<void>? _loading;
 
   static String defaultDeviceLabel() {
     if (kIsWeb) {
@@ -531,6 +604,7 @@ class KorlixDeviceStore {
     final created = 'korlix_${DateTime.now().millisecondsSinceEpoch}_$random';
 
     await prefs.setString(deviceIdKey, created);
+    createdDuringThisRun = true;
 
     return created;
   }
@@ -551,7 +625,9 @@ class KorlixDeviceStore {
     return label;
   }
 
-  static Future<void> ensureLoaded() async {
+  static Future<void> ensureLoaded() => _loading ??= _load().whenComplete(() => _loading = null);
+
+  static Future<void> _load() async {
     kKorlixDeviceId = await loadOrCreateDeviceId();
     kKorlixDeviceLabel = await loadOrCreateDeviceLabel();
   }
@@ -583,9 +659,17 @@ class KorlixDeviceStore {
 }
 
 class KorlixSessionStore {
+  static const String hasSignedInKey = 'korlix_has_signed_in_v1';
   static const String accessTokenKey = 'korlix_access_token';
   static const String refreshTokenKey = 'korlix_refresh_token';
   static const String emailKey = 'korlix_user_email';
+  static Future<void> _writes = Future<void>.value();
+
+  static Future<void> _serial(Future<void> Function() operation) {
+    final result = _writes.then((_) => operation());
+    _writes = result.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+    return result;
+  }
 
   static Future<KorlixAuthSession?> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -605,25 +689,34 @@ class KorlixSessionStore {
     );
   }
 
-  static Future<void> save(KorlixAuthSession session) async {
+  static Future<void> save(KorlixAuthSession session, {bool Function()? isCurrent}) => _serial(() async {
+    if (isCurrent?.call() == false) return;
     final prefs = await SharedPreferences.getInstance();
+    if (isCurrent?.call() == false) return;
 
     await KorlixTokenStore.instance.write(
       accessToken: session.accessToken,
       refreshToken: session.refreshToken,
+      isCurrent: isCurrent,
     );
+    if (isCurrent?.call() == false) return;
 
     if (session.email != null && session.email!.isNotEmpty) {
       await prefs.setString(emailKey, session.email!);
     }
-  }
+    try {
+      await prefs.setBool(hasSignedInKey, true);
+    } catch (_) {
+      // A welcome-screen preference must not invalidate a saved session.
+    }
+  });
 
-  static Future<void> clear() async {
+  static Future<void> clear() => _serial(() async {
     final prefs = await SharedPreferences.getInstance();
 
     await KorlixTokenStore.instance.clear();
     await prefs.remove(emailKey);
-  }
+  });
 
   static Future<KorlixAuthSession?> refresh(
     KorlixAuthSession session, {
@@ -635,10 +728,10 @@ class KorlixSessionStore {
       return session;
     }
 
+    final transport = client ?? raw_http.Client();
     try {
       await KorlixDeviceStore.ensureLoaded();
-      final post = client?.post ?? http.post;
-      final response = await post(
+      final response = await transport.post(
         _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/auth/refresh'),
         headers: {
           'Content-Type': 'application/json',
@@ -648,24 +741,28 @@ class KorlixSessionStore {
           'refresh_token': refreshToken,
           ...KorlixDeviceStore.bodyFields(),
         }),
-      );
+      ).timeout(const Duration(seconds: 60));
 
-      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final decoded = jsonDecode(response.body);
+      if (decoded is! Map<String, dynamic>) throw const KorlixSessionRefreshUnavailable();
+      final data = decoded;
 
       if (response.statusCode >= 400) {
-        return null;
+        if (korlixRefreshWasRejected(response.statusCode, data)) return null;
+        throw const KorlixSessionRefreshUnavailable();
       }
 
       final refreshedSession = data['session'] as Map<String, dynamic>?;
 
       if (refreshedSession == null ||
-          refreshedSession['access_token'] == null) {
-        return null;
+          refreshedSession['access_token'] is! String ||
+          (refreshedSession['access_token'] as String).trim().isEmpty) {
+        throw const KorlixSessionRefreshUnavailable();
       }
 
       final newSession = KorlixAuthSession(
         accessToken: refreshedSession['access_token'].toString(),
-        refreshToken: refreshedSession['refresh_token']?.toString(),
+        refreshToken: refreshedSession['refresh_token']?.toString() ?? session.refreshToken,
         email: data['user']?['email']?.toString() ?? session.email,
       );
 
@@ -673,62 +770,48 @@ class KorlixSessionStore {
       // before persisting a response that arrived after an account switch.
       return newSession;
     } catch (_) {
-      return session;
+      throw const KorlixSessionRefreshUnavailable();
+    } finally {
+      // The shared coordinator bounds each caller's wait separately. Keep the
+      // transport alive long enough to save a slow token rotation, then abort
+      // a genuinely stalled connection so a later attempt can recover.
+      if (client == null) transport.close();
     }
   }
 }
 
-class KorlixAuthSession {
-  final String accessToken;
-  final String? refreshToken;
-  final String? email;
+KorlixAuthSession? _korlixCurrentSession() => kKorlixAccessToken?.isNotEmpty == true
+    ? KorlixAuthSession(accessToken: kKorlixAccessToken!,
+        refreshToken: kKorlixRefreshToken, email: kKorlixUserEmail)
+    : null;
 
-  const KorlixAuthSession({
-    required this.accessToken,
-    this.refreshToken,
-    this.email,
-  });
-}
+final kKorlixSessionRefresh = KorlixSessionRefreshCoordinator(
+  current: _korlixCurrentSession,
+  revision: () => kKorlixAuthRevision.value,
+  refresh: (session) => KorlixSessionStore.refresh(session),
+  persist: (session, stillCurrent) => KorlixSessionStore.save(session, isCurrent: stillCurrent),
+  publish: (session) {
+    // Same-login bearer rotation is not an account change. Keeping the account
+    // revision stable preserves active Social routes, Rici calls and drafts.
+    kKorlixAccessToken = session.accessToken;
+    kKorlixRefreshToken = session.refreshToken;
+    kKorlixUserEmail = session.email;
+  },
+  clear: korlixClearLocalAuthSession,
+);
 
 Future<Map<String, String>> korlixAuthenticatedBackendHeaders({http.Client? client}) async {
-  final revision = kKorlixAuthRevision.value;
-  KorlixAuthSession? session;
-  final inMemoryAccessToken = kKorlixAccessToken?.trim();
-  if (inMemoryAccessToken != null && inMemoryAccessToken.isNotEmpty) {
-    session = KorlixAuthSession(
-      accessToken: inMemoryAccessToken,
-      refreshToken: kKorlixRefreshToken,
-      email: kKorlixUserEmail,
+  try {
+    await kKorlixSessionRefresh.ensureFresh(
+      // Explicit client overrides keep the diagnostic/test helper's contract.
+      force: client != null,
+      refreshOverride: client == null ? null : (session) => KorlixSessionStore.refresh(session, client: client),
     );
-  } else {
-    try {
-      session = await KorlixSessionStore.load().timeout(const Duration(seconds: 3));
-    } catch (_) {
-      session = null;
-    }
-  }
-  if (session != null && revision == kKorlixAuthRevision.value) {
-    KorlixAuthSession? refreshed;
-    try {
-      refreshed = await KorlixSessionStore.refresh(session, client: client)
-          .timeout(const Duration(seconds: 8));
-    } catch (_) {
-      refreshed = session;
-    }
-    if (revision != kKorlixAuthRevision.value) {
-      throw StateError('Your account changed. Please try again.');
-    }
-    if (refreshed == null) {
-      await korlixClearLocalAuthSession();
-      return KorlixDeviceStore.headers();
-    }
-    await KorlixSessionStore.save(refreshed);
-    if (revision != kKorlixAuthRevision.value) {
-      throw StateError('Your account changed. Please try again.');
-    }
-    korlixSetInMemorySession(refreshed);
-  } else if (revision != kKorlixAuthRevision.value) {
+  } on KorlixSessionChanged {
     throw StateError('Your account changed. Please try again.');
+  } on KorlixSessionRefreshUnavailable {
+    final current = _korlixCurrentSession();
+    if (current == null || kKorlixSessionRefresh.isExpired(current)) rethrow;
   }
 
   final headers = KorlixDeviceStore.headers();
@@ -768,11 +851,44 @@ Uri _assertValidKorlixBackendUri(String rawUri) {
   return uri;
 }
 
-class _AuthGateState extends State<AuthGate> {
+class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
   bool _booting = true;
+  bool _preferSignIn = false;
   String? _restoreNotice;
   late final KnovaWelcomeController _welcome;
   bool _portalLaunchScheduled = false;
+  Timer? _refreshTimer;
+  bool _refreshForeground = true;
+
+  void _scheduleSessionRefresh() {
+    _refreshTimer?.cancel();
+    if (!mounted || !_signedIn || !_refreshForeground) return;
+    final delay = kKorlixSessionRefresh.nextRefreshDelay();
+    if (delay != null) _refreshTimer = Timer(delay, () => unawaited(_renewSession()));
+  }
+
+  Future<void> _renewSession() async {
+    try {
+      await kKorlixSessionRefresh.ensureFresh();
+    } on KorlixSessionRefreshUnavailable {
+      // Keep the saved session. Requests use the same coordinator and retry
+      // after connectivity recovers; an outage must not become a sign-out.
+    } on KorlixSessionChanged {
+      // The explicit account transition already owns the new UI/session.
+    } finally {
+      _scheduleSessionRefresh();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _refreshForeground = state == AppLifecycleState.resumed;
+    if (_refreshForeground) {
+      unawaited(_renewSession());
+    } else {
+      _refreshTimer?.cancel();
+    }
+  }
 
   void _schedulePortalLaunch() {
     final launch = _korlixInitialPortalLaunch;
@@ -809,6 +925,9 @@ class _AuthGateState extends State<AuthGate> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    final lifecycle = WidgetsBinding.instance.lifecycleState;
+    _refreshForeground = lifecycle == null || lifecycle == AppLifecycleState.resumed;
     _welcome = KnovaWelcomeController(backendBaseUrl: kKorlixBackendBaseUrl, sounds: kKorlixSounds);
     unawaited(_welcome.preload());
     kKorlixAuthRevision.addListener(_handleAuthRevisionChanged);
@@ -817,6 +936,8 @@ class _AuthGateState extends State<AuthGate> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _refreshTimer?.cancel();
     _welcome.dispose();
     kKorlixAuthRevision.removeListener(_handleAuthRevisionChanged);
     super.dispose();
@@ -824,6 +945,7 @@ class _AuthGateState extends State<AuthGate> {
 
   void _handleAuthRevisionChanged() {
     if (!_signedIn) _welcome.signedOut();
+    _scheduleSessionRefresh();
     if (mounted) {
       setState(() {});
     }
@@ -832,6 +954,13 @@ class _AuthGateState extends State<AuthGate> {
   Future<void> _restoreSession() async {
     final revision = kKorlixAuthRevision.value;
     try {
+      try {
+        final preferences = await SharedPreferences.getInstance().timeout(const Duration(seconds: 2));
+        _preferSignIn = preferences.getBool(KorlixSessionStore.hasSignedInKey) == true ||
+            preferences.containsKey(KorlixSessionStore.emailKey);
+      } catch (_) {
+        // Optional presentation preference; session restoration still runs.
+      }
       await KorlixDeviceStore.ensureLoaded().timeout(
         const Duration(seconds: 5),
       );
@@ -844,18 +973,16 @@ class _AuthGateState extends State<AuthGate> {
       if (saved == null) {
         await korlixClearLocalAuthSession();
       } else {
-        final refreshed = await KorlixSessionStore.refresh(
-          saved,
-        ).timeout(const Duration(seconds: 8));
-
-        if (!mounted || revision != kKorlixAuthRevision.value) return;
-        if (refreshed != null) {
-          await KorlixSessionStore.save(refreshed).timeout(const Duration(seconds: 5));
-          if (!mounted || revision != kKorlixAuthRevision.value) return;
-          korlixSetInMemorySession(refreshed);
-        } else {
-          await korlixClearLocalAuthSession();
+        korlixSetInMemorySession(saved);
+        try {
+          await kKorlixSessionRefresh.ensureFresh(force: true);
+        } on KorlixSessionRefreshUnavailable {
+          // Cached credentials remain available for a later silent retry.
+          // The HTTP guard does not dispatch an expired bearer meanwhile.
+        } on KorlixSessionChanged {
+          return;
         }
+        _scheduleSessionRefresh();
       }
     } catch (error, stack) {
       final warning = 'Session restore failed: $error';
@@ -876,13 +1003,18 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   Future<void> _handleSignedIn(KorlixAuthSession session) async {
-    await KorlixSessionStore.save(session);
+    // Fence a pending refresh from the previous login before persistence starts.
+    korlixSetInMemorySession(null);
+    final revision = kKorlixAuthRevision.value;
+    await KorlixSessionStore.save(session,
+      isCurrent: () => revision == kKorlixAuthRevision.value);
 
-    if (!mounted) {
+    if (!mounted || revision != kKorlixAuthRevision.value) {
       return;
     }
 
     setState(() {
+      _preferSignIn = true;
       korlixSetInMemorySession(session);
     });
     unawaited(_welcome.signedIn());
@@ -890,28 +1022,8 @@ class _AuthGateState extends State<AuthGate> {
 
   Future<void> _handleSignOut() async {
     _welcome.signedOut();
-    try {
-      await KorlixDeviceStore.ensureLoaded();
-
-      await http.post(
-        _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/auth/signout'),
-        headers: {
-          'Content-Type': 'application/json',
-          if (kKorlixAccessToken != null && kKorlixAccessToken!.isNotEmpty)
-            'Authorization': 'Bearer $kKorlixAccessToken',
-          ...KorlixDeviceStore.headers(),
-        },
-        body: jsonEncode(KorlixDeviceStore.bodyFields()),
-      ).timeout(const Duration(seconds: 8));
-    } catch (_) {
-      // Local sign-out should still happen even if the server cleanup fails.
-    }
-
-    await korlixClearLocalAuthSession();
-
-    if (mounted) {
-      setState(() {});
-    }
+    await korlixSignOut();
+    if (mounted) setState(() {});
   }
 
   @override
@@ -957,6 +1069,7 @@ class _AuthGateState extends State<AuthGate> {
 
     if (!_signedIn) {
       return AuthScreen(
+        showWelcome: !_preferSignIn && _restoreNotice == null,
         onSignedIn: _handleSignedIn,
         onSignInGesture: _welcome.prepareGesture,
         initialNotice: _restoreNotice,
@@ -965,56 +1078,19 @@ class _AuthGateState extends State<AuthGate> {
 
     _schedulePortalLaunch();
 
-    return Stack(
-      children: [
-        CommandCenterScreen(key: _korlixReviewHomeKey),
-        Positioned(
-          top: 8,
-          left: 8,
-          child: SafeArea(
-            child: Material(
-              color: Colors.transparent,
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                const KorlixAccountButton(),
-                const _KorlixSoundSettingsButton(),
-                RiciWelcomeButton(controller: _welcome),
-              ]),
-            ),
-          ),
-        ),
-        const Positioned(
-          left: 0,
-          right: 0,
-          bottom: 0,
-          child: SafeArea(top: false, child: KorlixBasicAdBanner()),
-        ),
-        Positioned(
-          top: 8,
-          right: 8,
-          child: SafeArea(
-            child: Material(
-              color: Colors.transparent,
-              child: MediaQuery.sizeOf(context).width < 460 &&
-                      MediaQuery.textScalerOf(context).scale(14) > 18
-                  ? IconButton(
-                      tooltip: 'Sign out',
-                      enableFeedback: false,
-                      onPressed: korlixSoundAction(_handleSignOut),
-                      icon: const Icon(Icons.logout, color: Color(0xFFE4EBEE)),
-                    )
-                  : TextButton.icon(
-                onPressed: korlixSoundAction(_handleSignOut),
-                icon: const Icon(Icons.logout, size: 18),
-                label: const Text('Sign out'),
-                style: korlixSoundButtonStyle(TextButton.styleFrom(
-                  foregroundColor: const Color(0xFFE4EBEE),
-                  backgroundColor: Colors.black.withOpacity(0.32),
-                )),
-              ),
-            ),
-          ),
+    return CommandCenterScreen(
+      key: _korlixReviewHomeKey,
+      toolbarActions: [
+        const KorlixAccountButton(),
+        const _KorlixSoundSettingsButton(),
+        RiciWelcomeButton(controller: _welcome),
+        IconButton(
+          tooltip: 'Sign out',
+          onPressed: korlixSoundAction(_handleSignOut),
+          icon: const Icon(Icons.logout),
         ),
       ],
+      bottomBar: const KorlixBasicAdBanner(),
     );
   }
 }
@@ -1025,8 +1101,9 @@ class AuthScreen extends StatefulWidget {
   final DateTime? seasonalDate;
   final VoidCallback? onSignInGesture;
   final String? initialNotice;
+  final bool showWelcome;
 
-  const AuthScreen({super.key, required this.onSignedIn, this.client, this.seasonalDate, this.onSignInGesture, this.initialNotice});
+  const AuthScreen({super.key, required this.onSignedIn, this.client, this.seasonalDate, this.onSignInGesture, this.initialNotice, this.showWelcome = false});
 
   @override
   State<AuthScreen> createState() => _AuthScreenState();
@@ -1044,6 +1121,7 @@ class _AuthScreenState extends State<AuthScreen> {
   String? _preferenceMessage;
 
   bool _isSignUp = false;
+  late bool _showWelcome;
   KorlixSignupAgeBand? _signupAgeBand;
   bool _acceptedSignupPolicies = false;
   bool _parentPermission = false;
@@ -1059,7 +1137,28 @@ class _AuthScreenState extends State<AuthScreen> {
   void initState() {
     super.initState();
     _message = widget.initialNotice;
+    _showWelcome = widget.showWelcome;
     _preferencesLoaded = _restoreLoginPreferences();
+    if (!_showWelcome) KorlixOnboarding.instance.track('login_screen_viewed');
+  }
+
+  void _chooseAuthMode({required bool signUp}) {
+    if (_loading || _resetLoading) return;
+    TextInput.finishAutofillContext(shouldSave: false);
+    _passwordController.clear();
+    setState(() {
+      _showWelcome = false;
+      _isSignUp = signUp;
+      _signupAgeBand = null;
+      _acceptedSignupPolicies = false;
+      _parentPermission = false;
+      _obscurePassword = true;
+      _error = null;
+      _message = null;
+      _showForgotPassword = false;
+    });
+    KorlixOnboarding.instance.track(signUp
+      ? 'registration_screen_viewed' : 'login_screen_viewed');
   }
 
   Future<void> _restoreLoginPreferences() async {
@@ -1177,18 +1276,21 @@ class _AuthScreenState extends State<AuthScreen> {
     final password = _passwordController.text;
 
     if (signingUp) {
+      KorlixOnboarding.instance.track('registration_submit');
       final eligibilityError = korlixSignupEligibilityError(
         ageBand: _signupAgeBand,
         acceptedPolicies: _acceptedSignupPolicies,
         parentPermission: _parentPermission,
       );
       if (eligibilityError != null) {
+        KorlixOnboarding.instance.track('registration_validation_error', errorCode: 'eligibility');
         setState(() { _error = eligibilityError; _message = null; });
         return;
       }
     }
 
     if (email.isEmpty || password.isEmpty) {
+      if (signingUp) KorlixOnboarding.instance.track('registration_validation_error', errorCode: 'required_fields');
       setState(() {
         _error = 'Enter your email and password.';
         _message = null;
@@ -1198,6 +1300,7 @@ class _AuthScreenState extends State<AuthScreen> {
     }
 
     if (password.length < 6) {
+      if (signingUp) KorlixOnboarding.instance.track('registration_validation_error', errorCode: 'password_length');
       setState(() {
         _error = 'Password must be at least 6 characters.';
         _message = null;
@@ -1214,7 +1317,14 @@ class _AuthScreenState extends State<AuthScreen> {
       _showForgotPassword = false;
     });
 
+    bool receivedResponse = false;
+    bool serverRejected = false;
     try {
+      // Let ordinary sign-out cleanup finish before this device is registered
+      // again. The cleanup request itself is bounded so offline login UI cannot
+      // wait forever. Server-side session-bound revocation is still authoritative.
+      await _korlixPendingSignOut;
+      if (!mounted) return;
       await KorlixDeviceStore.ensureLoaded();
       final path = signingUp ? '/api/auth/signup' : '/api/auth/signin';
 
@@ -1238,6 +1348,8 @@ class _AuthScreenState extends State<AuthScreen> {
           },
         }),
       ).timeout(const Duration(seconds: 30));
+      receivedResponse = true;
+      serverRejected = response.statusCode >= 400;
       if (!mounted) return;
 
       final data = jsonDecode(response.body) as Map<String, dynamic>;
@@ -1254,6 +1366,7 @@ class _AuthScreenState extends State<AuthScreen> {
         if (!mounted) return;
         TextInput.finishAutofillContext(shouldSave: _offerPasswordSave);
         _passwordController.clear();
+        KorlixOnboarding.instance.track('confirmation_screen_viewed');
         setState(() {
           _confirmationEmail = email;
           _message = null;
@@ -1278,11 +1391,16 @@ class _AuthScreenState extends State<AuthScreen> {
     } catch (error) {
       if (!mounted) return;
       final cleanedError = _cleanError(error);
+      if (signingUp && !serverRejected) {
+        KorlixOnboarding.instance.track('registration_transport_error',
+          errorCode: receivedResponse ? 'response' : 'network');
+      }
 
       setState(() {
         final lower = cleanedError.toLowerCase();
         final unconfirmed = lower.contains('email not confirmed') || lower.contains('email_not_confirmed');
         if (unconfirmed) {
+          KorlixOnboarding.instance.track('confirmation_screen_viewed');
           _confirmationEmail = email;
           _passwordController.clear();
         }
@@ -1299,318 +1417,278 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
+  Widget _loginPreferences() {
+    final skin = korlixSkinOf(context);
+    return ExpansionTile(
+      key: ValueKey('login-preferences-$_isSignUp'),
+      title: const Text('Login preferences'),
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: EdgeInsets.zero,
+      maintainState: true,
+      children: [
+        CheckboxListTile(
+          key: const Key('remember-email'),
+          value: _rememberEmail,
+          onChanged: !_preferencesReady || _loading || _resetLoading ? null : (value) {
+            setState(() => _rememberEmail = value ?? false);
+            unawaited(_saveLoginPreferences());
+          },
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          title: Text('Remember my email', style: TextStyle(color: skin.text, fontSize: 14)),
+        ),
+        CheckboxListTile(
+          key: const Key('offer-password-save'),
+          value: _offerPasswordSave,
+          onChanged: !_preferencesReady || _loading || _resetLoading ? null : (value) {
+            setState(() => _offerPasswordSave = value ?? false);
+            unawaited(_saveLoginPreferences());
+          },
+          contentPadding: EdgeInsets.zero,
+          controlAffinity: ListTileControlAffinity.leading,
+          title: Text('Offer to save password', style: TextStyle(color: skin.text, fontSize: 14)),
+        ),
+        Text(_preferenceMessage ?? 'Your browser or password manager can save and autofill your password.',
+          style: TextStyle(color: skin.mutedText, fontSize: 12, height: 1.4)),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final skin = korlixSkinOf(context);
-    final title = _isSignUp
-        ? 'Create your Korlix AI account'
-        : 'Sign in to Korlix AI';
-    final buttonText = _isSignUp ? 'Create account' : 'Sign in';
     final seasonalDate = widget.seasonalDate ?? DateTime.now();
-    final october = korlixIsOctober(seasonalDate);
-
+    final busy = _loading || _resetLoading;
+    final signup = _isSignUp;
+    final colorfulSignup = signup && !_showWelcome && _confirmationEmail == null;
+    final title = signup ? 'Create your free account' : 'Sign in to Korlix AI';
     return Scaffold(
-      body: KorlixOctoberWelcome(
+      appBar: _showWelcome ? AppBar(
+        automaticallyImplyLeading: false,
+        title: Image.asset('assets/branding/korlix_mini_mark.png', height: 32,
+          semanticLabel: 'KORLIX AI'),
+        actions: [TextButton.icon(
+          key: const Key('welcome-view-plans'),
+          onPressed: () async {
+            final create = await showKorlixPublicPlans(context);
+            if (mounted && create) _chooseAuthMode(signUp: true);
+          },
+          icon: const Icon(Icons.workspace_premium_outlined),
+          label: const Text('View Plans'),
+        ), const SizedBox(width: 12)],
+      ) : null,
+      body: KorlixAuthBackground(
+        signup: colorfulSignup,
         date: seasonalDate,
         child: SafeArea(
           child: Center(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
+              key: ValueKey('auth-scroll-$_showWelcome-$signup-${_confirmationEmail != null}'),
+              padding: const EdgeInsets.all(20),
               child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 430),
+                constraints: const BoxConstraints(maxWidth: 450),
                 child: Container(
-                  padding: const EdgeInsets.all(24),
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: skin.panel,
+                    gradient: colorfulSignup ? LinearGradient(
+                      begin: Alignment.topLeft, end: Alignment.bottomRight,
+                      colors: [
+                        Color.alphaBlend(const Color(0xFF8D7CFF).withValues(alpha: .12), skin.panel),
+                        skin.panel,
+                        Color.alphaBlend(const Color(0xFF3BC9DA).withValues(alpha: .09), skin.panel),
+                      ],
+                    ) : null,
                     borderRadius: BorderRadius.circular(28),
-                    border: Border.all(
-                      color: (october ? const Color(0xFFFFBD69) : const Color(0xFF2EC7DF)).withValues(alpha: .38),
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: (october ? const Color(0xFFCE83FF) : const Color(0xFF2EC7DF)).withValues(alpha: .12),
-                        blurRadius: 36,
-                        spreadRadius: 4,
-                      ),
-                    ],
+                    border: Border.all(color: colorfulSignup
+                      ? const Color(0xFF9D8DDF) : skin.primary.withValues(alpha: .35)),
                   ),
                   child: _confirmationEmail != null
                     ? KorlixWelcomeConfirmation(
                         email: _confirmationEmail!,
-                        onSignIn: () => setState(() { _confirmationEmail = null; _isSignUp = false; }),
-                        onChangeEmail: () => setState(() { _confirmationEmail = null; _isSignUp = true; _signupAgeBand = null; _acceptedSignupPolicies = false; _parentPermission = false; _emailController.clear(); _passwordController.clear(); }),
+                        onSignIn: () {
+                          setState(() => _confirmationEmail = null);
+                          _chooseAuthMode(signUp: false);
+                        },
+                        onChangeEmail: () {
+                          setState(() => _confirmationEmail = null);
+                          _emailController.clear();
+                          _chooseAuthMode(signUp: true);
+                        },
                       )
-                    : AutofillGroup(
-                    key: ValueKey('auth-autofill-$_isSignUp'),
-                    onDisposeAction: AutofillContextAction.cancel,
-                    child: Material(
-                    color: Colors.transparent,
-                    child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (october) ...[
-                        KorlixOctoberGreeting(date: seasonalDate),
-                      ],
-                      Image.asset(
-                        'assets/branding/korlix_mini_mark.png',
-                        height: 74,
-                        fit: BoxFit.contain,
-                      ),
-                      const SizedBox(height: 14),
-                      Text(
-                        'KORLIX AI',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 36,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 4,
-                          color: skin.text,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        title,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 18,
-                          color: skin.mutedText,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      const KorlixAgeNotice(),
-                      const SizedBox(height: 16),
-                      if (_isSignUp) ...[
-                        KorlixSignupAgeField(
-                          ageBand: _signupAgeBand,
-                          enabled: !_loading && !_resetLoading,
-                          onChanged: (value) => setState(() {
-                            _signupAgeBand = value;
-                            _acceptedSignupPolicies = false;
-                            _parentPermission = false;
-                            _error = null;
-                          }),
-                        ),
-                        const SizedBox(height: 18),
-                      ],
-                      TextField(
-                        key: const Key('auth-email'),
-                        controller: _emailController,
-                        autofillHints: const [AutofillHints.username, AutofillHints.email],
-                        enabled: !_loading && !_resetLoading,
-                        autocorrect: false,
-                        enableSuggestions: false,
-                        textInputAction: TextInputAction.next,
-                        onSubmitted: (_) => _passwordFocus.requestFocus(),
-                        onChanged: (_) {
-                          _emailEdited = true;
-                          if (_preferencesReady && _rememberEmail) unawaited(_saveLoginPreferences());
-                        },
-                        keyboardType: TextInputType.emailAddress,
-                        style: TextStyle(color: skin.text),
-                        decoration: InputDecoration(
-                          labelText: 'Email',
-                          labelStyle: TextStyle(color: skin.mutedText),
-                          filled: true,
-                          fillColor: skin.inputFill,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      TextField(
-                        key: const Key('auth-password'),
-                        controller: _passwordController,
-                        focusNode: _passwordFocus,
-                        autofillHints: [_isSignUp ? AutofillHints.newPassword : AutofillHints.password],
-                        enabled: !_loading && !_resetLoading,
-                        textInputAction: TextInputAction.done,
-                        onSubmitted: (_) => _submit(),
-                        obscureText: _obscurePassword,
-                        keyboardType: TextInputType.visiblePassword,
-                        autocorrect: false,
-                        enableSuggestions: false,
-                        smartDashesType: SmartDashesType.disabled,
-                        smartQuotesType: SmartQuotesType.disabled,
-                        style: TextStyle(color: skin.text),
-                        decoration: InputDecoration(
-                          labelText: 'Password',
-                          labelStyle: TextStyle(color: skin.mutedText),
-                          suffixIcon: IconButton(enableFeedback: false,
-                            tooltip: _obscurePassword
-                                ? 'Show password'
-                                : 'Hide password',
-                            onPressed: korlixSoundAction(_loading
-                                ? null
-                                : () => setState(() {
-                                    _obscurePassword = !_obscurePassword;
-                                  })),
-                            icon: Icon(
-                              _obscurePassword
-                                  ? Icons.visibility_outlined
-                                  : Icons.visibility_off_outlined,
-                              color: skin.mutedText,
-                            ),
-                          ),
-                          filled: true,
-                          fillColor: skin.inputFill,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      CheckboxListTile(
-                        key: const Key('remember-email'),
-                        value: _rememberEmail,
-                        onChanged: !_preferencesReady || _loading || _resetLoading ? null : (value) {
-                          setState(() => _rememberEmail = value ?? false);
-                          unawaited(_saveLoginPreferences());
-                        },
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        title: Text('Remember my email', style: TextStyle(color: skin.text, fontSize: 14)),
-                      ),
-                      CheckboxListTile(
-                        key: const Key('offer-password-save'),
-                        value: _offerPasswordSave,
-                        onChanged: !_preferencesReady || _loading || _resetLoading ? null : (value) {
-                          setState(() => _offerPasswordSave = value ?? false);
-                          unawaited(_saveLoginPreferences());
-                        },
-                        contentPadding: EdgeInsets.zero,
-                        controlAffinity: ListTileControlAffinity.leading,
-                        title: Text('Offer to save password', style: TextStyle(color: skin.text, fontSize: 14)),
-                      ),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          _preferenceMessage ?? 'Your browser or password manager can save and autofill your password.',
-                          style: TextStyle(color: skin.mutedText, fontSize: 12, height: 1.35),
-                        ),
-                      ),
-                      if (_error != null) ...[
-                        const SizedBox(height: 12),
-                        Text(
-                          _error!,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.redAccent),
-                        ),
-                      ],
-                      if (!_isSignUp && _showForgotPassword) ...[
-                        const SizedBox(height: 10),
-                        TextButton.icon(
-                          onPressed: korlixSoundAction((_loading || _resetLoading)
-                              ? null
-                              : _requestPasswordReset),
-                          icon: _resetLoading
-                              ? SizedBox(
-                                  width: 16,
-                                  height: 16,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: skin.primary,
-                                  ),
-                                )
-                              : const Icon(Icons.lock_reset_rounded, size: 18),
-                          label: Text(
-                            _resetLoading
-                                ? 'Sending reset email...'
-                                : 'Forgot password? Send reset email',
-                          ),
-                          style: korlixSoundButtonStyle(TextButton.styleFrom(
-                            foregroundColor: const Color(0xFF69D9E8),
-                          )),
-                        ),
-                      ],
-                      if (_message != null) ...[
-                        const SizedBox(height: 12),
-                        Text(
-                          _message!,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: skin.primary),
-                        ),
-                      ],
-                      const SizedBox(height: 20),
-                      if (_isSignUp)
-                        KorlixSignupAcknowledgments(
-                          ageBand: _signupAgeBand,
-                          acceptedPolicies: _acceptedSignupPolicies,
-                          parentPermission: _parentPermission,
-                          enabled: !_loading && !_resetLoading,
-                          onPoliciesChanged: (value) => setState(() {
-                            _acceptedSignupPolicies = value;
-                            _error = null;
-                          }),
-                          onParentPermissionChanged: (value) => setState(() {
-                            _parentPermission = value;
-                            _error = null;
-                          }),
-                        ),
-                      const KorlixSignupPolicyLinks(),
-                      const SizedBox(height: 10),
-                      SizedBox(
-                        width: double.infinity,
-                        height: 54,
-                        child: ElevatedButton(
-                          onPressed: korlixSoundAction(_loading || _resetLoading ||
-                              (_isSignUp && _signupAgeBand == KorlixSignupAgeBand.under16)
-                              ? null : _submit),
-                          style: korlixSoundButtonStyle(ElevatedButton.styleFrom(
-                            backgroundColor: october ? const Color(0xFFFFBD69) : const Color(0xFF143B4A),
-                            foregroundColor: october ? const Color(0xFF352100) : const Color(0xFFE4EBEE),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(999),
-                            ),
-                          )),
-                          child: _loading
-                              ? SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: october ? const Color(0xFF352100) : skin.text,
-                                  ),
-                                )
-                              : Text(
-                                  buttonText,
-                                  style: TextStyle(
-                                    fontSize: 17,
-                                    fontWeight: FontWeight.w800,
+                    : _showWelcome
+                      ? KorlixEntryWelcome(
+                          showBranding: false,
+                          onCreateAccount: () => _chooseAuthMode(signUp: true),
+                          onSignIn: () => _chooseAuthMode(signUp: false),
+                        )
+                      : AutofillGroup(
+                          key: ValueKey('auth-autofill-$signup'),
+                          onDisposeAction: AutofillContextAction.cancel,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                if (widget.showWelcome)
+                                  Align(alignment: Alignment.centerLeft,
+                                    child: IconButton(
+                                      tooltip: 'Back to welcome',
+                                      onPressed: busy ? null : () {
+                                        TextInput.finishAutofillContext(shouldSave: false);
+                                        _passwordController.clear();
+                                        setState(() => _showWelcome = true);
+                                      },
+                                      icon: const Icon(Icons.arrow_back_rounded),
+                                    )),
+                                if (!signup && korlixIsOctober(seasonalDate))
+                                  KorlixOctoberGreeting(date: seasonalDate),
+                                if (signup) const KorlixSignupHeader(),
+                                if (!signup) ...[
+                                  Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                                    Image.asset('assets/branding/korlix_mini_mark.png', height: 42),
+                                    const SizedBox(width: 10),
+                                    Flexible(child: Text('KORLIX AI', style: TextStyle(
+                                      color: skin.text, fontSize: 20,
+                                      fontWeight: FontWeight.w800, letterSpacing: 1.5))),
+                                  ]),
+                                  const SizedBox(height: 24),
+                                  Text(title, style: TextStyle(color: skin.text,
+                                    fontSize: 25, height: 1.2, fontWeight: FontWeight.w800)),
+                                ],
+                                const SizedBox(height: 18),
+                                if (!signup) ...[
+                                  const KorlixAgeNotice(),
+                                  const SizedBox(height: 16),
+                                ],
+                                TextField(
+                                  key: const Key('auth-email'),
+                                  controller: _emailController,
+                                  autofillHints: const [AutofillHints.username, AutofillHints.email],
+                                  enabled: !busy,
+                                  autocorrect: false,
+                                  enableSuggestions: false,
+                                  textInputAction: TextInputAction.next,
+                                  onSubmitted: (_) => _passwordFocus.requestFocus(),
+                                  onChanged: (_) {
+                                    _emailEdited = true;
+                                    if (_preferencesReady && _rememberEmail) unawaited(_saveLoginPreferences());
+                                  },
+                                  keyboardType: TextInputType.emailAddress,
+                                  style: TextStyle(color: skin.text),
+                                  decoration: InputDecoration(
+                                    labelText: 'Email', hintText: 'you@example.com',
+                                    prefixIcon: signup ? const Icon(Icons.alternate_email_rounded,
+                                      color: Color(0xFF8A73D6)) : null,
+                                    filled: true, fillColor: skin.inputFill,
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
                                   ),
                                 ),
+                                const SizedBox(height: 16),
+                                TextField(
+                                  key: const Key('auth-password'),
+                                  controller: _passwordController,
+                                  focusNode: _passwordFocus,
+                                  autofillHints: [signup ? AutofillHints.newPassword : AutofillHints.password],
+                                  enabled: !busy,
+                                  textInputAction: TextInputAction.done,
+                                  onSubmitted: (_) => _submit(),
+                                  obscureText: _obscurePassword,
+                                  keyboardType: TextInputType.visiblePassword,
+                                  autocorrect: false, enableSuggestions: false,
+                                  smartDashesType: SmartDashesType.disabled,
+                                  smartQuotesType: SmartQuotesType.disabled,
+                                  style: TextStyle(color: skin.text),
+                                  decoration: InputDecoration(
+                                    labelText: 'Password',
+                                    prefixIcon: signup ? const Icon(Icons.lock_outline_rounded,
+                                      color: Color(0xFF4389C4)) : null,
+                                    helperText: signup ? 'Use at least 6 characters.' : null,
+                                    helperMaxLines: 2,
+                                    suffixIcon: IconButton(enableFeedback: false,
+                                      tooltip: _obscurePassword ? 'Show password' : 'Hide password',
+                                      onPressed: busy ? null : () => setState(() => _obscurePassword = !_obscurePassword),
+                                      icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                                    ),
+                                    filled: true, fillColor: skin.inputFill,
+                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+                                  ),
+                                ),
+                                if (signup) ...[
+                                  const SizedBox(height: 18),
+                                  KorlixSignupAgeField(
+                                    ageBand: _signupAgeBand, enabled: !busy,
+                                    onChanged: (value) => setState(() {
+                                      _signupAgeBand = value;
+                                      _acceptedSignupPolicies = false;
+                                      _parentPermission = false;
+                                      _error = null;
+                                    }),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  const KorlixAgeNotice(),
+                                  KorlixSignupAcknowledgments(
+                                    ageBand: _signupAgeBand,
+                                    acceptedPolicies: _acceptedSignupPolicies,
+                                    parentPermission: _parentPermission,
+                                    enabled: !busy,
+                                    onPoliciesChanged: (value) => setState(() {
+                                      _acceptedSignupPolicies = value; _error = null;
+                                    }),
+                                    onParentPermissionChanged: (value) => setState(() {
+                                      _parentPermission = value; _error = null;
+                                    }),
+                                  ),
+                                ],
+                                if (!signup)
+                                  Align(alignment: Alignment.centerRight,
+                                    child: TextButton(
+                                      onPressed: korlixSoundAction(busy ? null : _requestPasswordReset),
+                                      child: Text(_resetLoading ? 'Sending reset email...' :
+                                        (_showForgotPassword ? 'Forgot password? Send reset email' : 'Forgot password?')),
+                                    )),
+                                _loginPreferences(),
+                                if (_preferenceMessage != null)
+                                  Text(_preferenceMessage!, style: TextStyle(color: skin.mutedText, fontSize: 12)),
+                                if (_error != null) ...[
+                                  const SizedBox(height: 12),
+                                  Semantics(liveRegion: true, child: Text(_error!,
+                                    style: TextStyle(color: skin.danger, height: 1.4))),
+                                ],
+                                if (_message != null) ...[
+                                  const SizedBox(height: 12),
+                                  Semantics(liveRegion: true, child: Text(_message!,
+                                    style: TextStyle(color: skin.primary, height: 1.4))),
+                                ],
+                                const SizedBox(height: 16),
+                                FilledButton(
+                                  key: const Key('auth-submit'),
+                                  onPressed: korlixSoundAction(busy ||
+                                    (signup && _signupAgeBand == KorlixSignupAgeBand.under16) ? null : _submit),
+                                  style: korlixSoundButtonStyle(FilledButton.styleFrom(
+                                    minimumSize: const Size.fromHeight(54),
+                                    backgroundColor: skin.primary, foregroundColor: skin.textOnAccent,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  )),
+                                  child: _loading
+                                    ? SizedBox(width: 22, height: 22,
+                                        child: CircularProgressIndicator(strokeWidth: 2, color: skin.textOnAccent))
+                                    : Text(signup ? 'Create free account' : 'Sign in',
+                                        textAlign: TextAlign.center,
+                                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800)),
+                                ),
+                                const SizedBox(height: 8),
+                                TextButton(
+                                  onPressed: korlixSoundAction(busy ? null : () => _chooseAuthMode(signUp: !signup)),
+                                  child: Text(signup ? 'Already have an account? Sign in' : 'New here? Create account',
+                                    textAlign: TextAlign.center),
+                                ),
+                                const KorlixSignupPolicyLinks(),
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      TextButton(style: korlixSoundButtonStyle(null),
-                        onPressed: korlixSoundAction(_loading
-                            ? null
-                            : () {
-                                TextInput.finishAutofillContext(shouldSave: false);
-                                _passwordController.clear();
-                                setState(() {
-                                  _isSignUp = !_isSignUp;
-                                  _signupAgeBand = null;
-                                  _acceptedSignupPolicies = false;
-                                  _parentPermission = false;
-                                  _obscurePassword = true;
-                                  _error = null;
-                                  _message = null;
-                                  _showForgotPassword = false;
-                                });
-                              }),
-                        child: Text(
-                          _isSignUp
-                              ? 'Already have an account? Sign in'
-                              : 'New here? Create account',
-                          style: TextStyle(color: skin.primary),
-                        ),
-                      ),
-                    ],
-                  ),
-                  ),
-                  ),
                 ),
               ),
             ),
@@ -2254,7 +2332,8 @@ class _KorlixBasicAdBannerState extends State<KorlixBasicAdBanner> {
         generation == _generation &&
         authRevision == kKorlixAuthRevision.value &&
         billingRevision == kKorlixBillingRevision.value &&
-        token == kKorlixAccessToken;
+        kKorlixAccessToken != null &&
+        korlixSessionIdentity(token) == korlixSessionIdentity(kKorlixAccessToken!);
 
     _preparing = true;
     try {
@@ -2575,7 +2654,7 @@ class _KorlixSoundSettingsButton extends StatelessWidget {
   Widget build(BuildContext context) => IconButton(enableFeedback: false,
     key: const Key('korlix-open-sounds'),
     tooltip: 'Sounds & Alerts',
-    icon: const Icon(Icons.volume_up_outlined, color: Color(0xFF69D9E8)),
+    icon: Icon(Icons.volume_up_outlined, color: korlixSkinOf(context).primary),
     onPressed: korlixSoundAction(() => Navigator.of(context).push<void>(MaterialPageRoute<void>(
       builder: (_) => const KorlixSoundSettingsScreen(),
     ))),
@@ -2734,7 +2813,8 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
     }
     final headers = Map<String, String>.from(_headers());
     bool current() => mounted && revision == kKorlixAuthRevision.value &&
-        token == kKorlixAccessToken;
+        kKorlixAccessToken != null &&
+        korlixSessionIdentity(token) == korlixSessionIdentity(kKorlixAccessToken!);
     _historyReportBusy = true;
     try {
       final reportId = await showDialog<String>(
@@ -3759,7 +3839,8 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
     }
     final headers = Map<String, String>.from(_headers());
     bool current() => mounted && revision == kKorlixAuthRevision.value &&
-        token == kKorlixAccessToken;
+        kKorlixAccessToken != null &&
+        korlixSessionIdentity(token) == korlixSessionIdentity(kKorlixAccessToken!);
     _deletionRequestBusy = true;
     try {
       final recorded = await showDialog<bool>(
@@ -4455,6 +4536,17 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
                       ),
                     ),
                     const SizedBox(height: 14),
+                    if (profile['developer_unlimited'] == true) ...[
+                      OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).push<void>(MaterialPageRoute<void>(
+                          builder: (_) => KorlixOnboardingReport(
+                            baseUrl: kKorlixBackendBaseUrl, headersBuilder: _headers),
+                        )),
+                        icon: const Icon(Icons.analytics_outlined),
+                        label: const Text('New user journey'),
+                      ),
+                      const SizedBox(height: 10),
+                    ],
                     FilledButton.icon(
                       onPressed: korlixSoundAction(() {
                         if (kIsWeb) Navigator.of(context).pop();
@@ -4868,6 +4960,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
 
   @override
   Widget build(BuildContext context) {
+    final skin = korlixSkinOf(context);
     if (MediaQuery.sizeOf(context).width < 460 &&
         MediaQuery.textScalerOf(context).scale(14) > 18) {
       return IconButton(
@@ -4877,7 +4970,7 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
         icon: _loading
             ? const SizedBox(width: 17, height: 17,
                 child: CircularProgressIndicator(strokeWidth: 2))
-            : const Icon(Icons.settings_rounded, color: Color(0xFFE4EBEE)),
+            : Icon(Icons.settings_rounded, color: skin.text),
       );
     }
     return TextButton.icon(
@@ -4894,8 +4987,8 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
           : const Icon(Icons.settings_rounded, size: 18),
       label: const Text('Settings'),
       style: korlixSoundButtonStyle(TextButton.styleFrom(
-        foregroundColor: const Color(0xFFE4EBEE),
-        backgroundColor: Colors.black.withOpacity(0.32),
+        foregroundColor: skin.text,
+        backgroundColor: skin.panelSoft,
       )),
     );
   }
@@ -5452,7 +5545,9 @@ class KorlixLocalChatTopic {
 }
 
 class CommandCenterScreen extends StatefulWidget {
-  const CommandCenterScreen({super.key});
+  const CommandCenterScreen({super.key, this.toolbarActions = const [], this.bottomBar});
+  final List<Widget> toolbarActions;
+  final Widget? bottomBar;
 
   @override
   State<CommandCenterScreen> createState() => _CommandCenterScreenState();
@@ -5554,6 +5649,10 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
   fp.PlatformFile? _pickedUploadFile;
   final List<fp.PlatformFile> _pickedUploadFiles = <fp.PlatformFile>[];
   bool _loadingTier = false;
+  bool _tierKnown = false;
+  bool _developerPlan = false;
+  bool _openingDiscoveryPlans = false;
+  late final String _starterTasksPrefsKey;
   String _currentTier = 'basic';
   String? _error;
   String _selectedLanguage = 'en';
@@ -5741,6 +5840,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
 
     setState(() {
       _currentTier = normalizedTier.isEmpty ? 'basic' : normalizedTier;
+      _tierKnown = normalizedTier.isNotEmpty;
     });
 
     await _loadCurrentTier();
@@ -5757,6 +5857,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     );
     unawaited(_characters.load());
     final chatStorageScope = chatAccountStorageKey(_authHeaders());
+    _starterTasksPrefsKey = 'korlix_starter_tasks_v1_$chatStorageScope';
     _localChatTopicsPrefsKey = 'korlix_chat_topics_account_v2_$chatStorageScope';
     _pendingGenerationJobsPrefsKey = 'korlix_chat_jobs_account_v2_$chatStorageScope';
     _chatMemory = ChatMemoryClient(baseUrl: kKorlixBackendBaseUrl,
@@ -6117,26 +6218,6 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     }
   }
 
-  Future<void> _forceSignOutForSessionTimeout() async {
-    await korlixClearLocalAuthSession();
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _loading = false;
-      _error = 'Your session timed out. Please sign in again.';
-    });
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Your session timed out. Please sign in again.'),
-        duration: Duration(seconds: 5),
-      ),
-    );
-  }
-
   String _makePendingGenerationJobId(String kind) {
     final safeKind = kind.replaceAll(RegExp(r'[^a-zA-Z0-9_-]+'), '-');
     return 'korlix-$safeKind-${DateTime.now().microsecondsSinceEpoch}-${_chatMessages.length}-${_results.length}';
@@ -6343,8 +6424,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         int.tryParse((result['statusCode'] ?? 200).toString()) ?? 200;
 
     if (korlixIsSessionTimeoutStatus(statusCode)) {
-      unawaited(_forceSignOutForSessionTimeout());
-      throw Exception('Your session timed out. Please sign in again.');
+      // A completed job can contain an upstream provider's authorization
+      // failure. Its old status cannot revoke the currently signed-in account.
+      throw Exception('This operation was not authorized. Please retry it.');
     }
 
     if (statusCode < 200 || statusCode >= 300) {
@@ -6628,8 +6710,11 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
 
   Map<String, dynamic> _decodeKorlixJsonMap(http.Response response) {
     if (korlixIsSessionTimeoutStatus(response.statusCode)) {
-      unawaited(_forceSignOutForSessionTimeout());
-      throw Exception('Your session timed out. Please sign in again.');
+      // The shared transport renews first and clears only confirmed refresh
+      // revocations. Never clear a newer account from a late API response.
+      throw Exception(kKorlixAccessToken == null
+          ? 'Please sign in again.'
+          : 'Your connection could not be authorized. Please retry.');
     }
 
     final body = response.body.trim();
@@ -6834,7 +6919,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         ),
       );
 
-      final streamedResponse = await request.send().timeout(
+      final streamedResponse = await http.sendMultipart(request).timeout(
         const Duration(seconds: 430),
       );
 
@@ -6979,7 +7064,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
             ),
           );
         }
-        final streamedResponse = await request.send().timeout(
+        final streamedResponse = await http.sendMultipart(request).timeout(
           const Duration(seconds: 360),
         );
         final response = await http.Response.fromStream(streamedResponse);
@@ -7066,7 +7151,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         );
       }
 
-      final streamedResponse = await request.send().timeout(
+      final streamedResponse = await http.sendMultipart(request).timeout(
         const Duration(seconds: 360),
       );
 
@@ -7933,7 +8018,8 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     }
     final headers = Map<String, String>.from(_authHeaders());
     bool current() => mounted && revision == kKorlixAuthRevision.value &&
-        token == kKorlixAccessToken;
+        kKorlixAccessToken != null &&
+        korlixSessionIdentity(token) == korlixSessionIdentity(kKorlixAccessToken!);
     _aiOutputReportBusy = true;
     var sheetSubmitted = false;
     final detailsController = TextEditingController();
@@ -9428,10 +9514,20 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     final t = _t;
 
     return Scaffold(
-      body: ValueListenableBuilder<String>(valueListenable: kKorlixScreenSkinNotifier,
+      bottomNavigationBar: widget.bottomBar == null ? null : SafeArea(top: false, child: widget.bottomBar!),
+      body: Column(children: [
+        KorlixFixedPlanBar(
+          actions: widget.toolbarActions,
+          tier: _tierKnown ? _currentTier : null,
+          developer: _developerPlan,
+          busy: _openingDiscoveryPlans,
+          onOpenPlans: () => unawaited(_openDiscoveryPlans()),
+        ),
+        Expanded(child: ValueListenableBuilder<String>(valueListenable: kKorlixScreenSkinNotifier,
         builder: (context, screenSkin, _) => KorlixScreenBackdrop(
         palette: korlixSkinPaletteFor(kKorlixThemeNotifier.value), skinId: screenSkin,
         child: SafeArea(
+          top: false,
           child: Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 980),
@@ -9440,6 +9536,15 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                 child: Column(
                   children: [
                     _buildMockupHomeHeader(),
+                    KorlixStarterTasks(
+                      key: ValueKey(_starterTasksPrefsKey),
+                      storageKey: _starterTasksPrefsKey,
+                      tier: _tierKnown ? _currentTier : null,
+                      busy: _loading,
+                      onTask: _openStarterTask,
+                      onExplore: () => unawaited(_openHomeToolFinder()),
+                      onViewPlans: () => unawaited(_openDiscoveryPlans()),
+                    ),
                     if (kIsWeb) const KorlixLaunchCountdown(),
                     HomeQuickAccess(
                       onFindTool: _openHomeToolFinder,
@@ -9465,75 +9570,96 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
             ),
           ),
         ),
-      )),
+      ))),
+      ]),
     );
+  }
+
+  Future<bool> _openStarterTask(KorlixStarterTask task) async {
+    if (_loading || !mounted) return false;
+    if (_controller.text.trim().isNotEmpty || _activeUploadFiles.isNotEmpty) {
+      final replace = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Use this example?'),
+          content: const Text('This will replace your current message and clear any attached files.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Keep my text'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Use example'),
+            ),
+          ],
+        ),
+      );
+      if (replace != true || !mounted || _loading) return false;
+    }
+    // Prepare an editable text request. The normal submit path still checks
+    // consent, authentication and quota; choosing a task never generates it.
+    _setChatMode(false, starter: task.prompt);
+    setState(() {
+      _selectedUtilityTool = null;
+      _utilityPanelOpen = false;
+      _creditDebtValidationRoundsVisible = false;
+      _portraitStudioPromptOverride = null;
+      _pickedUploadFile = null;
+      _pickedUploadFiles.clear();
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final panel = _commandPanelKey.currentContext;
+      if (!mounted || panel == null || ModalRoute.of(context)?.isCurrent != true) return;
+      unawaited(Scrollable.ensureVisible(panel,
+        duration: MediaQuery.disableAnimationsOf(context)
+          ? Duration.zero : const Duration(milliseconds: 250)));
+    });
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('Edit the example, then tap ${_t.askButton} when you are ready.'),
+    ));
+    return true;
+  }
+
+  Future<void> _openDiscoveryPlans() async {
+    if (!mounted || _openingDiscoveryPlans) return;
+    setState(() => _openingDiscoveryPlans = true);
+    try {
+      if (kIsWeb) {
+        await showKorlixWebBilling(context, baseUrl: kKorlixBackendBaseUrl,
+          headersBuilder: _authHeaders, sessionChanges: kKorlixAuthRevision,
+          onTierChanged: _handleAppleSubscriptionTierChanged);
+      } else {
+        await showKorlixAppleSubscriptionSheet(
+          context: context,
+          backendBaseUrl: kKorlixBackendBaseUrl,
+          headersBuilder: _authHeaders,
+          sessionChanges: kKorlixAuthRevision,
+          currentTier: _currentTier,
+          onTierChanged: _handleAppleSubscriptionTierChanged,
+        );
+      }
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Plans could not be opened. Please try again.'),
+      ));
+    } finally {
+      if (mounted) setState(() => _openingDiscoveryPlans = false);
+    }
   }
 
   Future<void> _showPremiumFeaturePrompt({
     required String title,
     required String availability,
     required String description,
+    bool comingSoon = false,
   }) async {
-    if (!mounted) {
-      return;
-    }
-
-    await showDialog<void>(
-      context: context,
-      barrierColor: Colors.black.withOpacity(0.62),
-      builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF071B27),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-            side: BorderSide(color: const Color(0xFF69D9E8).withOpacity(0.50)),
-          ),
-          title: Row(
-            children: [
-              const Icon(
-                Icons.workspace_premium_rounded,
-                color: Color(0xFFFFD166),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    color: Color(0xFFE4EBEE),
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          content: Text(
-            '$description\n\nAvailable on: $availability\n\nOpen Settings, then tap View plans / upgrade to see plan options.',
-            style: const TextStyle(
-              color: Color(0xFFA9C6CF),
-              height: 1.4,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          actions: [
-            TextButton(style: korlixSoundButtonStyle(null),
-              onPressed: korlixSoundAction(() => Navigator.of(context).pop()),
-              child: const Text(
-                'Not now',
-                style: TextStyle(color: Color(0xFFA9C6CF)),
-              ),
-            ),
-            FilledButton(
-              onPressed: korlixSoundAction(() => Navigator.of(context).pop()),
-              style: korlixSoundButtonStyle(FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF143B4A),
-                foregroundColor: const Color(0xFFE4EBEE),
-              )),
-              child: const Text('Got it'),
-            ),
-          ],
-        );
-      },
+    if (!mounted) return;
+    final viewPlans = await showKorlixPlanPrompt(
+      context: context, title: title, availability: availability,
+      description: description, comingSoon: comingSoon,
     );
+    if (viewPlans && mounted) await _openDiscoveryPlans();
   }
 
   Widget _premiumToolChip({
@@ -9567,6 +9693,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
         title: title,
         availability: availability,
         description: description,
+        comingSoon: comingSoon,
       )),
     );
   }
@@ -9592,6 +9719,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                 title: title,
                 availability: availability,
                 description: description,
+                comingSoon: comingSoon,
               )),
         style: korlixSoundButtonStyle(OutlinedButton.styleFrom(
           padding: EdgeInsets.zero,
@@ -9639,6 +9767,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       _loadingTier = true;
     });
 
+    final authRevision = kKorlixAuthRevision.value;
     try {
       final response = await http.get(
         _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/me'),
@@ -9654,12 +9783,17 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
           (data['profile'] as Map?)?.cast<String, dynamic>() ??
           <String, dynamic>{};
 
-      if (!mounted) {
+      if (!mounted || authRevision != kKorlixAuthRevision.value) {
         return;
       }
 
       setState(() {
-        _currentTier = (profile['tier'] ?? 'basic').toString();
+        final tier = profile['tier']?.toString().trim().toLowerCase();
+        if (tier != null && tier.isNotEmpty) {
+          _currentTier = tier;
+          _tierKnown = true;
+          _developerPlan = profile['developer_unlimited'] == true;
+        }
       });
     } catch (_) {
       // Tier loading should never block the app.
@@ -13237,10 +13371,17 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       : tile(label, korlixToolIcon(label),
           (_loading || _customAccessLoading) && label != 'THE RECEIPT WIZ' && !_isIncludedTextWorkspace(label)
             ? null : () => _selectUtilityTool(label));
-    bool businessAction(QuickAction action) => const {
-      'create an app', 'email enhancer', 'negocios', 'crear plan', 'ideas de contenido', 'idées contenu',
-    }.contains(action.label.toLowerCase());
+    bool businessAction(QuickAction action) =>
+        isHomeBusinessQuickAction(action.label);
     final quickActions = _homeQuickActions;
+    List<Widget> orderedTiles(
+      List<MapEntry<String, Widget>> entries, {
+      required bool business,
+    }) => orderHomeTools(
+      entries,
+      labelOf: (entry) => entry.key,
+      business: business,
+    ).map((entry) => entry.value).toList(growable: false);
 
     Widget answerReadyBody() => _buildAnswerReadyConversationView(
       activeResult, compact: MediaQuery.sizeOf(context).width < 430);
@@ -13465,20 +13606,21 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                 KorlixActionSection(
                   title: 'For business', description: 'Manage operations, grow your reach, and get work done.',
                   icon: Icons.business_center_outlined,
-                  children: [
-                    for (final tool in homeBusinessTools) toolTile(tool),
+                  children: orderedTiles([
+                    for (final tool in homeBusinessTools) MapEntry(tool, toolTile(tool)),
                     if (_currentTier.trim().toLowerCase() == 'enterprise') ...[
-                      for (final tool in homeEnterpriseTools) toolTile(tool),
+                      for (final tool in homeEnterpriseTools) MapEntry(tool, toolTile(tool)),
                     ],
-                    for (final action in quickActions.where(businessAction)) _buildSafeUiQuickActionChip(action, tile: true),
-                  ],
+                    for (final action in quickActions.where(businessAction))
+                      MapEntry(action.label, _buildSafeUiQuickActionChip(action, tile: true)),
+                  ], business: true),
                 ),
                 const SizedBox(height: 30),
                 KorlixActionSection(
                   title: 'For personal use', description: 'Create, learn, organize, and explore your everyday life.',
                   icon: Icons.person_outline_rounded,
-                  children: [
-                    AnimatedBuilder(
+                  children: orderedTiles([
+                    MapEntry('KORLIX Social', AnimatedBuilder(
                       animation: _socialNotifications,
                       builder: (context, _) => tile('KORLIX Social',
                         _socialNotifications.totalUnread > 0
@@ -13487,13 +13629,15 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                         subtitle: _socialNotifications.totalUnread > 0
                           ? '${_socialNotifications.countLabel} unread messages'
                           : 'People, messages & forums'),
-                    ),
-                    for (final tool in homePersonalTools) toolTile(tool),
-                    for (final action in quickActions.where((a) => !businessAction(a))) _buildSafeUiQuickActionChip(action, tile: true),
-                    tile('Music Studio', Icons.library_music_rounded, _loading ? null : _showMusicStudio),
-                    tile('Locator', Icons.location_on_outlined, _loading ? null : _showLocatorOptions),
-                    if (kKorlixMusicDistributionPrelaunchVisible) tile('Music Distribution', Icons.public_rounded, _loading ? null : _showMusicDistribution),
-                  ],
+                    )),
+                    for (final tool in homePersonalTools) MapEntry(tool, toolTile(tool)),
+                    for (final action in quickActions.where((a) => !businessAction(a)))
+                      MapEntry(action.label, _buildSafeUiQuickActionChip(action, tile: true)),
+                    MapEntry('Music Studio', tile('Music Studio', Icons.library_music_rounded, _loading ? null : _showMusicStudio)),
+                    MapEntry('Locator', tile('Locator', Icons.location_on_outlined, _loading ? null : _showLocatorOptions)),
+                    if (kKorlixMusicDistributionPrelaunchVisible)
+                      MapEntry('Music Distribution', tile('Music Distribution', Icons.public_rounded, _loading ? null : _showMusicDistribution)),
+                  ], business: false),
                 ),
                 if (_currentTier == 'basic' && !kKorlixHideTipDeveloperOnIos) ...[
                   const SizedBox(height: 20),
@@ -15083,7 +15227,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     }
     final headers = Map<String, String>.from(_authHeaders());
     bool current() => mounted && revision == kKorlixAuthRevision.value &&
-        token == kKorlixAccessToken;
+        kKorlixAccessToken != null &&
+        korlixSessionIdentity(token) == korlixSessionIdentity(kKorlixAccessToken!);
     _aiOutputReportBusy = true;
     var sheetSubmitted = false;
     final detailsController = TextEditingController();

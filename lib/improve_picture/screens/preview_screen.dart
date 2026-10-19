@@ -4,7 +4,7 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart' as fp;
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 
 import '../controllers/portrait_studio_controller.dart';
 import '../models/portrait_studio_callback.dart';
@@ -181,7 +181,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
         ),
       );
 
-      final streamed = await request.send().timeout(
+      final streamed = await http.sendMultipart(request).timeout(
         const Duration(seconds: 90),
       );
       final response = await http.Response.fromStream(streamed);

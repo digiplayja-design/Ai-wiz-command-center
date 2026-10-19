@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
 import 'models/portrait_studio_callback.dart';
@@ -64,7 +64,7 @@ class PictureStudioClient {
     required this.headersBuilder,
     this.isSessionCurrent,
     http.Client? client,
-  }) : _client = client ?? http.Client();
+  }) : _client = client ?? http.createClient();
   final String backendBaseUrl;
   final KorlixPreviewHeadersBuilder headersBuilder;
   final bool Function()? isSessionCurrent;

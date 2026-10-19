@@ -1,3 +1,6 @@
+import 'package:ai_wiz_command_center/social/social_call_background.dart';
+import 'package:ai_wiz_command_center/theme/korlix_smoke_screensaver.dart';
+import 'package:ai_wiz_command_center/theme/korlix_screensaver_controller.dart';
 // K136S-F5: controller + real microphone guard + routing integration, with fake devices/API.
 import 'dart:async';
 import 'dart:convert';
@@ -297,7 +300,31 @@ class _ReadinessPeer extends _ReadinessObservedFake implements rtc.RTCPeerConnec
   Future<void> dispose() async { disposals++; }
 }
 
+class _ReadinessBackground extends SocialCallBackground {
+  _ReadinessBackground() : super(kind: 'rici');
+  bool allowed = true;
+  int starts = 0, stops = 0;
+  Completer<bool>? gate;
+  @override
+  Future<bool> start(String id) async {
+    starts++;
+    ready = await (gate?.future ?? Future.value(allowed));
+    return ready;
+  }
+  @override
+  Future<void> stop() async { stops++; ready = false; }
+  void nativeStop() { ready = false; onStopped?.call(); }
+}
+
 class _ReadinessIo extends K136sLiveConvoIo {
+  final backgrounds = <_ReadinessBackground>[];
+  bool allowBackground = true;
+  @override
+  SocialCallBackground createBackgroundSession() {
+    final background = _ReadinessBackground()..allowed = allowBackground;
+    backgrounds.add(background);
+    return background;
+  }
   final callbackFailures = <String>[];
   void expectCallback(Object? actual, Object? matcher) {
     try {
@@ -454,6 +481,80 @@ Future<void> _withScreen(WidgetTester tester, Future<void> Function(_ReadinessIo
 }
 
 void _readinessScreenTests() {
+  testWidgets('Rici keeps the live transport and microphone state through device lock', (tester) async {
+    await _withScreen(tester, (io) async {
+      await _finishAction(tester, _screenAction(tester));
+      final peer = io.peers.single;
+      final track = io.streams.single.audio;
+      final background = io.backgrounds.single;
+      expect(background.ready, true);
+      peer.channel.onMessage!(rtc.RTCDataChannelMessage(jsonEncode({'type': 'output_audio_buffer.started'})));
+      await tester.pump();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump(const Duration(seconds: 2));
+      expect(peer.closes, 0);
+      expect(track.enabled, true);
+      expect(_stage(tester).status, 'Rici is speaking…');
+      expect(background.stops, 0);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await _finishAction(tester, _stage(tester).onToggleMute!());
+      expect(track.enabled, false);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump();
+      expect(track.enabled, false);
+      expect(peer.closes, 0);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    });
+  });
+
+  testWidgets('Rici lock-screen Stop ends transport and releases the background lease', (tester) async {
+    await _withScreen(tester, (io) async {
+      await _finishAction(tester, _screenAction(tester));
+      io.backgrounds.single.nativeStop();
+      await _pumpSteps(tester);
+      expect(io.streams.single.audio.enabled, false);
+      expect(io.streams.single.audio.stops, greaterThan(0));
+      expect(io.peers.single.closes, 1);
+      expect(io.backgrounds.single.stops, 1);
+      expect(_stage(tester).paused, true);
+    });
+  });
+
+  testWidgets('unavailable native background audio pauses safely on device lock', (tester) async {
+    await _withScreen(tester, (io) async {
+      io.allowBackground = false;
+      await _finishAction(tester, _screenAction(tester));
+      expect(_stage(tester).backgroundAudioNotice, contains('unavailable'));
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await _pumpSteps(tester);
+      expect(io.peers.single.closes, 1);
+      expect(io.streams.single.audio.enabled, false);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await _pumpSteps(tester);
+      expect(io.peers.length, 1, reason: 'Unlock never silently reconnects.');
+    });
+  });
+
+  testWidgets('visual smoke screensaver preserves Rici speech and live session', (tester) async {
+    final saver = KorlixScreensaverController(initiallyEnabled: false);
+    await _withScreen(tester, (io) async {
+      await tester.pumpWidget(MaterialApp(home: KorlixSmokeScreensaver(controller: saver, child: _readinessApp(io))));
+      await _pumpSteps(tester);
+      await _finishAction(tester, _screenAction(tester));
+      final peer = io.peers.single;
+      peer.channel.onMessage!(rtc.RTCDataChannelMessage(jsonEncode({'type': 'output_audio_buffer.started'})));
+      saver.preview();
+      await tester.pump();
+      expect(find.byKey(const Key('smoke-screensaver')), findsOneWidget);
+      expect(_stage(tester).status, 'Rici is speaking…');
+      expect(peer.closes, 0);
+      expect(io.backgrounds.single.ready, true);
+    });
+    saver.dispose();
+  });
+
   testWidgets('Rici speaks one name while assistant captions keep the written spelling', (tester) async {
     await _withScreen(tester, (io) async {
       await _finishAction(tester, _screenAction(tester));

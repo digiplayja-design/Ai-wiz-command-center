@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 
 import '../live_convo/agent_studio_client.dart'
     show agentAccountScope, agentStudioKey;
@@ -31,7 +31,7 @@ class SocialClient extends ChangeNotifier {
     required this.headersBuilder,
     this.sessionChanges,
     http.Client? client,
-  }) : _http = client ?? http.Client(),
+  }) : _http = client ?? http.createClient(),
        _owns = client == null {
     _scope = agentAccountScope(headersBuilder());
     sessionChanges?.addListener(_check);

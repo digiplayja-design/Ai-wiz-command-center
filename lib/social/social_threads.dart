@@ -26,6 +26,7 @@ import 'social_message_quote.dart';
 import 'social_message_receipt.dart';
 import 'social_auto_dump.dart';
 import 'social_dump_truck.dart';
+import 'social_floating_chat.dart';
 
 class SocialChatScreen extends StatefulWidget {
   const SocialChatScreen({
@@ -38,6 +39,7 @@ class SocialChatScreen extends StatefulWidget {
     this.onGroupDetails,
     this.attachmentPicker,
     this.autoDumpNow,
+    this.bubbleMode = false,
   });
   final SocialClient client;
   final SocialMap me, peer;
@@ -46,6 +48,9 @@ class SocialChatScreen extends StatefulWidget {
   final Future<SocialAttachmentDraft?> Function(String kind)? attachmentPicker;
   final Future<bool> Function()? onGroupDetails;
   final DateTime Function()? autoDumpNow;
+  /// A native bubble is a compact chat surface; calls and microphone capture
+  /// stay in the main app, which owns their permissions and audio lifecycle.
+  final bool bubbleMode;
   @override
   State<SocialChatScreen> createState() => _SocialChatScreenState();
 }
@@ -1479,6 +1484,20 @@ class _SocialChatScreenState extends State<SocialChatScreen>
         ],
       ),
       actions: [
+        if (!widget.bubbleMode && SocialFloatingChat.supportedPlatform)
+          IconButton(
+            key: const ValueKey('keep-chat-floating'),
+            tooltip: 'Keep this chat floating',
+            icon: const Icon(Icons.bubble_chart_outlined),
+            onPressed: _unavailable
+                ? null
+                : () => keepSocialChatFloating(
+                    context,
+                    client: widget.client,
+                    peer: _peer,
+                    groupChat: widget.groupChat,
+                  ),
+          ),
         IconButton(
           key: const ValueKey('auto-dump-mode'),
           tooltip: _dumpMode
@@ -1516,7 +1535,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
               ),
             ],
           ),
-        if (widget.groupChat)
+        if (widget.groupChat && !widget.bubbleMode)
           IconButton(
             tooltip: 'Group details',
             icon: const Icon(Icons.group_outlined),
@@ -1532,7 +1551,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                     }
                   },
           )
-        else
+        else if (!widget.groupChat)
           PopupMenuButton<String>(
             tooltip: 'Conversation options',
             onSelected: (action) => action == 'appearance'
@@ -1709,7 +1728,8 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                             ),
                             ('image', 'Photo', Icons.photo_outlined),
                             ('file', 'File', Icons.attach_file_rounded),
-                            ('voice', 'Voice note', Icons.mic_none_rounded),
+                            if (!widget.bubbleMode)
+                              ('voice', 'Voice note', Icons.mic_none_rounded),
                           ])
                             TextButton.icon(
                               onPressed: _sending || _pickingAttachment

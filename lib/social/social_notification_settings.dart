@@ -43,14 +43,25 @@ class _SocialNotificationSettingsState
 
   Future<void> _load() async {
     try {
-      final state = await widget.client.get('push_state');
-      if (!mounted || !widget.client.available) return;
       await platform.syncOwner(owner);
+      if (!mounted || !widget.client.available) return;
+      final state = await widget.client.get(platform.action('state'), {
+        if (platform.isNative && platform.provider.isNotEmpty)
+          'provider': platform.provider,
+      });
+      if (!mounted || !widget.client.available) return;
       final local = await platform.current(owner);
       if (!mounted || !widget.client.available) return;
       final saved = socialItems(
         state['subscriptions'],
-      ).where((s) => s['device'] == local?['device']).firstOrNull;
+      ).where((s) =>
+        local != null && s['device'] == local['device'] &&
+        (!platform.isNative ||
+          (local['binding'] is String &&
+            (local['binding'] as String).isNotEmpty &&
+            s['binding'] == local['binding'] &&
+            s['provider'] == platform.provider)),
+      ).firstOrNull;
       setState(() {
         _config = state;
         _local = saved == null ? null : local;
@@ -84,7 +95,7 @@ class _SocialNotificationSettingsState
         await platform.unsubscribe(owner);
         return;
       }
-      await widget.client.post('push_subscribe', {
+      await widget.client.post(platform.action('subscribe'), {
         'device': local['device'],
         'binding': local['binding'],
         'subscription': local['subscription'],
@@ -117,8 +128,9 @@ class _SocialNotificationSettingsState
       await platform.unsubscribe(owner);
       if (mounted) setState(() => _local = null);
       if (local != null && widget.client.available) {
-        await widget.client.post('push_unsubscribe', {
+        await widget.client.post(platform.action('unsubscribe'), {
           'device': local['device'],
+          if (platform.isNative) 'binding': local['binding'],
         });
       }
     } catch (e) {
@@ -131,7 +143,13 @@ class _SocialNotificationSettingsState
   @override
   Widget build(BuildContext context) {
     final skin = korlixSkinOf(context);
-    final capable = platform.supported && _config['enabled'] == true;
+    final native = platform.isNative;
+    final where = native ? 'device' : 'browser';
+    final providerConfig = socialMap(
+      socialMap(_config['providers'])[platform.provider],
+    );
+    final capable = platform.supported && _config['enabled'] == true &&
+        (!native || providerConfig['enabled'] == true);
     return SocialScaffold(
       appBar: AppBar(title: const Text('Social notifications')),
       body: SafeArea(
@@ -161,14 +179,14 @@ class _SocialNotificationSettingsState
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        'Choose alerts for this browser. Notifications hide message content and caller names. Opening an alert never answers a call.',
+                        'Choose alerts for this $where. Notifications hide message content and caller names. Opening an alert never answers a call.',
                         style: TextStyle(color: skin.mutedText, height: 1.5),
                       ),
                       const SizedBox(height: 12),
                       Text(
                         _local != null
-                            ? 'Enabled on this browser'
-                            : 'Off on this browser',
+                            ? 'Enabled on this $where'
+                            : 'Off on this $where',
                         style: TextStyle(
                           color: _local != null ? skin.success : skin.mutedText,
                           fontWeight: FontWeight.w700,
@@ -198,8 +216,10 @@ class _SocialNotificationSettingsState
                   SocialPanel(
                     child: Text(
                       !platform.supported
-                          ? 'This build cannot receive background push notifications. In-app alerts still work while KORLIX is active. On iPhone or iPad, try adding KORLIX to your Home Screen and opening it there.'
-                          : '${_config['reason'] ?? 'Background notification delivery is not configured yet.'}',
+                          ? native
+                            ? 'Background notifications are not configured for this app version yet. In-app alerts still work while KORLIX is active.'
+                            : 'This build cannot receive background push notifications. In-app alerts still work while KORLIX is active. On iPhone or iPad, try adding KORLIX to your Home Screen and opening it there.'
+                          : '${(native ? providerConfig['reason'] : null) ?? _config['reason'] ?? 'Background notification delivery is not configured yet.'}',
                       style: TextStyle(color: skin.mutedText, height: 1.5),
                     ),
                   ),
@@ -207,7 +227,9 @@ class _SocialNotificationSettingsState
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     child: Text(
-                      'Notifications are blocked in this browser. Allow notifications in the site settings, then reopen this screen.',
+                      native
+                          ? 'Notifications are blocked on this device. Allow KORLIX notifications in your device Settings, then reopen this screen.'
+                          : 'Notifications are blocked in this browser. Allow notifications in the site settings, then reopen this screen.',
                       style: TextStyle(color: skin.danger),
                     ),
                   ),
@@ -243,7 +265,9 @@ class _SocialNotificationSettingsState
                 const SizedBox(height: 12),
                 KorlixActionButton(
                   label: _local == null
-                      ? 'Enable browser notifications'
+                      ? native
+                        ? 'Enable device notifications'
+                        : 'Enable browser notifications'
                       : 'Save notification preferences',
                   icon: Icons.notifications_active_outlined,
                   busy: _saving,
@@ -261,7 +285,7 @@ class _SocialNotificationSettingsState
                   TextButton.icon(
                     onPressed: _saving ? null : _disable,
                     icon: const Icon(Icons.notifications_off_outlined),
-                    label: const Text('Turn off on this browser'),
+                    label: Text('Turn off on this $where'),
                   ),
                 if (_error != null)
                   Padding(
@@ -269,8 +293,19 @@ class _SocialNotificationSettingsState
                     child: Text(_error!, style: TextStyle(color: skin.danger)),
                   ),
                 const SizedBox(height: 18),
+                if (native && ['fcm', 'apns'].contains(platform.provider)) ...[
+                  Text(
+                    platform.provider == 'fcm'
+                        ? 'On Android, open a conversation and choose “Keep this chat floating”. Allow bubbles in your device notification settings to keep that chat handy while using other apps.'
+                        : 'On iPhone and iPad, choose Reply on a message notification. KORLIX opens after you unlock so you can continue the conversation.',
+                    style: TextStyle(color: skin.mutedText, height: 1.5),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 Text(
-                  'Delivery depends on your browser, device settings and connection. Push can alert you when KORLIX is not visible; it does not keep an active call alive when the device suspends the app. Native app background calling needs a separately configured mobile build.',
+                  native
+                      ? 'Delivery depends on notification permissions, device settings and your connection. Alerts can arrive while you use other apps; they never automatically answer a call or turn on your microphone.'
+                      : 'Delivery depends on your browser, device settings and connection. Push can alert you when KORLIX is not visible; it does not keep an active call alive when the device suspends the app. Native app background calling needs a separately configured mobile build.',
                   style: TextStyle(color: skin.mutedText, height: 1.5),
                 ),
               ],

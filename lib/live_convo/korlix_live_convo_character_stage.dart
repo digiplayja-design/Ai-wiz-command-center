@@ -38,6 +38,7 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
     required this.connected,
     required this.muted,
     this.microphoneActive,
+    this.backgroundAudioNotice,
     this.inventoryResults,
     this.schedulingPanel,
     this.schedulingMode = false,
@@ -125,6 +126,7 @@ class KorlixLiveConvoCharacterStage extends StatefulWidget {
   final bool connected;
   final bool muted;
   final bool? microphoneActive;
+  final String? backgroundAudioNotice;
 
   // KORLIX_LIVE_CONVO_HARD_LOCKED_PAUSE_STAGE_BUILD131_V1
   final bool paused;

@@ -8,6 +8,11 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Push remains explicitly unconfigured in ordinary CI/developer builds. A
+// Firebase Android client file enables only the native messaging source set.
+val korlixFcmConfigured = file("google-services.json").isFile
+if (korlixFcmConfigured) apply(plugin = "com.google.gms.google-services")
+
 // KORLIX_ANDROID_RELEASE_SIGNING_REPAIR_BEGIN
 val korlixAndroidKeyProperties = Properties()
 val korlixAndroidKeyPropertiesFile = rootProject.file("key.properties")
@@ -99,7 +104,12 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        manifestPlaceholders["korlixFcmEnabled"] = korlixFcmConfigured.toString()
     }
+
+    sourceSets.getByName("main").java.srcDir(
+        if (korlixFcmConfigured) "src/fcm/kotlin" else "src/noFcm/kotlin"
+    )
 
     signingConfigs {
         create("release") {
@@ -126,6 +136,10 @@ kotlin {
 
 dependencies {
     implementation("com.google.android.play:review:2.0.2")
+    if (korlixFcmConfigured) {
+        implementation(platform("com.google.firebase:firebase-bom:34.19.0"))
+        implementation("com.google.firebase:firebase-messaging")
+    }
 }
 
 // Fail at the release task boundary, without blocking debug builds or analysis.

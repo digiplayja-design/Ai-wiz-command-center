@@ -12,13 +12,17 @@ class _SecureBackend implements KorlixSecureTokenBackend {
   bool failDelete = false;
   bool ignoreWrite = false;
   Completer<void>? writeBarrier;
+  Completer<void>? readBarrier, readEntered;
   final calls = <String>[];
 
   @override
   Future<String?> read() async {
     calls.add('read');
     if (failRead) throw StateError('Storage locked');
-    return value;
+    final snapshot = value;
+    if (readEntered?.isCompleted == false) readEntered!.complete();
+    await readBarrier?.future;
+    return snapshot;
   }
 
   @override
@@ -132,6 +136,7 @@ void main() {
   test('a pending save completes before a following sign-out', () async {
     backend.writeBarrier = Completer<void>();
     final saving = store.write(accessToken: 'new-access');
+    await Future<void>.delayed(Duration.zero);
     final clearing = store.clear();
     await Future<void>.delayed(Duration.zero);
     expect(backend.calls, ['write']);
@@ -139,6 +144,38 @@ void main() {
     await Future.wait([saving, clearing]);
     expect(await store.read(), isNull);
     expect(backend.value, isNull);
+  });
+
+  test('logout marker is durable before a blocked secure write completes', () async {
+    await store.read();
+    backend.writeBarrier = Completer<void>();
+    final saving = store.write(accessToken: 'rotated-access');
+    await Future<void>.delayed(Duration.zero);
+    final clearing = store.clear();
+    await Future<void>.delayed(Duration.zero);
+    final reopened = KorlixTokenStore(
+      useSecureStorage: true,
+      preferences: () async => prefs,
+      secureStorage: backend,
+    );
+    expect(prefs.getBool('korlix_tokens_signed_out_v1'), isTrue);
+    expect(await reopened.readOnly(), isNull);
+    backend.writeBarrier!.complete();
+    await Future.wait([saving, clearing]);
+    expect(await reopened.read(), isNull);
+  });
+
+  test('a read started before logout cannot migrate or clear its marker', () async {
+    backend.readBarrier = Completer<void>();
+    backend.readEntered = Completer<void>();
+    final reading = store.read();
+    await backend.readEntered!.future;
+    await store.markSignedOut();
+    backend.readBarrier!.complete();
+    expect(await reading, isNull);
+    expect(backend.calls, ['read']);
+    expect(prefs.getBool('korlix_tokens_signed_out_v1'), isTrue);
+    expect(await store.readOnly(), isNull);
   });
 
   test('fresh installs do not restore a keychain session left by uninstall', () async {
@@ -160,5 +197,35 @@ void main() {
     await webStore.clear();
     expect(await webStore.read(), isNull);
     expect(backend.calls, isEmpty);
+  });
+
+  test('secondary engine read never migrates or writes a session', () async {
+    expect(await store.readOnly(), isNull);
+    expect(backend.calls, isEmpty);
+    expect(prefs.getString(KorlixTokenStore.accessTokenKey), 'fixture-access');
+    await store.write(accessToken: 'current-access');
+    backend.calls.clear();
+    expect((await store.readOnly())?.accessToken, 'current-access');
+    expect(backend.calls, ['read']);
+  });
+
+  test('secondary read racing main-engine logout cannot resurrect tokens', () async {
+    await store.write(accessToken: 'current-access');
+    final secondary = KorlixTokenStore(
+      useSecureStorage: true,
+      preferences: () async => prefs,
+      secureStorage: backend,
+    );
+    backend.readBarrier = Completer<void>();
+    backend.readEntered = Completer<void>();
+    final reading = secondary.readOnly();
+    await backend.readEntered!.future;
+    await store.clear();
+    backend.readBarrier!.complete();
+    expect(await reading, isNull);
+    expect(await store.read(), isNull);
+    expect(backend.value, isNull);
+    await prefs.reload();
+    expect(prefs.getBool('korlix_tokens_signed_out_v1'), isTrue);
   });
 }

@@ -1,5 +1,7 @@
 import 'helpers/signup_eligibility.dart';
+
 import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
@@ -50,14 +52,14 @@ void main() {
       await tester.pumpAndSettle();
       await credentials(tester);
       await acceptAdultSignup(tester);
-      await tester.ensureVisible(find.text('Create account'));
-      await tester.tap(find.text('Create account'));
+      await tester.ensureVisible(find.text('Create free account'));
+      await tester.tap(find.text('Create free account'));
       await tester.pumpAndSettle();
       expect(path, '/api/auth/signup');
       expect(signedIn, isFalse);
       expect(find.byType(KorlixWelcomeConfirmation), findsOneWidget);
       expect(find.text('Welcome to KORLIX AI'), findsOneWidget);
-      expect(find.text('Look for Supabase'), findsOneWidget);
+      expect(find.text('Look for KORLIX AI'), findsOneWidget);
       expect(find.textContaining('before you can log in'), findsOneWidget);
       await tester.ensureVisible(find.text('Back to sign in'));
       await tester.tap(find.text('Back to sign in'));
@@ -129,7 +131,7 @@ void main() {
       )) {
         expect(field.controller!.text, isEmpty);
       }
-      expect(find.text('Create your Korlix AI account'), findsOneWidget);
+      expect(find.text('Create your free account'), findsOneWidget);
     },
   );
 }

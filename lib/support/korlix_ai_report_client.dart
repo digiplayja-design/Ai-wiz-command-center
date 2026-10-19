@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 
 class KorlixAiReportException implements Exception {
   const KorlixAiReportException(this.message);
@@ -31,7 +31,7 @@ Future<String> submitKorlixAiReport({
   Duration timeout = const Duration(seconds: 30),
 }) async {
   final ownedClient = client == null;
-  final transport = client ?? http.Client();
+  final transport = client ?? http.createClient();
   try {
     final body = jsonEncode({
       'contentType': contentType,

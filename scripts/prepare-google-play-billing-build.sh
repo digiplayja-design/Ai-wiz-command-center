@@ -53,6 +53,11 @@ git -C "$source_root" worktree add --detach "$build_root" "$revision"
 echo "Build folder: $build_root"
 
 java "$build_root/scripts/PrepareAndroidSigning.java" "$source_root" "$build_root"
+python3 "$build_root/scripts/prepare-android-firebase.py" "$source_root" "$build_root"
+if [[ -n "${KORLIX_FIREBASE_ANDROID_CONFIG:-}" ]]; then
+  # The selected file was validated and copied before changing directories.
+  export KORLIX_FIREBASE_ANDROID_CONFIG="$build_root/android/app/google-services.json"
+fi
 
 if [[ -n "${KORLIX_ANDROID_BUILD_PARENT:-}" ]]; then
   # A separate worktree alone is insufficient when the home disk is also full:

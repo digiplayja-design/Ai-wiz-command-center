@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 
 typedef BillingJson = Map<String, dynamic>;
 
@@ -18,7 +18,7 @@ class WebBillingClient {
     required this.headersBuilder,
     this.sessionChanges,
     http.Client? httpClient,
-  }) : _http = httpClient ?? http.Client(),
+  }) : _http = httpClient ?? http.createClient(),
        _ownsHttp = httpClient == null {
     _scope = _readScope();
     sessionChanges?.addListener(_checkSession);

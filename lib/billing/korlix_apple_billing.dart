@@ -3,7 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 import 'package:in_app_purchase_android/billing_client_wrappers.dart';
@@ -36,7 +36,7 @@ class KorlixAppleBillingService extends ChangeNotifier
     with WidgetsBindingObserver {
   KorlixAppleBillingService._()
     : _store = InAppPurchase.instance,
-      _http = http.Client();
+      _http = http.createClient();
 
   @visibleForTesting
   KorlixAppleBillingService.forTesting(this._store, this._http);

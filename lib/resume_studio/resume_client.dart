@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
+import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'resume_model.dart';
@@ -20,7 +20,7 @@ class ResumeClient {
     this.language = 'en',
     this.sessionChanges,
     http.Client? client,
-  }) : _http = client ?? http.Client(),
+  }) : _http = client ?? http.createClient(),
        _owns = client == null {
     final identity = _identity();
     _scope = jsonEncode(identity);

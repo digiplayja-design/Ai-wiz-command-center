@@ -2,6 +2,26 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:ai_wiz_command_center/navigation/home_tool_catalog.dart';
 
 void main() {
+  test('ranking preserves translated labels, route objects and unknown tools', () {
+    final entries = <MapEntry<String, Object>>[
+      MapEntry('New first tool', Object()),
+      MapEntry('Estudiar', Object()),
+      MapEntry('Rédiger mon CV', Object()),
+      MapEntry('BabyBlend', Object()),
+      MapEntry('Study Studio', Object()),
+      MapEntry('New second tool', Object()),
+    ];
+    final ordered = orderHomeTools(
+      entries,
+      labelOf: (entry) => entry.key,
+      business: false,
+    );
+    expect(ordered, [entries[3], entries[2], entries[1], entries[0], entries[5]]);
+    for (final label in ['Negocios', 'Crear plan', 'Ideas de contenido', 'Idées contenu']) {
+      expect(isHomeBusinessQuickAction(label), isTrue);
+    }
+  });
+
   test('Business Passport is visible and searchable on every tier', () {
     expect(homeBusinessTools, contains('Business Passport'));
     expect(homeEnterpriseTools, isNot(contains('Business Passport')));

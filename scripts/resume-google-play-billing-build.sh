@@ -132,6 +132,10 @@ if [[ -n "$backup_root" ]]; then
     fi
   done
 fi
+python3 "$build_root/scripts/prepare-android-firebase.py" "$source_root" "$build_root"
+if [[ -n "${KORLIX_FIREBASE_ANDROID_CONFIG:-}" ]]; then
+  export KORLIX_FIREBASE_ANDROID_CONFIG="$build_root/android/app/google-services.json"
+fi
 
 run_root="$(dirname "$build_root")"
 export GRADLE_USER_HOME="$run_root/gradle-cache"
