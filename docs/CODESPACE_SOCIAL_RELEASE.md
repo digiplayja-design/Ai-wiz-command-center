@@ -1,9 +1,16 @@
-# Build KORLIX Social and session renewal, then save the AAB in your browser
+# Build KORLIX Social, session renewal and signup branding, then save the AAB in your browser
 
-**Automated validation passed.** This handoff builds application commit
-`d6e9251f433a6959fa03be42190b1ad9ca4697ea`. Its validation run is
+This handoff builds application commit
+`728c43d50b4a6d4f265950b58e23a161cae8ee8d`, which changes the signup
+confirmation instructions to match the KORLIX AI sender and email subject.
+The copy change and existing test assertion were reviewed, and `git diff --check`
+passed. Flutter was unavailable locally; automated validation for this revision
+has not yet been confirmed.
+
+The earlier application baseline `d6e9251f433a6959fa03be42190b1ad9ca4697ea`
+passed validation run
 [39145471909](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/39145471909).
-All 589 regression tests passed, plus the separate build-mode layout check;
+For that earlier baseline, all 589 regression tests passed, plus the separate build-mode layout check;
 one existing optional visual test was skipped. Android arm64 debug builds passed
 with and without Firebase, and the unsigned iOS simulator build passed.
 Complete the signed-device checks below before store rollout; this does not
@@ -48,9 +55,9 @@ and deployment. See [the release guide](SOCIAL_FLOATING_CHAT_RELEASE.md).
 ## One paste: signed build and browser download
 
 First check the highest version code in **all Google Play tracks and drafts**.
-The last locally confirmed build was **136**; verify the current highest Play
+The last user-provided Play Console screenshot showed production build **138**; verify the current highest Play
 code instead of assuming that number. The command asks for it and builds the
-next code. If the highest Play code is 136, the resulting file is KORLIX-137.aab.
+next code. If the highest Play code is 138, the resulting file is KORLIX-139.aab.
 
 Paste the entire block into the Codespace **Terminal**:
 
@@ -66,7 +73,7 @@ if [[ ! -r "$KORLIX_ANDROID_DEFINES_FILE" ]]; then
   echo 'The saved Android client configuration is missing.' >&2
   exit 1
 fi
-KORLIX_RELEASE_REV=d6e9251f433a6959fa03be42190b1ad9ca4697ea
+KORLIX_RELEASE_REV=728c43d50b4a6d4f265950b58e23a161cae8ee8d
 read -r -p 'Highest version code in all Play tracks and drafts: ' KORLIX_HIGHEST </dev/tty
 if [[ ! "$KORLIX_HIGHEST" =~ ^[1-9][0-9]{0,9}$ ]] || (( 10#$KORLIX_HIGHEST >= 2100000000 )); then
   echo 'Enter the highest version code verified in Play Console.' >&2
@@ -123,7 +130,12 @@ backend credentials. Keep the Codespace running until the download finishes.
 ## Internal testing before rollout
 
 Upload the saved AAB to **Internal testing** first. Install it on the Samsung
-and verify a direct chat and group chat: choose **Keep this chat floating**,
+and confirm that signup now says **Look for KORLIX AI**, identifies the subject
+**Confirm your KORLIX AI email address**, and recommends searching for
+**KORLIX AI**. With a test email address you control, check that the branded
+confirmation email arrives, its button confirms the account, and sign-in works.
+
+Verify a direct chat and group chat: choose **Keep this chat floating**,
 allow notifications/bubbles, switch to another app, expand, reply, collapse and
 dismiss. Check that logout/account switching invalidates old bubbles and actions.
 Recheck normal Social messages/calls and Rici lock-screen Mute/Stop behavior.
