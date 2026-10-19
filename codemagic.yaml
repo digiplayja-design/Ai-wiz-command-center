@@ -41,6 +41,12 @@ workflows:
             test/auth/korlix_http_test.dart test/registration_discovery_test.dart \
             test/korlix_entry_intro_test.dart
 
+      - name: Verify image report attachments
+        script: |
+          set -euo pipefail
+          flutter --suppress-analytics --no-version-check analyze --no-pub lib/support test/support
+          flutter --suppress-analytics --no-version-check test --no-pub --reporter expanded test/support/ai_output_report_test.dart test/support/report_image_test.dart
+
       - name: Select the next iOS build number
         script: |
           set -euo pipefail

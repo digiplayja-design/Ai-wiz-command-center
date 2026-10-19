@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
+import 'korlix_report_image.dart';
 
 class KorlixAiReportException implements Exception {
   const KorlixAiReportException(this.message);
@@ -22,6 +23,8 @@ Future<String> submitKorlixAiReport({
   required String outputSummary,
   String? contentId,
   String? imageUrl,
+  String? imageDataUrl,
+  bool Function()? isCurrent,
   String? videoId,
   String? language,
   String? platform,
@@ -33,7 +36,7 @@ Future<String> submitKorlixAiReport({
   final ownedClient = client == null;
   final transport = client ?? http.createClient();
   try {
-    final body = jsonEncode({
+    final metadata = <String, dynamic>{
       'contentType': contentType,
       'appArea': appArea,
       'contentId': contentId,
@@ -45,12 +48,35 @@ Future<String> submitKorlixAiReport({
       'videoId': ?videoId,
       'language': ?language,
       'platform': ?platform,
-    });
-    if (utf8.encode(body).length > 28 * 1024) {
+    };
+    if (utf8.encode(jsonEncode(metadata)).length > 28 * 1024) {
       throw const KorlixAiReportException(
         'This report is too long to send. Shorten your details and try again.',
       );
     }
+    if (isCurrent != null && !isCurrent()) {
+      throw const KorlixAiReportException(
+        'Your account changed. Open the report again.',
+      );
+    }
+    if (contentType == 'image') {
+      try {
+        metadata['imageDataUrl'] = await prepareKorlixReportImage(
+          imageDataUrl: imageDataUrl,
+          imageUrl: imageUrl,
+        );
+      } on KorlixReportImageException catch (error) {
+        throw KorlixAiReportException(error.message);
+      }
+    }
+    // Image decoding/download yields to the UI. Recheck the captured session
+    // before sending any report or image under that account.
+    if (isCurrent != null && !isCurrent()) {
+      throw const KorlixAiReportException(
+        'Your account changed. Open the report again.',
+      );
+    }
+    final body = jsonEncode(metadata);
     final response = await transport
         .post(
           endpoint,
@@ -71,7 +97,7 @@ Future<String> submitKorlixAiReport({
     }
     if (response.statusCode == 413) {
       throw const KorlixAiReportException(
-        'This report is too long. Shorten your details and try again.',
+        'The report or image is too large. Shorten your details and try again.',
       );
     }
     if (response.statusCode == 503) {

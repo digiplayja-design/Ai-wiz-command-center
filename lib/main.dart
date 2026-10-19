@@ -8051,15 +8051,17 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     ];
   }
 
-  Future<bool> _submitGeneratedContentReport({
+  Future<String?> _submitGeneratedContentReport({
     required String contentType,
     required String prompt,
     required String outputSummary,
     required String reason,
     required String details,
     required Map<String, String> headers,
+    required bool Function() isCurrent,
     String? contentId,
     String? imageUrl,
+    String? imageDataUrl,
     String? videoId,
   }) async {
     try {
@@ -8074,13 +8076,15 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         details: details,
         contentId: contentId,
         imageUrl: imageUrl,
+        imageDataUrl: imageDataUrl,
         videoId: videoId,
         language: _selectedLanguage,
+        isCurrent: isCurrent,
         platform: kIsWeb ? 'web' : defaultTargetPlatform.name,
       );
-      return true;
-    } catch (_) {
-      return false;
+      return null;
+    } on KorlixAiReportException catch (error) {
+      return error.message;
     }
   }
 
@@ -8090,6 +8094,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     required String outputSummary,
     String? contentId,
     String? imageUrl,
+    String? imageDataUrl,
     String? videoId,
   }) async {
     if (!mounted || _aiOutputReportBusy) return;
@@ -8158,7 +8163,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Tell us why this $contentType may be offensive, unsafe, misleading, or inappropriate.',
+                          contentType == 'image'
+                              ? 'An image preview, its prompt, and your report will be shared with Korlix support for review.'
+                              : 'Tell us why this $contentType may be offensive, unsafe, misleading, or inappropriate.',
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                             color: Color(0xFFA9C6CF),
@@ -8315,8 +8322,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       final reason = result['reason'] ?? 'Other';
       final details = result['details'] ?? '';
 
-      final sent = await _submitGeneratedContentReport(
+      final error = await _submitGeneratedContentReport(
         headers: headers,
+        isCurrent: current,
         contentType: contentType,
         prompt: prompt,
         outputSummary: outputSummary,
@@ -8324,6 +8332,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         details: details,
         contentId: contentId,
         imageUrl: imageUrl,
+        imageDataUrl: imageDataUrl,
         videoId: videoId,
       );
 
@@ -8331,7 +8340,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
         return;
       }
 
-      if (sent) {
+      if (error == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Report submitted. Thank you.')),
         );
@@ -8339,11 +8348,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'We could not confirm whether your report was received. It may already be saved. Contact support@korlixdeveloper.com before submitting it again.',
-          ),
-        ),
+        SnackBar(content: Text(error)),
       );
     } finally {
       detailsController.dispose();
@@ -8357,6 +8362,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
     required String outputSummary,
     String? contentId,
     String? imageUrl,
+    String? imageDataUrl,
     String? videoId,
   }) {
     return Material(
@@ -8368,6 +8374,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
           outputSummary: outputSummary,
           contentId: contentId,
           imageUrl: imageUrl,
+          imageDataUrl: imageDataUrl,
           videoId: videoId,
         ),
         borderRadius: BorderRadius.circular(999),
@@ -8474,6 +8481,7 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
               outputSummary: outputSummary,
               contentId: item.title,
               imageUrl: imageUrl,
+              imageDataUrl: item.imageDataUrl,
             ),
           ),
         ],
@@ -15266,14 +15274,17 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     return 'Generated AI output';
   }
 
-  Future<bool> _submitGooglePlayAiReport({
+  Future<String?> _submitGooglePlayAiReport({
     required String contentType,
     required String prompt,
     required String outputSummary,
     required String reason,
     required String details,
     required Map<String, String> headers,
+    required bool Function() isCurrent,
     String? contentId,
+    String? imageDataUrl,
+    String? imageUrl,
   }) async {
     try {
       await submitKorlixAiReport(
@@ -15286,12 +15297,15 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
         reason: reason,
         details: details,
         contentId: contentId,
+        imageDataUrl: imageDataUrl,
+        imageUrl: imageUrl,
         language: _selectedLanguage,
+        isCurrent: isCurrent,
         platform: kIsWeb ? 'web' : defaultTargetPlatform.name,
       );
-      return true;
-    } catch (_) {
-      return false;
+      return null;
+    } on KorlixAiReportException catch (error) {
+      return error.message;
     }
   }
 
@@ -15300,6 +15314,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     required String prompt,
     required String outputSummary,
     String? contentId,
+    String? imageDataUrl,
+    String? imageUrl,
   }) async {
     if (!mounted || _aiOutputReportBusy) return;
     final revision = kKorlixAuthRevision.value;
@@ -15417,6 +15433,14 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                           }).toList(),
                         ),
                         const SizedBox(height: 14),
+                        if (contentType == 'image') ...[
+                          const Text(
+                            'An image preview, its prompt, and your report will be shared with Korlix support for review.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: Color(0xFFA9C6CF)),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
                         TextField(
                           controller: detailsController,
                           minLines: 3,
@@ -15545,14 +15569,17 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
         return;
       }
 
-      final sent = await _submitGooglePlayAiReport(
+      final error = await _submitGooglePlayAiReport(
         headers: headers,
+        isCurrent: current,
         contentType: contentType,
         prompt: prompt,
         outputSummary: outputSummary,
         reason: result['reason'] ?? 'Other',
         details: result['details'] ?? '',
         contentId: contentId,
+        imageDataUrl: imageDataUrl,
+        imageUrl: imageUrl,
       );
 
       if (!current()) {
@@ -15562,9 +15589,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            sent
-                ? 'Report submitted. Thank you for helping improve Korlix AI safety.'
-                : 'We could not confirm whether your report was received. It may already be saved. Contact support@korlixdeveloper.com before submitting it again.',
+            error ?? 'Report submitted. Thank you for helping improve Korlix AI safety.',
           ),
         ),
       );
@@ -15579,6 +15604,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     required String prompt,
     required String outputSummary,
     String? contentId,
+    String? imageDataUrl,
+    String? imageUrl,
     bool compact = false,
   }) {
     return Align(
@@ -15589,6 +15616,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
           prompt: prompt,
           outputSummary: outputSummary,
           contentId: contentId,
+          imageDataUrl: imageDataUrl,
+          imageUrl: imageUrl,
         )),
         icon: const Icon(Icons.flag_outlined, size: 17),
         label: const Text('Report AI Output'),
@@ -15628,6 +15657,8 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       padding: const EdgeInsets.fromLTRB(22, 4, 22, 8),
       child: _buildReportAiOutputButton(
         contentType: isImage ? 'image' : 'text answer',
+        imageDataUrl: item.imageDataUrl,
+        imageUrl: item.imageUrl,
         prompt: _korlixVisibleUserText(item.command),
         outputSummary: _reportableOutputSummary(item),
         contentId: item.title.trim().isEmpty

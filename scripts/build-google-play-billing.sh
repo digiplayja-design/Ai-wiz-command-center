@@ -63,6 +63,8 @@ pathlib.Path(sys.argv[1]).write_text(json.dumps(config))
 PY
 
 flutter pub get
+flutter analyze lib/support test/support
+flutter test test/support/ai_output_report_test.dart test/support/report_image_test.dart
 flutter analyze lib/analytics lib/onboarding lib/auth/korlix_signup_presentation.dart lib/auth/korlix_entry_welcome.dart lib/auth/korlix_entry_intro.dart lib/auth/korlix_entry_intro_controller.dart lib/billing/korlix_plan_prompt.dart test/korlix_onboarding_test.dart test/registration_discovery_test.dart test/korlix_entry_intro_test.dart
 flutter test test/auth/korlix_email_confirmation_test.dart test/korlix_onboarding_test.dart test/registration_discovery_test.dart test/korlix_entry_intro_test.dart test/auth_welcome_test.dart test/auth_remember_login_test.dart test/auth_october_integration_test.dart test/signup_eligibility_test.dart test/auth_device_session_test.dart
 flutter analyze lib/auth/korlix_session_refresh.dart lib/auth/korlix_http.dart test/auth/korlix_session_refresh_test.dart test/auth/korlix_http_test.dart
