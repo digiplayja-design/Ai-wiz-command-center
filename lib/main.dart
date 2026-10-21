@@ -48,6 +48,8 @@ import 'auth/korlix_email_confirmation.dart';
 import 'package:app_links/app_links.dart';
 import 'auth/korlix_signup_eligibility.dart';
 import 'auth/korlix_signup_presentation.dart';
+import 'auth/korlix_signup_plan.dart';
+import 'accessibility/korlix_accessibility.dart';
 import 'auth/knova_welcome_controller.dart';
 import 'auth/rici_welcome_button.dart';
 import 'navigation/home_tool_catalog.dart';
@@ -514,7 +516,8 @@ class CheeChaiCheeApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return KorlixThemeScope(builder: (context, theme) => MaterialApp(
+    return ListenableBuilder(listenable: kKorlixAccessibility, builder: (context, _) =>
+      KorlixThemeScope(builder: (context, theme) => MaterialApp(
       navigatorKey: _korlixNavigatorKey,
       // Invitation fragments are credentials for explicit acceptance, not
       // Flutter route names. Account sign-in always happens first.
@@ -525,7 +528,7 @@ class CheeChaiCheeApp extends StatelessWidget {
         _korlixScreensaverObserver,
         _korlixReviewRouteObserver,
       ],
-      builder: (context, child) => KorlixReviewHost(
+      builder: (context, child) => KorlixAccessibilityHost(child: KorlixReviewHost(
         sessionChanges: _korlixReviewChanges,
         accountScope: () => _korlixReviewAccountScope,
         isAvailable: () => !kKorlixScreensaver.visibility.value,
@@ -562,7 +565,7 @@ class CheeChaiCheeApp extends StatelessWidget {
         beforeOpenCall: stopKorlixCharacterSpeechGlobally,
         child: KorlixSmokeScreensaver(sessionChanges: kKorlixAuthRevision,
           child: child ?? const SizedBox.shrink()),
-      ))),
+      )))),
 
       routes: <String, WidgetBuilder>{
         KorlixMeetingCopilotRoute.routeName: (_) =>
@@ -578,9 +581,10 @@ class CheeChaiCheeApp extends StatelessWidget {
       },
       title: 'Korlix AI',
       debugShowCheckedModeBanner: false,
-      theme: theme,
+      theme: kKorlixAccessibility.theme(theme),
+      highContrastTheme: kKorlixAccessibility.theme(theme, forceHighContrast: true),
       home: const AuthGate(),
-    ));
+    )));
   }
 }
 
@@ -1198,6 +1202,7 @@ class _AuthScreenState extends State<AuthScreen> {
   String? _preferenceMessage;
 
   bool _isSignUp = false;
+  String? _signupPlan;
   late bool _showWelcome;
   KorlixSignupAgeBand? _signupAgeBand;
   bool _acceptedSignupPolicies = false;
@@ -1366,6 +1371,11 @@ class _AuthScreenState extends State<AuthScreen> {
       }
     }
 
+    if (signingUp && _signupPlan == null) {
+      setState(() => _error = 'Choose Ultra, Pro or Basic to continue.');
+      return;
+    }
+
     if (email.isEmpty || password.isEmpty) {
       if (signingUp) KorlixOnboarding.instance.track('registration_validation_error', errorCode: 'required_fields');
       setState(() {
@@ -1423,6 +1433,7 @@ class _AuthScreenState extends State<AuthScreen> {
             'confirmation_state': confirmationState,
           },
           ...KorlixDeviceStore.bodyFields(),
+          if (signingUp) 'signup_plan': _signupPlan,
           if (signingUp) 'signup_eligibility': {
             'age_band': _signupAgeBand!.value,
             'terms_accepted': _acceptedSignupPolicies,
@@ -1442,6 +1453,10 @@ class _AuthScreenState extends State<AuthScreen> {
         throw Exception(data['error'] ?? 'Authentication failed.');
       }
 
+      if (signingUp) {
+        await KorlixSignupPlanIntent.save(data['user']?['id']?.toString(), _signupPlan!)
+          .catchError((Object _) {});
+      }
       final session = data['session'] as Map<String, dynamic>?;
 
       if (session == null || session['access_token'] == null) {
@@ -1502,7 +1517,7 @@ class _AuthScreenState extends State<AuthScreen> {
     }
   }
 
-  Widget _loginPreferences() {
+  Widget _loginPreferences(BuildContext context) {
     final skin = korlixSkinOf(context);
     return ExpansionTile(
       key: ValueKey('login-preferences-$_isSignUp'),
@@ -1541,18 +1556,35 @@ class _AuthScreenState extends State<AuthScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isSignUp || _showWelcome || _confirmationEmail != null) {
+      return Theme(data: kKorlixAccessibility.theme(korlixBuildTheme('pure_white')),
+        child: Builder(builder: _buildAuth));
+    }
+    return _buildAuth(context);
+  }
+
+  Widget _buildAuth(BuildContext context) {
     final skin = korlixSkinOf(context);
     final seasonalDate = widget.seasonalDate ?? DateTime.now();
     final busy = _loading || _resetLoading;
     final signup = _isSignUp;
-    final colorfulSignup = signup && !_showWelcome && _confirmationEmail == null;
-    final title = signup ? 'Create your free account' : 'Sign in to Korlix AI';
+    final colorfulSignup = signup || _showWelcome || _confirmationEmail != null;
+    final title = signup ? 'Create your account' : 'Sign in to Korlix AI';
     return Scaffold(
       appBar: _showWelcome ? AppBar(
         automaticallyImplyLeading: false,
         title: Image.asset('assets/branding/korlix_mini_mark.png', height: 32,
           semanticLabel: 'KORLIX AI'),
-        actions: [TextButton.icon(
+        actions: [IconButton(tooltip: 'Accessibility',
+          onPressed: () => openKorlixAccessibility(context),
+          icon: const Icon(Icons.accessibility_new)),
+        if (MediaQuery.sizeOf(context).width < 380 || MediaQuery.textScalerOf(context).scale(14) > 20)
+          IconButton(tooltip: 'View plans', key: const Key('welcome-view-plans'),
+            onPressed: () async {
+              final create = await showKorlixPublicPlans(context);
+              if (mounted && create) _chooseAuthMode(signUp: true);
+            }, icon: const Icon(Icons.workspace_premium_outlined))
+        else TextButton.icon(
           key: const Key('welcome-view-plans'),
           onPressed: () async {
             final create = await showKorlixPublicPlans(context);
@@ -1579,18 +1611,19 @@ class _AuthScreenState extends State<AuthScreen> {
                     gradient: colorfulSignup ? LinearGradient(
                       begin: Alignment.topLeft, end: Alignment.bottomRight,
                       colors: [
-                        Color.alphaBlend(const Color(0xFF8D7CFF).withValues(alpha: .12), skin.panel),
+                        Colors.white,
                         skin.panel,
-                        Color.alphaBlend(const Color(0xFF3BC9DA).withValues(alpha: .09), skin.panel),
+                        Colors.white,
                       ],
                     ) : null,
                     borderRadius: BorderRadius.circular(28),
                     border: Border.all(color: colorfulSignup
-                      ? const Color(0xFF9D8DDF) : skin.primary.withValues(alpha: .35)),
+                      ? const Color(0xFFB7DCE3) : skin.primary.withValues(alpha: .35)),
                   ),
                   child: _confirmationEmail != null
                     ? KorlixWelcomeConfirmation(
                         email: _confirmationEmail!,
+                        selectedPlan: _signupPlan,
                         onSignIn: () {
                           setState(() => _confirmationEmail = null);
                           _chooseAuthMode(signUp: false);
@@ -1629,7 +1662,19 @@ class _AuthScreenState extends State<AuthScreen> {
                                     )),
                                 if (!signup && korlixIsOctober(seasonalDate))
                                   KorlixOctoberGreeting(date: seasonalDate),
-                                if (signup) const KorlixSignupHeader(),
+                                if (signup) ...[
+                                  const KorlixSignupHeader(),
+                                  const SizedBox(height: 20),
+                                  KorlixSignupPlanPicker(value: _signupPlan,
+                                    enabled: !busy,
+                                    onChanged: (value) => setState(() => _signupPlan = value)),
+                                ],
+                                Align(alignment: Alignment.centerRight,
+                                  child: TextButton.icon(
+                                    key: const Key('auth-accessibility'),
+                                    onPressed: () => openKorlixAccessibility(context),
+                                    icon: const Icon(Icons.accessibility_new),
+                                    label: const Text('Accessibility'))),
                                 if (!signup) ...[
                                   Row(mainAxisAlignment: MainAxisAlignment.center, children: [
                                     Image.asset('assets/branding/korlix_mini_mark.png', height: 42),
@@ -1665,7 +1710,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                   decoration: InputDecoration(
                                     labelText: 'Email', hintText: 'you@example.com',
                                     prefixIcon: signup ? const Icon(Icons.alternate_email_rounded,
-                                      color: Color(0xFF8A73D6)) : null,
+                                      color: Color(0xFF006C80)) : null,
                                     filled: true, fillColor: skin.inputFill,
                                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
                                   ),
@@ -1688,7 +1733,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                   decoration: InputDecoration(
                                     labelText: 'Password',
                                     prefixIcon: signup ? const Icon(Icons.lock_outline_rounded,
-                                      color: Color(0xFF4389C4)) : null,
+                                      color: Color(0xFF006C80)) : null,
                                     helperText: signup ? 'Use at least 6 characters.' : null,
                                     helperMaxLines: 2,
                                     suffixIcon: IconButton(enableFeedback: false,
@@ -1733,7 +1778,7 @@ class _AuthScreenState extends State<AuthScreen> {
                                       child: Text(_resetLoading ? 'Sending reset email...' :
                                         (_showForgotPassword ? 'Forgot password? Send reset email' : 'Forgot password?')),
                                     )),
-                                _loginPreferences(),
+                                _loginPreferences(context),
                                 if (_preferenceMessage != null)
                                   Text(_preferenceMessage!, style: TextStyle(color: skin.mutedText, fontSize: 12)),
                                 if (_error != null) ...[
@@ -5959,6 +6004,9 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
       ),
     );
 
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_reviewSignupPlan());
+    });
     _loadSavedKorlixTheme();
     _loadCurrentTier();
     _loadLocalChatTopics();
@@ -5971,6 +6019,32 @@ class _CommandCenterScreenState extends State<CommandCenterScreen>
           onTierChanged: _handleAppleSubscriptionTierChanged,
           checkoutReturn: Uri.base.queryParameters['billing']));
       });
+    }
+  }
+
+  Future<void> _reviewSignupPlan() async {
+    final token = kKorlixAccessToken;
+    try {
+      final choice = await KorlixSignupPlanIntent.read(token);
+      if (!mounted || token != kKorlixAccessToken || choice == null) return;
+      if (choice != 'basic') {
+        if (kIsWeb) {
+          await showDialog<void>(context: context, builder: (dialogContext) => AlertDialog(
+            scrollable: true, title: Text('Your ${choice == 'ultra' ? 'Ultra' : 'Pro'} choice is saved'),
+            content: const Text('Three-day trials are activated in the Android or iOS app. '
+              'Sign in there to review your eligibility and automatic renewal price. '
+              'You can use Basic here without starting a subscription.'),
+            actions: [TextButton(onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Continue with Basic'))],
+          ));
+        } else {
+          await _openDiscoveryPlans(requestedTier: choice);
+        }
+      }
+      // Leaving review retains Basic unless a store transaction is verified.
+      if (mounted && token == kKorlixAccessToken) await KorlixSignupPlanIntent.clear(token);
+    } catch (_) {
+      // Local preference storage never blocks verified account access.
     }
   }
 
@@ -9618,7 +9692,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
         ),
         Expanded(child: ValueListenableBuilder<String>(valueListenable: kKorlixScreenSkinNotifier,
         builder: (context, screenSkin, _) => KorlixScreenBackdrop(
-        palette: korlixSkinPaletteFor(kKorlixThemeNotifier.value), skinId: screenSkin,
+        palette: korlixSkinOf(context), skinId: MediaQuery.highContrastOf(context) ? 'classic' : screenSkin,
         child: SafeArea(
           top: false,
           child: Center(
@@ -9656,7 +9730,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                       _buildResults(),
                       const SizedBox(height: 18),
                     ],
-                    KorlixSkinFrame(key: _commandPanelKey, palette: korlixSkinPaletteFor(kKorlixThemeNotifier.value), skinId: screenSkin, child: _buildCommandPanel()),
+                    KorlixSkinFrame(key: _commandPanelKey, palette: korlixSkinOf(context), skinId: MediaQuery.highContrastOf(context) ? 'classic' : screenSkin, child: _buildCommandPanel()),
                   ],
                 ),
               ),
@@ -9714,7 +9788,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     return true;
   }
 
-  Future<void> _openDiscoveryPlans() async {
+  Future<void> _openDiscoveryPlans({String? requestedTier}) async {
     if (!mounted || _openingDiscoveryPlans) return;
     setState(() => _openingDiscoveryPlans = true);
     try {
@@ -9729,6 +9803,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
           headersBuilder: _authHeaders,
           sessionChanges: kKorlixAuthRevision,
           currentTier: _currentTier,
+          requestedTier: requestedTier,
           onTierChanged: _handleAppleSubscriptionTierChanged,
         );
       }

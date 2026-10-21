@@ -20,6 +20,8 @@ class PlayStore extends Fake implements InAppPurchase {
   final completed = <PurchaseDetails>[];
   Set<String> requested = {};
   bool missing = false;
+  String? trialPeriod;
+  bool catalogFailure = false;
   @override
   Stream<List<PurchaseDetails>> get purchaseStream => updates.stream;
   @override
@@ -27,6 +29,7 @@ class PlayStore extends Fake implements InAppPurchase {
   @override
   Future<ProductDetailsResponse> queryProductDetails(Set<String> ids) async {
     requested = ids;
+    if (catalogFailure) throw StateError('Catalog unavailable');
     return ProductDetailsResponse(
       productDetails: missing
           ? []
@@ -40,6 +43,32 @@ class PlayStore extends Fake implements InAppPurchase {
                       name: id,
                       description: 'Membership',
                       subscriptionOfferDetails: [
+                        if (trialPeriod != null)
+                          SubscriptionOfferDetailsWrapper(
+                            basePlanId: 'monthly',
+                            offerId: 'trial-3-days',
+                            offerTags: [],
+                            offerIdToken: '$id-trial',
+                            pricingPhases: [
+                              PricingPhaseWrapper(
+                                billingCycleCount: 1,
+                                billingPeriod: trialPeriod!,
+                                formattedPrice: 'Free',
+                                priceAmountMicros: 0,
+                                priceCurrencyCode: 'EUR',
+                                recurrenceMode: RecurrenceMode.finiteRecurring,
+                              ),
+                              PricingPhaseWrapper(
+                                billingCycleCount: 0,
+                                billingPeriod: 'P1M',
+                                formattedPrice: '€34,99',
+                                priceAmountMicros: 34990000,
+                                priceCurrencyCode: 'EUR',
+                                recurrenceMode:
+                                    RecurrenceMode.infiniteRecurring,
+                              ),
+                            ],
+                          ),
                         for (final base in ['annual', 'monthly'])
                           SubscriptionOfferDetailsWrapper(
                             basePlanId: base,
@@ -161,6 +190,97 @@ void androidTest(String name, WidgetTesterCallback callback) => testWidgets(
 
 void main() {
   androidTest(
+    '3-day Play trial wins over base plan and shows the renewal price',
+    (tester) async {
+      final f = Fixture();
+      f.store.trialPeriod = 'P3D';
+      addTearDown(f.dispose);
+      await f.configure();
+      expect(
+        f.service.hasThreeDayTrial(kKorlixGoogleProMonthlyProductId),
+        isTrue,
+      );
+      expect(
+        f.service.renewalPriceFor(kKorlixGoogleProMonthlyProductId),
+        '€34,99',
+      );
+      await f.service.purchase(
+        kKorlixGoogleProMonthlyProductId,
+        requireThreeDayTrial: true,
+        expectedRenewalPrice: '€34,99',
+      );
+      final param = f.store.bought.single as GooglePlayPurchaseParam;
+      expect(param.offerToken, 'korlix_pro-trial');
+      expect(
+        f.service.currentTier,
+        'basic',
+        reason: 'Only server verification grants paid access',
+      );
+    },
+  );
+  androidTest(
+    'seven-day and vanished trials never turn a trial tap into a paid purchase',
+    (tester) async {
+      final f = Fixture();
+      f.store.trialPeriod = 'P7D';
+      addTearDown(f.dispose);
+      await f.configure();
+      expect(
+        f.service.hasThreeDayTrial(kKorlixGoogleProMonthlyProductId),
+        isFalse,
+      );
+      expect(
+        (f.service.productFor(kKorlixGoogleProMonthlyProductId)
+                as GooglePlayProductDetails)
+            .offerToken,
+        'korlix_pro-monthly',
+      );
+      await f.service.purchase(
+        kKorlixGoogleProMonthlyProductId,
+        requireThreeDayTrial: true,
+      );
+      expect(f.store.bought, isEmpty);
+      f.store.trialPeriod = 'P3D';
+      await f.service.refreshProducts();
+      expect(
+        f.service.hasThreeDayTrial(kKorlixGoogleProMonthlyProductId),
+        isTrue,
+      );
+      f.store.trialPeriod = null;
+      await f.service.purchase(
+        kKorlixGoogleProMonthlyProductId,
+        requireThreeDayTrial: true,
+      );
+      expect(f.store.bought, isEmpty);
+    },
+  );
+  androidTest(
+    'failed catalog refresh and changed price fail closed before a trial',
+    (tester) async {
+      final f = Fixture();
+      f.store.trialPeriod = 'P3D';
+      addTearDown(f.dispose);
+      await f.configure();
+      await f.service.purchase(
+        kKorlixGoogleProMonthlyProductId,
+        requireThreeDayTrial: true,
+        expectedRenewalPrice: '€1,00',
+      );
+      expect(f.store.bought, isEmpty);
+      f.store.catalogFailure = true;
+      await f.service.purchase(
+        kKorlixGoogleProMonthlyProductId,
+        requireThreeDayTrial: true,
+      );
+      expect(f.store.bought, isEmpty);
+      expect(
+        f.service.hasThreeDayTrial(kKorlixGoogleProMonthlyProductId),
+        isFalse,
+      );
+    },
+  );
+
+  androidTest(
     'Android loads the Play catalog and monthly base plan, with store prices',
     (tester) async {
       final f = Fixture();
@@ -280,6 +400,8 @@ void main() {
         findsOneWidget,
       );
       expect(find.textContaining('Apple subscription purchases'), findsNothing);
+      expect(find.text('€124,99 / month'), findsOneWidget);
+      await tester.scrollUntilVisible(find.text('€34,99 / month'), 250);
       expect(find.text('€34,99 / month'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },

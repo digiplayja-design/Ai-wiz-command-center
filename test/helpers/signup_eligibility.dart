@@ -11,6 +11,13 @@ Future<void> selectSignupAge(WidgetTester tester, String label) async {
 }
 
 Future<void> acceptAdultSignup(WidgetTester tester) async {
+  final plan = find.byKey(const Key('signup-plan-basic'));
+  if (plan.evaluate().isNotEmpty) {
+    await tester.ensureVisible(plan);
+    await tester.pumpAndSettle();
+    await tester.tap(plan);
+    await tester.pumpAndSettle();
+  }
   await selectSignupAge(tester, '18 or older');
   final checkbox = find.byKey(const Key('signup-policy-acceptance'));
   await tester.ensureVisible(checkbox);

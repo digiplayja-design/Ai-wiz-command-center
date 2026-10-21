@@ -3,6 +3,8 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:ai_wiz_command_center/social/social_alert_overlay.dart';
+import 'package:ai_wiz_command_center/accessibility/korlix_accessibility.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ai_wiz_command_center/social/social_client.dart';
 import 'package:ai_wiz_command_center/social/social_notifications.dart';
 import 'package:flutter/material.dart';
@@ -161,8 +163,25 @@ void main() {
     }
   });
   late AlertFixture alerts;
-  setUp(() => alerts = AlertFixture(ValueNotifier(0)));
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    alerts = AlertFixture(ValueNotifier(0));
+  });
   tearDown(() => alerts.dispose());
+
+  testWidgets('keep-visible preference preserves messages until dismissed', (tester) async {
+    await tester.runAsync(() => kKorlixAccessibility.update(keepAlerts: true));
+    addTearDown(() => tester.runAsync(() => kKorlixAccessibility.update(keepAlerts: false)));
+    await tester.pumpWidget(app(alerts));
+    alerts.showMessage();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 30));
+    expect(alerts.dismissals, 0);
+    expect(alerts.messageAlert, isNotNull);
+    alerts.dismissMessage();
+    await tester.pump();
+    expect(alerts.messageAlert, isNull);
+  });
 
   testWidgets('private and group alerts reveal names, never message contents', (
     tester,

@@ -7,11 +7,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
+import 'package:in_app_purchase_storekit/in_app_purchase_storekit.dart';
+import 'package:in_app_purchase_storekit/store_kit_2_wrappers.dart';
 
 const owner = '11111111-1111-4111-8111-111111111111';
 const other = '22222222-2222-4222-8222-222222222222';
 
 class Store extends Fake implements InAppPurchase {
+  List<ProductDetails>? products;
   final updates = StreamController<List<PurchaseDetails>>.broadcast();
   final completed = <PurchaseDetails>[];
   final bought = <PurchaseParam>[];
@@ -20,23 +23,28 @@ class Store extends Fake implements InAppPurchase {
   @override
   Future<bool> isAvailable() async => true;
   @override
-  Future<ProductDetailsResponse> queryProductDetails(
-    Set<String> ids,
-  ) async => ProductDetailsResponse(
-    productDetails: ids
-        .map(
-          (id) => ProductDetails(
-            id: id,
-            title: id,
-            description: 'Monthly membership',
-            price: id == kKorlixAppleProMonthlyProductId ? '€34,99' : '€124,99',
-            rawPrice: id == kKorlixAppleProMonthlyProductId ? 34.99 : 124.99,
-            currencyCode: 'EUR',
-          ),
-        )
-        .toList(),
-    notFoundIDs: const [],
-  );
+  Future<ProductDetailsResponse> queryProductDetails(Set<String> ids) async =>
+      ProductDetailsResponse(
+        productDetails:
+            products ??
+            ids
+                .map(
+                  (id) => ProductDetails(
+                    id: id,
+                    title: id,
+                    description: 'Monthly membership',
+                    price: id == kKorlixAppleProMonthlyProductId
+                        ? '€34,99'
+                        : '€124,99',
+                    rawPrice: id == kKorlixAppleProMonthlyProductId
+                        ? 34.99
+                        : 124.99,
+                    currencyCode: 'EUR',
+                  ),
+                )
+                .toList(),
+        notFoundIDs: const [],
+      );
   @override
   Future<void> restorePurchases({String? applicationUserName}) async {}
   @override
@@ -75,6 +83,7 @@ class Fixture {
   String tier = 'basic';
   Completer<http.Response>? gate;
   bool verificationSucceeds = true;
+  bool trialEligible = true;
   Map<String, String> headers() => {
     'Authorization':
         'Bearer h.${base64Url.encode(utf8.encode(jsonEncode({'iss': 'https://fixture.test', 'sub': user, 'session_id': 'session-$user'})))}.s',
@@ -105,6 +114,7 @@ class Fixture {
         'webSubscriptionActive': false,
       });
     }),
+    appleTrialEligibility: (_) async => trialEligible,
   );
   Future<void> configure() => service.configure(
     backendBaseUrl: 'https://backend.fixture',
@@ -128,7 +138,87 @@ void nativeTestWidgets(String description, WidgetTesterCallback callback) {
   );
 }
 
+ProductDetails trialProduct({int days = 3}) =>
+    AppStoreProduct2Details.fromSK2Product(
+      SK2Product(
+        id: kKorlixAppleProMonthlyProductId,
+        displayName: 'Pro',
+        displayPrice: '€34,99',
+        description: 'Pro monthly',
+        price: 34.99,
+        type: SK2ProductType.autoRenewable,
+        priceLocale: SK2PriceLocale(currencyCode: 'EUR', currencySymbol: '€'),
+        subscription: SK2SubscriptionInfo(
+          subscriptionGroupID: 'korlix',
+          subscriptionPeriod: const SK2SubscriptionPeriod(
+            value: 1,
+            unit: SK2SubscriptionPeriodUnit.month,
+          ),
+          promotionalOffers: [
+            SK2SubscriptionOffer(
+              price: 0,
+              type: SK2SubscriptionOfferType.introductory,
+              period: SK2SubscriptionPeriod(
+                value: days,
+                unit: SK2SubscriptionPeriodUnit.day,
+              ),
+              periodCount: 1,
+              paymentMode: SK2SubscriptionOfferPaymentMode.freeTrial,
+            ),
+          ],
+        ),
+      ),
+    );
+
 void main() {
+  nativeTestWidgets(
+    'Apple trial needs a 3-day offer and current StoreKit eligibility',
+    (tester) async {
+      final f = Fixture();
+      f.store.products = [trialProduct()];
+      addTearDown(f.dispose);
+      await f.configure();
+      expect(
+        f.service.hasThreeDayTrial(kKorlixAppleProMonthlyProductId),
+        isTrue,
+      );
+      expect(
+        f.service.renewalPriceFor(kKorlixAppleProMonthlyProductId),
+        '€34,99',
+      );
+      f.trialEligible = false;
+      await f.service.purchase(
+        kKorlixAppleProMonthlyProductId,
+        requireThreeDayTrial: true,
+      );
+      expect(f.store.bought, isEmpty);
+      expect(
+        f.service.hasThreeDayTrial(kKorlixAppleProMonthlyProductId),
+        isFalse,
+      );
+      f.trialEligible = true;
+      f.store.products = [trialProduct(days: 7)];
+      await f.service.refreshProducts();
+      expect(f.service.productFor(kKorlixAppleProMonthlyProductId), isNull);
+    },
+  );
+  nativeTestWidgets(
+    'confirmed Apple trial still requires server verification',
+    (tester) async {
+      final f = Fixture();
+      f.store.products = [trialProduct()];
+      addTearDown(f.dispose);
+      await f.configure();
+      await f.service.purchase(
+        kKorlixAppleProMonthlyProductId,
+        requireThreeDayTrial: true,
+        expectedRenewalPrice: '€34,99',
+      );
+      expect(f.store.bought.single.applicationUserName, owner);
+      expect(f.service.currentTier, 'basic');
+    },
+  );
+
   nativeTestWidgets(
     'restore with no purchases ends and offers a clear result',
     (tester) async {

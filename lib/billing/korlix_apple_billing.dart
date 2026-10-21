@@ -7,6 +7,8 @@ import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:in_app_purchase_android/in_app_purchase_android.dart';
 import 'package:in_app_purchase_android/billing_client_wrappers.dart';
+import 'package:in_app_purchase_storekit/in_app_purchase_storekit.dart';
+import 'package:in_app_purchase_storekit/store_kit_2_wrappers.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 typedef KorlixBillingHeadersBuilder = Map<String, String> Function();
@@ -36,14 +38,22 @@ class KorlixAppleBillingService extends ChangeNotifier
     with WidgetsBindingObserver {
   KorlixAppleBillingService._()
     : _store = InAppPurchase.instance,
-      _http = http.createClient();
+      _http = http.createClient(),
+      _appleTrialEligibility = SK2Product.isIntroductoryOfferEligible;
 
   @visibleForTesting
-  KorlixAppleBillingService.forTesting(this._store, this._http);
+  KorlixAppleBillingService.forTesting(
+    this._store,
+    this._http, {
+    Future<bool> Function(String)? appleTrialEligibility,
+  }) : _appleTrialEligibility =
+           appleTrialEligibility ?? SK2Product.isIntroductoryOfferEligible;
 
   static final KorlixAppleBillingService instance =
       KorlixAppleBillingService._();
 
+  final Future<bool> Function(String) _appleTrialEligibility;
+  final Set<String> _appleEligibleTrials = {};
   final InAppPurchase _store;
   final http.Client _http;
   final Map<String, ProductDetails> _products = <String, ProductDetails>{};
@@ -98,22 +108,101 @@ class KorlixAppleBillingService extends ChangeNotifier
       !_otherStoreSubscriptionActive &&
       (!isGooglePlatform || _googleCanPurchase);
 
-  bool _eligibleProduct(ProductDetails product) {
-    if (!isGooglePlatform) return productIds.contains(product.id);
+  SubscriptionOfferDetailsWrapper? _googleOffer(ProductDetails? product) {
     if (product is! GooglePlayProductDetails ||
-        !productIds.contains(product.id)) {
-      return false;
+        product.productDetails.productType != ProductType.subs) {
+      return null;
     }
     final index = product.subscriptionIndex;
     final offers = product.productDetails.subscriptionOfferDetails;
-    if (index == null || offers == null || index >= offers.length) return false;
-    final offer = offers[index];
-    return offer.basePlanId == 'monthly' &&
+    if (index == null ||
+        offers == null ||
+        index < 0 ||
+        index >= offers.length) {
+      return null;
+    }
+    return offers[index];
+  }
+
+  bool _threeDayGoogleOffer(SubscriptionOfferDetailsWrapper? offer) {
+    if (offer == null ||
+        offer.basePlanId != 'monthly' ||
+        offer.offerId == null ||
+        offer.pricingPhases.length != 2) {
+      return false;
+    }
+    final free = offer.pricingPhases.first;
+    final paid = offer.pricingPhases.last;
+    return free.priceAmountMicros == 0 &&
+        free.billingPeriod == 'P3D' &&
+        free.billingCycleCount == 1 &&
+        free.recurrenceMode == RecurrenceMode.finiteRecurring &&
+        paid.priceAmountMicros > 0 &&
+        paid.billingPeriod == 'P1M' &&
+        paid.recurrenceMode == RecurrenceMode.infiniteRecurring;
+  }
+
+  bool _threeDayAppleOffer(ProductDetails product) {
+    if (product is! AppStoreProduct2Details) return false;
+    final subscription = product.sk2Product.subscription;
+    if (subscription == null ||
+        subscription.subscriptionPeriod.unit !=
+            SK2SubscriptionPeriodUnit.month ||
+        subscription.subscriptionPeriod.value != 1) {
+      return false;
+    }
+    return subscription.promotionalOffers.any(
+      (offer) =>
+          offer.type == SK2SubscriptionOfferType.introductory &&
+          offer.paymentMode == SK2SubscriptionOfferPaymentMode.freeTrial &&
+          offer.price == 0 &&
+          offer.period.unit == SK2SubscriptionPeriodUnit.day &&
+          offer.period.value * offer.periodCount == 3,
+    );
+  }
+
+  bool _eligibleProduct(ProductDetails product) {
+    if (!productIds.contains(product.id)) return false;
+    if (!isGooglePlatform) {
+      if (product is AppStoreProduct2Details) {
+        final subscription = product.sk2Product.subscription;
+        if (product.sk2Product.type != SK2ProductType.autoRenewable ||
+            subscription == null ||
+            subscription.subscriptionPeriod.unit !=
+                SK2SubscriptionPeriodUnit.month ||
+            subscription.subscriptionPeriod.value != 1) {
+          return false;
+        }
+        final hasFreeIntro = subscription.promotionalOffers.any(
+          (offer) =>
+              offer.type == SK2SubscriptionOfferType.introductory &&
+              offer.paymentMode == SK2SubscriptionOfferPaymentMode.freeTrial,
+        );
+        if (hasFreeIntro && !_threeDayAppleOffer(product)) return false;
+      }
+      return true;
+    }
+    final offer = _googleOffer(product);
+    if (_threeDayGoogleOffer(offer)) return true;
+    return offer != null &&
+        offer.basePlanId == 'monthly' &&
         offer.offerId == null &&
         offer.pricingPhases.length == 1 &&
+        offer.pricingPhases.single.priceAmountMicros > 0 &&
         offer.pricingPhases.single.billingPeriod == 'P1M' &&
         offer.pricingPhases.single.recurrenceMode ==
             RecurrenceMode.infiniteRecurring;
+  }
+
+  bool hasThreeDayTrial(String productId) => isGooglePlatform
+      ? _threeDayGoogleOffer(_googleOffer(_products[productId]))
+      : _appleEligibleTrials.contains(productId);
+
+  String? renewalPriceFor(String productId) {
+    final product = _products[productId];
+    return isGooglePlatform
+        ? _googleOffer(product)?.pricingPhases.last.formattedPrice
+        : product?.price;
   }
 
   bool get loadingProducts => _loadingProducts;
@@ -223,6 +312,8 @@ class KorlixAppleBillingService extends ChangeNotifier
     }
 
     _loadingProducts = true;
+    _products.clear();
+    _appleEligibleTrials.clear();
     _error = null;
     notifyListeners();
 
@@ -247,16 +338,29 @@ class KorlixAppleBillingService extends ChangeNotifier
         );
       }
 
-      _products
-        ..clear()
-        ..addEntries(
-          response.productDetails
-              .where(_eligibleProduct)
-              .map(
-                (ProductDetails product) =>
-                    MapEntry<String, ProductDetails>(product.id, product),
-              ),
-        );
+      _products.clear();
+      _appleEligibleTrials.clear();
+      for (final product in response.productDetails.where(_eligibleProduct)) {
+        // Play returns eligible offers. Prefer exactly 3 free days over the
+        // regular monthly base plan, independent of catalog ordering.
+        if (!_products.containsKey(product.id) ||
+            _threeDayGoogleOffer(_googleOffer(product))) {
+          _products[product.id] = product;
+        }
+      }
+      if (isApplePlatform) {
+        for (final product in _products.values.toList()) {
+          if (!_threeDayAppleOffer(product)) continue;
+          try {
+            if (await _appleTrialEligibility(product.id)) {
+              _appleEligibleTrials.add(product.id);
+            }
+          } catch (_) {
+            // Unknown eligibility never becomes an advertised free trial.
+          }
+          if (_disposed) return;
+        }
+      }
 
       if (response.notFoundIDs.isNotEmpty ||
           _products.length < productIds.length) {
@@ -355,8 +459,12 @@ class KorlixAppleBillingService extends ChangeNotifier
     }
   }
 
-  Future<void> purchase(String productId) async {
-    if (busy || _checkingStatus) return;
+  Future<void> purchase(
+    String productId, {
+    bool requireThreeDayTrial = false,
+    String? expectedRenewalPrice,
+  }) async {
+    if (busy || _checkingStatus || _loadingProducts) return;
     if (!isStorePlatform) {
       _setError('Subscriptions require the Android, iPhone, or iPad app.');
       return;
@@ -405,6 +513,21 @@ class KorlixAppleBillingService extends ChangeNotifier
     if (product == null) {
       _setError('This subscription is not available from $storeName yet.');
       return;
+    }
+    if (requireThreeDayTrial) {
+      await refreshProducts();
+      if (!_sessionMatches(scope)) return;
+      product = _products[productId];
+      if (_error != null ||
+          product == null ||
+          !hasThreeDayTrial(productId) ||
+          (expectedRenewalPrice != null &&
+              renewalPriceFor(productId) != expectedRenewalPrice)) {
+        _setError(
+          'This trial offer has changed or is unavailable. Review the current terms before continuing.',
+        );
+        return;
+      }
     }
     if (busy) return;
 
@@ -861,6 +984,7 @@ Future<void> showKorlixAppleSubscriptionSheet({
   KorlixBillingTierChanged? onTierChanged,
   Listenable? sessionChanges,
   KorlixAppleBillingService? billingService,
+  String? requestedTier,
 }) async {
   final KorlixAppleBillingService service =
       billingService ?? KorlixAppleBillingService.instance;
@@ -899,13 +1023,21 @@ Future<void> showKorlixAppleSubscriptionSheet({
       borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
     ),
     builder: (BuildContext sheetContext) {
-      return _KorlixAppleSubscriptionSheet(service: service);
+      return _KorlixAppleSubscriptionSheet(
+        service: service,
+        requestedTier: requestedTier,
+      );
     },
   );
 }
 
 class _KorlixAppleSubscriptionSheet extends StatelessWidget {
-  const _KorlixAppleSubscriptionSheet({required this.service});
+  const _KorlixAppleSubscriptionSheet({
+    required this.service,
+    this.requestedTier,
+  });
+
+  final String? requestedTier;
 
   final KorlixAppleBillingService service;
 
@@ -969,9 +1101,45 @@ class _KorlixAppleSubscriptionSheet extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 14),
+                if (requestedTier != null) ...[
+                  Text(
+                    'You chose ${requestedTier == 'ultra' ? 'Ultra' : 'Pro'}. '
+                    'Review your store offer below. Your trial starts after store confirmation.',
+                    style: const TextStyle(
+                      color: Color(0xFFF2F6F8),
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton(
+                    onPressed: service.busy
+                        ? null
+                        : () => Navigator.pop(context),
+                    child: const Text(
+                      'Continue with Basic',
+                      style: TextStyle(color: Color(0xFFF2F6F8)),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 _statusBanner(),
                 const SizedBox(height: 14),
-                _basicPlan(),
+                _storePlan(
+                  productId: service.ultraProductId,
+                  title: 'Ultra',
+                  subtitle:
+                      'For power users who want the full Korlix experience.',
+                  accent: const Color(0xFFFFD166),
+                  icon: Icons.workspace_premium_rounded,
+                  features: const <String>[
+                    'All characters, included on every plan',
+                    '75 AI requests and 200 credits per day',
+                    'LIVE CONVO fair-use allowance',
+                    'OCR, handwriting, and scanned-image reading',
+                    '10 video generations per month',
+                    'No ads',
+                  ],
+                ),
                 const SizedBox(height: 14),
                 _storePlan(
                   productId: service.proProductId,
@@ -989,28 +1157,13 @@ class _KorlixAppleSubscriptionSheet extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 14),
-                _storePlan(
-                  productId: service.ultraProductId,
-                  title: 'Ultra Premium',
-                  subtitle:
-                      'For power users who want the full Korlix experience.',
-                  accent: const Color(0xFFFFD166),
-                  icon: Icons.workspace_premium_rounded,
-                  features: const <String>[
-                    'All characters, included on every plan',
-                    '75 AI requests and 200 credits per day',
-                    'LIVE CONVO fair-use allowance',
-                    'OCR, handwriting, and scanned-image reading',
-                    '10 video generations per month',
-                    'No ads',
-                  ],
-                ),
+                _basicPlan(),
                 const SizedBox(height: 14),
                 _enterprisePlan(),
                 const SizedBox(height: 16),
                 if (service.isStorePlatform) ...<Widget>[
                   const Text(
-                    'Plans renew monthly. AI GAS and Music Studio purchases are separate from your subscription.',
+                    'Subscriptions renew automatically each month. Cancel in your store subscription settings before renewal. AI GAS and Music Studio purchases are separate from your subscription.',
                     style: TextStyle(color: Color(0xFFA9C6CF), height: 1.4),
                   ),
                   const SizedBox(height: 12),
@@ -1151,7 +1304,7 @@ class _KorlixAppleSubscriptionSheet extends StatelessWidget {
   Widget _basicPlan() {
     return _planShell(
       title: 'Basic',
-      subtitle: 'Free entry plan for light use.',
+      subtitle: 'Most features are extremely limited.',
       price: 'Free',
       accent: const Color(0xFF69D9E8),
       current: service.currentTier == 'basic',
@@ -1196,17 +1349,21 @@ class _KorlixAppleSubscriptionSheet extends StatelessWidget {
     final String expectedTier = productId == service.ultraProductId
         ? 'ultra'
         : 'pro';
+    final bool trial = service.hasThreeDayTrial(productId);
+    final String? renewalPrice = service.renewalPriceFor(productId);
     final bool current = service.currentTier == expectedTier;
     final bool working = service.busyProductId == productId;
     final String price =
-        (product == null ? null : '${product.price} / month') ??
+        (product == null ? null : '$renewalPrice / month') ??
         (service.loadingProducts
             ? 'Loading ${service.storeName} price…'
             : 'Unavailable');
 
     return _planShell(
       title: title,
-      subtitle: subtitle,
+      subtitle: trial
+          ? '$subtitle\n3 days free, then $price. Renews automatically unless canceled.'
+          : '$subtitle\nRenews monthly unless canceled. A 3-day trial has not been confirmed for this account. Review the final store terms.',
       price: price,
       accent: accent,
       current: current,
@@ -1218,11 +1375,16 @@ class _KorlixAppleSubscriptionSheet extends StatelessWidget {
               onPressed:
                   product == null ||
                       service.busy ||
+                      service.loadingProducts ||
                       service.checkingStatus ||
                       !service.canPurchase ||
                       service.currentTier == 'enterprise'
                   ? null
-                  : () => service.purchase(productId),
+                  : () => service.purchase(
+                      productId,
+                      requireThreeDayTrial: trial,
+                      expectedRenewalPrice: renewalPrice,
+                    ),
               style: FilledButton.styleFrom(
                 backgroundColor: accent,
                 foregroundColor: const Color(0xFF041018),
@@ -1239,7 +1401,11 @@ class _KorlixAppleSubscriptionSheet extends StatelessWidget {
                     )
                   : const Icon(Icons.lock_open_rounded),
               label: Text(
-                working ? 'Processing…' : 'Subscribe to $title',
+                working
+                    ? 'Processing…'
+                    : trial
+                    ? 'Start 3-day free trial'
+                    : 'Subscribe to $title',
                 style: const TextStyle(fontWeight: FontWeight.w900),
               ),
             ),

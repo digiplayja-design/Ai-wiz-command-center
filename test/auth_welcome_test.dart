@@ -139,7 +139,7 @@ void main() {
       )) {
         expect(field.controller!.text, isEmpty);
       }
-      expect(find.text('Create your free account'), findsOneWidget);
+      expect(find.text('Create your account'), findsOneWidget);
     },
   );
 }

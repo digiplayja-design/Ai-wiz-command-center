@@ -389,13 +389,16 @@ void main() {
   );
 
   testWidgets(
-    'reduced motion is still; screen readers retain control until explicit preview',
+    'reduced motion prevents idle smoke; explicit previews remain still',
     (tester) async {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       final controller = KorlixScreensaverController();
       await mount(tester, controller, reduced: true);
       await tester.pump(const Duration(seconds: 30));
+      await tester.pumpAndSettle();
+      expect(smoke, findsNothing);
+      controller.preview();
       await tester.pumpAndSettle();
       expect(smoke, findsOneWidget);
       expect(tester.binding.hasScheduledFrame, isFalse);

@@ -36,6 +36,8 @@ dependencies:
   http: ^1.6.0
   in_app_purchase: ^3.3.0
   in_app_purchase_android: 0.5.1
+  in_app_purchase_storekit: 0.4.10+1
+  package_info_plus: 9.0.1
   http_parser: ^4.1.2
   archive: 4.0.9
   pdf: ^3.12.0

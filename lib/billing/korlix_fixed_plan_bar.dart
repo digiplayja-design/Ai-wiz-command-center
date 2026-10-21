@@ -73,9 +73,9 @@ Future<bool> showKorlixPublicPlans(BuildContext context) async =>
         title: const Text('Choose your Korlix plan'),
         content: const SingleChildScrollView(
           child: Text(
-            'Basic · Free\nStart creating with the free plan.\n\n'
+            'Ultra\nHigher usage, LIVE CONVO and an ad-free experience.\n\n'
             'Pro\nMore room for daily creation, documents and exports.\n\n'
-            'Ultra Premium\nHigher usage, LIVE CONVO and an ad-free experience.\n\n'
+            'Basic · Free\nMost features are extremely limited.\n\n'
             'Enterprise\nOrganization-managed access for teams.\n\n'
             'Create your free account or sign in to see current pricing and '
             'full plan details. AI GAS and Music Studio purchases are separate.',

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../theme/korlix_theme.dart';
+import '../accessibility/korlix_accessibility.dart';
+import 'korlix_app_information.dart';
 import 'korlix_third_party_ai_consent.dart';
 
 /// Public policy access and the current account's local AI-sharing preferences.
@@ -173,6 +175,12 @@ class _KorlixPrivacySettingsState extends State<KorlixPrivacySettings> {
                         trailing: const Icon(Icons.open_in_new, size: 20),
                         onTap: _openingLink ? null : () => _open(entry.key),
                       ),
+                    const KorlixAppInformation(),
+                    ListTile(contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.accessibility_new),
+                      title: const Text('Accessibility'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => openKorlixAccessibility(context)),
                     const Divider(height: 32),
                     Text(
                       'AI-sharing choices',

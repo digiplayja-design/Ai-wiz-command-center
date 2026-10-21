@@ -10,8 +10,10 @@ class KorlixWelcomeConfirmation extends StatelessWidget {
     required this.email,
     required this.onSignIn,
     required this.onChangeEmail,
+    this.selectedPlan,
   });
   final String email;
+  final String? selectedPlan;
   final VoidCallback onSignIn, onChangeEmail;
   @override
   Widget build(BuildContext context) {
@@ -68,6 +70,18 @@ class KorlixWelcomeConfirmation extends StatelessWidget {
               fontWeight: FontWeight.w600,
             ),
           ),
+          if (selectedPlan != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              selectedPlan == 'basic'
+                  ? 'You chose Basic. Your account is free.'
+                  : 'You chose ${selectedPlan == 'ultra' ? 'Ultra' : 'Pro'}. '
+                        'After verification, review your 3-day trial eligibility and renewal price. '
+                        'No subscription has started.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: skin.mutedText, height: 1.5),
+            ),
+          ],
           const SizedBox(height: 18),
           Container(
             padding: const EdgeInsets.all(16),

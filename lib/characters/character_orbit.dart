@@ -131,7 +131,8 @@ class _KorlixCharacterOrbitState extends State<KorlixCharacterOrbit>
   }
 
   void _showWind(double movement) {
-    if (movement == 0) return;
+    if (movement == 0 || MediaQuery.disableAnimationsOf(context) ||
+        MediaQuery.accessibleNavigationOf(context)) return;
     _windDirection = movement.sign;
     // A bounded pulse: fresh movement refreshes the mist, then it disperses.
     _wind.forward(from: 0);

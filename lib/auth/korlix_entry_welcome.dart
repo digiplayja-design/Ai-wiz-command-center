@@ -100,7 +100,7 @@ class KorlixEntryWelcome extends StatelessWidget {
         ),
         const SizedBox(height: 22),
         Text(
-          'Start with the free Basic plan.',
+          'Choose Ultra, Pro or the free Basic plan.',
           textAlign: TextAlign.center,
           style: TextStyle(color: skin.mutedText, height: 1.4),
         ),
@@ -126,7 +126,7 @@ class KorlixEntryWelcome extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Text(
-          'No card required.',
+          'Basic is free. Eligible Ultra and Pro trials renew automatically after 3 days.',
           textAlign: TextAlign.center,
           style: TextStyle(color: skin.mutedText, fontSize: 13),
         ),

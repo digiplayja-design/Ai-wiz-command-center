@@ -47,6 +47,7 @@ Future<void> mountSignup(
   expect(find.byKey(const Key('auth-privacy-link')), findsOneWidget);
   expect(find.byKey(const Key('signup-age-range')), findsNothing);
   await tap(tester, find.text('New here? Create account'));
+  await tap(tester, find.byKey(const Key('signup-plan-basic')));
   await tester.ensureVisible(find.byKey(const Key('auth-email')));
   await tester.enterText(
     find.byKey(const Key('auth-email')),

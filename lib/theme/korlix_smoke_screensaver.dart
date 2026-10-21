@@ -59,7 +59,8 @@ class _KorlixSmokeScreensaverState extends State<KorlixSmokeScreensaver>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final accessible = MediaQuery.accessibleNavigationOf(context);
+    final accessible = MediaQuery.accessibleNavigationOf(context) ||
+        MediaQuery.disableAnimationsOf(context);
     if (accessible && !_accessibleNavigation && _visible) {
       _dismiss(restoreFocus: false);
     }

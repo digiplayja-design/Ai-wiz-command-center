@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import '../accessibility/korlix_accessibility.dart';
 
 import 'social_client.dart';
 import 'social_notifications.dart';
@@ -51,6 +52,7 @@ class _SocialAlertOverlayState extends State<SocialAlertOverlay>
   void initState() {
     super.initState();
     widget.notifications.addListener(_changed);
+    kKorlixAccessibility.addListener(_changed);
   }
 
   @override
@@ -120,7 +122,7 @@ class _SocialAlertOverlayState extends State<SocialAlertOverlay>
       }
       // A call gets priority. A waiting message receives a full reading window
       // when the call leaves, rather than expiring behind the call card.
-      if (_accessibleNavigation) {
+      if (_accessibleNavigation || kKorlixAccessibility.keepAlertsVisible) {
         _messageTimer?.cancel();
         _messageTimer = null;
       } else if (!_localBusy && _messageTimer == null) {
@@ -181,6 +183,7 @@ class _SocialAlertOverlayState extends State<SocialAlertOverlay>
 
   @override
   void dispose() {
+    kKorlixAccessibility.removeListener(_changed);
     widget.notifications.removeListener(_changed);
     _messageTimer?.cancel();
     _shake.dispose();

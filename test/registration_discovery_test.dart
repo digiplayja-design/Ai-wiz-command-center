@@ -81,7 +81,7 @@ void main() {
     expect(find.text('Choose your Korlix plan'), findsOneWidget);
     await tap(tester, find.text('Close'));
     await tap(tester, find.byKey(const Key('welcome-create-account')));
-    expect(find.text('Create your free account'), findsOneWidget);
+    expect(find.text('Create your account'), findsOneWidget);
     expect(find.byKey(const Key('signup-age-range')), findsOneWidget);
     expect(find.byKey(const Key('signup-policy-acceptance')), findsOneWidget);
     expect(find.byKey(const Key('remember-email')), findsNothing);
@@ -191,7 +191,7 @@ void main() {
         await tester.pumpAndSettle();
         await tap(tester, find.byKey(const Key('welcome-create-account')));
         expect(
-          find.text('Create your free account').hitTestable(),
+          find.text('Create your account').hitTestable(),
           findsOneWidget,
         );
         await tester.ensureVisible(find.byKey(const Key('auth-submit')));
@@ -267,6 +267,7 @@ void main() {
         RepaintBoundary(
           key: boundary,
           child: MaterialApp(
+            debugShowCheckedModeBanner: false,
             theme: korlixBuildTheme(theme),
             home: app.AuthScreen(
               showWelcome: true,
@@ -296,7 +297,7 @@ void main() {
       await tap(tester, find.byTooltip('Close introduction'));
       await tap(tester, find.byKey(const Key('welcome-create-account')));
       expect(
-        find.text('Create your free account').hitTestable(),
+        find.text('Create your account').hitTestable(),
         findsOneWidget,
       );
       await capture(boundary, '$theme-signup-top');

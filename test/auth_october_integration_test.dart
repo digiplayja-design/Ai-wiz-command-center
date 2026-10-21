@@ -154,7 +154,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       await tap(tester, find.text('New here? Create account'));
-      expect(find.text('Create your free account'), findsOneWidget);
+      expect(find.text('Create your account'), findsOneWidget);
       expect(find.byType(KorlixOctoberGreeting), findsNothing);
       await credentials(tester);
       await acceptAdultSignup(tester);
@@ -220,7 +220,7 @@ void main() {
             reason: '$size/$theme',
           );
           await tap(tester, find.text('New here? Create account'));
-          expect(find.text('Create your free account'), findsOneWidget);
+          expect(find.text('Create your account'), findsOneWidget);
           await tester.ensureVisible(find.text('Create free account'));
           await tester.pumpAndSettle();
           expect(
