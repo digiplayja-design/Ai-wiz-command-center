@@ -58,6 +58,12 @@ export function createKorlixSignupHandler({
       if (!supabaseAuth) {
         return res.status(500).json({error: 'Supabase auth is not configured on the backend.'});
       }
+      // A signup preference only. Billing verification remains the sole source
+      // of paid entitlements; editable user metadata never grants access.
+      const signupPlan = body.signup_plan ?? 'basic';
+      if (!['ultra', 'pro', 'basic'].includes(signupPlan)) {
+        return res.status(400).json({error: 'Choose Ultra, Pro or Basic to continue.'});
+      }
       const email = String(body.email || '').trim().toLowerCase();
       const password = String(body.password || '').trim();
       if (!email || !password) {
@@ -79,7 +85,7 @@ export function createKorlixSignupHandler({
         email,
         password,
         options: {
-          data: {korlix_signup_declaration: eligibility.declaration},
+          data: {korlix_signup_declaration: eligibility.declaration, korlix_signup_plan: signupPlan},
           ...(nativeConfirmation ? {
             emailRedirectTo: `${KORLIX_EMAIL_APP_CALLBACK}${confirmationState}`,
           } : {}),

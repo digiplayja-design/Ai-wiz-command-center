@@ -90,7 +90,7 @@ test('adult signup saves only normalized self-declarations and retains email con
   assert.equal(profiles.length + sessions.length, 0);
   assert.deepEqual(calls, [{
     email: 'member@example.test', password: 'test-password',
-    options: {data: {korlix_signup_declaration: {
+    options: {data: {korlix_signup_plan: 'basic', korlix_signup_declaration: {
       age_band: '18_plus', minimum_age: 16, terms_accepted: true,
       privacy_acknowledged: true, parent_permission: false,
       policy_version: '2026-10-06', declared_at: instant.toISOString(), method: 'self_declaration',
@@ -121,6 +121,29 @@ test('provider rejection and exceptions never create profiles or sessions', asyn
 test('existing credential validation remains before any provider request', async () => {
   for (const body of [{}, {...credentials, password: 'short'}]) {
     const {response, calls} = await request(valid, {body});
+    assert.equal(response.statusCode, 400);
+    assert.equal(calls.length, 0);
+  }
+});
+
+
+test('signup plan is a preference and never grants an entitlement', async () => {
+  for (const tier of ['ultra', 'pro', 'basic']) {
+    const {response, calls, profiles, sessions} = await request(valid, {
+      body: {...credentials, signup_plan: tier, tier: 'enterprise', trial_active: true},
+    });
+    assert.equal(response.statusCode, 200);
+    assert.equal(response.body.session, null);
+    assert.equal(profiles.length + sessions.length, 0);
+    assert.equal(calls[0].options.data.korlix_signup_plan, tier);
+    assert.equal(calls[0].options.data.tier, undefined);
+    assert.equal(calls[0].options.data.trial_active, undefined);
+  }
+});
+
+test('invalid signup plans are rejected before calling auth', async () => {
+  for (const signup_plan of ['enterprise', 'free', '', {}, ['pro'], 3]) {
+    const {response, calls} = await request(valid, {body: {...credentials, signup_plan}});
     assert.equal(response.statusCode, 400);
     assert.equal(calls.length, 0);
   }
