@@ -99,6 +99,49 @@ class _SignupPlanPickerState extends State<KorlixSignupPlanPicker> {
           ),
         ),
         const SizedBox(height: 12),
+        Container(
+          key: const Key('signup-trial-summary'),
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEAF7FA),
+            border: Border.all(color: const Color(0xFF007A91)),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Semantics(
+                header: true,
+                child: const Text(
+                  '3-day free trial',
+                  style: TextStyle(
+                    color: Color(0xFF006476),
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Text(
+                'For eligible new Ultra and Pro subscribers.',
+                style: TextStyle(
+                  color: Color(0xFF102D3B),
+                  height: 1.4,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${service.isStorePlatform ? '' : 'Activate in the Android or iOS app. '}'
+                'After the trial, your plan automatically renews monthly at the '
+                'store price unless canceled. The store confirms eligibility '
+                'before you subscribe.',
+                style: const TextStyle(color: Color(0xFF405865), height: 1.5),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
         for (final tier in const ['ultra', 'pro', 'basic']) ...[
           _card(tier),
           const SizedBox(height: 10),
@@ -204,10 +247,10 @@ class _SignupPlanPickerState extends State<KorlixSignupPlanPicker> {
               basic
                   ? 'Free • No subscription'
                   : trial
-                  ? '3 days free, then $price / month'
+                  ? '3-day free trial, then $price / month'
                   : price != null
-                  ? '$price / month • Trial eligibility checked by the store'
-                  : '3-day trial if eligible • Store price shown before confirmation',
+                  ? '$price / month • 3-day free trial subject to store eligibility'
+                  : '3-day free trial if eligible • Store price shown before confirmation',
               style: const TextStyle(
                 color: Color(0xFF006476),
                 height: 1.4,

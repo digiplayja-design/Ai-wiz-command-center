@@ -56,3 +56,11 @@ Verify regional availability, eligibility and the final store price before distr
 ## Publishing status
 
 Publishing these release branches was approved on 21 October 2026. This is a source update; store builds, production deployments, and store-console configuration remain separate release steps.
+
+## Build 141 device feedback: visible trial message
+
+Google Play confirmed version 12.0.2 (141) available to internal testers on 21 October 2026. The subsequent registration photo showed store prices on Ultra and Pro but only the generic "Trial eligibility checked by the store" fallback. The three-day duration was below Basic, making the trial offer too easy to miss. This screen does not establish why the store did not return a confirmed trial for that account.
+
+The follow-up adds a prominent "3-day free trial" callout before the plan cards, immediately qualified for eligible new Ultra and Pro subscribers and accompanied by monthly automatic-renewal and cancellation terms. Both paid cards now name the three-day free trial even when store eligibility is unconfirmed, with explicit conditional wording. Prices still come from the store; eligibility checks and purchase confirmation are unchanged. Web registration identifies Android/iOS as the trial activation location. The screenshots above document the initial layout before this follow-up.
+
+Validation: all 25 existing signup/accessibility, Google Play billing and Apple billing tests passed, including 320px width and 200 percent text. Static analysis of the modified signup widget passed without issues, and `git diff --check` passed. This correction requires a new mobile build; the installed build 141 retains the earlier wording.
