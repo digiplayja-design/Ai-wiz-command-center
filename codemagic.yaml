@@ -212,3 +212,43 @@ workflows:
           ls -lah artifacts
     artifacts:
       - artifacts/*.aab
+
+  receipt-wiz-validation:
+    name: Receipt Wiz — test builds
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      flutter: 3.47.7
+      xcode: 26.6
+      cocoapods: default
+    scripts:
+      - name: Validate shared scanner
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/packages/korlix_receipt_core"
+          flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
+          flutter analyze --no-pub
+          flutter test --no-pub --reporter expanded
+      - name: Validate independent app
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/apps/receipt_wiz"
+          flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
+          flutter analyze --no-pub
+          flutter test --no-pub --reporter expanded
+      - name: Build Receipt Wiz Android test APK
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/apps/receipt_wiz"
+          flutter build apk --debug --no-pub
+      - name: Build Receipt Wiz iOS simulator
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/apps/receipt_wiz"
+          flutter build ios --simulator --debug --no-pub
+          cd build/ios/iphonesimulator
+          ditto -c -k --sequesterRsrc --keepParent Runner.app ReceiptWiz-Simulator.zip
+    artifacts:
+      - apps/receipt_wiz/build/app/outputs/flutter-apk/app-debug.apk
+      - apps/receipt_wiz/build/ios/iphonesimulator/ReceiptWiz-Simulator.zip
+      - /tmp/xcodebuild_logs/*.log

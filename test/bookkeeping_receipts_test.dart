@@ -398,6 +398,9 @@ void main() {
       await t.pumpAndSettle();
       expect(t.takeException(), isNull);
       await f.screenshot(t, 'k199-inbox-${width.toInt()}', key);
+      // On narrow phones the lazy list has not built the receipt card yet.
+      await t.scrollUntilVisible(find.text('View / scan'), 180,
+          scrollable: find.byType(Scrollable).first);
       await f.tap(t, 'View / scan');
       expect(t.takeException(), isNull);
       await f.tap(t, 'Scan receipt');

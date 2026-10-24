@@ -1,2 +1,2 @@
-export 'receipt_wiz_capture_native.dart'
-    if (dart.library.html) 'receipt_wiz_capture_web.dart';
+// Shared with the standalone KORLIX Receipt Wiz app.
+export 'package:korlix_receipt_core/receipt_wiz/receipt_wiz_capture.dart';

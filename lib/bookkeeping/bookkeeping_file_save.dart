@@ -1,2 +1,2 @@
-export 'bookkeeping_file_save_native.dart'
-    if (dart.library.html) 'bookkeeping_file_save_web.dart';
+// Shared with the standalone KORLIX Receipt Wiz app.
+export 'package:korlix_receipt_core/bookkeeping/bookkeeping_file_save.dart';
