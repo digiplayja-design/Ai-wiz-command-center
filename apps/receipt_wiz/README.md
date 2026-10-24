@@ -22,20 +22,24 @@ still required before distribution.
 - Signout clears local credentials and requests revocation of this installation.
   Account deletion explicitly requests deletion of the **shared KORLIX account**.
 
-## Device allowance decision before release
+## Independent app sessions
 
-The existing backend counts app installations as devices. Basic/Pro allow one
-active device session and Ultra/Enterprise two, subject to existing overrides.
-Receipt Wiz respects those limits. Basic/Pro customers may need to sign out of
-the hub before signing in here.
+The companion backend change on **feature/receipt-wiz-shared-sessions-20261024**
+gives Receipt Wiz its own per-plan installation allowance: Basic/Pro one and
+Ultra/Enterprise two, with existing server-owned account overrides respected.
+KORLIX AI and Receipt Wiz can remain signed in together. Logging out of either
+app does not log out the other. Shared receipts, quotas and paid entitlements
+remain attached to the same account.
 
-A separate Receipt Wiz allowance needs server-enforced application/session scope.
-Never use a client header alone to bypass limits or grant paid access. Decide the
-multi-app allowance policy before public release.
+The server binds each Receipt Wiz login to the verified provider session ID and
+restricts it to receipt and account-management routes. Changing or removing the
+app header cannot turn it into a hub login. Revoked bindings are retained, and
+refresh never grants a new slot or reactivates a revoked login. This requires the
+companion migration and backend deployment before live testing.
 
 ## Backend prerequisite
 
-Companion branch **feature/receipt-wiz-auth-20261024** adds HTTP 409 with
+Companion branch **feature/receipt-wiz-shared-sessions-20261024** includes HTTP 409 with
 `KORLIX_ACCOUNT_EXISTS` for `client_app: receipt_wiz`, including the provider's
 masked duplicate-signup result. Main-app signup retains its existing contract.
 A hashed mailbox budget limits signup to five attempts per 15 minutes per backend
@@ -76,7 +80,9 @@ flutter build apk --debug --no-pub
 
 On macOS, `flutter build ios --simulator --debug --no-pub` builds for the simulator.
 The separate **Receipt Wiz — test builds** Codemagic workflow builds both platforms
-and publishes to neither store.
+and publishes to neither store. **Receipt Wiz mobile validation** in GitHub Actions
+also builds an Android debug APK and an unsigned iOS simulator app using Flutter
+3.47.7. Simulator output cannot be installed on an iPhone or sent to TestFlight.
 
 Android release signing uses this app's `android/key.properties` or Codemagic's
 `CM_KEYSTORE_PATH`, `CM_KEYSTORE_PASSWORD`, `CM_KEY_ALIAS`, `CM_KEY_PASSWORD`.
@@ -110,5 +116,5 @@ billing, microphone and social SDKs.
   Android API 24 and target API 36. The packaged archive and native-library
   boundaries were checked; the latest reduced-motion code is included.
 - No real-device installation or iOS build was performed here. Store signing,
-  listings, backend deployment and the multi-app device allowance decision remain
+  listings, backend deployment and real-device checks remain
   release steps. No store upload or production backend change was made.

@@ -1,0 +1,104 @@
+name: Receipt Wiz mobile validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/receipt-wiz-mobile-validation-20261024
+    paths:
+      - .github/workflows/receipt-wiz-validation.yml
+      - apps/receipt_wiz/lib/**
+      - apps/receipt_wiz/test/**
+      - apps/receipt_wiz/android/**
+      - apps/receipt_wiz/ios/**
+      - apps/receipt_wiz/pubspec.*
+      - packages/korlix_receipt_core/lib/**
+      - packages/korlix_receipt_core/test/**
+      - packages/korlix_receipt_core/pubspec.*
+
+permissions:
+  contents: read
+
+concurrency:
+  group: receipt-wiz-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: 'true'
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
+  DART_SUPPRESS_ANALYTICS: 'true'
+  COCOAPODS_DISABLE_STATS: 'true'
+
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - name: Validate shared scanner and independent app
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter config --no-analytics
+          dart --disable-analytics
+          cd packages/korlix_receipt_core
+          flutter pub get --enforce-lockfile
+          flutter analyze --no-pub
+          flutter test --no-pub --reporter expanded
+          cd ../../apps/receipt_wiz
+          flutter pub get --enforce-lockfile
+          flutter analyze --no-pub
+          flutter test --no-pub --reporter expanded
+      - name: Build Android test APK
+        working-directory: apps/receipt_wiz
+        run: flutter build apk --debug --no-pub
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: receipt-wiz-android-debug
+          path: apps/receipt_wiz/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  ios-simulator:
+    runs-on: macos-26
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - name: Build iOS simulator app
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter config --no-analytics
+          dart --disable-analytics
+          xcodebuild -version
+          cd packages/korlix_receipt_core
+          flutter pub get --enforce-lockfile
+          cd ../../apps/receipt_wiz
+          flutter pub get --enforce-lockfile
+          flutter build ios --simulator --debug --no-pub
+          cd build/ios/iphonesimulator
+          ditto -c -k --sequesterRsrc --keepParent Runner.app ReceiptWiz-Simulator.zip
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: receipt-wiz-ios-simulator
+          path: apps/receipt_wiz/build/ios/iphonesimulator/ReceiptWiz-Simulator.zip
+          if-no-files-found: error
+          retention-days: 14
