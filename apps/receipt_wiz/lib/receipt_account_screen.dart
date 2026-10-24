@@ -13,10 +13,12 @@ class ReceiptAccountScreen extends StatefulWidget {
     required this.highContrast,
     required this.reduceMotion,
     required this.preference,
+    this.onOpenPlan,
   });
   final ReceiptAuthController auth;
   final bool largeText, highContrast, reduceMotion;
   final Future<void> Function(String, bool) preference;
+  final Future<void> Function()? onOpenPlan;
   @override
   State<ReceiptAccountScreen> createState() => _ReceiptAccountScreenState();
 }
@@ -120,6 +122,21 @@ class _ReceiptAccountScreenState extends State<ReceiptAccountScreen> {
           'One account for Receipt Wiz and KORLIX AI. Your receipt library is shared across both apps.',
         ),
         const SizedBox(height: 24),
+        if (widget.onOpenPlan != null) ...[
+          ListTile(
+            leading: const Icon(
+              Icons.workspace_premium_outlined,
+              color: Color(0xFF7145C7),
+            ),
+            title: const Text('Receipt Wiz plan'),
+            subtitle: const Text(
+              'Monthly scan allowance, upgrade and purchases',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: widget.onOpenPlan,
+          ),
+          const Divider(height: 28),
+        ],
         Semantics(
           header: true,
           child: Text(

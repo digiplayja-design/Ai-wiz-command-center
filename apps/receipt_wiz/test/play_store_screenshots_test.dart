@@ -16,6 +16,10 @@ import 'package:korlix_receipt_wiz/receipt_auth.dart';
 
 import '../../../packages/korlix_receipt_core/test/receipt_wiz_test.dart'
     show FakeVault;
+import 'receipt_billing_test.dart' show Fixture;
+
+import 'package:korlix_receipt_wiz/receipt_plan_screen.dart';
+
 import 'receipt_auth_test.dart' show signedIn, response;
 
 void main() {
@@ -35,8 +39,10 @@ void main() {
       ]) {
         await (FontLoader(family)..addFont(
               File('$sdk/bin/cache/artifacts/material_fonts/$file')
-                  .readAsBytes().then(ByteData.sublistView),
-            )).load();
+                  .readAsBytes()
+                  .then(ByteData.sublistView),
+            ))
+            .load();
       }
     });
     final auth = ReceiptAuthController(
@@ -44,21 +50,26 @@ void main() {
       client: MockClient((_) async => response(signedIn())),
       tokenStore: KorlixTokenStore(useSecureStorage: false),
     );
-    await tester.pumpWidget(RepaintBoundary(
-      key: const Key('play-screenshot'),
-      child: ReceiptWizApp(auth: auth),
-    ));
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: const Key('play-screenshot'),
+        child: ReceiptWizApp(auth: auth),
+      ),
+    );
     await tester.pumpAndSettle();
     await tester.runAsync(() async {
-      await precacheImage(const AssetImage('assets/korlix_logo.png'),
-          tester.element(find.byType(MaterialApp)));
+      await precacheImage(
+        const AssetImage('assets/korlix_logo.png'),
+        tester.element(find.byType(MaterialApp)),
+      );
     });
 
     Future<void> capture(String name) async {
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       final boundary = tester.renderObject<RenderRepaintBoundary>(
-          find.byKey(const Key('play-screenshot')));
+        find.byKey(const Key('play-screenshot')),
+      );
       await tester.runAsync(() async {
         final image = await boundary.toImage(pixelRatio: 2);
         try {
@@ -77,7 +88,6 @@ void main() {
     korlix_http.configureClientFactory(() => MockClient(vault.handle));
     await auth.authenticate(email: 'sample@example.test', password: 'fixture');
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byKey(const Key('receipt-wiz-camera')));
     await capture('01-scan');
     await tester.tap(find.text('Receipts'));
     await tester.pumpAndSettle();
@@ -89,6 +99,28 @@ void main() {
     await capture('03-review');
     await tester.pumpWidget(const SizedBox());
     await tester.pumpAndSettle();
+    final billing = Fixture();
+    billing.store.monthlyPrice = r'$8.99';
+    await billing.service.start();
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: const Key('play-screenshot'),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
+            useMaterial3: true,
+            scaffoldBackgroundColor: const Color(0xFFFFFAF5),
+            colorScheme: ColorScheme.fromSeed(
+              seedColor: const Color(0xFF7145C7),
+            ),
+          ),
+          home: ReceiptPlanScreen(billing: billing.service),
+        ),
+      ),
+    );
+    await capture('05-full-plan');
+    await tester.pumpWidget(const SizedBox());
+    billing.dispose();
     korlix_http.configureClientFactory(null);
   }, skip: Platform.environment['RECEIPT_WIZ_PLAY_ASSETS'] == null);
 }

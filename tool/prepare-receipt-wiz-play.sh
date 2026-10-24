@@ -5,14 +5,14 @@ set -euo pipefail
 umask 077
 
 original_root=${1:-/workspaces/Ai-wiz-command-center}
-source_commit=${2:-38285c6215b828947b5728d84d525a40d03af5de}
+source_commit=${2:?Pass the exact source commit to build}
 flutter_commit=abaf9c523780a608bd46686fd5e53740a07077f8
 bundletool_sha=a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29
 original_sdk=${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/home/codespace/android-sdk}}
 test -f "$original_root/android/key.properties"
 test -d "$original_sdk"
 [[ "$source_commit" =~ ^[0-9a-f]{40}$ ]] || exit 1
-run_root=$(mktemp -d /tmp/korlix-receipt-play-1.XXXXXX)
+run_root=$(mktemp -d /tmp/korlix-receipt-play-2.XXXXXX)
 printf 'Build workspace: %s\n' "$run_root"
 printf '%s\n' "$run_root" > /tmp/korlix-receipt-play-latest-path
 trap 'printf "Build stopped. Logs and intermediate files remain in %s\n" "$run_root" >&2' ERR
@@ -49,7 +49,7 @@ cd "$run_root/source/packages/korlix_receipt_core"
 flutter pub get --enforce-lockfile
 cd "$app_root"
 flutter pub get --enforce-lockfile
-flutter build appbundle --release --no-pub --build-name=1.0.0 --build-number=1
+flutter build appbundle --release --no-pub --build-name=1.1.0 --build-number=2
 bundle="$app_root/build/app/outputs/bundle/release/app-release.aab"
 test -s "$bundle"
 jarsigner -verify "$bundle" > "$run_root/signature-verification.txt"
@@ -63,21 +63,21 @@ import sys, xml.etree.ElementTree as ET
 root = ET.parse(sys.argv[1]).getroot()
 ns = '{http://schemas.android.com/apk/res/android}'
 assert root.get('package') == 'com.korlixdeveloper.receiptwiz'
-assert root.get(ns+'versionCode') == '1'
-assert root.get(ns+'versionName') == '1.0.0'
+assert root.get(ns+'versionCode') == '2'
+assert root.get(ns+'versionName') == '1.1.0'
 sdk = root.find('uses-sdk')
 assert int(sdk.get(ns+'targetSdkVersion')) >= 36
 assert root.find('application').get(ns+'debuggable', 'false') == 'false'
 print('Verified Receipt Wiz package, version, API target and release mode.')
 PY
 
-output="$original_root/release_uploads/receipt-wiz-1-$(date -u +%Y%m%d-%H%M%S)"
+output="$original_root/release_uploads/receipt-wiz-2-$(date -u +%Y%m%d-%H%M%S)"
 mkdir -p "$output"
-cp "$bundle" "$output/KORLIX-Receipt-Wiz-1.aab"
+cp "$bundle" "$output/KORLIX-Receipt-Wiz-2.aab"
 cp "$run_root/AndroidManifest.xml" "$run_root/signature-verification.txt" "$run_root/bundle-validation.txt" "$output/"
 printf '%s\n' "$source_commit" > "$output/source-commit.txt"
 cd "$output"
-sha256sum KORLIX-Receipt-Wiz-1.aab > SHA256SUMS
-printf 'Signed release bundle: %s/KORLIX-Receipt-Wiz-1.aab\n' "$output"
+sha256sum KORLIX-Receipt-Wiz-2.aab > SHA256SUMS
+printf 'Signed release bundle: %s/KORLIX-Receipt-Wiz-2.aab\n' "$output"
 cat SHA256SUMS
 printf '%s\n' "$output" > /tmp/korlix-receipt-play-output-path

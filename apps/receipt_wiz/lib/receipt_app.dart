@@ -13,6 +13,8 @@ import 'package:korlix_receipt_core/receipt_wiz/receipt_wiz_screen.dart';
 import 'receipt_auth.dart';
 import 'receipt_auth_screen.dart';
 import 'receipt_account_screen.dart';
+import 'receipt_billing.dart';
+import 'receipt_plan_screen.dart';
 
 class ReceiptWizApp extends StatefulWidget {
   const ReceiptWizApp({super.key, required this.auth});
@@ -85,7 +87,7 @@ class _ReceiptWizAppState extends State<ReceiptWizApp>
       brightness: Brightness.light,
       contrastLevel: contrast ? 1 : 0,
     ),
-    scaffoldBackgroundColor: Colors.white,
+    scaffoldBackgroundColor: const Color(0xFFFFFAF5),
     pageTransitionsTheme: PageTransitionsTheme(
       builders: {
         for (final entry in const PageTransitionsTheme().builders.entries)
@@ -96,7 +98,7 @@ class _ReceiptWizAppState extends State<ReceiptWizApp>
     materialTapTargetSize: MaterialTapTargetSize.padded,
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: const Color(0xFFF5F9F9),
+      fillColor: const Color(0xFFFFFEFC),
       errorMaxLines: 4,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
@@ -212,7 +214,41 @@ class _ReceiptHome extends StatefulWidget {
   State<_ReceiptHome> createState() => _ReceiptHomeState();
 }
 
-class _ReceiptHomeState extends State<_ReceiptHome> {
+class _ReceiptHomeState extends State<_ReceiptHome>
+    with WidgetsBindingObserver {
+  late final ReceiptBillingService _billing = ReceiptBillingService(
+    backendUrl: widget.auth.backendUrl,
+    headers: widget.auth.headers,
+    sessionChanges: widget.auth,
+  );
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_billing.start());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(_billing.refresh());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _billing.dispose();
+    super.dispose();
+  }
+
+  Future<void> _openPlan() async {
+    unawaited(_billing.refresh());
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => ReceiptPlanScreen(billing: _billing),
+      ),
+    );
+  }
+
   late final ReceiptWizClient _client = ReceiptWizClient(
     backendBaseUrl: widget.auth.backendUrl,
     headersBuilder: widget.auth.headers,
@@ -221,6 +257,7 @@ class _ReceiptHomeState extends State<_ReceiptHome> {
   @override
   Widget build(BuildContext context) => ReceiptWizScreen(
     client: _client,
+    onOpenSubscription: _billing.supported ? _openPlan : null,
     ensureConsent: () => ensureKorlixThirdPartyAiConsent(
       context: context,
       featureName: 'KORLIX Receipt Wiz',
@@ -238,6 +275,7 @@ class _ReceiptHomeState extends State<_ReceiptHome> {
           highContrast: widget.highContrast,
           reduceMotion: widget.reduceMotion,
           preference: widget.preference,
+          onOpenPlan: _billing.supported ? _openPlan : null,
         ),
       ),
     ),

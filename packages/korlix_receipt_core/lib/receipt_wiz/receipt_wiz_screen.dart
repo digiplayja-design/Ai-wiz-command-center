@@ -24,6 +24,7 @@ class ReceiptWizScreen extends StatefulWidget {
     this.capture,
     this.saveFile,
     this.onOpenAccount,
+    this.onOpenSubscription,
   });
   final ReceiptWizClient client;
   final Future<bool> Function() ensureConsent;
@@ -33,6 +34,7 @@ class ReceiptWizScreen extends StatefulWidget {
   final Future<BookkeepingPickedReceipt?> Function()? picker, capture;
   final Future<void> Function(Uint8List, String, String, Rect)? saveFile;
   final VoidCallback? onOpenAccount;
+  final Future<void> Function()? onOpenSubscription;
   @override
   State<ReceiptWizScreen> createState() => _ReceiptWizScreenState();
 }
@@ -40,6 +42,7 @@ class ReceiptWizScreen extends StatefulWidget {
 class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
   List<Map<String, dynamic>> _receipts = [];
   Map<String, dynamic> _integrations = {};
+  Map<String, dynamic> _plan = {};
   final _search = TextEditingController(), _exportKey = GlobalKey();
   Timer? _debounce;
   bool _loading = true,
@@ -48,11 +51,7 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
       _needsReview = false,
       _scanAvailable = true;
   bool _inboxTab = false;
-  int _offset = 0,
-      _total = 0,
-      _loadOperation = 0,
-      _usedBytes = 0,
-      _scansToday = 0;
+  int _offset = 0, _total = 0, _loadOperation = 0, _usedBytes = 0;
   String? _category, _error, _notice;
   int? _year;
   BookkeepingPickedReceipt? _pending;
@@ -85,6 +84,7 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
       _locked = true;
       _receipts = [];
       _integrations = {};
+      _plan = {};
       _pending = null;
       _uploadKey = null;
       _search.clear();
@@ -118,7 +118,7 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
         _integrations = wizMap(data['integrations']);
         _total = (data['total'] as num?)?.toInt() ?? 0;
         _usedBytes = (data['used_bytes'] as num?)?.toInt() ?? 0;
-        _scansToday = (data['scans_today'] as num?)?.toInt() ?? 0;
+        _plan = wizMap(data['plan']);
         _scanAvailable = data['scanning_available'] == true;
       });
     } catch (e) {
@@ -325,13 +325,87 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
     }
   }
 
+  Future<void> _subscription() async {
+    await widget.onOpenSubscription?.call();
+    if (_alive) await _load();
+  }
+
+  Widget _usage() {
+    final used = (_plan['scans_this_month'] as num?)?.toInt() ?? 0;
+    final limit = (_plan['monthly_scan_limit'] as num?)?.toInt();
+    final unlimited = _plan['unlimited'] == true;
+    final full = _plan['name'] == 'full';
+    return Container(
+      key: const Key('receipt-monthly-usage'),
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF4ECFF),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFE4D2FA)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              wizChip(
+                full ? 'RECEIPT WIZ FULL' : 'FREE PLAN',
+                icon: full
+                    ? Icons.workspace_premium_outlined
+                    : Icons.auto_awesome_outlined,
+              ),
+              if (_plan['included'] == true)
+                wizChip(
+                  'Included with KORLIX',
+                  icon: Icons.check_circle_outline,
+                  color: wizGreen,
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            _plan.isEmpty
+                ? 'Loading your scan allowance…'
+                : unlimited
+                ? '$used AI scans this month · Unlimited access'
+                : '$used / ${limit ?? 20} AI scans this month',
+            style: const TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 17,
+              color: wizInk,
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (limit != null && limit > 0)
+            LinearProgressIndicator(
+              value: (used / limit).clamp(0, 1),
+              color: used >= limit ? wizCoral : wizTeal,
+              backgroundColor: Colors.white,
+              minHeight: 7,
+              borderRadius: BorderRadius.circular(10),
+              semanticsLabel: '$used of $limit monthly AI scans used',
+            ),
+          const SizedBox(height: 10),
+          Text(
+            'Resets on the 1st of each month (UTC). Failed scans are returned.\n'
+            '${(_usedBytes / 1048576).toStringAsFixed(1)} MB stored'
+            '${_plan['max_bytes'] is num ? ' of ${((_plan['max_bytes'] as num) / 1048576).round()} MB' : ''}',
+            style: const TextStyle(color: wizMuted, fontSize: 12, height: 1.5),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _scanner() => Container(
     padding: const EdgeInsets.all(24),
     decoration: BoxDecoration(
       gradient: const LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [Color(0xFF102F45), Color(0xFF075766)],
+        colors: [Color(0xFF6431B1), Color(0xFFAA3768)],
       ),
       borderRadius: BorderRadius.circular(28),
     ),
@@ -343,7 +417,9 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
           runSpacing: 8,
           children: [
             wizChip(
-              'FREE · EVERY PLAN',
+              _plan['name'] == 'full'
+                  ? 'FULL · MORE ROOM TO SCAN'
+                  : 'SCAN · SORT · SAVE',
               icon: Icons.auto_awesome_outlined,
               color: wizMint,
             ),
@@ -371,7 +447,7 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
         const SizedBox(height: 12),
         const Text(
           'Scan once. Find it fast. Keep your connected finance inboxes in sync.',
-          style: TextStyle(color: Color(0xFFBFE0E8), height: 1.5),
+          style: TextStyle(color: Color(0xFFF7E5FF), height: 1.5),
         ),
         const SizedBox(height: 22),
         Container(
@@ -461,7 +537,7 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
           onPressed: _uploading ? null : () => _choose(false),
           style: OutlinedButton.styleFrom(
             foregroundColor: Colors.white,
-            side: const BorderSide(color: Color(0xFF82B6C1)),
+            side: const BorderSide(color: Color(0xFFE3B5E2)),
             padding: const EdgeInsets.symmetric(vertical: 15),
           ),
           icon: const Icon(Icons.add_photo_alternate_outlined),
@@ -471,7 +547,7 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
         const Text(
           'JPG, PNG, WebP or PDF · Up to 8 MB\nAuto-read details, then review and correct.',
           textAlign: TextAlign.center,
-          style: TextStyle(color: Color(0xFFBFE0E8), fontSize: 12, height: 1.5),
+          style: TextStyle(color: Color(0xFFF7E5FF), fontSize: 12, height: 1.5),
         ),
       ],
     ),
@@ -480,7 +556,9 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
     Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Icon(Icons.hub_outlined, color: wizTeal, size: 30),
+        _usage(),
+        const SizedBox(height: 22),
+        const Icon(Icons.hub_outlined, color: wizGreen, size: 30),
         const SizedBox(height: 12),
         const Text(
           'One receipt. Connected inboxes.',
@@ -503,14 +581,20 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
             wizChip(
               'Receipt Wiz · Always saved',
               icon: Icons.check_circle_outline,
+              color: wizGreen,
             ),
             if (wizRows(_integrations['bookkeeping']).isNotEmpty)
               wizChip(
                 'Bookkeeping · Connected',
                 icon: Icons.check_circle_outline,
+                color: wizCoral,
               ),
             if (wizRows(_integrations['tax_prep']).isNotEmpty)
-              wizChip('Tax Prep · Connected', icon: Icons.check_circle_outline),
+              wizChip(
+                'Tax Prep · Connected',
+                icon: Icons.check_circle_outline,
+                color: wizAmber,
+              ),
           ],
         ),
         const SizedBox(height: 20),
@@ -543,11 +627,6 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
               ],
             ),
           ),
-        const SizedBox(height: 14),
-        Text(
-          '$_scansToday / 100 free AI scans today · No credits used\n${(_usedBytes / 1048576).toStringAsFixed(1)} / 250 MB stored',
-          style: const TextStyle(color: wizMuted, fontSize: 12, height: 1.6),
-        ),
       ],
     ),
   );
@@ -727,7 +806,7 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
             onPressed: _offset == 0 || _loading
                 ? null
                 : () {
-                    _offset = (_offset - 30).clamp(0, 1000);
+                    _offset = (_offset - 30).clamp(0, 1000000);
                     unawaited(_load());
                   },
             icon: const Icon(Icons.chevron_left),
@@ -768,14 +847,16 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: wizTeal.withValues(alpha: .08),
+                  color: wizCategoryColor(
+                    d['category']?.toString(),
+                  ).withValues(alpha: .10),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(
                   r['mime_type'] == 'application/pdf'
                       ? Icons.picture_as_pdf_outlined
                       : Icons.receipt_long_outlined,
-                  color: wizTeal,
+                  color: wizCategoryColor(d['category']?.toString()),
                 ),
               ),
               const SizedBox(width: 14),
@@ -816,7 +897,7 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
                               : 'Needs review',
                           style: TextStyle(
                             color: r['reviewed'] == true
-                                ? wizTeal
+                                ? wizGreen
                                 : Colors.deepOrange,
                             fontSize: 12,
                           ),
@@ -868,17 +949,59 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
       ),
       bottomNavigationBar: widget.inboxOnly || _locked
           ? null
-          : NavigationBar(
-              selectedIndex: _inboxTab ? 1 : 0,
-              onDestinationSelected: (i) => setState(() => _inboxTab = i == 1),
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(Icons.document_scanner_outlined),
-                  label: 'Scan',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.receipt_long_outlined),
-                  label: 'Receipts',
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (widget.onOpenSubscription != null)
+                  Material(
+                    color: const Color(0xFFFFF0D5),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              _plan['name'] == 'full'
+                                  ? (_plan['included'] == true
+                                        ? 'Full included with KORLIX'
+                                        : 'Receipt Wiz Full')
+                                  : 'More scans. More space.',
+                              style: const TextStyle(
+                                color: wizInk,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          FilledButton(
+                            onPressed: _uploading ? null : _subscription,
+                            child: Text(
+                              _plan['name'] == 'full' ? 'My plan' : 'Upgrade',
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                NavigationBar(
+                  indicatorColor: const Color(0xFFE7D5FA),
+                  backgroundColor: const Color(0xFFFFFAF5),
+                  selectedIndex: _inboxTab ? 1 : 0,
+                  onDestinationSelected: (i) =>
+                      setState(() => _inboxTab = i == 1),
+                  destinations: const [
+                    NavigationDestination(
+                      icon: Icon(Icons.document_scanner_outlined),
+                      label: 'Scan',
+                    ),
+                    NavigationDestination(
+                      icon: Icon(Icons.receipt_long_outlined),
+                      label: 'Receipts',
+                    ),
+                  ],
                 ),
               ],
             ),

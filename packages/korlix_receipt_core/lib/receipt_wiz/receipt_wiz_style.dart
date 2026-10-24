@@ -1,10 +1,20 @@
 import 'package:flutter/material.dart';
 
-const wizInk = Color(0xFF102B3E),
-    wizTeal = Color(0xFF006C75),
-    wizMint = Color(0xFFADFAE6),
-    wizPaper = Color(0xFFF5F8FA),
-    wizMuted = Color(0xFF4D6474);
+const wizInk = Color(0xFF2D2343),
+    wizTeal = Color(0xFF7145C7),
+    wizMint = Color(0xFFFFD77A),
+    wizPaper = Color(0xFFFFFAF5),
+    wizMuted = Color(0xFF685E76),
+    wizCoral = Color(0xFFBB463C),
+    wizGreen = Color(0xFF237355),
+    wizAmber = Color(0xFF8C5A12);
+
+Color wizCategoryColor(String? category) => switch (category) {
+  'Groceries' || 'Health & medical' => wizGreen,
+  'Meals & dining' || 'Shopping' => wizCoral,
+  'Fuel & transport' || 'Travel & lodging' => wizAmber,
+  _ => wizTeal,
+};
 const wizCategories = [
   'Uncategorized',
   'Groceries',
@@ -53,7 +63,7 @@ ThemeData wizTheme(BuildContext context) => ThemeData(
     fillColor: Colors.white,
     border: OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: Color(0xFFD8E4E8)),
+      borderSide: const BorderSide(color: Color(0xFFE6DDEF)),
     ),
     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
   ),
@@ -89,7 +99,7 @@ Widget wizPanel(Widget child) => Container(
   decoration: BoxDecoration(
     color: Colors.white,
     borderRadius: BorderRadius.circular(22),
-    border: Border.all(color: const Color(0xFFE0E9ED)),
+    border: Border.all(color: const Color(0xFFECE1D7)),
   ),
   child: child,
 );

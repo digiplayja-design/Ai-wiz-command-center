@@ -4,8 +4,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'receipt_auth.dart';
 
-const receiptInk = Color(0xFF102B3E);
-const receiptTeal = Color(0xFF00717A);
+const receiptInk = Color(0xFF2D2343);
+const receiptTeal = Color(0xFF7145C7);
 
 class ReceiptAuthScreen extends StatefulWidget {
   const ReceiptAuthScreen({super.key, required this.auth});
@@ -176,7 +176,7 @@ class _ReceiptAuthScreenState extends State<ReceiptAuthScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: Colors.white,
+    backgroundColor: const Color(0xFFFFFAF5),
     body: Stack(
       children: [
         const Positioned.fill(
@@ -258,16 +258,47 @@ class _ReceiptAuthScreenState extends State<ReceiptAuthScreen> {
                           style: const TextStyle(
                             fontSize: 16,
                             height: 1.5,
-                            color: Color(0xFF486372),
+                            color: Color(0xFF685E76),
                           ),
                         ),
-                        const SizedBox(height: 24),
+                        const SizedBox(height: 18),
+                        const Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            Chip(
+                              avatar: Icon(
+                                Icons.document_scanner_outlined,
+                                color: Color(0xFF7145C7),
+                              ),
+                              label: Text('Scan'),
+                              backgroundColor: Color(0xFFF0E8FF),
+                            ),
+                            Chip(
+                              avatar: Icon(
+                                Icons.category_outlined,
+                                color: Color(0xFFBB463C),
+                              ),
+                              label: Text('Organize'),
+                              backgroundColor: Color(0xFFFFE7DD),
+                            ),
+                            Chip(
+                              avatar: Icon(
+                                Icons.check_circle_outline,
+                                color: Color(0xFF237355),
+                              ),
+                              label: Text('Keep'),
+                              backgroundColor: Color(0xFFE5F4E8),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 18),
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: const Color(0xFFEAF8F5),
+                            color: const Color(0xFFF0E8FF),
                             borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: const Color(0xFFB8DED9)),
+                            border: Border.all(color: const Color(0xFFD9C4EF)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -429,7 +460,7 @@ class _ReceiptAuthScreenState extends State<ReceiptAuthScreen> {
                                 decoration: BoxDecoration(
                                   color: _error != null
                                       ? const Color(0xFFFFF1EC)
-                                      : const Color(0xFFEAF8F5),
+                                      : const Color(0xFFF0E8FF),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: Text(
@@ -469,12 +500,12 @@ class _ReceiptAuthScreenState extends State<ReceiptAuthScreen> {
                         ),
                         const SizedBox(height: 18),
                         const Text(
-                          'Private receipt storage • Free scanning • One KORLIX account',
+                          '20 free AI scans a month • One KORLIX account',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 12,
                             height: 1.5,
-                            color: Color(0xFF486372),
+                            color: Color(0xFF685E76),
                           ),
                         ),
                         const SizedBox(height: 8),
@@ -511,7 +542,7 @@ class _CircuitLines extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final p = Paint()
-      ..color = const Color(0xFF00717A).withValues(alpha: .06)
+      ..color = const Color(0xFF7145C7).withValues(alpha: .06)
       ..strokeWidth = 1;
     for (var x = 14.0; x < size.width; x += 54) {
       canvas.drawLine(Offset(x, 0), Offset(x, size.height), p);

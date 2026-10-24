@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - feature/receipt-wiz-mobile-validation-20261024
+      - feature/receipt-wiz-full-android-20261024
     paths:
       - .github/workflows/receipt-wiz-validation.yml
       - apps/receipt_wiz/lib/**

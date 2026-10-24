@@ -1,16 +1,18 @@
 {
-  "status": "Ready to send for review in Google Play; feature-graphic AI label saved with owner approval",
+  "status": "Updated 1.1.0 copy prepared; new subscription and internal build pending Play setup",
   "aiAssetDeclaration": {
     "ownerApproved": true,
     "submitted": true,
-    "labeledAssets": ["feature-graphic.png"],
+    "labeledAssets": [
+      "feature-graphic.png"
+    ],
     "provenance": "Assistant-authored SVG rendered to PNG; original brand icon and real-app screenshots were not labeled."
   },
   "packageName": "com.korlixdeveloper.receiptwiz",
   "language": "en-US",
   "title": "KORLIX Receipt Wiz",
   "shortDescription": "Scan receipts, review details, and keep your receipt library in one place",
-  "fullDescription": "Keep your receipts together with KORLIX Receipt Wiz. Capture a receipt with your camera, import a photo or PDF, review its details, and save it to your private KORLIX receipt library.\n\nCAPTURE AND REVIEW\nUse optional AI-assisted scanning to extract receipt details, then check and edit the merchant, date, amounts, category, and notes. You can also enter details manually. AI results may be inaccurate, so review them before relying on them.\n\nFIND YOUR RECEIPTS\nSearch your receipt library and filter by category, year, or review status. Keep the original photo or PDF with the saved receipt. Export receipt details as CSV for your own records.\n\nONE KORLIX ACCOUNT\nAlready use KORLIX AI? Sign in with the same email and password to access your existing receipt library. Receipt Wiz works as a separate app; KORLIX AI does not need to be installed. Your account's receipt storage and scanning limits still apply.\n\nYOUR CHOICES\nAI scanning asks for your permission before sending receipt content for processing. You can decline and enter receipt details manually. Account settings include larger text, higher contrast, reduced motion, privacy information, sign-out, and a request to delete your shared KORLIX account.\n\nAn internet connection and a KORLIX account are required. Free Basic accounts are available. Receipt Wiz is intended for users aged 16 and older; users aged 16 or 17 need permission from a parent or guardian.\n\nQuestions? Contact support@korlixdeveloper.com.",
+  "fullDescription": "Keep your receipts together with KORLIX Receipt Wiz. Capture a receipt with your camera, import a photo or PDF, review its details, and save it to your private KORLIX receipt library.\n\nCAPTURE AND REVIEW\nUse optional AI-assisted scanning to extract receipt details, then check and edit the merchant, date, amounts, category, and notes. You can also enter details manually. AI results may be inaccurate, so review them before relying on them.\n\nFIND YOUR RECEIPTS\nSearch your receipt library and filter by category, year, or review status. Keep the original photo or PDF with the saved receipt. Export receipt details as CSV for your own records.\n\nONE KORLIX ACCOUNT\nAlready use KORLIX AI? Sign in with the same email and password to access your existing receipt library. Receipt Wiz works as a separate app; KORLIX AI does not need to be installed. Your account's receipt storage and scanning limits are shared across KORLIX receipt tools.\n\nFREE AND FULL\nFree includes 20 AI scans per calendar month and 100 stored receipts within 250 MB. Optional Receipt Wiz Full costs US$8.99/month, with local pricing shown by Google Play, and includes 1,000 AI scans per calendar month and 5,000 receipts within 2 GB. Full is included with active KORLIX Pro, Ultra Premium and Enterprise access. The separate receipt subscription does not upgrade your main KORLIX plan.\n\nFull renews monthly unless canceled in Google Play. Scan allowances reset on the first of each calendar month (UTC), without rollover. Saved receipts remain accessible after cancellation or when a limit is reached. Manual entry, search and CSV export remain available on Free.\n\nYOUR CHOICES\nAI scanning asks for your permission before sending receipt content for processing. You can decline and enter receipt details manually. Account settings include larger text, higher contrast, reduced motion, privacy information, sign-out, and a request to delete your shared KORLIX account.\n\nAn internet connection and a KORLIX account are required. Free Basic accounts are available. Receipt Wiz is intended for users aged 16 and older; users aged 16 or 17 need permission from a parent or guardian.\n\nQuestions? Contact support@korlixdeveloper.com.",
   "category": "PRODUCTIVITY",
   "appOrGame": "app",
   "price": "free",
@@ -19,8 +21,8 @@
   "website": "https://www.korlixdeveloper.com",
   "privacyPolicy": "https://www.korlixdeveloper.com/privacy-policy.html",
   "accountDeletion": "https://www.korlixdeveloper.com/delete-account.html",
-  "releaseName": "1.0.0 (1)",
-  "releaseNotes": "The first independent KORLIX Receipt Wiz release. Capture or import receipts, review and edit details, search your shared receipt library, and export CSV records using your existing KORLIX account.",
+  "releaseName": "1.1.0 (2)",
+  "releaseNotes": "A more colorful design, monthly scan counters, and Receipt Wiz Full. Free includes 20 AI scans a month; Full includes 1,000 scans, more receipt storage, and is included with eligible KORLIX paid plans.",
   "reviewAccess": "A working reviewer account is required; no credentials are stored in this repository.",
   "playScreenshotOrder": [
     "01-scan.png",

@@ -102,6 +102,12 @@ class FakeVault {
         'offset': 0,
         'used_bytes': 4000,
         'scans_today': 1,
+        'plan': {
+          'name': 'free', 'included': false, 'unlimited': false,
+          'monthly_scan_limit': 20, 'scans_this_month': 1,
+          'scans_remaining': 19, 'max_receipts': 100, 'max_bytes': 262144000,
+          'resets_at': '2026-11-01T00:00:00Z',
+        },
         'credit_cost': 0,
         'categories': wizCategories,
         'scanning_available': true,
@@ -381,7 +387,7 @@ void main() {
           textScale: scale,
         );
         expect(find.byKey(const Key('receipt-wiz-camera')), findsOneWidget);
-        expect(find.text('FREE · EVERY PLAN'), findsOneWidget);
+        expect(find.text('SCAN · SORT · SAVE'), findsOneWidget);
         expect(tester.takeException(), isNull);
         await tester.tap(find.text('Receipts'));
         await tester.pumpAndSettle();
