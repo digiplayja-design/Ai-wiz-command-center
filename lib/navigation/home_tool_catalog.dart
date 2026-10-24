@@ -1,5 +1,6 @@
 /// Shared by the home sections and More tools so each feature has one entry.
 const homeBusinessTools = <String>[
+  if (bool.fromEnvironment('KORLIX_POS_PRACTICE')) 'KORLIX POS · Practice',
   'Logo Studio',
   // CRM remains available independently of the home tier request.
   'Contacts CRM',

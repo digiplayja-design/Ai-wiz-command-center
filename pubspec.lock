@@ -728,6 +728,13 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.3.1"
+  korlix_pos_core:
+    dependency: "direct main"
+    description:
+      path: "packages/korlix_pos_core"
+      relative: true
+    source: path
+    version: "0.1.0"
   korlix_receipt_core:
     dependency: "direct main"
     description:

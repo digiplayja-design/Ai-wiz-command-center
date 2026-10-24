@@ -1,0 +1,18 @@
+name: korlix_pos_core
+description: Shared KORLIX POS retail and restaurant practice workspace.
+publish_to: none
+version: 0.1.0
+environment:
+  sdk: ^3.12.0
+dependencies:
+  flutter:
+    sdk: flutter
+  shared_preferences: 2.5.5
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: 6.0.0
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/korlix_logo.png

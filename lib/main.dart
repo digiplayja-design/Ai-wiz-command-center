@@ -91,6 +91,7 @@ import 'chat/chat_request.dart';
 import 'bookkeeping/bookkeeping_client.dart';
 import 'bookkeeping/bookkeeping_screen.dart';
 import 'receipt_wiz/receipt_wiz_entry.dart';
+import 'pos/pos_entry.dart';
 import 'bookkeeping/bookkeeping_voice.dart';
 import 'payroll/payroll_client.dart';
 import 'payroll/payroll_screen.dart';
@@ -10427,6 +10428,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   void _selectUtilityTool(String tool) {
+    if (tool == 'KORLIX POS · Practice') { unawaited(openKorlixPosPractice(context, sessionChanges:kKorlixAuthRevision)); return; }
     if (tool == 'THE RECEIPT WIZ') { unawaited(_openReceiptWiz()); return; }
     if (tool == 'Inventory Studio') { unawaited(_openInventoryStudio()); return; }
     if (tool == 'Logo Studio') { unawaited(_openLogoStudio()); return; }
@@ -11574,6 +11576,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     };
 
     String statusFor(String tool) {
+      if (tool == 'KORLIX POS · Practice') return 'Try retail checkout, restaurant orders and the kitchen queue with sample data';
       if (tool == 'Inventory Studio') return 'Enterprise: find, scan and manage stock across every location with Rici';
       if (tool == 'Logo Studio') return 'Create editable logos, explore AI concepts, and download your brand kit';
       if (tool == 'Cybersecurity Defender') return 'Check suspicious messages, strengthen habits and get incident help';

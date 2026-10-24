@@ -31,6 +31,8 @@ dependencies:
     sdk: flutter
   korlix_receipt_core:
     path: packages/korlix_receipt_core
+  korlix_pos_core:
+    path: packages/korlix_pos_core
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
