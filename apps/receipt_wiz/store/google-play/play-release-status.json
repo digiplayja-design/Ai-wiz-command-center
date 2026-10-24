@@ -25,9 +25,10 @@
     "sourceCommit": "38285c6215b828947b5728d84d525a40d03af5de",
     "acceptedByGooglePlay": true
   },
-  "listing": "Saved as draft",
+  "listing": "Ready to send for review; approved feature-graphic AI label saved",
+  "contentRating": "IARC Completed; ESRB Everyone, PEGI 3; awaiting Google review with app submission",
   "dataSafety": "Saved as draft, pending provider/logging confirmation and target audience",
-  "initialSetupCompletedTasks": 6,
+  "initialSetupCompletedTasks": 8,
   "initialSetupTotalTasks": 11,
   "physicalDeviceValidation": "Pending",
   "consoleUrl": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4974803615919424879/tracks/4701326269245146922?tab=releases",
@@ -36,8 +37,6 @@
   "remaining": [
     "Dedicated reviewer sign-in details",
     "Target audience (requires sign-in details first)",
-    "IARC Terms acceptance and content rating",
-    "AI asset declaration and listing finalization",
     "Provider/logging checks and Data safety certification",
     "Real-device testing and production submission"
   ]

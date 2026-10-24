@@ -1,5 +1,11 @@
 {
-  "status": "saved as Google Play draft; AI asset declaration awaiting owner approval",
+  "status": "Ready to send for review in Google Play; feature-graphic AI label saved with owner approval",
+  "aiAssetDeclaration": {
+    "ownerApproved": true,
+    "submitted": true,
+    "labeledAssets": ["feature-graphic.png"],
+    "provenance": "Assistant-authored SVG rendered to PNG; original brand icon and real-app screenshots were not labeled."
+  },
   "packageName": "com.korlixdeveloper.receiptwiz",
   "language": "en-US",
   "title": "KORLIX Receipt Wiz",

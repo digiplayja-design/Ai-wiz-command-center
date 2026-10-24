@@ -134,8 +134,8 @@ billing, microphone and social SDKs.
   artifact digest and packaged identifier `com.korlixdeveloper.receiptwiz`,
   version `1.0.0 (1)`, minimum iOS 15, camera/photo permission descriptions and
   simulator platform were verified. This is not an iPhone-installable IPA.
-- No real-device installation or store upload was performed. Store records,
-  final disclosures, review access and real-device checks remain release steps.
+- At this first validation checkpoint, no real-device installation or store
+  upload had been performed. The subsequent Android internal release is recorded below.
 
 ## Google Play preparation — 24 October 2026
 
@@ -180,8 +180,10 @@ publication. This release is unreviewed and is not a public production launch;
 Google currently displays its temporary package-based name.
 
 - Store listing copy, icon, feature graphic and four real-app screenshots are
-  saved as a draft. The short description has no final punctuation. Screenshot
-  order in Play is scan, receipts, shared account, receipt review.
+  saved and **ready to send for review**. The owner explicitly approved the AI
+  declaration, which labels only the assistant-authored feature graphic. The
+  short description has no final punctuation. Screenshot order in Play is scan,
+  receipts, shared account, receipt review.
 - Privacy policy, no-ads, non-government, no-health-features, financial scope,
   and Productivity category/public support contact are saved. Financial scope is
   declared as **Other**, with an explicit receipt/expense recordkeeping description.
@@ -189,11 +191,16 @@ Google currently displays its temporary package-based name.
   no-sharing answer relies on Google's provider/consent exceptions and must be
   checked against actual provider settings before certification. Infrastructure
   diagnostic/IP/query retention still requires confirmation.
-- Public review is blocked by dedicated reviewer sign-in details, the dependent
-  target-audience questionnaire, IARC Terms of Use acceptance/content rating,
-  and the listing's AI-asset declaration. Automatic approval review rejected
-  submitting the feature-graphic AI declaration and preparing reviewer access
-  without an established authorized reviewer account. No credentials were entered.
+- Following the owner's explicit approval, IARC Terms of Use were accepted and
+  the content-rating questionnaire was saved as **Completed**. Ratings include
+  **ESRB Everyone** and **PEGI 3**, with no content descriptors. These content
+  ratings do not change the intended 16+ audience or the shared-account age policy.
+- Google Play now shows **8 of 11 initial setup tasks complete**. Public review
+  still requires dedicated reviewer sign-in details, the dependent target-audience
+  questionnaire and final Data safety certification. The open reviewer form's
+  password field was checked for presence only and was still empty; no credentials
+  were read, entered or stored. A working authorized review account must be
+  supplied directly in Play Console.
 - The internal-test invitation page was checked. It requires an invited Google
   account; the current Console account was not recognized as an invited tester.
   No new tester addresses were added and no invitations were sent.
