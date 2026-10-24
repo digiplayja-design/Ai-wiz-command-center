@@ -25,7 +25,7 @@
     "sourceCommit": "38285c6215b828947b5728d84d525a40d03af5de",
     "acceptedByGooglePlay": true
   },
-  "listing": "Ready to send for review; approved feature-graphic AI label saved",
+  "listing": "Colorful feature graphic, five current Flutter UI screenshots and Free/Full description saved; ready to send for review. Only feature graphic AI-labeled.",
   "contentRating": "IARC Completed; ESRB Everyone, PEGI 3; awaiting Google review with app submission",
   "dataSafety": "Saved as draft, pending provider/logging confirmation and target audience",
   "initialSetupCompletedTasks": 8,
@@ -44,9 +44,9 @@
     "versionName": "1.1.0",
     "versionCode": 2,
     "sourceCommit": "466eb4e7e3361f1818f0e46764c04e956acf8cc6",
-    "status": "Signed build in preparation; do not roll out until subscription backend is ready",
+    "status": "Signed bundle accepted; Google Play internal release draft says Ready to release. Not published.",
     "backendCommit": "fc1e11a5dd5fbce58e45d5c4fb99f11cbb88a379",
-    "productionApproval": "Automatic review rejected shared Render backend deployment; explicit production approval required",
+    "productionApproval": "Automatic review rejected shared Render backend deployment and 175-country subscription availability; both remain pending explicit owner approval. Receipt Wiz billing account access also requires browser action-time confirmation.",
     "subscription": {
       "productId": "receipt_wiz_full",
       "basePlanId": "monthly",
@@ -57,7 +57,49 @@
         "pro",
         "ultra",
         "enterprise"
-      ]
+      ],
+      "productStatus": "Created; benefits saved",
+      "basePlanStatus": "Monthly auto-renewal and prices prepared in unsaved Console form; availability Apply blocked by automatic approval review",
+      "regionalAvailability": 175,
+      "usMonthlyPricePrepared": 8.99,
+      "priceStatus": "USD 8.99 and Google-generated local prices entered; final save and activation pending approval",
+      "availabilityApproval": "Explicit approval required for 175-country sales scope. Do not bypass rejected Apply action.",
+      "billingEnabled": false
+    },
+    "releaseId": 2,
+    "reviewUrl": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4974803615919424879/tracks/4701326269245146922/releases/2/review",
+    "bundle": {
+      "filename": "KORLIX-Receipt-Wiz-2.aab",
+      "bytes": 56171705,
+      "sha256": "d45f66604d9497a15a6777223cce08ce9c58f5e75f54aa0cd5f3ae7662e344d3",
+      "signatureVerified": true,
+      "bundletoolValidated": true,
+      "acceptedByGooglePlay": true,
+      "billingPermissionVerified": true
+    },
+    "ci": {
+      "runId": 40125218882,
+      "url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/40125218882",
+      "android": "success",
+      "iosSimulator": "success"
+    },
+    "termsCommit": "23079f9e5193672ce6d71ffd784265968820409e",
+    "termsLive": false,
+    "billingAccess": {
+      "serviceAccount": "korlix-play-billing@korlix-ai.iam.gserviceaccount.com",
+      "currentScope": "Korlix AI only; no account-wide permissions",
+      "requiredReceiptWizScope": [
+        "View app information (read-only), including inherited app quality information",
+        "View financial data",
+        "Manage orders and subscriptions"
+      ],
+      "status": "Receipt Wiz selected in Add app picker; no grant applied or saved. Browser action-time confirmation required."
+    },
+    "notifications": {
+      "currentlyEnabled": false,
+      "proposedTopic": "projects/korlix-ai/topics/korlix-play-billing",
+      "content": "Subscriptions and voided purchases only",
+      "status": "Not configured; enable and test after verified backend deployment"
     }
   }
 }

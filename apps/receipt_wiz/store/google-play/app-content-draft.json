@@ -207,6 +207,15 @@
     "requiresContentRatingDigitalPurchases": true,
     "additionalManifestPermission": "com.android.vending.BILLING",
     "billingData": "Google Play product and opaque purchase identifiers, renewal state, expiry, and account-bound entitlements; service-role access only",
-    "requiresDataSafetyReview": "Purchase history and user/account identifiers are used for app functionality, account management, and fraud prevention; review store-billing provider disclosures before certification."
+    "requiresDataSafetyReview": "Purchase history and user/account identifiers are used for app functionality, account management, and fraud prevention; review store-billing provider disclosures before certification.",
+    "verifiedCandidateManifest": {
+      "version": "1.1.0 (2)",
+      "sourceCommit": "466eb4e7e3361f1818f0e46764c04e956acf8cc6",
+      "minSdk": 24,
+      "targetSdk": 36,
+      "billingPermission": true,
+      "bundletoolValidated": true,
+      "acceptedByGooglePlay": true
+    }
   }
 }
