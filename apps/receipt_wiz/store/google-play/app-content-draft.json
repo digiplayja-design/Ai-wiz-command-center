@@ -201,5 +201,12 @@
     "usExportLaws": "approved and accepted",
     "iarcTerms": "explicitly approved and accepted on 2026-10-24; questionnaire completed",
     "featureGraphicAiLabel": "explicitly approved and submitted on 2026-10-24; only feature-graphic.png labeled"
+  },
+  "subscriptionUpdate": {
+    "status": "Prepared for 1.1.0; not yet reflected in saved declarations",
+    "requiresContentRatingDigitalPurchases": true,
+    "additionalManifestPermission": "com.android.vending.BILLING",
+    "billingData": "Google Play product and opaque purchase identifiers, renewal state, expiry, and account-bound entitlements; service-role access only",
+    "requiresDataSafetyReview": "Purchase history and user/account identifiers are used for app functionality, account management, and fraud prevention; review store-billing provider disclosures before certification."
   }
 }

@@ -1,10 +1,8 @@
 # KORLIX Receipt Wiz
 
 Independent Flutter app for the existing KORLIX receipt scanner and private
-receipt library. Version **1.0.0 (1)**. Android/iOS identifier:
-**com.korlixdeveloper.receiptwiz**. The first signed Android release bundle is
-prepared. Separate store records and iOS signing are still required before
-distribution.
+receipt library. Candidate version **1.1.0 (2)**; **1.0.0 (1)** remains the active internal test release. Android/iOS identifier:
+**com.korlixdeveloper.receiptwiz**. Android internal testing is configured, and the owner confirmed downloading and testing version 1.0.0 successfully. iOS store records and signing remain separate.
 
 ## Shared account
 
@@ -16,7 +14,7 @@ distribution.
   registration offers **Sign In** and **Forgot Password?**. Sign In retains the
   email and clears the attempted new password.
 - New registration retains age, guardian-permission and policy checks and
-  selects free Basic, matching the existing free receipt scanner.
+  selects free Basic, with the Free receipt allowance.
 - Confirmation uses the existing web destination. Users verify their email,
   then return here to sign in. No dependency on the hub's custom URL scheme.
   Password recovery uses the existing hosted recovery page.
@@ -207,3 +205,23 @@ Google currently displays its temporary package-based name.
 
 See [Play release status](store/google-play/play-release-status.json) for the
 exact Console and test-track links. Physical-device validation remains pending.
+
+## Receipt Wiz Full candidate
+
+Version 1.1.0 adds purple/coral, amber and green styling, monthly usage, and an
+Android Upgrade/My plan screen. Free: 20 AI scans/month and 100 receipts within
+250 MB. Full: 1,000 scans/month and 5,000 receipts within 2 GB for US$8.99/month
+(localized price confirmed by Google Play). Pro, Ultra and Enterprise include
+Full; existing developer overrides remain unlimited. All allowances belong to
+the shared account and reset on the first calendar day at 00:00 UTC.
+
+The independent `receipt_wiz_full` / `monthly` product is bound to
+`com.korlixdeveloper.receiptwiz`. It never upgrades or downgrades the hub tier.
+Only verified backend entitlement grants access. Failed scans return allowance;
+manual entry, search and CSV remain free, and expiration/limits do not hide
+saved receipts. Restore and Google Play management are available in My plan.
+
+Deployment is pending explicit production approval after an automatic review
+blocked the shared backend deploy. Do not publish the candidate internal release
+or enable checkout before the database, backend, Play catalog and policies are
+ready. See `docs/RECEIPT_WIZ_FULL_RELEASE_2026-10-24.md` for the release checklist.

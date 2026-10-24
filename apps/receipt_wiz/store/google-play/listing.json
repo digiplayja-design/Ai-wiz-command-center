@@ -27,7 +27,8 @@
   "playScreenshotOrder": [
     "01-scan.png",
     "02-receipts.png",
+    "03-review.png",
     "04-shared-account.png",
-    "03-review.png"
+    "05-full-plan.png"
   ]
 }
