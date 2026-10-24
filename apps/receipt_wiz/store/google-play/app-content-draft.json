@@ -1,5 +1,5 @@
 {
-  "status": "Data safety saved as complete Google Play draft; not certified or submitted for review",
+  "status": "Updated 11-type Data safety draft saved; preview complete. Final save blocked by Target audience prerequisite, itself blocked by missing reviewer credentials.",
   "reviewedSource": {
     "app": "466eb4e7e3361f1818f0e46764c04e956acf8cc6",
     "backend": "fc1e11a5dd5fbce58e45d5c4fb99f11cbb88a379"
@@ -94,7 +94,8 @@
       "type": "App activity / App interactions",
       "purposes": [
         "App functionality",
-        "Fraud prevention, security, and compliance"
+        "Fraud prevention, security, and compliance",
+        "Analytics"
       ],
       "required": true,
       "evidence": "Scan usage counts, sign-in/session events, consent and review state"
@@ -105,16 +106,28 @@
         "App functionality"
       ],
       "required": false,
-      "evidence": "Search terms are sent to the receipt list/export API; confirm infrastructure query-string retention before choosing ephemeral processing"
+      "evidence": "Optional search queries are sent in API URLs. Render retains requested paths/query strings; therefore not declared ephemeral."
     },
     {
       "type": "Device or other IDs",
       "purposes": [
         "Account management",
+        "Fraud prevention, security, and compliance",
+        "Analytics",
+        "App functionality"
+      ],
+      "required": true,
+      "evidence": "Installation/session identifiers and infrastructure client IP/request identifiers; retained for account access, security and service diagnostics."
+    },
+    {
+      "type": "App info and performance / Diagnostics",
+      "purposes": [
+        "Analytics",
         "Fraud prevention, security, and compliance"
       ],
       "required": true,
-      "evidence": "Installation ID and session-bound app allowance"
+      "ephemeral": false,
+      "evidence": "Live Render receipt API request logs include HTTP status, response timing, request IDs, user-agent and client network identifiers. Raw request-log values are not stored in this release record."
     }
   ],
   "processing": {
@@ -130,9 +143,9 @@
     "retention": "Saved receipts and originals are retained; they are not ephemeral. Deletion can leave necessary security/usage records and backup copies for the disclosed retention period. Original uploads may contain embedded metadata."
   },
   "remainingChecks": [
-    "Confirm infrastructure diagnostics, IP handling and query logging for the final Data safety answers.",
-    "Verify reviewer credentials and real-device camera, import, sharing, session recovery and deletion-request navigation.",
-    "Enter an authorized dedicated reviewer account directly in Play Console, then complete target audience and certify the reviewed Data safety answers."
+    "Enter a dedicated verified reviewer account with Full access directly in Play Console. No credentials are stored in the repository.",
+    "Complete Target audience (16-17 and 18+) after Sign in details, then finalize Data safety and submit the production changes.",
+    "Owner reports the latest app test worked; a completed license purchase/restore/cancellation test was not explicitly reported."
   ],
   "guidance": [
     "https://support.google.com/googleplay/android-developer/answer/10787469?hl=en",
@@ -200,7 +213,7 @@
     "deletionPolicy": "https://www.korlixdeveloper.com/delete-account.html"
   },
   "playDataSafetyDraft": {
-    "collectedDataTypes": 10,
+    "collectedDataTypes": 11,
     "sharedDataTypes": 0,
     "sharingAnswerCertified": false,
     "ephemeralProcessing": false,
@@ -212,7 +225,14 @@
     "deleteDataUrl": "https://www.korlixdeveloper.com/delete-account.html",
     "targetAudiencePrerequisiteComplete": false,
     "diagnosticsAndProviderSettingsConfirmed": false,
-    "subscriptionPurposesSaved": true
+    "subscriptionPurposesSaved": true,
+    "diagnosticsConfirmed": true,
+    "diagnosticsPurposesSaved": [
+      "Analytics",
+      "Fraud prevention, security, and compliance"
+    ],
+    "identifiersAndInteractionsAnalyticsSaved": true,
+    "finalSaveBlockedByTargetAudience": true
   },
   "ownerApprovals": {
     "googleDeveloperProgramPolicy": "approved and accepted",
@@ -238,5 +258,33 @@
     },
     "dataSafetyStatus": "Purchase history additionally declares Account management and Fraud prevention, security, and compliance; saved as draft, not certified or submitted.",
     "contentRatingDigitalPurchasesSaved": true
+  },
+  "infrastructureReview": {
+    "checkedDate": "2026-10-24",
+    "renderReceiptRequestLogsObserved": true,
+    "retainedLogFieldTypes": [
+      "HTTP method/status",
+      "URL path and query string",
+      "Client IP",
+      "User agent",
+      "Request ID",
+      "Response time",
+      "Response size"
+    ],
+    "supabaseLoggingSettings": {
+      "log_statement": "ddl",
+      "log_min_duration_statement": "-1",
+      "log_min_error_statement": "error",
+      "log_connections": "off",
+      "log_disconnections": "off",
+      "log_parameter_max_length_on_error": "0"
+    },
+    "standaloneAdAnalyticsCrashSdkFound": false,
+    "consentedReceiptAiStoreFalseVerified": true,
+    "publicPrivacyPolicyHttp": 200,
+    "publicPolicyCoversTechnicalIdentifiersAndDiagnostics": true,
+    "providerDataFlows": "Supabase Auth/database/storage, Render hosting/logs, encrypted Backblaze backups, optional consented OpenAI receipt extraction, user-initiated Google Play subscription billing and verification.",
+    "providerCaveat": "No promise of zero provider retention. Final sharing/declaration certification remains pending.",
+    "noInfrastructureSettingsChanged": true
   }
 }

@@ -30,18 +30,17 @@
   },
   "listing": "Colorful feature graphic, five current Flutter UI screenshots and Free/Full description saved; ready to send for review. Only feature graphic AI-labeled.",
   "contentRating": "IARC Completed for 1.1.0 with In-App Purchases; ESRB Everyone, PEGI 3, Brazil 14+. Saved in Publishing overview; not yet sent for Google review.",
-  "dataSafety": "Saved draft updated for subscription purchase history, account management and fraud prevention; provider/logging verification and certification remain pending.",
+  "dataSafety": "11 collected types, 0 shared, updated draft saved. Diagnostics and Analytics purposes added from observed hosting logs. Final submission is locked pending Target audience, which requires reviewer sign-in details.",
   "initialSetupCompletedTasks": 8,
   "initialSetupTotalTasks": 11,
-  "physicalDeviceValidation": "Owner confirmed version 1.0.0 downloaded and tested successfully on 2026-10-24; version 1.1.0 still requires device testing.",
+  "physicalDeviceValidation": "Owner confirmed the latest Android 1.1.0 internal build worked on 2026-10-24 and requested production publication. A completed purchase/restore/cancellation transaction was not explicitly reported.",
   "consoleUrl": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4974803615919424879/tracks/4701326269245146922?tab=releases",
   "testInvitationUrl": "https://play.google.com/apps/internaltest/4701326269245146922",
   "testInvitationCheck": "Opened successfully; current Console account not recognized as invited. Intended for accounts in the selected tester list.",
   "remaining": [
-    "Dedicated reviewer sign-in details",
-    "Target audience (requires sign-in details first)",
-    "Provider/logging checks and Data safety certification",
-    "Version 1.1.0 real-device and Google Play purchase tests, then production submission"
+    "Dedicated verified reviewer KORLIX account with Full access entered directly in Play Console",
+    "Complete intended 16-17 and 18+ audience after sign-in details",
+    "Finalize Data safety and submit the staged production changes for Google review"
   ],
   "candidateRelease": {
     "versionName": "1.1.0",
@@ -49,7 +48,7 @@
     "sourceCommit": "466eb4e7e3361f1818f0e46764c04e956acf8cc6",
     "status": "Published to existing internal testers; Active, Available to internal testers.",
     "backendCommit": "fc1e11a5dd5fbce58e45d5c4fb99f11cbb88a379",
-    "productionApproval": "Owner approved shared backend deployment, subscription terms, billing notifications, reviewed country scope, app-scoped billing permissions, and internal rollout on 2026-10-24.",
+    "productionApproval": "Owner requested production publication after confirming the latest internal app worked on 2026-10-24. Production rollout and declarations may proceed within the approved scope; reviewer credentials are missing.",
     "subscription": {
       "productId": "receipt_wiz_full",
       "basePlanId": "monthly",
@@ -128,7 +127,7 @@
       "unauthenticatedStatusHttp": 401,
       "termsHttp": 200,
       "realPurchasePerformed": false,
-      "physicalDeviceAndLicensePurchaseTesting": "Pending"
+      "physicalDeviceAndLicensePurchaseTesting": "Owner reports latest app test worked; license purchase/restore/cancellation not explicitly confirmed."
     },
     "contentRating": {
       "status": "Completed",
@@ -154,5 +153,29 @@
       "acceptedByGooglePlay": true
     }
   },
-  "releasedAtLocal": "2026-10-24 16:45 America/New_York"
+  "releasedAtLocal": "2026-10-24 16:45 America/New_York",
+  "productionCandidate": {
+    "versionName": "1.1.0",
+    "versionCode": 2,
+    "trackId": "4698050174705258385",
+    "releaseId": 1,
+    "status": "Saved in Publishing overview: Start full rollout; not submitted for review",
+    "bundleReusedFromInternal": true,
+    "runtimeChanges": false,
+    "releaseValidation": "Ready to release; no remaining release validation errors",
+    "countries": 173,
+    "marketBasis": "Intersection of the 174 active subscription markets and the 178 entries offered by production targeting. Central African Republic is not separately listed in production. China, Cuba, Iran, Sudan and Rest of World are unselected because they are not active named subscription markets. No automatic future-market expansion.",
+    "publishingUrl": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4974803615919424879/publishing",
+    "reviewUrl": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4974803615919424879/tracks/4698050174705258385/releases/1/review",
+    "changesAwaitingReview": 8,
+    "submitButtonEnabled": false,
+    "blockers": [
+      "Missing reviewer sign-in details",
+      "Target audience requires Sign in details first",
+      "Data safety submission requires Target audience first"
+    ],
+    "reviewerFormPrepared": true,
+    "credentialsEntered": false,
+    "publiclyAvailable": false
+  }
 }
