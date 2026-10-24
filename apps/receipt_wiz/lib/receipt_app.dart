@@ -86,6 +86,12 @@ class _ReceiptWizAppState extends State<ReceiptWizApp>
       contrastLevel: contrast ? 1 : 0,
     ),
     scaffoldBackgroundColor: Colors.white,
+    pageTransitionsTheme: PageTransitionsTheme(
+      builders: {
+        for (final entry in const PageTransitionsTheme().builders.entries)
+          entry.key: _ReceiptMotionTransitions(entry.value),
+      },
+    ),
     visualDensity: VisualDensity.standard,
     materialTapTargetSize: MaterialTapTargetSize.padded,
     inputDecorationTheme: InputDecorationTheme(
@@ -166,6 +172,28 @@ class _ReceiptWizAppState extends State<ReceiptWizApp>
       );
     },
   );
+}
+
+class _ReceiptMotionTransitions extends PageTransitionsBuilder {
+  const _ReceiptMotionTransitions(this.fallback);
+  final PageTransitionsBuilder fallback;
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) => MediaQuery.disableAnimationsOf(context)
+      ? child
+      : fallback.buildTransitions(
+          route,
+          context,
+          animation,
+          secondaryAnimation,
+          child,
+        );
 }
 
 class _ReceiptHome extends StatefulWidget {

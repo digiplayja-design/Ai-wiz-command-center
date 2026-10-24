@@ -45,6 +45,9 @@ class _ReceiptAccountScreenState extends State<ReceiptAccountScreen> {
   Future<void> _delete() async {
     final confirmed = await showDialog<bool>(
       context: context,
+      animationStyle: MediaQuery.disableAnimationsOf(context)
+          ? AnimationStyle.noAnimation
+          : null,
       builder: (context) => AlertDialog(
         scrollable: true,
         title: const Text('Request deletion of your KORLIX account?'),

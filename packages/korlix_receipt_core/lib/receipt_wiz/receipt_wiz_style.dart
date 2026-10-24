@@ -39,6 +39,7 @@ ThemeData wizTheme(BuildContext context) => ThemeData(
     brightness: Brightness.light,
   ),
   scaffoldBackgroundColor: wizPaper,
+  pageTransitionsTheme: Theme.of(context).pageTransitionsTheme,
   materialTapTargetSize: MaterialTapTargetSize.padded,
   visualDensity: VisualDensity.standard,
   fontFamily: Theme.of(context).textTheme.bodyMedium?.fontFamily,

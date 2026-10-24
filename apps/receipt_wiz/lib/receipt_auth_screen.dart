@@ -82,6 +82,9 @@ class _ReceiptAuthScreenState extends State<ReceiptAuthScreen> {
   Future<void> _existingAccount() async {
     final result = await showDialog<String>(
       context: context,
+      animationStyle: MediaQuery.disableAnimationsOf(context)
+          ? AnimationStyle.noAnimation
+          : null,
       builder: (context) => AlertDialog(
         key: const Key('existing-account-dialog'),
         scrollable: true,
