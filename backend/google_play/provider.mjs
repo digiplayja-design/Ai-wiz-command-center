@@ -20,12 +20,12 @@ function catalogError(reason) {
   return error;
 }
 
-export function googlePlay(environment = process.env, {auth, identity = new OAuth2Client()} = {}) {
+export function googlePlay(environment = process.env, {auth, identity = new OAuth2Client(), packageName = PACKAGE, products = PRODUCTS, notificationPackages = [packageName]} = {}) {
   let credentials;
   try { credentials = JSON.parse(environment.KORLIX_GOOGLE_PLAY_SERVICE_ACCOUNT_JSON || 'null'); } catch { /* fail closed */ }
   const configured = !!(credentials?.client_email && credentials?.private_key && credentials?.type === 'service_account');
   const client = auth || (configured ? new GoogleAuth({credentials, scopes: ['https://www.googleapis.com/auth/androidpublisher']}) : null);
-  const root = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${PACKAGE}`;
+  const root = `https://androidpublisher.googleapis.com/androidpublisher/v3/applications/${packageName}`;
   async function request(url, method = 'GET', data) {
     if (!client) fail('Google Play billing is being set up. Please try again later.', 503);
     try { return (await client.request({url, method, data, timeout: 20000, retry: false})).data; }
@@ -35,7 +35,7 @@ export function googlePlay(environment = process.env, {auth, identity = new OAut
     configured, ready: configured && environment.KORLIX_GOOGLE_PLAY_BILLING_ENABLED === 'true',
     notificationsConfigured: !!(environment.KORLIX_GOOGLE_PLAY_RTDN_AUDIENCE && environment.KORLIX_GOOGLE_PLAY_RTDN_SERVICE_ACCOUNT && environment.KORLIX_GOOGLE_PLAY_RTDN_SUBSCRIPTION),
     async catalog(product) {
-      if (!Object.hasOwn(PRODUCTS, product)) fail('Unsupported subscription.');
+      if (!Object.hasOwn(products, product)) fail('Unsupported subscription.');
       const result = await request(`${root}/subscriptions/${product}`);
       const plan = result?.basePlans?.find(p => p.basePlanId === 'monthly');
       if (result?.productId !== product || plan?.state !== 'ACTIVE' ||
@@ -48,7 +48,7 @@ export function googlePlay(environment = process.env, {auth, identity = new OAut
     },
     async subscription(token) { return request(`${root}/purchases/subscriptionsv2/tokens/${encodeURIComponent(purchaseToken(token))}`); },
     async acknowledge(token, product) {
-      if (!Object.hasOwn(PRODUCTS, product)) fail('Unsupported subscription.');
+      if (!Object.hasOwn(products, product)) fail('Unsupported subscription.');
       await request(`${root}/purchases/subscriptions/${product}/tokens/${encodeURIComponent(purchaseToken(token))}:acknowledge`, 'POST', {});
     },
     async notification(req) {
@@ -67,7 +67,7 @@ export function googlePlay(environment = process.env, {auth, identity = new OAut
         if (typeof req.body?.message?.data !== 'string' || req.body.message.data.length > 16384) throw new Error();
         message = JSON.parse(Buffer.from(req.body.message.data, 'base64').toString('utf8'));
       } catch { fail('Invalid Google Play notification.'); }
-      if (message.packageName !== PACKAGE) fail('Notification package does not match.', 400);
+      if (!notificationPackages.includes(message.packageName)) fail('Notification package does not match.', 400);
       return message;
     },
   };

@@ -23,7 +23,7 @@ export function registerReceiptWiz(app,{database,storageDatabase=database,storag
  };
  const filters=q=>{
   const d={};for(const key of ['query','category','year','offset'])if(q.query[key]!==undefined){if(typeof q.query[key]!=='string')fail('Check receipt filters.');d[key]=q.query[key];}
-  if(d.offset!==undefined&&!/^\d{1,4}$/.test(d.offset))fail('Check the receipt page.');
+  if(d.offset!==undefined&&!/^\d{1,7}$/.test(d.offset))fail('Check the receipt page.');
   if(d.category&&!CATEGORIES.includes(d.category))fail('Choose a receipt category.');
   if(q.query.needs_review==='true')d.needs_review=true;
   for(const key of ['business_id','tax_workspace_id'])if(q.query[key])d[key]=id(q.query[key]);

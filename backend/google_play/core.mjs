@@ -13,15 +13,15 @@ export const tokenHash = value => createHash('sha256').update(purchaseToken(valu
 
 // Only independently fetched Google facts may enter this function. Client
 // product IDs are assertions to check, never a source of entitlement.
-export function observation(data, {userId, token, expectedProduct, allowTest = false, now = Date.now()} = {}) {
+export function observation(data, {userId, token, expectedProduct, allowTest = false, now = Date.now(), products = PRODUCTS, accountIdentifier = accountId} = {}) {
   if (!UUID.test(userId || '')) fail('Sign in to verify your subscription.', 401);
-  if (data?.externalAccountIdentifiers?.obfuscatedExternalAccountId !== accountId(userId)) {
+  if (data?.externalAccountIdentifiers?.obfuscatedExternalAccountId !== accountIdentifier(userId)) {
     fail('This Google Play purchase belongs to a different KORLIX account.', 409);
   }
   if (data.testPurchase && !allowTest) fail('Test purchases are only enabled for designated test accounts.', 403);
   const items = data.lineItems;
   if (!Array.isArray(items) || items.length !== 1) fail('Unsupported Google Play subscription.', 409);
-  const item = items[0], tier = PRODUCTS[item.productId];
+  const item = items[0], tier = products[item.productId];
   if (!tier || (expectedProduct && item.productId !== expectedProduct) ||
       item.offerDetails?.basePlanId !== 'monthly' || !item.autoRenewingPlan) {
     fail('This purchase does not match a KORLIX monthly plan.', 409);
@@ -35,7 +35,7 @@ export function observation(data, {userId, token, expectedProduct, allowTest = f
   if (active && !['ACKNOWLEDGEMENT_STATE_PENDING', 'ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED'].includes(data.acknowledgementState)) {
     fail('Google Play has not confirmed the purchase.', 409);
   }
-  return {purchase_token: purchaseToken(token), token_hash: tokenHash(token), account_id: accountId(userId),
+  return {purchase_token: purchaseToken(token), token_hash: tokenHash(token), account_id: accountIdentifier(userId),
     product_id: item.productId, tier, state: data.subscriptionState, active,
     expires_at: Number.isFinite(expires) ? new Date(expires).toISOString() : null,
     acknowledged: data.acknowledgementState === 'ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED',

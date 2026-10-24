@@ -1,10 +1,13 @@
 import {BillingError, fail, UUID} from '../web_billing/core.mjs';
-import {PACKAGE, PRODUCTS, VERSION, accountId, observation, playStore, purchaseToken, tokenHash} from './core.mjs';
+import {PACKAGE as DEFAULT_PACKAGE, PRODUCTS as DEFAULT_PRODUCTS, VERSION as DEFAULT_VERSION, accountId as defaultAccountId, observation as observe, playStore, purchaseToken, tokenHash} from './core.mjs';
 import {CATALOG_FAILURES, googlePlay} from './provider.mjs';
 
 export function registerGooglePlay(app, {database, requireUser, loadProfile, environment = process.env,
-  store = playStore(database), provider = googlePlay(environment), autoStart = true, now = Date.now} = {}) {
-  const root = '/api/billing/google', rates = new Map();
+  configuration = {}, store = playStore(database), provider = googlePlay(environment), notificationHandlers = {}, autoStart = true, now = Date.now} = {}) {
+  const {root = '/api/billing/google', packageName: PACKAGE = DEFAULT_PACKAGE, products: PRODUCTS = DEFAULT_PRODUCTS,
+    version: VERSION = DEFAULT_VERSION, accountIdentifier: accountId = defaultAccountId} = configuration;
+  const rates = new Map();
+  const observation = (data, options) => observe(data, {...options, products: PRODUCTS, accountIdentifier: accountId});
   const testUsers = new Set((environment.KORLIX_GOOGLE_PLAY_TEST_USER_IDS || '').split(',').map(x => x.trim().toLowerCase()).filter(x => UUID.test(x)));
   let catalogCheck = {checkedAt: null, ready: false, reason: null};
   async function checkCatalog() {
@@ -65,7 +68,7 @@ export function registerGooglePlay(app, {database, requireUser, loadProfile, env
     return {version: VERSION, tier: snapshot.tier, entitlement: snapshot.entitlement,
       billingEnabled: provider.ready, canPurchase: provider.ready && snapshot.canPurchase,
       webSubscriptionActive: snapshot.webSubscriptionActive,
-      otherStoreSubscriptionActive: snapshot.otherStoreSubscriptionActive, refreshWarning};
+      otherStoreSubscriptionActive: snapshot.otherStoreSubscriptionActive, ...(snapshot.plan ? {plan: snapshot.plan} : {}), refreshWarning};
   }
   app.get(root + '/health', (_req, res) => res.set('Cache-Control', 'no-store').json({version: VERSION,
     packageName: PACKAGE, products: PRODUCTS, configured: provider.configured,
@@ -96,16 +99,14 @@ export function registerGooglePlay(app, {database, requireUser, loadProfile, env
     if (!Object.hasOwn(PRODUCTS, product || '') || req.body?.source !== 'google_play') fail('Unsupported Google Play purchase.');
     res.json(await sync(user.id, purchaseToken(req.body?.verificationData), product));
   }));
-  app.post(root + '/notifications', async (req, res) => {
-    res.set('Cache-Control', 'no-store');
-    try {
-      const event = await provider.notification(req);
+  async function handleNotification(event) {
+      if (event.packageName !== PACKAGE) fail('Notification package does not match.', 400);
       if (event.testNotification) {
         console.info('[google-play] authenticated RTDN test notification received');
-        return res.json({received: true});
+        return {received: true};
       }
       const token = event.subscriptionNotification?.purchaseToken || event.voidedPurchaseNotification?.purchaseToken;
-      if (!token) return res.json({received: true});
+      if (!token) return {received: true};
       purchaseToken(token);
       let owner = await store.command(null, 'lookup', {token_hash: tokenHash(token)});
       if (!owner) {
@@ -115,7 +116,15 @@ export function registerGooglePlay(app, {database, requireUser, loadProfile, env
         owner = await store.command(null, 'lookup', {account_id: data.externalAccountIdentifiers?.obfuscatedExternalAccountId || ''});
       }
       if (owner) await sync(owner.user_id, token);
-      res.json({received: true});
+      return {received: true};
+  }
+  app.post(root + '/notifications', async (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    try {
+      const event = await provider.notification(req);
+      // Dispatch only after verifying the Pub/Sub identity and package allowlist.
+      const handler = notificationHandlers[event.packageName] || handleNotification;
+      res.json(await handler(event));
     } catch (e) {
       const status = e instanceof BillingError && [400,401,403].includes(e.status) ? e.status : 503;
       res.status(status).json({error: status === 503 ? 'Subscription update could not be reconciled. Please retry.' : 'Invalid subscription notification.'});
@@ -133,5 +142,5 @@ export function registerGooglePlay(app, {database, requireUser, loadProfile, env
     finally { running = false; }
   }
   if (autoStart && provider.configured) { void tick(); timer = setInterval(tick, 60000); timer.unref?.(); }
-  return {sync, tick, checkCatalog, stop: () => clearInterval(timer)};
+  return {sync, tick, checkCatalog, handleNotification, stop: () => clearInterval(timer)};
 }

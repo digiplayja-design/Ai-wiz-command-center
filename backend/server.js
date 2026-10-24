@@ -18,6 +18,9 @@ import { receptionistAI } from './receptionist/ai.mjs';
 import {registerWebBilling} from './web_billing/routes.mjs';
 import {registerGooglePlay} from './google_play/routes.mjs';
 import {playStore as createGooglePlayStore} from './google_play/core.mjs';
+import {googlePlay} from './google_play/provider.mjs';
+import {PACKAGE as KORLIX_PLAY_PACKAGE} from './google_play/core.mjs';
+import {registerReceiptBilling, RECEIPT_PACKAGE} from './receipt_wiz/billing.mjs';
 import {billingStore as createWebBillingStore} from './web_billing/core.mjs';
 import { registerChatMemory, prepareChatMemory } from './chat_memory/memory.mjs';
 import { resumeTextPolicy } from './resume_studio/policy.mjs';
@@ -12717,7 +12720,12 @@ const receptionistRegistration = registerReceptionist(app, {
 process.once('SIGTERM',()=>receptionistRegistration.stop());
 process.once('SIGINT',()=>receptionistRegistration.stop());
 registerWebBilling(app, {database: supabaseAdmin, requireUser, loadProfile: getOrCreateProfile});
-registerGooglePlay(app, {database: supabaseAdmin, requireUser, loadProfile: getOrCreateProfile});
+const receiptBilling = registerReceiptBilling(app, {database: supabaseAdmin, requireUser, loadProfile: getOrCreateProfile});
+const mainGoogleBilling = registerGooglePlay(app, {database: supabaseAdmin, requireUser, loadProfile: getOrCreateProfile,
+  provider: googlePlay(process.env, {notificationPackages: [KORLIX_PLAY_PACKAGE, RECEIPT_PACKAGE]}),
+  notificationHandlers: {[RECEIPT_PACKAGE]: receiptBilling.handleNotification}});
+process.once('SIGTERM', () => { receiptBilling.stop(); mainGoogleBilling.stop(); });
+process.once('SIGINT', () => { receiptBilling.stop(); mainGoogleBilling.stop(); });
 registerWorkforce(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1, workspaceEmail: workforceEmails }); // K138_WORKFORCE
 registerFunnels(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1, autoStartScheduler: true }); // K141_FUNNEL_SCHEDULING
 
