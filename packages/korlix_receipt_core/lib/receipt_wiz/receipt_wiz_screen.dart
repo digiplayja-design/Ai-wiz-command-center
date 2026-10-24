@@ -427,7 +427,7 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
               avatar: const Icon(Icons.lock_outline, color: wizMint, size: 16),
               label: const Text('PRIVATE VAULT'),
               labelStyle: const TextStyle(color: wizMint, fontSize: 11),
-              backgroundColor: Colors.white.withValues(alpha: .06),
+              color: const WidgetStatePropertyAll(Color(0xFF45236C)),
               side: BorderSide(color: wizMint.withValues(alpha: .3)),
               onPressed: _showVaultPrivacy,
             ),
