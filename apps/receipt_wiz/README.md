@@ -95,3 +95,20 @@ both-app receipt visibility, real camera and denied permissions, PDF upload,
 export/share, restart/session recovery, signout, and accessibility. Complete the
 new app's store privacy disclosures; its dependencies omit the hub's advertising,
 billing, microphone and social SDKs.
+
+## Verification — 24 October 2026
+
+- Standalone analysis and all 16 app tests pass, including duplicate-email
+  handoff, recovery, session changes, narrow layouts, enlarged text, labels,
+  touch targets and contrast.
+- Shared-package analysis and 81 scanner/auth/consent tests pass. The hub's 93
+  receipt/auth integration tests also pass. Optional shared/hub screenshot-export
+  cases are not part of those counts.
+- The companion backend passes 27 signup tests.
+- Web release compilation and Android debug APK compilation pass. The APK has
+  identifier `com.korlixdeveloper.receiptwiz`, version `1.0.0`, build `1`, minimum
+  Android API 24 and target API 36. The packaged archive and native-library
+  boundaries were checked; the latest reduced-motion code is included.
+- No real-device installation or iOS build was performed here. Store signing,
+  listings, backend deployment and the multi-app device allowance decision remain
+  release steps. No store upload or production backend change was made.
