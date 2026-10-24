@@ -1,6 +1,24 @@
+import {createReceiptSignupThrottle} from './security/receipt_signup_throttle.mjs';
+
 export const KORLIX_SIGNUP_POLICY_VERSION = '2026-10-06';
 export const KORLIX_MINIMUM_AGE = 16;
 export const KORLIX_EMAIL_APP_CALLBACK = 'com.korlixdeveloper.korlixai://auth/confirm/';
+
+// A registration outcome, never an authorization claim or an email lookup API.
+// Only the standalone client's signup flow opts into this response contract.
+export function receiptWizExistingAccount(data, error) {
+  return ['user_already_exists', 'user_already_registered', 'email_exists'].includes(error?.code)
+    || /user already registered|email.*already (?:registered|exists)/i.test(String(error?.message ?? ''))
+    || (!error && !data?.session && Array.isArray(data?.user?.identities)
+      && data.user.identities.length === 0);
+}
+
+function existingKorlixAccount(res) {
+  return res.status(409).json({
+    code: 'KORLIX_ACCOUNT_EXISTS',
+    error: 'You already have a KORLIX account. Sign in using the same email address and password you use for KORLIX AI.',
+  });
+}
 
 export function validateSignupEligibility(value, now = new Date()) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -48,6 +66,7 @@ export function createKorlixSignupHandler({
   registerDeviceSession,
   getUserFacingError,
   now = () => new Date(),
+  consumeReceiptSignup = createReceiptSignupThrottle(),
 }) {
   return async (req, res) => {
     try {
@@ -72,6 +91,7 @@ export function createKorlixSignupHandler({
       if (password.length < 6) {
         return res.status(400).json({error: 'Password must be at least 6 characters.'});
       }
+      if (body.client_app === 'receipt_wiz') consumeReceiptSignup(email);
 
       // Only new mobile clients opt in. Older app builds and web signup keep
       // their current redirect until they support receiving app links.
@@ -91,6 +111,9 @@ export function createKorlixSignupHandler({
           } : {}),
         },
       });
+      if (body.client_app === 'receipt_wiz' && receiptWizExistingAccount(data, error)) {
+        return existingKorlixAccount(res);
+      }
       if (error) {
         return res.status(error.status || 400).json({error: getUserFacingError(error)});
       }
