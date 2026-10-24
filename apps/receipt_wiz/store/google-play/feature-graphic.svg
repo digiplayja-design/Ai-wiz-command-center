@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">
+  <defs>
+    <linearGradient id="bg" x2="1" y2="1"><stop stop-color="#073942"/><stop offset="1" stop-color="#071d2a"/></linearGradient>
+    <linearGradient id="paper" x2="0" y2="1"><stop stop-color="#f8ffff"/><stop offset="1" stop-color="#d7f7f2"/></linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#60c9cb" stroke-opacity=".06"/></pattern>
+  </defs>
+  <rect width="1024" height="500" fill="url(#bg)"/>
+  <rect width="1024" height="500" fill="url(#grid)"/>
+  <circle cx="1020" cy="10" r="380" fill="none" stroke="#27d8dc" stroke-opacity=".08" stroke-width="50"/>
+  <circle cx="50" cy="500" r="220" fill="none" stroke="#27d8dc" stroke-opacity=".05" stroke-width="40"/>
+  <g font-family="DejaVu Sans, sans-serif">
+    <text x="110" y="176" fill="#5be4e3" font-size="23" font-weight="700" letter-spacing="5">KORLIX</text>
+    <text x="106" y="244" fill="#f0ffff" font-size="54" font-weight="700" letter-spacing="-2">Receipt Wiz</text>
+    <text x="110" y="293" fill="#a8d7d8" font-size="24">Scan. Review. Keep.</text>
+    <path d="M110 329H166" stroke="#52dedc" stroke-width="4" stroke-linecap="round"/>
+  </g>
+  <g transform="translate(672 94)">
+    <path d="M17 16H205V303L189 293L173 303L157 293L141 303L125 293L109 303L93 293L77 303L61 293L45 303L29 293L17 303Z" fill="#001620" opacity=".35" transform="translate(11 12)"/>
+    <path d="M17 16H205V303L189 293L173 303L157 293L141 303L125 293L109 303L93 293L77 303L61 293L45 303L29 293L17 303Z" fill="url(#paper)"/>
+    <path d="M49 67H154M49 91H177M49 148H105M149 148H177M49 175H105M149 175H177M49 202H177" fill="none" stroke="#7eacab" stroke-width="7" stroke-linecap="round"/>
+    <path d="M49 244H90M139 244H177" stroke="#176a70" stroke-width="9" stroke-linecap="round"/>
+    <path d="M-4 61V1H48M175 1H226V61M226 257V317H175M48 317H-4V257" fill="none" stroke="#5ce8e3" stroke-width="4" stroke-linecap="round"/>
+    <circle cx="200" cy="104" r="32" fill="#20b9b6"/>
+    <path d="M185 104L195 114L215 93" fill="none" stroke="#f0ffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

@@ -30,6 +30,8 @@ git -C "$run_root/source" remote set-url origin https://github.com/digiplayja-de
 git -C "$run_root/source" -c gc.auto=0 fetch --depth=1 --no-tags origin "$source_commit"
 git -C "$run_root/source" checkout --detach "$source_commit"
 test "$(git -C "$run_root/source" rev-parse HEAD)" = "$source_commit"
+app_root="$run_root/source/apps/receipt_wiz"
+java "$run_root/source/scripts/PrepareAndroidSigning.java" "$original_root" "$app_root"
 git -c gc.auto=0 clone --depth=1 --branch 3.47.7 https://github.com/flutter/flutter.git "$run_root/flutter-sdk"
 test "$(git -C "$run_root/flutter-sdk" rev-parse HEAD)" = "$flutter_commit"
 export PATH="$run_root/flutter-sdk/bin:$PATH"
@@ -41,8 +43,6 @@ flutter --version
 mkdir "$run_root/android-sdk"
 cp -aL "$original_sdk/." "$run_root/android-sdk/"
 export ANDROID_SDK_ROOT="$run_root/android-sdk" ANDROID_HOME="$run_root/android-sdk"
-app_root="$run_root/source/apps/receipt_wiz"
-java "$run_root/source/scripts/PrepareAndroidSigning.java" "$original_root" "$app_root"
 printf 'sdk.dir=%s\n' "$ANDROID_SDK_ROOT" > "$app_root/android/local.properties"
 
 cd "$run_root/source/packages/korlix_receipt_core"

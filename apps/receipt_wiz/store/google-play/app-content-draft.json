@@ -1,0 +1,47 @@
+{
+  "status": "draft for the separate Receipt Wiz Play record; not certified or submitted",
+  "reviewedSource": {
+    "app": "38285c6215b828947b5728d84d525a40d03af5de",
+    "backend": "f35201cc93233b614d28598d0a7bef00657bbcba"
+  },
+  "containsAds": false,
+  "targetAgeGroups": ["16-17", "18+"],
+  "accountCreation": "Email and password; email verification for new accounts",
+  "access": "All receipt features require a signed-in KORLIX account. Supply a dedicated verified reviewer account through Play Console; never commit its credentials.",
+  "privacyPolicy": "https://www.korlixdeveloper.com/privacy-policy.html",
+  "deletionUrl": "https://www.korlixdeveloper.com/delete-account.html",
+  "inAppDeletion": "Account settings > request deletion of the shared KORLIX account; confirmation explains that KORLIX AI data is included. This submits a support request, not an immediate automatic purge.",
+  "transportEncryption": "HTTPS backend; Android cleartext disabled. Confirm infrastructure and any outbound provider transfers before certifying the Play answer.",
+  "dataCollected": [
+    {"type": "Personal info / Email address", "purposes": ["Account management", "App functionality"], "required": true, "evidence": "ReceiptAuthController email/password authentication"},
+    {"type": "Personal info / User IDs", "purposes": ["Account management", "App functionality", "Fraud prevention, security, and compliance"], "required": true, "evidence": "Account-bound receipt ownership and provider-session binding"},
+    {"type": "Personal info / Other info", "purposes": ["Account management", "Fraud prevention, security, and compliance"], "required": true, "evidence": "New-account age band, guardian-permission declaration and policy acceptance"},
+    {"type": "Financial info / Purchase history", "purposes": ["App functionality"], "required": true, "evidence": "Receipt originals and saved merchant/date/amount/category/item fields are the core receipt-storage service"},
+    {"type": "Photos and videos / Photos", "purposes": ["App functionality"], "required": false, "evidence": "User-chosen camera/photo imports; PDF import is also available"},
+    {"type": "Files and docs", "purposes": ["App functionality"], "required": true, "evidence": "Receipt storage requires an uploaded photo or PDF, including filename and original bytes"},
+    {"type": "App activity / Other user-generated content", "purposes": ["App functionality"], "required": false, "evidence": "Optional receipt descriptions and notes"},
+    {"type": "App activity / App interactions", "purposes": ["App functionality", "Fraud prevention, security, and compliance"], "required": true, "evidence": "Scan usage counts, sign-in/session events, consent and review state"},
+    {"type": "App activity / In-app search history", "purposes": ["App functionality"], "required": false, "evidence": "Search terms are sent to the receipt list/export API; confirm infrastructure query-string retention before choosing ephemeral processing"},
+    {"type": "Device or other IDs", "purposes": ["Account management", "Fraud prevention, security, and compliance"], "required": true, "evidence": "Installation ID and session-bound app allowance"}
+  ],
+  "processing": {
+    "serviceProviders": ["Supabase authentication, database and file storage", "Render backend hosting", "Backblaze encrypted receipt backups when enabled"],
+    "optionalAi": "OpenAI receives selected receipt preview/PDF content only after the in-app AI disclosure and consent. Manual review remains available. Backend requests disable response storage; this is not a promise of zero provider retention.",
+    "userExports": "CSV exports use the device share/save flow chosen by the user.",
+    "sharingAnswer": "Apply Google's service-provider and user-initiated/prominent-consent exceptions only after checking the actual provider terms and configuration. No advertising or data-sale integration is included in this app.",
+    "retention": "Saved receipts and originals are retained; they are not ephemeral. Deletion can leave necessary security/usage records and backup copies for the disclosed retention period. Original uploads may contain embedded metadata."
+  },
+  "remainingChecks": [
+    "Verify the signed bundle's merged permissions and SDK contents.",
+    "Confirm infrastructure diagnostics, IP handling and query logging for the final Data safety answers.",
+    "Complete the live content-rating and financial-features questionnaires using the standalone app's scope.",
+    "Check public policies explicitly cover this separate app and its shared account.",
+    "Verify reviewer credentials and real-device camera, import, sharing, session recovery and deletion-request navigation.",
+    "Accept Google policy/export declarations only after the owner's action-time confirmation."
+  ],
+  "guidance": [
+    "https://support.google.com/googleplay/android-developer/answer/10787469?hl=en",
+    "https://support.google.com/googleplay/android-developer/answer/13327111?hl=en",
+    "https://support.google.com/googleplay/android-developer/answer/9859455?hl=en"
+  ]
+}

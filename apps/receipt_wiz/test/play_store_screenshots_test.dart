@@ -23,7 +23,7 @@ void main() {
     final destination = Platform.environment['RECEIPT_WIZ_PLAY_ASSETS']!;
     final sdk = Platform.environment['KORLIX_FLUTTER_ROOT']!;
     SharedPreferences.setMockInitialValues({});
-    tester.view.physicalSize = const Size(360, 640);
+    tester.view.physicalSize = const Size(540, 960);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -60,7 +60,7 @@ void main() {
       final boundary = tester.renderObject<RenderRepaintBoundary>(
           find.byKey(const Key('play-screenshot')));
       await tester.runAsync(() async {
-        final image = await boundary.toImage(pixelRatio: 3);
+        final image = await boundary.toImage(pixelRatio: 2);
         try {
           final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
           final file = File('$destination/$name.png');
@@ -77,6 +77,7 @@ void main() {
     korlix_http.configureClientFactory(() => MockClient(vault.handle));
     await auth.authenticate(email: 'sample@example.test', password: 'fixture');
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('receipt-wiz-camera')));
     await capture('01-scan');
     await tester.tap(find.text('Receipts'));
     await tester.pumpAndSettle();
@@ -84,6 +85,7 @@ void main() {
     await tester.ensureVisible(find.text('The Paper Shop'));
     await tester.tap(find.text('The Paper Shop'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const ValueKey('receipt-merchant')));
     await capture('03-review');
     await tester.pumpWidget(const SizedBox());
     await tester.pumpAndSettle();
