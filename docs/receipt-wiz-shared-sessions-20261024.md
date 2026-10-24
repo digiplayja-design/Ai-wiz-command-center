@@ -9,8 +9,11 @@ quotas, subscriptions and paid access remain attached to the existing account.
 
 Implementation and local verification are complete. Ricardo explicitly approved
 public GitHub publication, the database migration and backend deployment on
-24 October 2026. Publication is in progress; live deployment and mobile build
-results remain to be verified.
+24 October 2026. Both feature branches are published. The migration is applied
+and its permissions verified. Backend commit
+`f35201cc93233b614d28598d0a7bef00657bbcba` reached Render **live** at
+12:52 p.m. EDT on 24 October; `/api/health` returned HTTP 200 afterward.
+Mobile build results remain to be verified.
 
 - Backend branch: `feature/receipt-wiz-shared-sessions-20261024`, based on
   `958687b3b75407863bd4011d5bce5689af101e23` (the existing duplicate-signup fix).
@@ -29,12 +32,19 @@ authenticated requests, even when an app header is changed or omitted. Companion
 sessions may access the existing receipt endpoints, refresh, signout and shared
 account deletion request. They cannot use hub-only paid features.
 
-`supabase/migrations/20261024155931_receipt_wiz_app_sessions.sql` adds the
+`supabase/migrations/20261024165108_receipt_wiz_app_sessions.sql` adds the
 server-owned bindings table and registration function. Clients cannot read or
 modify either. An account-level transaction lock serializes registration. The
 allowance is Basic/Pro one, Ultra/Enterprise two; existing server-owned account
 overrides and developer grants remain effective. The existing hub session table
 is not modified by companion registration or signout.
+
+The migration filename matches the version recorded by the connected Supabase
+migration tool (`20261024165108`). The SQL is identical to the tested and applied
+migration; aligning the filename prevents a later migration run from treating it
+as an unapplied duplicate. Live checks confirmed RLS, denied client table/RPC
+permissions, allowed service-role access and rejection of a nonexistent account.
+The new objects have no security-advisor findings.
 
 Refresh preserves the provider session binding. New password sign-in replaces
 only the older companion login for that same installation. Revoked bindings are

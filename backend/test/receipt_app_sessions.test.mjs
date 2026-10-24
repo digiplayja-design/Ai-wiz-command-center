@@ -18,7 +18,7 @@ const sourceUnderTest = part('function getRequestDeviceInfo(', 'async function g
   + part('app.post("/api/auth/signin"', 'app.get("/api/supabase-diagnostics"')
   + part('app.post("/api/auth/refresh"', 'app.post("/api/characters/select"')
   + part('app.post("/api/auth/signout"', 'app.get("/api/video-credits"');
-const migration = readFileSync(new URL('../../supabase/migrations/20261024155931_receipt_wiz_app_sessions.sql', import.meta.url), 'utf8');
+const migration = readFileSync(new URL('../../supabase/migrations/20261024165108_receipt_wiz_app_sessions.sql', import.meta.url), 'utf8');
 let db, userId, otherId, database, context, handlers, tokens, refreshes, revoked, writes, unavailable, revokeRace;
 
 const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
