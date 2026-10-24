@@ -6,6 +6,8 @@ import vm from 'node:vm';
 import express from 'express';
 import {publicApiErrorHandler} from '../security/http_errors.mjs';
 import {createAccountRequestLimiter} from '../security/account_request_limiter.mjs';
+import {authenticatedDeveloperUser} from '../security/developer_access.mjs';
+import {createReceiptAppSessions} from '../security/receipt_app_sessions.mjs';
 
 const source = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
 function section(start, end) {
@@ -37,6 +39,8 @@ function fixture({disabled = false, device = 'active', storageError = false} = {
     async rpc(name, payload) {calls.push({name, payload}); return {data: {id: 'deletion-request', status: 'requested'}};},
   };
   const context = vm.createContext({
+    authenticatedDeveloperUser,
+    receiptAppSessions: createReceiptAppSessions({database}),
     supabaseAdmin: database, getRequestDeviceInfo: () => ({deviceId: 'alice-phone', explicitDeviceId: true}),
     getKorlixUserFacingError: error => error.message,
     app: {post: (path, handler) => routes.set(path, handler)},

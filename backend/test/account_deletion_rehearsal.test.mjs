@@ -7,6 +7,8 @@ import express from 'express';
 import sharp from 'sharp';
 import { PGlite } from '@electric-sql/pglite';
 import { registerReceiptWiz } from '../receipt_wiz/routes.mjs';
+import {authenticatedDeveloperUser} from '../security/developer_access.mjs';
+import {createReceiptAppSessions} from '../security/receipt_app_sessions.mjs';
 
 // A local rehearsal of existing operations, not an account-purger implementation.
 // Real route/SQL code runs against synthetic users. Storage and Auth are local
@@ -94,6 +96,8 @@ test.before(async () => {
   };
   const app = express(); app.use(express.json());
   const context = vm.createContext({ app, supabaseAdmin: database,
+    authenticatedDeveloperUser,
+    receiptAppSessions: createReceiptAppSessions({database}),
     getRequestDeviceInfo: () => ({ explicitDeviceId: false }),
     getKorlixUserFacingError: error => error.statusCode ? error.message : 'The request could not be completed. Please retry.',
   });

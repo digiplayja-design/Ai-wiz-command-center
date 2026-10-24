@@ -64,6 +64,7 @@ export function createKorlixSignupHandler({
   getRequestDeviceInfo,
   getOrCreateProfile,
   registerDeviceSession,
+  revokeSession,
   getUserFacingError,
   now = () => new Date(),
   consumeReceiptSignup = createReceiptSignupThrottle(),
@@ -121,12 +122,18 @@ export function createKorlixSignupHandler({
       let profile = null;
       let deviceSession = null;
       if (data.user && data.session) {
-        profile = await getOrCreateProfile(data.user);
-        deviceSession = await registerDeviceSession({
-          userId: data.user.id,
-          profile,
-          deviceInfo: getRequestDeviceInfo(req),
-        });
+        try {
+          profile = await getOrCreateProfile(data.user);
+          deviceSession = await registerDeviceSession({
+            userId: data.user.id,
+            profile,
+            deviceInfo: getRequestDeviceInfo(req),
+            session: data.session,
+          });
+        } catch (accessError) {
+          if (revokeSession && data.session.access_token) await revokeSession(data.session);
+          throw accessError;
+        }
       }
       return res.json({
         success: true,

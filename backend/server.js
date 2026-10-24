@@ -1,4 +1,5 @@
 import {createAccountRequestLimiter} from './security/account_request_limiter.mjs';
+import {createReceiptAppSessions, requestsReceiptApp} from './security/receipt_app_sessions.mjs';
 import {createOnboardingMeasurement} from './onboarding/measurement.mjs';
 import {publicApiErrorHandler} from './security/http_errors.mjs';
 import {createReportSubmissionGuard} from './security/report_submission.mjs';
@@ -313,6 +314,7 @@ const supabaseAdmin =
     : null;
 
 const videoAccess = createVideoAccess({database:supabaseAdmin});
+const receiptAppSessions = createReceiptAppSessions({database:supabaseAdmin});
 
 const supabaseAuth =
   supabaseUrl && supabaseAnonKey
@@ -856,6 +858,7 @@ function getRequestDeviceInfo(req) {
     deviceLabel,
     platform,
     explicitDeviceId: Boolean(rawDeviceId),
+    clientApp: requestsReceiptApp(req) ? 'receipt_wiz' : 'korlix_ai',
   };
 }
 
@@ -896,8 +899,12 @@ async function registerDeviceSession({
   userId,
   profile,
   deviceInfo,
+  session,
 }) {
   assertAccountEnabled(profile);
+  if (deviceInfo.clientApp === 'receipt_wiz') {
+    return receiptAppSessions.register({userId, session, deviceInfo});
+  }
   if (!supabaseAdmin) {
     return null;
   }
@@ -1163,10 +1170,13 @@ async function getAuthenticatedUser(req) {
   assertAccountEnabled(account);
 
   const deviceInfo = getRequestDeviceInfo(req);
+  const receiptSession = await receiptAppSessions.authorize({
+    userId: data.user.id, accessToken: token, deviceInfo, req,
+  });
 
   // Keep older clients without device headers compatible, but do not suppress
   // a revocation or a failed access check for an explicitly supplied device.
-  if (deviceInfo.explicitDeviceId) {
+  if (!receiptSession && deviceInfo.explicitDeviceId) {
     await touchActiveDeviceSession({
       userId: data.user.id,
       profile: account,
@@ -2162,6 +2172,10 @@ app.post("/api/auth/signup", onboardingMeasurement.observeAuth('signup'), create
   getRequestDeviceInfo,
   getOrCreateProfile,
   registerDeviceSession,
+  revokeSession: async session => {
+    const {error} = await supabaseAdmin.auth.admin.signOut(session.access_token, 'local');
+    if (error) throw makeHttpError('Session revocation could not be confirmed. Please retry.', 503);
+  },
   getUserFacingError: getKorlixUserFacingError,
 }));
 
@@ -2194,13 +2208,20 @@ app.post("/api/auth/signin", onboardingMeasurement.observeAuth('signin'), async 
       });
     }
 
-    const profile = await getOrCreateProfile(data.user);
-
-    const deviceSession = await registerDeviceSession({
-      userId: data.user.id,
-      profile,
-      deviceInfo,
-    });
+    let profile, deviceSession;
+    try {
+      profile = await getOrCreateProfile(data.user);
+      deviceSession = await registerDeviceSession({
+        userId: data.user.id, profile, deviceInfo, session: data.session,
+      });
+    } catch (accessError) {
+      // A rejected fresh login must not leave usable provider refresh tokens.
+      if (data.session?.access_token) {
+        const {error: revokeError} = await supabaseAdmin.auth.admin.signOut(data.session.access_token, 'local');
+        if (revokeError) throw makeHttpError('Session revocation could not be confirmed. Please retry.', 503);
+      }
+      throw accessError;
+    }
 
     res.json({
       success: true,
@@ -2295,7 +2316,11 @@ app.post("/api/auth/refresh", async (req, res) => {
 
     let deviceSession;
     try {
-      deviceSession = await touchActiveDeviceSession({
+      assertAccountEnabled(profile);
+      deviceSession = await receiptAppSessions.authorize({
+        userId: data.user.id, accessToken: data.session?.access_token, deviceInfo, req,
+      });
+      if (!deviceSession) deviceSession = await touchActiveDeviceSession({
         userId: data.user.id,
         profile,
         deviceInfo,
@@ -2304,7 +2329,7 @@ app.post("/api/auth/refresh", async (req, res) => {
     } catch (accessError) {
       // Rotation already happened. Do not leave a freshly rotated session
       // usable when the account or the device was explicitly denied.
-      if (accessError?.statusCode === 403 && data.session?.access_token) {
+      if ([401, 403].includes(accessError?.statusCode) && data.session?.access_token) {
         const { error: revokeError } = await supabaseAdmin.auth.admin.signOut(
           data.session.access_token, "local",
         );
@@ -3165,7 +3190,9 @@ app.post("/api/auth/signout", async (req, res) => {
     );
     if (signOutError) throw makeHttpError("Sign-out could not be confirmed. Please retry.", 503);
 
-    if (deviceInfo.deviceId) {
+    if (req.korlixReceiptAppSession) {
+      await receiptAppSessions.revoke(req.korlixReceiptAppSession);
+    } else if (deviceInfo.deviceId) {
       await revokeDeviceSession({
         userId: user.id,
         deviceId: deviceInfo.deviceId,
