@@ -1,9 +1,10 @@
 # KORLIX Receipt Wiz
 
 Independent Flutter app for the existing KORLIX receipt scanner and private
-receipt library. Version **1.0.0 (1)**. Proposed Android/iOS identifier:
-**com.korlixdeveloper.receiptwiz**. Separate store records and signing setup are
-still required before distribution.
+receipt library. Version **1.0.0 (1)**. Android/iOS identifier:
+**com.korlixdeveloper.receiptwiz**. The first signed Android release bundle is
+prepared. Separate store records and iOS signing are still required before
+distribution.
 
 ## Shared account
 
@@ -133,5 +134,43 @@ billing, microphone and social SDKs.
   artifact digest and packaged identifier `com.korlixdeveloper.receiptwiz`,
   version `1.0.0 (1)`, minimum iOS 15, camera/photo permission descriptions and
   simulator platform were verified. This is not an iPhone-installable IPA.
-- No real-device installation or store upload was performed. Store signing,
-  listings and real-device checks remain release steps.
+- No real-device installation or store upload was performed. Store records,
+  final disclosures, review access and real-device checks remain release steps.
+
+## Google Play preparation — 24 October 2026
+
+The existing Android Codespace produced **KORLIX-Receipt-Wiz-1.aab**, version
+**1.0.0 (1)**, from source `38285c6215b828947b5728d84d525a40d03af5de`.
+The release build completed successfully with Flutter 3.47.7, using the existing
+upload key without changing its configuration or the original working tree.
+An isolated temporary build folder avoids the Codespace's nearly full project disk.
+The reusable build helper is [prepare-receipt-wiz-play.sh](../../tool/prepare-receipt-wiz-play.sh).
+
+- Bundle size: **55,132,507 bytes**; SHA-256:
+  `c098a7ea0ffe93054e3dfb35df07089663310ed3882bd1ae9563a0776183c13d`.
+- Bundletool 1.18.3 validation passed. The packaged ID, version, build number,
+  minimum API 24, target API 36 and release mode were verified.
+- All **404 application entries** passed signature verification against the
+  existing upload-key certificate. The archive contains no keystore, private
+  signing properties or environment file.
+- All eight 64-bit native libraries passed 16 KB ELF alignment checks, and the
+  bundle requests `PAGE_ALIGNMENT_16K` native-library packaging.
+- The merged manifest requests Internet, camera and its own signature-level
+  dynamic-receiver permission. It contains no advertising identifier permission.
+- [Store copy](store/google-play/listing.json), the existing brand icon, a
+  1024×500 feature graphic and four 1080×1920 screenshots are prepared in
+  [store/google-play](store/google-play). Screenshots were exported from the
+  actual app with local sample data; the export test passed and the images were
+  visually reviewed. PNGs have no alpha channel.
+- [App-content disclosures](store/google-play/app-content-draft.json) are a draft,
+  not a submitted certification. Provider/logging details, review access and
+  applicable Play questionnaires remain to be completed.
+- [Validation of the store-preparation commit](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/40117102254)
+  also passed: both analyses, the existing shared/app tests, Android debug build
+  and iOS simulator build. Screenshot export is run separately with its explicit
+  sample-data environment setting.
+
+The Play Console creation form is prepared for the free **KORLIX Receipt Wiz**
+app, and its package name was available. The app record has **not** been created:
+Google's Developer Program Policy and US export-law declarations await the
+owner's confirmation. No release has been submitted or published.

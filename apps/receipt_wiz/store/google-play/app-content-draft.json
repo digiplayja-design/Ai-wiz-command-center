@@ -5,6 +5,13 @@
     "backend": "f35201cc93233b614d28598d0a7bef00657bbcba"
   },
   "containsAds": false,
+  "verifiedReleaseManifest": {
+    "version": "1.0.0 (1)",
+    "minSdk": 24,
+    "targetSdk": 36,
+    "permissions": ["android.permission.INTERNET", "android.permission.CAMERA", "com.korlixdeveloper.receiptwiz.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"],
+    "advertisingIdPermission": false
+  },
   "targetAgeGroups": ["16-17", "18+"],
   "accountCreation": "Email and password; email verification for new accounts",
   "access": "All receipt features require a signed-in KORLIX account. Supply a dedicated verified reviewer account through Play Console; never commit its credentials.",
@@ -32,7 +39,6 @@
     "retention": "Saved receipts and originals are retained; they are not ephemeral. Deletion can leave necessary security/usage records and backup copies for the disclosed retention period. Original uploads may contain embedded metadata."
   },
   "remainingChecks": [
-    "Verify the signed bundle's merged permissions and SDK contents.",
     "Confirm infrastructure diagnostics, IP handling and query logging for the final Data safety answers.",
     "Complete the live content-rating and financial-features questionnaires using the standalone app's scope.",
     "Check public policies explicitly cover this separate app and its shared account.",
