@@ -13,7 +13,8 @@ public GitHub publication, the database migration and backend deployment on
 and its permissions verified. Backend commit
 `f35201cc93233b614d28598d0a7bef00657bbcba` reached Render **live** at
 12:52 p.m. EDT on 24 October; `/api/health` returned HTTP 200 afterward.
-Mobile build results remain to be verified.
+Android and iOS simulator CI builds both passed. Real-device acceptance and store
+distribution remain pending.
 
 - Backend branch: `feature/receipt-wiz-shared-sessions-20261024`, based on
   `958687b3b75407863bd4011d5bce5689af101e23` (the existing duplicate-signup fix).
@@ -21,8 +22,21 @@ Mobile build results remain to be verified.
   commit `7b21888ceea16a7c27967a86e758eaee8f35e268`, based on standalone app
   commit `51681ad2a0f7934aabdb9b868705956f6c839817`.
 - Public destination: `digiplayja-design/Ai-wiz-command-center`.
-- Mobile CI has not run. The new workflow builds an Android debug APK and an
-  unsigned iOS simulator app. It does not sign or upload an App Store build.
+- [Mobile CI run](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/40113384151):
+  Android and iOS simulator succeeded. Shared-package and app analysis passed;
+  81 shared tests and 16 app tests passed (one optional screenshot-export test
+  skipped). The workflow does not sign or upload an App Store build.
+- The iOS artifact digest, bundle `com.korlixdeveloper.receiptwiz`, version
+  `1.0.0 (1)`, minimum iOS 15 and simulator-only platform were verified.
+- [Android debug APK artifact](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/40113384151/artifacts/12568020933)
+  and [iOS simulator artifact](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/40113384151/artifacts/12566888930)
+  were uploaded successfully. They expire 7 November 2026. The iOS artifact is
+  not an iPhone-installable IPA.
+
+The release branch also contains a documentation/test-path checkpoint aligning
+the migration filename to the applied version. Application runtime and migration
+SQL remain byte-for-byte identical to the deployed and tested versions; no
+second service restart was needed for that checkpoint.
 
 ## Implementation
 
