@@ -29,7 +29,7 @@
     "sourceCommit": "466eb4e7e3361f1818f0e46764c04e956acf8cc6"
   },
   "listing": "Colorful feature graphic, five current Flutter UI screenshots and Free/Full description saved; ready to send for review. Only feature graphic AI-labeled.",
-  "contentRating": "Original IARC rating completed. New digital-purchases questionnaire prepared; requires renewed IARC Terms acceptance before proceeding.",
+  "contentRating": "IARC Completed for 1.1.0 with In-App Purchases; ESRB Everyone, PEGI 3, Brazil 14+. Saved in Publishing overview; not yet sent for Google review.",
   "dataSafety": "Saved draft updated for subscription purchase history, account management and fraud prevention; provider/logging verification and certification remain pending.",
   "initialSetupCompletedTasks": 8,
   "initialSetupTotalTasks": 11,
@@ -38,7 +38,6 @@
   "testInvitationUrl": "https://play.google.com/apps/internaltest/4701326269245146922",
   "testInvitationCheck": "Opened successfully; current Console account not recognized as invited. Intended for accounts in the selected tester list.",
   "remaining": [
-    "Renewed IARC Terms acceptance and digital-purchases rating update",
     "Dedicated reviewer sign-in details",
     "Target audience (requires sign-in details first)",
     "Provider/logging checks and Data safety certification",
@@ -130,6 +129,17 @@
       "termsHttp": 200,
       "realPurchasePerformed": false,
       "physicalDeviceAndLicensePurchaseTesting": "Pending"
+    },
+    "contentRating": {
+      "status": "Completed",
+      "digitalPurchases": true,
+      "randomPurchases": false,
+      "interactiveElements": [
+        "In-App Purchases"
+      ],
+      "renewedTermsAcceptedWithOwnerApproval": true,
+      "submittedAtLocal": "2026-10-24 17:00 America/New_York",
+      "googleReviewSubmitted": false
     }
   },
   "previousRelease": {
