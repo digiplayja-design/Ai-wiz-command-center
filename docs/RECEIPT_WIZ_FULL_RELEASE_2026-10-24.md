@@ -1,4 +1,6 @@
-# Receipt Wiz Full Android internal release — 24 October 2026
+# Receipt Wiz Full Android production submission — 24 October 2026
+
+**Current status:** Android **1.1.0 (2)** was submitted for production review on 24 October 2026. Publishing overview shows **Changes in review**, with automatic quick checks running. Managed publishing is off, so successful review is configured to publish automatically. The app is not yet publicly available. The sections below retain the earlier internal-release and staging history.
 
 The owner confirmed the original internal build downloaded and tested successfully, requested a more colorful frontend and an $8.99/month Full subscription, selected 20 Free AI scans/month and 1,000 Full scans/month, and chose to include Full with existing Pro, Ultra and Enterprise access.
 
@@ -48,7 +50,7 @@ The owner's subsequent **Approved** authorized production deployment, subscripti
 - After the active Play catalog and public terms were verified, a merged environment update set `KORLIX_RECEIPT_WIZ_BILLING_ENABLED=true`. This automatically deployed the same runtime commit in **dep-dbehgb3ncjis73e93odg**, live at `2026-10-24T20:42:56Z`.
 - Final Receipt Wiz and existing KORLIX billing health endpoints both returned HTTP 200, `configured=true`, `billingEnabled=true`, `notificationsConfigured=true`, and `catalogCheck.ready=true`. No customer purchase was made during verification.
 
-## Remaining public-release and device checks
+## Checks recorded before production staging
 
 A Basic Google Play license-test account whose KORLIX UUID is authorized in `KORLIX_GOOGLE_PLAY_TEST_USER_IDS` must complete purchase/restore and expiry/cancellation checks on a physical Android device. Pro/Ultra/Enterprise accounts must show included Full and no extra charge. The owner/developer account intentionally cannot buy redundant Full. Public production was not submitted.
 
@@ -65,3 +67,13 @@ Production targeting is saved for **173 named markets**, the intersection of the
 The privacy review checked actual receipt API request-log field types, Supabase logging settings, standalone dependencies, receipt AI consent/store:false handling and the live public privacy policy (HTTP 200). Render retains URL query strings, client IP/user-agent/request identifiers, HTTP status and response timing/size. The Data safety draft now contains **11 collected types**, adding Diagnostics with Analytics and Fraud prevention/security/compliance purposes; Analytics was also added to Device or other IDs and App interactions. Data is not declared ephemeral. The zero-shared draft remains subject to final declaration certification; no promise of zero provider retention is made. No infrastructure settings were changed and no raw request logs, customer identifiers or credentials were committed.
 
 Google shows exactly three linked submission blockers: missing reviewer sign-in details; Target audience requires Sign in details first; final Data safety submission requires Target audience first. A reviewer form has been prepared with a descriptive name and access instructions, but the username/password and full-access attestation are unfilled. The owner must provide a dedicated, verified KORLIX reviewer account with Full access directly in Play Console. Production publication is already authorized; no repeat general publishing approval is needed. A completed billing purchase/restore/cancellation test has not been explicitly reported.
+
+## Production review submitted
+
+After the owner saved reviewer sign-in details directly in Play Console, the missing-credentials blocker cleared. The assistant did not read or record the credential values or test that login. Target audience was saved as **16–17 and 18+**. The final Data safety declaration was then saved successfully: **11 collected data types, 0 shared** under the applicable service-provider and user-initiated/prominent-consent exceptions, encrypted in transit, and the account/data deletion URL supplied. No additional terms acceptance was requested at this step.
+
+The enabled **Send 10 changes for review** action was completed and confirmed. Publishing overview now shows **Changes in review** and **Running quick checks for commonly found issues**, explaining that the changes will be sent for review once the checks complete successfully. There are no remaining configuration blockers. The ten submitted changes cover production 1.1.0 (2), 173 production markets, the default store listing, content rating, target audience, privacy policy, ads, Data safety, health-app declaration and app category.
+
+**Managed publishing is off**, so approved changes are configured to publish automatically. Google approval is still pending; this record does not claim the app is publicly live. The existing internal release remains available to its testers. The same signed bundle was reused, and no runtime code, infrastructure settings or subscription prices changed during submission. The owner confirmed the app worked; a completed purchase/restore/cancellation test has not been explicitly reported.
+
+[Publishing overview](https://play.google.com/console/u/0/developers/4772708594176030332/app/4974803615919424879/publishing). Confirmation evidence: `apps/receipt_wiz/store/google-play/production-submitted-review-proof.jpg`.

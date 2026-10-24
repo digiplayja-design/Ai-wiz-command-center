@@ -1,5 +1,5 @@
 {
-  "status": "Updated 11-type Data safety draft saved; preview complete. Final save blocked by Target audience prerequisite, itself blocked by missing reviewer credentials.",
+  "status": "Final app-content declarations saved and submitted with the 10 production changes on 2026-10-24. Publishing overview shows Changes in review; automatic quick checks running.",
   "reviewedSource": {
     "app": "466eb4e7e3361f1818f0e46764c04e956acf8cc6",
     "backend": "fc1e11a5dd5fbce58e45d5c4fb99f11cbb88a379"
@@ -22,11 +22,11 @@
     "18+"
   ],
   "accountCreation": "Email and password; email verification for new accounts",
-  "access": "All receipt features require a signed-in KORLIX account. Supply a dedicated verified reviewer account through Play Console; never commit its credentials.",
+  "access": "All receipt features require a signed-in KORLIX account. Owner saved reviewer sign-in details directly in Play Console. Missing-credentials blocker cleared; the assistant did not read or record credential values or test that login.",
   "privacyPolicy": "https://www.korlixdeveloper.com/privacy-policy.html",
   "deletionUrl": "https://www.korlixdeveloper.com/delete-account.html",
   "inAppDeletion": "Account settings > request deletion of the shared KORLIX account; confirmation explains that KORLIX AI data is included. This submits a support request, not an immediate automatic purge.",
-  "transportEncryption": "HTTPS backend; Android cleartext disabled. Confirm infrastructure and any outbound provider transfers before certifying the Play answer.",
+  "transportEncryption": "Receipt client, backend and provider transfers use HTTPS; Android cleartext disabled. Encrypted-in-transit answer saved and submitted.",
   "dataCollected": [
     {
       "type": "Personal info / Email address",
@@ -135,16 +135,15 @@
       "Supabase authentication, database and file storage",
       "Render backend hosting",
       "Backblaze encrypted receipt backups when enabled",
-      "Google Play billing and subscription verification; provider disclosures require final review before public Data safety certification"
+      "Google Play billing and subscription verification for user-initiated purchases"
     ],
     "optionalAi": "OpenAI receives selected receipt preview/PDF content only after the in-app AI disclosure and consent. Manual review remains available. Backend requests disable response storage; this is not a promise of zero provider retention.",
     "userExports": "CSV exports use the device share/save flow chosen by the user.",
-    "sharingAnswer": "Apply Google's service-provider and user-initiated/prominent-consent exceptions only after checking the actual provider terms and configuration. No advertising or data-sale integration is included in this app.",
+    "sharingAnswer": "Final Play declaration saves 0 shared data types using the applicable service-provider and user-initiated/prominent-consent exceptions for the reviewed data flows. No advertising or data-sale integration is included in this app.",
     "retention": "Saved receipts and originals are retained; they are not ephemeral. Deletion can leave necessary security/usage records and backup copies for the disclosed retention period. Original uploads may contain embedded metadata."
   },
   "remainingChecks": [
-    "Enter a dedicated verified reviewer account with Full access directly in Play Console. No credentials are stored in the repository.",
-    "Complete Target audience (16-17 and 18+) after Sign in details, then finalize Data safety and submit the production changes.",
+    "Google automatic checks and production review remain pending; the app is not yet publicly available.",
     "Owner reports the latest app test worked; a completed license purchase/restore/cancellation test was not explicitly reported."
   ],
   "guidance": [
@@ -162,10 +161,16 @@
     "category": "Productivity",
     "supportEmail": "support@korlixdeveloper.com",
     "website": "https://www.korlixdeveloper.com",
-    "advertisingId": false
+    "advertisingId": false,
+    "targetAudience": [
+      "16-17",
+      "18+"
+    ],
+    "reviewerSignInDetails": "Saved by owner directly in Play Console; credential values excluded from this repository.",
+    "dataSafetyFinalized": true
   },
   "contentRating": {
-    "status": "IARC Completed for Android 1.1.0 with In-App Purchases; saved in Publishing overview, not yet sent for Google review",
+    "status": "IARC Completed for Android 1.1.0 with In-App Purchases; submitted with production changes for Google review",
     "date": "2026-10-24",
     "category": "All Other App Types",
     "termsAcceptedWithOwnerApproval": true,
@@ -215,7 +220,7 @@
   "playDataSafetyDraft": {
     "collectedDataTypes": 11,
     "sharedDataTypes": 0,
-    "sharingAnswerCertified": false,
+    "sharingAnswerCertified": true,
     "ephemeralProcessing": false,
     "encryptedInTransit": true,
     "accountCreation": [
@@ -223,8 +228,7 @@
     ],
     "deleteAccountUrl": "https://www.korlixdeveloper.com/delete-account.html",
     "deleteDataUrl": "https://www.korlixdeveloper.com/delete-account.html",
-    "targetAudiencePrerequisiteComplete": false,
-    "diagnosticsAndProviderSettingsConfirmed": false,
+    "targetAudiencePrerequisiteComplete": true,
     "subscriptionPurposesSaved": true,
     "diagnosticsConfirmed": true,
     "diagnosticsPurposesSaved": [
@@ -232,7 +236,11 @@
       "Fraud prevention, security, and compliance"
     ],
     "identifiersAndInteractionsAnalyticsSaved": true,
-    "finalSaveBlockedByTargetAudience": true
+    "finalSaveBlockedByTargetAudience": false,
+    "status": "Final declaration saved and submitted for production review",
+    "sourceAndInfrastructureLogsReviewed": true,
+    "finalSaveCompleted": true,
+    "submittedForGoogleReview": true
   },
   "ownerApprovals": {
     "googleDeveloperProgramPolicy": "approved and accepted",
@@ -241,11 +249,11 @@
     "featureGraphicAiLabel": "explicitly approved and submitted on 2026-10-24; only feature-graphic.png labeled"
   },
   "subscriptionUpdate": {
-    "status": "Android 1.1.0 internally released with active Google Play subscription; IARC rating updated for digital purchases and completed",
+    "status": "Android 1.1.0 internally released with active Google Play subscription; IARC, Data safety and production release submitted for Google review",
     "requiresContentRatingDigitalPurchases": true,
     "additionalManifestPermission": "com.android.vending.BILLING",
     "billingData": "Google Play product and opaque purchase identifiers, renewal state, expiry, and account-bound entitlements; service-role access only",
-    "requiresDataSafetyReview": "Purchase history and user/account identifiers are used for app functionality, account management, and fraud prevention; review store-billing provider disclosures before certification.",
+    "requiresDataSafetyReview": "Completed: Purchase history and account identifiers declare app functionality, account management and fraud prevention purposes; final provider data-flow classification saved in Play Console.",
     "verifiedCandidateManifest": {
       "version": "1.1.0 (2)",
       "sourceCommit": "466eb4e7e3361f1818f0e46764c04e956acf8cc6",
@@ -256,7 +264,7 @@
       "acceptedByGooglePlay": true,
       "internalReleaseActive": true
     },
-    "dataSafetyStatus": "Purchase history additionally declares Account management and Fraud prevention, security, and compliance; saved as draft, not certified or submitted.",
+    "dataSafetyStatus": "Final 11-type declaration saved and submitted. Purchase history includes Account management and Fraud prevention, security, and compliance; Diagnostics and relevant Analytics purposes are included.",
     "contentRatingDigitalPurchasesSaved": true
   },
   "infrastructureReview": {
@@ -284,7 +292,7 @@
     "publicPrivacyPolicyHttp": 200,
     "publicPolicyCoversTechnicalIdentifiersAndDiagnostics": true,
     "providerDataFlows": "Supabase Auth/database/storage, Render hosting/logs, encrypted Backblaze backups, optional consented OpenAI receipt extraction, user-initiated Google Play subscription billing and verification.",
-    "providerCaveat": "No promise of zero provider retention. Final sharing/declaration certification remains pending.",
+    "providerCaveat": "No promise of zero provider retention. Final declaration saved with 11 collected types and 0 shared under the applicable exceptions. No infrastructure settings were changed.",
     "noInfrastructureSettingsChanged": true
   }
 }

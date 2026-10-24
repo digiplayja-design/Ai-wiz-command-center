@@ -10,7 +10,7 @@
   "releaseId": 2,
   "trackStatus": "Active",
   "releaseStatus": "Available to internal testers",
-  "googleReviewStatus": "Not reviewed",
+  "googleReviewStatus": "Changes in review; automatic quick checks running",
   "publicProductionLaunch": false,
   "testers": {
     "existingList": "Internal tester email list",
@@ -28,19 +28,15 @@
     "billingPermissionVerified": true,
     "sourceCommit": "466eb4e7e3361f1818f0e46764c04e956acf8cc6"
   },
-  "listing": "Colorful feature graphic, five current Flutter UI screenshots and Free/Full description saved; ready to send for review. Only feature graphic AI-labeled.",
-  "contentRating": "IARC Completed for 1.1.0 with In-App Purchases; ESRB Everyone, PEGI 3, Brazil 14+. Saved in Publishing overview; not yet sent for Google review.",
-  "dataSafety": "11 collected types, 0 shared, updated draft saved. Diagnostics and Analytics purposes added from observed hosting logs. Final submission is locked pending Target audience, which requires reviewer sign-in details.",
-  "initialSetupCompletedTasks": 8,
-  "initialSetupTotalTasks": 11,
+  "listing": "Colorful feature graphic, five current Flutter UI screenshots and Free/Full description submitted for production review. Only feature graphic AI-labeled.",
+  "contentRating": "IARC Completed for 1.1.0 with In-App Purchases; ESRB Everyone, PEGI 3, Brazil 14+. Submitted with the production changes for Google review.",
+  "dataSafety": "Final declaration saved and submitted: 11 collected types, 0 shared under the applicable service-provider and user-initiated/consent exceptions, encrypted in transit, account/data deletion links supplied. Diagnostics and Analytics purposes reflect observed hosting logs.",
   "physicalDeviceValidation": "Owner confirmed the latest Android 1.1.0 internal build worked on 2026-10-24 and requested production publication. A completed purchase/restore/cancellation transaction was not explicitly reported.",
   "consoleUrl": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4974803615919424879/tracks/4701326269245146922?tab=releases",
   "testInvitationUrl": "https://play.google.com/apps/internaltest/4701326269245146922",
   "testInvitationCheck": "Opened successfully; current Console account not recognized as invited. Intended for accounts in the selected tester list.",
   "remaining": [
-    "Dedicated verified reviewer KORLIX account with Full access entered directly in Play Console",
-    "Complete intended 16-17 and 18+ audience after sign-in details",
-    "Finalize Data safety and submit the staged production changes for Google review"
+    "Google automatic checks and production review; managed publishing is off, so approved changes are configured to publish automatically."
   ],
   "candidateRelease": {
     "versionName": "1.1.0",
@@ -48,7 +44,7 @@
     "sourceCommit": "466eb4e7e3361f1818f0e46764c04e956acf8cc6",
     "status": "Published to existing internal testers; Active, Available to internal testers.",
     "backendCommit": "fc1e11a5dd5fbce58e45d5c4fb99f11cbb88a379",
-    "productionApproval": "Owner requested production publication after confirming the latest internal app worked on 2026-10-24. Production rollout and declarations may proceed within the approved scope; reviewer credentials are missing.",
+    "productionApproval": "Owner requested production publication after confirming the latest internal app worked on 2026-10-24. Owner supplied reviewer sign-in details directly in Play Console; production submission completed within the approved scope.",
     "subscription": {
       "productId": "receipt_wiz_full",
       "basePlanId": "monthly",
@@ -138,7 +134,7 @@
       ],
       "renewedTermsAcceptedWithOwnerApproval": true,
       "submittedAtLocal": "2026-10-24 17:00 America/New_York",
-      "googleReviewSubmitted": false
+      "googleReviewSubmitted": true
     }
   },
   "previousRelease": {
@@ -159,7 +155,7 @@
     "versionCode": 2,
     "trackId": "4698050174705258385",
     "releaseId": 1,
-    "status": "Saved in Publishing overview: Start full rollout; not submitted for review",
+    "status": "Changes in review; automatic quick checks running before Google review",
     "bundleReusedFromInternal": true,
     "runtimeChanges": false,
     "releaseValidation": "Ready to release; no remaining release validation errors",
@@ -167,15 +163,23 @@
     "marketBasis": "Intersection of the 174 active subscription markets and the 178 entries offered by production targeting. Central African Republic is not separately listed in production. China, Cuba, Iran, Sudan and Rest of World are unselected because they are not active named subscription markets. No automatic future-market expansion.",
     "publishingUrl": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4974803615919424879/publishing",
     "reviewUrl": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4974803615919424879/tracks/4698050174705258385/releases/1/review",
-    "changesAwaitingReview": 8,
-    "submitButtonEnabled": false,
-    "blockers": [
-      "Missing reviewer sign-in details",
-      "Target audience requires Sign in details first",
-      "Data safety submission requires Target audience first"
-    ],
+    "blockers": [],
     "reviewerFormPrepared": true,
-    "credentialsEntered": false,
-    "publiclyAvailable": false
+    "credentialsEntered": true,
+    "publiclyAvailable": false,
+    "submissionDate": "2026-10-24",
+    "submissionTimezone": "America/New_York",
+    "submittedChanges": 10,
+    "submissionComplete": true,
+    "managedPublishing": false,
+    "publishAutomaticallyAfterApproval": true,
+    "reviewerCredentialsSource": "Owner saved directly in Play Console; credential values were not read or recorded by the assistant.",
+    "reviewerLoginTestedByAssistant": false,
+    "targetAudienceSaved": [
+      "16-17",
+      "18+"
+    ],
+    "dataSafetyFinalized": true,
+    "confirmationProof": "production-submitted-review-proof.jpg"
   }
 }
