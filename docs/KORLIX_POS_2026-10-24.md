@@ -37,3 +37,14 @@ Practice data is stored only in this device/browser. It is not merchant cloud st
 Core tests cover cent arithmetic, input rejection, rounding, stock limits, underpayment rollback, duplicate settlement, failed persistence, mode isolation, priced modifiers, kitchen/payment independence, once-only refunds/restocking, cross-day refunds, historical price snapshots, persistence restoration and CSV escaping. Widget checks cover desktop/tablet/phone/landscape, retail checkout, restaurant kitchen flow and embedded-session closure. All 24 core/widget tests passed, including phone navigation with 125% text size. Static analysis passed for the shared package and hub entry/catalog. The self-contained web build succeeded. Browser QA verified the retail cash receipt and change, priced restaurant options, unpaid kitchen submission and persisted preparing status after a reload. No native-device or live payment test was performed.
 
 No production readiness is implied by the private practice preview.
+
+## Private preview published
+
+- URL: https://korlix-pos-practice.silkyhinny128.chatgpt.site
+- Audience: owner-private; the hosting access gate uses ChatGPT sign-in. This is separate from the future shared KORLIX login.
+- Source runtime commit: `faf18d63d5e95a499ecf159dd06a40f7c3d4cfc8`.
+- Sites project: `appgprj_6add32010b94819180e46f871aa8e80c`.
+- Sites source commit: `bf171492cfc8c7921c63edca4f90e0d3ca55bbb1`.
+- Saved version: `appgprj_6add32010b94819180e46f871aa8e80c~appgver_61cf3a0184cc8191a4b1e908bcd541a1`.
+- Deployment: `appgdep_6add36488ca88191b5abdb42607f23d2`, succeeded on 24 October 2026.
+- The final browser visit reached the expected private ChatGPT access gate. Functional browser QA was performed on the same locally built assets before publication. Native store publication and merchant production use remain pending.
