@@ -3,11 +3,11 @@
   "appName": "KORLIX Receipt Wiz",
   "packageName": "com.korlixdeveloper.receiptwiz",
   "playAppId": "4974803615919424879",
-  "versionName": "1.0.0",
-  "versionCode": 1,
+  "versionName": "1.1.0",
+  "versionCode": 2,
   "releaseTrack": "internal",
   "trackId": "4701326269245146922",
-  "releaseId": 1,
+  "releaseId": 2,
   "trackStatus": "Active",
   "releaseStatus": "Available to internal testers",
   "googleReviewStatus": "Not reviewed",
@@ -19,15 +19,18 @@
     "messagesSent": false
   },
   "bundle": {
-    "filename": "KORLIX-Receipt-Wiz-1.aab",
-    "bytes": 55132507,
-    "sha256": "c098a7ea0ffe93054e3dfb35df07089663310ed3882bd1ae9563a0776183c13d",
-    "sourceCommit": "38285c6215b828947b5728d84d525a40d03af5de",
-    "acceptedByGooglePlay": true
+    "filename": "KORLIX-Receipt-Wiz-2.aab",
+    "bytes": 56171705,
+    "sha256": "d45f66604d9497a15a6777223cce08ce9c58f5e75f54aa0cd5f3ae7662e344d3",
+    "signatureVerified": true,
+    "bundletoolValidated": true,
+    "acceptedByGooglePlay": true,
+    "billingPermissionVerified": true,
+    "sourceCommit": "466eb4e7e3361f1818f0e46764c04e956acf8cc6"
   },
   "listing": "Colorful feature graphic, five current Flutter UI screenshots and Free/Full description saved; ready to send for review. Only feature graphic AI-labeled.",
-  "contentRating": "IARC Completed; ESRB Everyone, PEGI 3; awaiting Google review with app submission",
-  "dataSafety": "Saved as draft, pending provider/logging confirmation and target audience",
+  "contentRating": "Original IARC rating completed. New digital-purchases questionnaire prepared; requires renewed IARC Terms acceptance before proceeding.",
+  "dataSafety": "Saved draft updated for subscription purchase history, account management and fraud prevention; provider/logging verification and certification remain pending.",
   "initialSetupCompletedTasks": 8,
   "initialSetupTotalTasks": 11,
   "physicalDeviceValidation": "Owner confirmed version 1.0.0 downloaded and tested successfully on 2026-10-24; version 1.1.0 still requires device testing.",
@@ -35,6 +38,7 @@
   "testInvitationUrl": "https://play.google.com/apps/internaltest/4701326269245146922",
   "testInvitationCheck": "Opened successfully; current Console account not recognized as invited. Intended for accounts in the selected tester list.",
   "remaining": [
+    "Renewed IARC Terms acceptance and digital-purchases rating update",
     "Dedicated reviewer sign-in details",
     "Target audience (requires sign-in details first)",
     "Provider/logging checks and Data safety certification",
@@ -44,9 +48,9 @@
     "versionName": "1.1.0",
     "versionCode": 2,
     "sourceCommit": "466eb4e7e3361f1818f0e46764c04e956acf8cc6",
-    "status": "Signed bundle accepted; Google Play internal release draft says Ready to release. Not published.",
+    "status": "Published to existing internal testers; Active, Available to internal testers.",
     "backendCommit": "fc1e11a5dd5fbce58e45d5c4fb99f11cbb88a379",
-    "productionApproval": "Automatic review rejected shared Render backend deployment and 175-country subscription availability; both remain pending explicit owner approval. Receipt Wiz billing account access also requires browser action-time confirmation.",
+    "productionApproval": "Owner approved shared backend deployment, subscription terms, billing notifications, reviewed country scope, app-scoped billing permissions, and internal rollout on 2026-10-24.",
     "subscription": {
       "productId": "receipt_wiz_full",
       "basePlanId": "monthly",
@@ -59,15 +63,18 @@
         "enterprise"
       ],
       "productStatus": "Created; benefits saved",
-      "basePlanStatus": "Monthly auto-renewal and prices prepared in unsaved Console form; availability Apply blocked by automatic approval review",
-      "regionalAvailability": 175,
+      "basePlanStatus": "Active: monthly, auto-renewing",
+      "regionalAvailability": 174,
       "usMonthlyPricePrepared": 8.99,
-      "priceStatus": "USD 8.99 and Google-generated local prices entered; final save and activation pending approval",
-      "availabilityApproval": "Explicit approval required for 175-country sales scope. Do not bypass rejected Apply action.",
-      "billingEnabled": false
+      "priceStatus": "Saved and active: US USD 8.99 with Google-generated localized prices",
+      "availabilityApproval": "All named supported markets approved. Console group count 175 includes New countries / regions; 174 named markets selected, future expansion off. UI discrepancy checked and approval review resolved.",
+      "billingEnabled": true,
+      "gracePeriodDays": 7,
+      "accountHoldDays": 53,
+      "newCountriesAutomaticallyAvailable": false
     },
     "releaseId": 2,
-    "reviewUrl": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4974803615919424879/tracks/4701326269245146922/releases/2/review",
+    "reviewUrl": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4974803615919424879/tracks/4701326269245146922/releases/2/details",
     "bundle": {
       "filename": "KORLIX-Receipt-Wiz-2.aab",
       "bytes": 56171705,
@@ -75,7 +82,8 @@
       "signatureVerified": true,
       "bundletoolValidated": true,
       "acceptedByGooglePlay": true,
-      "billingPermissionVerified": true
+      "billingPermissionVerified": true,
+      "sourceCommit": "466eb4e7e3361f1818f0e46764c04e956acf8cc6"
     },
     "ci": {
       "runId": 40125218882,
@@ -84,22 +92,57 @@
       "iosSimulator": "success"
     },
     "termsCommit": "23079f9e5193672ce6d71ffd784265968820409e",
-    "termsLive": false,
+    "termsLive": true,
     "billingAccess": {
       "serviceAccount": "korlix-play-billing@korlix-ai.iam.gserviceaccount.com",
-      "currentScope": "Korlix AI only; no account-wide permissions",
+      "currentScope": "Receipt Wiz and existing Korlix AI app scopes only; no account-wide permissions",
       "requiredReceiptWizScope": [
         "View app information (read-only), including inherited app quality information",
         "View financial data",
         "Manage orders and subscriptions"
       ],
-      "status": "Receipt Wiz selected in Add app picker; no grant applied or saved. Browser action-time confirmation required."
+      "status": "Saved after explicit owner approval; active Receipt Wiz catalog accessible through billing API"
     },
     "notifications": {
-      "currentlyEnabled": false,
+      "currentlyEnabled": true,
       "proposedTopic": "projects/korlix-ai/topics/korlix-play-billing",
       "content": "Subscriptions and voided purchases only",
-      "status": "Not configured; enable and test after verified backend deployment"
+      "status": "Saved; authenticated RTDN test received by backend",
+      "testReceivedAt": "2026-10-24T20:35:26.798634433Z"
+    },
+    "termsDeployId": "dep-dbehc04s728c73c878kg",
+    "backendDeployId": "dep-dbehgb3ncjis73e93odg",
+    "backendInitialDeployId": "dep-dbeh7atg1s2s73fjbga0",
+    "databaseMigration": {
+      "name": "receipt_wiz_full_subscription",
+      "version": "20261024202256",
+      "recordCommit": "2af3c306df2a5315195df59383fb84b79ca663dd",
+      "serviceOnlyAccessVerified": true,
+      "quotaAndIncludedPlanChecksPassed": true
+    },
+    "verification": {
+      "receiptBillingEnabled": true,
+      "receiptCatalogReady": true,
+      "hubBillingEnabled": true,
+      "hubCatalogReady": true,
+      "catalogCheckedAt": "2026-10-24T20:42:48.668Z",
+      "unauthenticatedStatusHttp": 401,
+      "termsHttp": 200,
+      "realPurchasePerformed": false,
+      "physicalDeviceAndLicensePurchaseTesting": "Pending"
     }
-  }
+  },
+  "previousRelease": {
+    "versionName": "1.0.0",
+    "versionCode": 1,
+    "releaseId": 1,
+    "bundle": {
+      "filename": "KORLIX-Receipt-Wiz-1.aab",
+      "bytes": 55132507,
+      "sha256": "c098a7ea0ffe93054e3dfb35df07089663310ed3882bd1ae9563a0776183c13d",
+      "sourceCommit": "38285c6215b828947b5728d84d525a40d03af5de",
+      "acceptedByGooglePlay": true
+    }
+  },
+  "releasedAtLocal": "2026-10-24 16:45 America/New_York"
 }
