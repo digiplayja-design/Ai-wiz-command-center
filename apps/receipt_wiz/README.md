@@ -25,7 +25,8 @@ still required before distribution.
 ## Independent app sessions
 
 The companion backend change on **feature/receipt-wiz-shared-sessions-20261024**
-gives Receipt Wiz its own per-plan installation allowance: Basic/Pro one and
+was deployed on **24 October 2026**. It gives Receipt Wiz its own per-plan
+installation allowance: Basic/Pro one and
 Ultra/Enterprise two, with existing server-owned account overrides respected.
 KORLIX AI and Receipt Wiz can remain signed in together. Logging out of either
 app does not log out the other. Shared receipts, quotas and paid entitlements
@@ -34,10 +35,11 @@ remain attached to the same account.
 The server binds each Receipt Wiz login to the verified provider session ID and
 restricts it to receipt and account-management routes. Changing or removing the
 app header cannot turn it into a hub login. Revoked bindings are retained, and
-refresh never grants a new slot or reactivates a revoked login. This requires the
-companion migration and backend deployment before live testing.
+refresh never grants a new slot or reactivates a revoked login. The companion
+migration is applied and the live backend passed its health and access checks.
+Existing unbound standalone sessions must sign in again before testing.
 
-## Backend prerequisite
+## Backend
 
 Companion branch **feature/receipt-wiz-shared-sessions-20261024** includes HTTP 409 with
 `KORLIX_ACCOUNT_EXISTS` for `client_app: receipt_wiz`, including the provider's
@@ -46,9 +48,11 @@ A hashed mailbox budget limits signup to five attempts per 15 minutes per backen
 process with bounded memory; provider/ingress throttles remain needed across
 processes. No public email-lookup endpoint is added.
 
-Deploy this change before live duplicate-registration testing. The app recognizes
-ordinary duplicate errors from the old backend, but cannot detect its masked
-provider result reliably. This branch does not deploy the backend automatically.
+The backend runtime was deployed at commit
+`f35201cc93233b614d28598d0a7bef00657bbcba`. Its source branch also records the
+applied migration version and release checks. The app recognizes ordinary
+duplicate errors from older backends, but cannot detect their masked provider
+result reliably. This frontend branch does not deploy the backend automatically.
 
 ## Interface
 
@@ -104,17 +108,30 @@ billing, microphone and social SDKs.
 
 ## Verification — 24 October 2026
 
+- [GitHub Actions validation](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/40113384151)
+  completed successfully at source commit
+  `7b21888ceea16a7c27967a86e758eaee8f35e268`. It reran both analyses, all 81
+  shared tests and all 16 app tests, and produced both mobile build artifacts.
+  One optional shared screenshot-export test was skipped.
+- [Android debug APK](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/40113384151/artifacts/12568020933)
+  and [iOS simulator app](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/40113384151/artifacts/12566888930)
+  are available as CI artifacts until 7 November 2026.
 - Standalone analysis and all 16 app tests pass, including duplicate-email
   handoff, recovery, session changes, narrow layouts, enlarged text, labels,
   touch targets and contrast.
 - Shared-package analysis and 81 scanner/auth/consent tests pass. The hub's 93
   receipt/auth integration tests also pass. Optional shared/hub screenshot-export
   cases are not part of those counts.
-- The companion backend passes 27 signup tests.
+- The companion backend passes 246 session, signup and feature regression tests.
+  Its additive session migration and backend runtime are live; RLS and
+  service-role-only table/function permissions were verified.
 - Web release compilation and Android debug APK compilation pass. The APK has
   identifier `com.korlixdeveloper.receiptwiz`, version `1.0.0`, build `1`, minimum
   Android API 24 and target API 36. The packaged archive and native-library
   boundaries were checked; the latest reduced-motion code is included.
-- No real-device installation or iOS build was performed here. Store signing,
-  listings, backend deployment and real-device checks remain
-  release steps. No store upload or production backend change was made.
+- The first iOS simulator build passed on Xcode 26.6 and Flutter 3.47.7. The
+  artifact digest and packaged identifier `com.korlixdeveloper.receiptwiz`,
+  version `1.0.0 (1)`, minimum iOS 15, camera/photo permission descriptions and
+  simulator platform were verified. This is not an iPhone-installable IPA.
+- No real-device installation or store upload was performed. Store signing,
+  listings and real-device checks remain release steps.
