@@ -1,0 +1,44 @@
+{
+  "checkedDate": "2026-10-24",
+  "appName": "KORLIX Receipt Wiz",
+  "packageName": "com.korlixdeveloper.receiptwiz",
+  "playAppId": "4974803615919424879",
+  "versionName": "1.0.0",
+  "versionCode": 1,
+  "releaseTrack": "internal",
+  "trackId": "4701326269245146922",
+  "releaseId": 1,
+  "trackStatus": "Active",
+  "releaseStatus": "Available to internal testers",
+  "googleReviewStatus": "Not reviewed",
+  "publicProductionLaunch": false,
+  "testers": {
+    "existingList": "Internal tester email list",
+    "configuredUsers": 9,
+    "newAddressesAdded": false,
+    "messagesSent": false
+  },
+  "bundle": {
+    "filename": "KORLIX-Receipt-Wiz-1.aab",
+    "bytes": 55132507,
+    "sha256": "c098a7ea0ffe93054e3dfb35df07089663310ed3882bd1ae9563a0776183c13d",
+    "sourceCommit": "38285c6215b828947b5728d84d525a40d03af5de",
+    "acceptedByGooglePlay": true
+  },
+  "listing": "Saved as draft",
+  "dataSafety": "Saved as draft, pending provider/logging confirmation and target audience",
+  "initialSetupCompletedTasks": 6,
+  "initialSetupTotalTasks": 11,
+  "physicalDeviceValidation": "Pending",
+  "consoleUrl": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4974803615919424879/tracks/4701326269245146922?tab=releases",
+  "testInvitationUrl": "https://play.google.com/apps/internaltest/4701326269245146922",
+  "testInvitationCheck": "Opened successfully; current Console account not recognized as invited. Intended for accounts in the selected tester list.",
+  "remaining": [
+    "Dedicated reviewer sign-in details",
+    "Target audience (requires sign-in details first)",
+    "IARC Terms acceptance and content rating",
+    "AI asset declaration and listing finalization",
+    "Provider/logging checks and Data safety certification",
+    "Real-device testing and production submission"
+  ]
+}

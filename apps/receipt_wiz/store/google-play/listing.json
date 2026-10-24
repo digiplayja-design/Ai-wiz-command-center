@@ -1,9 +1,9 @@
 {
-  "status": "prepared, not submitted",
+  "status": "saved as Google Play draft; AI asset declaration awaiting owner approval",
   "packageName": "com.korlixdeveloper.receiptwiz",
   "language": "en-US",
   "title": "KORLIX Receipt Wiz",
-  "shortDescription": "Scan receipts, review details, and keep your receipt library in one place.",
+  "shortDescription": "Scan receipts, review details, and keep your receipt library in one place",
   "fullDescription": "Keep your receipts together with KORLIX Receipt Wiz. Capture a receipt with your camera, import a photo or PDF, review its details, and save it to your private KORLIX receipt library.\n\nCAPTURE AND REVIEW\nUse optional AI-assisted scanning to extract receipt details, then check and edit the merchant, date, amounts, category, and notes. You can also enter details manually. AI results may be inaccurate, so review them before relying on them.\n\nFIND YOUR RECEIPTS\nSearch your receipt library and filter by category, year, or review status. Keep the original photo or PDF with the saved receipt. Export receipt details as CSV for your own records.\n\nONE KORLIX ACCOUNT\nAlready use KORLIX AI? Sign in with the same email and password to access your existing receipt library. Receipt Wiz works as a separate app; KORLIX AI does not need to be installed. Your account's receipt storage and scanning limits still apply.\n\nYOUR CHOICES\nAI scanning asks for your permission before sending receipt content for processing. You can decline and enter receipt details manually. Account settings include larger text, higher contrast, reduced motion, privacy information, sign-out, and a request to delete your shared KORLIX account.\n\nAn internet connection and a KORLIX account are required. Free Basic accounts are available. Receipt Wiz is intended for users aged 16 and older; users aged 16 or 17 need permission from a parent or guardian.\n\nQuestions? Contact support@korlixdeveloper.com.",
   "category": "PRODUCTIVITY",
   "appOrGame": "app",
@@ -15,5 +15,11 @@
   "accountDeletion": "https://www.korlixdeveloper.com/delete-account.html",
   "releaseName": "1.0.0 (1)",
   "releaseNotes": "The first independent KORLIX Receipt Wiz release. Capture or import receipts, review and edit details, search your shared receipt library, and export CSV records using your existing KORLIX account.",
-  "reviewAccess": "A working reviewer account is required; no credentials are stored in this repository."
+  "reviewAccess": "A working reviewer account is required; no credentials are stored in this repository.",
+  "playScreenshotOrder": [
+    "01-scan.png",
+    "02-receipts.png",
+    "04-shared-account.png",
+    "03-review.png"
+  ]
 }

@@ -1,5 +1,5 @@
 {
-  "status": "draft for the separate Receipt Wiz Play record; not certified or submitted",
+  "status": "Data safety saved as complete Google Play draft; not certified or submitted for review",
   "reviewedSource": {
     "app": "38285c6215b828947b5728d84d525a40d03af5de",
     "backend": "f35201cc93233b614d28598d0a7bef00657bbcba"
@@ -9,10 +9,17 @@
     "version": "1.0.0 (1)",
     "minSdk": 24,
     "targetSdk": 36,
-    "permissions": ["android.permission.INTERNET", "android.permission.CAMERA", "com.korlixdeveloper.receiptwiz.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"],
+    "permissions": [
+      "android.permission.INTERNET",
+      "android.permission.CAMERA",
+      "com.korlixdeveloper.receiptwiz.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+    ],
     "advertisingIdPermission": false
   },
-  "targetAgeGroups": ["16-17", "18+"],
+  "targetAgeGroups": [
+    "16-17",
+    "18+"
+  ],
   "accountCreation": "Email and password; email verification for new accounts",
   "access": "All receipt features require a signed-in KORLIX account. Supply a dedicated verified reviewer account through Play Console; never commit its credentials.",
   "privacyPolicy": "https://www.korlixdeveloper.com/privacy-policy.html",
@@ -20,19 +27,99 @@
   "inAppDeletion": "Account settings > request deletion of the shared KORLIX account; confirmation explains that KORLIX AI data is included. This submits a support request, not an immediate automatic purge.",
   "transportEncryption": "HTTPS backend; Android cleartext disabled. Confirm infrastructure and any outbound provider transfers before certifying the Play answer.",
   "dataCollected": [
-    {"type": "Personal info / Email address", "purposes": ["Account management", "App functionality"], "required": true, "evidence": "ReceiptAuthController email/password authentication"},
-    {"type": "Personal info / User IDs", "purposes": ["Account management", "App functionality", "Fraud prevention, security, and compliance"], "required": true, "evidence": "Account-bound receipt ownership and provider-session binding"},
-    {"type": "Personal info / Other info", "purposes": ["Account management", "Fraud prevention, security, and compliance"], "required": true, "evidence": "New-account age band, guardian-permission declaration and policy acceptance"},
-    {"type": "Financial info / Purchase history", "purposes": ["App functionality"], "required": true, "evidence": "Receipt originals and saved merchant/date/amount/category/item fields are the core receipt-storage service"},
-    {"type": "Photos and videos / Photos", "purposes": ["App functionality"], "required": false, "evidence": "User-chosen camera/photo imports; PDF import is also available"},
-    {"type": "Files and docs", "purposes": ["App functionality"], "required": true, "evidence": "Receipt storage requires an uploaded photo or PDF, including filename and original bytes"},
-    {"type": "App activity / Other user-generated content", "purposes": ["App functionality"], "required": false, "evidence": "Optional receipt descriptions and notes"},
-    {"type": "App activity / App interactions", "purposes": ["App functionality", "Fraud prevention, security, and compliance"], "required": true, "evidence": "Scan usage counts, sign-in/session events, consent and review state"},
-    {"type": "App activity / In-app search history", "purposes": ["App functionality"], "required": false, "evidence": "Search terms are sent to the receipt list/export API; confirm infrastructure query-string retention before choosing ephemeral processing"},
-    {"type": "Device or other IDs", "purposes": ["Account management", "Fraud prevention, security, and compliance"], "required": true, "evidence": "Installation ID and session-bound app allowance"}
+    {
+      "type": "Personal info / Email address",
+      "purposes": [
+        "Account management",
+        "App functionality"
+      ],
+      "required": true,
+      "evidence": "ReceiptAuthController email/password authentication"
+    },
+    {
+      "type": "Personal info / User IDs",
+      "purposes": [
+        "Account management",
+        "App functionality",
+        "Fraud prevention, security, and compliance"
+      ],
+      "required": true,
+      "evidence": "Account-bound receipt ownership and provider-session binding"
+    },
+    {
+      "type": "Personal info / Other info",
+      "purposes": [
+        "Account management",
+        "Fraud prevention, security, and compliance"
+      ],
+      "required": true,
+      "evidence": "New-account age band, guardian-permission declaration and policy acceptance"
+    },
+    {
+      "type": "Financial info / Purchase history",
+      "purposes": [
+        "App functionality"
+      ],
+      "required": true,
+      "evidence": "Receipt originals and saved merchant/date/amount/category/item fields are the core receipt-storage service"
+    },
+    {
+      "type": "Photos and videos / Photos",
+      "purposes": [
+        "App functionality"
+      ],
+      "required": false,
+      "evidence": "User-chosen camera/photo imports; PDF import is also available"
+    },
+    {
+      "type": "Files and docs",
+      "purposes": [
+        "App functionality"
+      ],
+      "required": true,
+      "evidence": "Receipt storage requires an uploaded photo or PDF, including filename and original bytes"
+    },
+    {
+      "type": "App activity / Other user-generated content",
+      "purposes": [
+        "App functionality"
+      ],
+      "required": false,
+      "evidence": "Optional receipt descriptions and notes"
+    },
+    {
+      "type": "App activity / App interactions",
+      "purposes": [
+        "App functionality",
+        "Fraud prevention, security, and compliance"
+      ],
+      "required": true,
+      "evidence": "Scan usage counts, sign-in/session events, consent and review state"
+    },
+    {
+      "type": "App activity / In-app search history",
+      "purposes": [
+        "App functionality"
+      ],
+      "required": false,
+      "evidence": "Search terms are sent to the receipt list/export API; confirm infrastructure query-string retention before choosing ephemeral processing"
+    },
+    {
+      "type": "Device or other IDs",
+      "purposes": [
+        "Account management",
+        "Fraud prevention, security, and compliance"
+      ],
+      "required": true,
+      "evidence": "Installation ID and session-bound app allowance"
+    }
   ],
   "processing": {
-    "serviceProviders": ["Supabase authentication, database and file storage", "Render backend hosting", "Backblaze encrypted receipt backups when enabled"],
+    "serviceProviders": [
+      "Supabase authentication, database and file storage",
+      "Render backend hosting",
+      "Backblaze encrypted receipt backups when enabled"
+    ],
     "optionalAi": "OpenAI receives selected receipt preview/PDF content only after the in-app AI disclosure and consent. Manual review remains available. Backend requests disable response storage; this is not a promise of zero provider retention.",
     "userExports": "CSV exports use the device share/save flow chosen by the user.",
     "sharingAnswer": "Apply Google's service-provider and user-initiated/prominent-consent exceptions only after checking the actual provider terms and configuration. No advertising or data-sale integration is included in this app.",
@@ -40,14 +127,46 @@
   },
   "remainingChecks": [
     "Confirm infrastructure diagnostics, IP handling and query logging for the final Data safety answers.",
-    "Complete the live content-rating and financial-features questionnaires using the standalone app's scope.",
     "Check public policies explicitly cover this separate app and its shared account.",
     "Verify reviewer credentials and real-device camera, import, sharing, session recovery and deletion-request navigation.",
-    "Accept Google policy/export declarations only after the owner's action-time confirmation."
+    "Accept IARC Terms of Use after owner confirmation, then complete the content-rating questionnaire.",
+    "Enter an authorized dedicated reviewer account directly in Play Console, then complete target audience and certify the reviewed Data safety answers.",
+    "Obtain approval for the feature-graphic AI label and finish the store listing."
   ],
   "guidance": [
     "https://support.google.com/googleplay/android-developer/answer/10787469?hl=en",
     "https://support.google.com/googleplay/android-developer/answer/13327111?hl=en",
     "https://support.google.com/googleplay/android-developer/answer/9859455?hl=en"
-  ]
+  ],
+  "savedDeclarations": {
+    "privacyPolicy": true,
+    "containsAds": false,
+    "governmentApp": false,
+    "healthFeatures": false,
+    "financialFeatures": "Other",
+    "financialFeaturesDescription": "Receipt and expense recordkeeping: users capture or import receipts, review extracted merchant/date/amount details, organize their private receipt library, and export CSV records. The app does not move money, connect bank accounts, offer loans or investments, or provide financial advice.",
+    "category": "Productivity",
+    "supportEmail": "support@korlixdeveloper.com",
+    "website": "https://www.korlixdeveloper.com"
+  },
+  "playDataSafetyDraft": {
+    "collectedDataTypes": 10,
+    "sharedDataTypes": 0,
+    "sharingAnswerCertified": false,
+    "ephemeralProcessing": false,
+    "encryptedInTransit": true,
+    "accountCreation": [
+      "Username and password"
+    ],
+    "deleteAccountUrl": "https://www.korlixdeveloper.com/delete-account.html",
+    "deleteDataUrl": "https://www.korlixdeveloper.com/delete-account.html",
+    "targetAudiencePrerequisiteComplete": false,
+    "diagnosticsAndProviderSettingsConfirmed": false
+  },
+  "ownerApprovals": {
+    "googleDeveloperProgramPolicy": "approved and accepted",
+    "usExportLaws": "approved and accepted",
+    "iarcTerms": "awaiting action-time confirmation",
+    "featureGraphicAiLabel": "automatic approval review rejected submission; explicit owner approval required"
+  }
 }

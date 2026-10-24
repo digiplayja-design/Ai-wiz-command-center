@@ -170,7 +170,33 @@ The reusable build helper is [prepare-receipt-wiz-play.sh](../../tool/prepare-re
   and iOS simulator build. Screenshot export is run separately with its explicit
   sample-data environment setting.
 
-The Play Console creation form is prepared for the free **KORLIX Receipt Wiz**
-app, and its package name was available. The app record has **not** been created:
-Google's Developer Program Policy and US export-law declarations await the
-owner's confirmation. No release has been submitted or published.
+The owner approved Google's Developer Program Policy and US export-law
+declarations, and the separate free **KORLIX Receipt Wiz** app record was created
+on 24 October 2026 (Play app ID `4974803615919424879`). Google accepted the
+verified signed bundle above. Release **1.0.0 (1)** is now **active and available
+to internal testers**, using the existing nine-user internal tester list. The
+release review showed **Ready to release**, with no remaining warnings, before
+publication. This release is unreviewed and is not a public production launch;
+Google currently displays its temporary package-based name.
+
+- Store listing copy, icon, feature graphic and four real-app screenshots are
+  saved as a draft. The short description has no final punctuation. Screenshot
+  order in Play is scan, receipts, shared account, receipt review.
+- Privacy policy, no-ads, non-government, no-health-features, financial scope,
+  and Productivity category/public support contact are saved. Financial scope is
+  declared as **Other**, with an explicit receipt/expense recordkeeping description.
+- The complete ten-data-type questionnaire is saved as a draft. Its current
+  no-sharing answer relies on Google's provider/consent exceptions and must be
+  checked against actual provider settings before certification. Infrastructure
+  diagnostic/IP/query retention still requires confirmation.
+- Public review is blocked by dedicated reviewer sign-in details, the dependent
+  target-audience questionnaire, IARC Terms of Use acceptance/content rating,
+  and the listing's AI-asset declaration. Automatic approval review rejected
+  submitting the feature-graphic AI declaration and preparing reviewer access
+  without an established authorized reviewer account. No credentials were entered.
+- The internal-test invitation page was checked. It requires an invited Google
+  account; the current Console account was not recognized as an invited tester.
+  No new tester addresses were added and no invitations were sent.
+
+See [Play release status](store/google-play/play-release-status.json) for the
+exact Console and test-track links. Physical-device validation remains pending.
