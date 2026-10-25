@@ -11,6 +11,7 @@ import tempfile
 
 
 PACKAGE = "com.korlixdeveloper.korlixai"
+MESSENGER_PACKAGE = "com.korlixdeveloper.messenger"
 CLIENT_PATH = Path("android/app/google-services.json")
 MAX_BYTES = 1024 * 1024
 SECRET_KEYS = {
@@ -58,7 +59,9 @@ def reject_constant(_):
     raise ConfigError("Firebase Android client JSON contains an invalid numeric value.")
 
 
-def validate_bytes(data):
+def validate_bytes(data, package=PACKAGE):
+    if package not in (PACKAGE, MESSENGER_PACKAGE):
+        raise ConfigError("Choose a supported KORLIX Android package.")
     if len(data) > MAX_BYTES:
         raise ConfigError("Firebase Android client configuration is too large.")
     try:
@@ -87,10 +90,10 @@ def validate_bytes(data):
             raise ConfigError("Firebase Android client configuration contains an invalid client.")
         info = client.get("client_info")
         android = info.get("android_client_info") if isinstance(info, dict) else None
-        if isinstance(android, dict) and android.get("package_name") == PACKAGE:
+        if isinstance(android, dict) and android.get("package_name") == package:
             matching.append(client)
     if len(matching) != 1:
-        raise ConfigError(f"Firebase Android client configuration must contain exactly one client for {PACKAGE}.")
+        raise ConfigError(f"Firebase Android client configuration must contain exactly one client for {package}.")
     client = matching[0]
     app_id = client["client_info"].get("mobilesdk_app_id")
     if not isinstance(app_id, str) or not re.fullmatch(rf"1:{re.escape(number)}:android:[0-9a-fA-F]+", app_id):
@@ -105,7 +108,7 @@ def validate_bytes(data):
     return config
 
 
-def prepare(source_root, build_root, explicit=None):
+def prepare(source_root, build_root, explicit=None, package=PACKAGE, required=False):
     source_root, build_root = Path(source_root).resolve(), Path(build_root).resolve()
     target = build_root / CLIENT_PATH
     if not target.parent.is_dir() or target.parent.resolve() != target.parent:
@@ -120,6 +123,8 @@ def prepare(source_root, build_root, explicit=None):
     if not source.exists():
         if explicit:
             raise ConfigError("KORLIX_FIREBASE_ANDROID_CONFIG does not name an existing client JSON file.")
+        if required:
+            raise ConfigError("This release requires its own public Firebase Android client configuration.")
         return False
     if not source.is_file():
         raise ConfigError("Firebase Android client configuration must be a regular JSON file.")
@@ -128,7 +133,7 @@ def prepare(source_root, build_root, explicit=None):
             data = stream.read(MAX_BYTES + 1)
     except OSError:
         raise ConfigError("Could not read the Firebase Android client JSON file.") from None
-    validate_bytes(data)
+    validate_bytes(data, package=package)
     if source.resolve() == target.resolve():
         return True
     temporary = None
@@ -150,10 +155,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("source_root", type=Path)
     parser.add_argument("build_root", type=Path)
+    parser.add_argument("--package", choices=(PACKAGE, MESSENGER_PACKAGE), default=PACKAGE)
+    parser.add_argument("--required", action="store_true")
     args = parser.parse_args()
     try:
         enabled = prepare(args.source_root, args.build_root,
-                          os.environ.get("KORLIX_FIREBASE_ANDROID_CONFIG") or None)
+                          os.environ.get("KORLIX_FIREBASE_ANDROID_CONFIG") or None,
+                          package=args.package, required=args.required)
     except (ConfigError, OSError) as error:
         # Error messages never include values from the client/provider JSON.
         print(f"Android Firebase setup: {error if isinstance(error, ConfigError) else 'Could not access the client configuration.'}", file=sys.stderr)

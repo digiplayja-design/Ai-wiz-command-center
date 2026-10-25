@@ -59,6 +59,28 @@ class FirebaseClientPreparationTest(unittest.TestCase):
         self.assertFalse(firebase.prepare(self.source, self.build))
         self.assertFalse(self.target.exists())
 
+    def test_required_messenger_file_fails_closed(self):
+        with self.assertRaisesRegex(firebase.ConfigError, "requires its own"):
+            firebase.prepare(self.source, self.build, package=firebase.MESSENGER_PACKAGE, required=True)
+        self.assertFalse(self.target.exists())
+
+    def test_messenger_and_hub_clients_cannot_substitute_for_each_other(self):
+        for expected, wrong in ((firebase.MESSENGER_PACKAGE, firebase.PACKAGE),
+                                (firebase.PACKAGE, firebase.MESSENGER_PACKAGE)):
+            with self.subTest(expected=expected):
+                self.write(self.original, client_config(wrong))
+                with self.assertRaisesRegex(firebase.ConfigError, expected):
+                    firebase.prepare(self.source, self.build, package=expected, required=True)
+                self.write(self.original, client_config(expected))
+                self.assertTrue(firebase.prepare(self.source, self.build, package=expected, required=True))
+                self.assertEqual(json.loads(self.target.read_text())["client"][0]["client_info"]["android_client_info"]["package_name"], expected)
+
+    def test_messenger_client_still_rejects_private_provider_credentials(self):
+        value = client_config(firebase.MESSENGER_PACKAGE)
+        value["credentials"] = {"private_key": "DO-NOT-PRINT-ME"}
+        with self.assertRaisesRegex(firebase.ConfigError, "private credential"):
+            firebase.validate_bytes(json.dumps(value).encode(), package=firebase.MESSENGER_PACKAGE)
+
     def test_resume_preserves_validated_file_when_original_is_absent(self):
         self.write(self.target, client_config())
         before = self.target.read_bytes()
