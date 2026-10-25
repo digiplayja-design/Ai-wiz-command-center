@@ -1,6 +1,6 @@
 # KORLIX Messenger Android release preparation
 
-The owner reported the Android test app worked on October 25, 2026. The next candidate keeps the approved yellow/navy icon and colorful multi-conversation inbox. It uses the existing KORLIX account and separate Messenger session.
+The owner reported the Android test app worked on October 24, 2026 (America/New_York). The next candidate keeps the approved yellow/navy icon and colorful multi-conversation inbox. It uses the existing KORLIX account and separate Messenger session.
 
 Package: `com.korlixdeveloper.messenger`. The existing APK is a debug installation test. No signed Messenger AAB has been produced or submitted to Google Play.
 
@@ -24,11 +24,15 @@ The Firebase validator accepts only the selected KORLIX app package, checks proj
 
 GitHub's manual-dispatch UI requires the workflow on the default branch; this repository's default branch is older than Messenger. The dedicated release-branch trigger allows an initial candidate without replacing the default branch. Create/update that branch only after the required configuration is provisioned. Subsequent manual runs can use the registered workflow. See [GitHub trigger documentation](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch).
 
-The workflow's default candidate is version name `0.1.0`, version code `2`; choose an unused, increasing code before upload. The workflow syntax and Firebase validator are checked locally, but signing and AAB construction remain untested until the actual credentials exist.
+The workflow's default candidate is version name `0.1.0`, version code `2`; choose an unused, increasing code before upload. Signing and AAB construction remain untested until the actual credentials exist.
+
+### Workflow definition correction
+
+GitHub run `40153397217` rejected the release workflow before creating any jobs: `runner.temp` was used in job-level `env`, where the `runner` context is unavailable. The upload-keystore path now lives in the three step-level environments that need it. The dedicated workflow check validates all Messenger workflow expressions and contexts with checksum-pinned actionlint 1.7.12, then runs the 11 Firebase configuration tests without requiring signing credentials. Both checks pass locally. Basic YAML parsing alone did not detect the original context error.
 
 ## Remaining connected setup and device verification
 
-Install/connect the suggested Firebase plugin to register the Messenger Android client in the owner's Firebase project. Configure the matching server provider using `MESSENGER_NATIVE_*` variables and a private server-only FCM credential. Native push server integration is tracked in the backend branch's `docs/KORLIX_MESSENGER_PUSH_2026-10-25.md`.
+The Firebase plugin could not connect. With the owner's approval, Firebase Console registered `KORLIX Messenger` (`com.korlixdeveloper.messenger`) in the existing `korlix-ai` project. Client configuration download and configured-client compilation are still pending. Configure the matching server provider using `MESSENGER_NATIVE_*` variables and a private server-only FCM credential. Native push server integration is tracked in the backend branch's `docs/KORLIX_MESSENGER_PUSH_2026-10-25.md`. No server credential has been created or enabled by this registration.
 
 After configuration, build the signed candidate and use Google Play internal testing. Verify two accounts across Messenger and KORLIX Social: messages/unread state, media, permission denial, foreground/background notifications, taps/replies, logout isolation, reinstall, and audio/video calls. The existing APK does not include Firebase registration. A successful owner test does not establish all of these scenarios.
 

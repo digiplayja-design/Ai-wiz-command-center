@@ -33,7 +33,6 @@ jobs:
       DART_SUPPRESS_ANALYTICS: 'true'
       BUILD_NAME: ${{ inputs.build_name || '0.1.0' }}
       BUILD_NUMBER: ${{ inputs.build_number || '2' }}
-      KORLIX_MESSENGER_ANDROID_STORE_FILE: ${{ runner.temp }}/messenger-upload.jks
       KORLIX_MESSENGER_ANDROID_STORE_PASSWORD: ${{ secrets.KORLIX_MESSENGER_ANDROID_STORE_PASSWORD }}
       KORLIX_MESSENGER_ANDROID_KEY_ALIAS: ${{ secrets.KORLIX_MESSENGER_ANDROID_KEY_ALIAS }}
       KORLIX_MESSENGER_ANDROID_KEY_PASSWORD: ${{ secrets.KORLIX_MESSENGER_ANDROID_KEY_PASSWORD }}
@@ -52,6 +51,7 @@ jobs:
           cache: true
       - name: Prepare dedicated Messenger signing and Firebase client
         env:
+          KORLIX_MESSENGER_ANDROID_STORE_FILE: ${{ runner.temp }}/messenger-upload.jks
           MESSENGER_KEYSTORE_BASE64: ${{ secrets.KORLIX_MESSENGER_ANDROID_KEYSTORE_BASE64 }}
           MESSENGER_GOOGLE_SERVICES_JSON: ${{ secrets.KORLIX_MESSENGER_GOOGLE_SERVICES_JSON }}
         shell: bash
@@ -88,6 +88,8 @@ jobs:
           python3 scripts/prepare-android-firebase.py apps/korlix_messenger apps/korlix_messenger --package com.korlixdeveloper.messenger --required
           keytool -list -keystore "$KORLIX_MESSENGER_ANDROID_STORE_FILE" -storepass:env KORLIX_MESSENGER_ANDROID_STORE_PASSWORD -alias "$KORLIX_MESSENGER_ANDROID_KEY_ALIAS" >/dev/null
       - name: Validate and build signed AAB
+        env:
+          KORLIX_MESSENGER_ANDROID_STORE_FILE: ${{ runner.temp }}/messenger-upload.jks
         working-directory: apps/korlix_messenger
         shell: bash
         run: |
@@ -112,6 +114,8 @@ jobs:
           retention-days: 14
       - name: Remove private build inputs
         if: always()
+        env:
+          KORLIX_MESSENGER_ANDROID_STORE_FILE: ${{ runner.temp }}/messenger-upload.jks
         shell: bash
         run: |
           rm -f "$KORLIX_MESSENGER_ANDROID_STORE_FILE" apps/korlix_messenger/android/app/google-services.json
