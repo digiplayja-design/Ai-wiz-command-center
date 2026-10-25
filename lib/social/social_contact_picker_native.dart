@@ -1,4 +1,2 @@
-import 'social_invite_contacts.dart';
-
-bool get socialContactPickerAvailable => false;
-Future<List<InviteContact>> pickSocialContacts() async => [];
+// Shared by KORLIX AI and the standalone KORLIX Messenger app.
+export 'package:korlix_social_core/social/social_contact_picker_native.dart';

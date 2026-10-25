@@ -66,6 +66,7 @@ class Store {
   bool joined, incoming, accepted = false;
   final calls = <SocialMap>[];
   final messages = <SocialMap>[];
+  List<SocialMap>? inboxItems;
   String token = 'Bearer account-one';
   final revision = ValueNotifier(0);
   late final client = SocialClient(
@@ -86,17 +87,30 @@ class Store {
           'moderator': false,
         };
       }
-      if (action == 'members' || action == 'connections') {
+      if (action == 'members' ||
+          action == 'connections' ||
+          action == 'messenger_inbox') {
         result = {
-          'items': [
-            {
-              ...peer,
-              if (incoming || accepted)
-                'connection': accepted ? 'accepted' : 'pending',
-              if (incoming) 'incoming': true,
-              'unread': 0,
-            },
-          ],
+          'items': action == 'messenger_inbox' && inboxItems != null
+              ? inboxItems!
+                    .where(
+                      (item) =>
+                          (data['filter'] != 'unread' ||
+                              socialCallCount(item['unread']) > 0) &&
+                          '${item['name']} ${item['last_message']}'
+                              .toLowerCase()
+                              .contains('${data['q'] ?? ''}'.toLowerCase()),
+                    )
+                    .toList()
+              : [
+                  {
+                    ...peer,
+                    if (incoming || accepted)
+                      'connection': accepted ? 'accepted' : 'pending',
+                    if (incoming) 'incoming': true,
+                    'unread': 0,
+                  },
+                ],
         };
       }
       if (action == 'topics') {

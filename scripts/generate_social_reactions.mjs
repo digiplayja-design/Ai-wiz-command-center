@@ -3,7 +3,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 const { default: sharp } = await import(process.env.KORLIX_SHARP_MODULE || 'sharp');
-const folder = new URL('../assets/social_reactions/', import.meta.url);
+const folder = new URL('../packages/korlix_social_core/assets/social_reactions/', import.meta.url);
 await mkdir(folder, { recursive: true });
 const reactions = [
   ['hey', 'Hey!', 'Greetings', 'wave hello hi welcome', 'smile', '#61e3e4', '#22a0d7'],

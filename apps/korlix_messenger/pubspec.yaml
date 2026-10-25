@@ -1,0 +1,38 @@
+name: korlix_messenger
+description: Independent KORLIX Social messenger with shared conversations and a separate app session.
+publish_to: none
+version: 0.1.0+1
+environment:
+  sdk: ^3.13.5
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: 1.0.9
+  korlix_social_core:
+    path: ../../packages/korlix_social_core
+  korlix_receipt_core:
+    path: ../../packages/korlix_receipt_core
+  http: 1.6.0
+  shared_preferences: 2.5.5
+  package_info_plus: 9.0.1
+  url_launcher: 6.3.2
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: 6.0.0
+  flutter_launcher_icons: 0.14.4
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/korlix_messenger_icon.png
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/korlix_messenger_icon.png
+  remove_alpha_ios: true
+  min_sdk_android: 24
+  web:
+    generate: true
+    image_path: assets/korlix_messenger_icon.png
+    background_color: '#F8F5FF'
+    theme_color: '#7145C7'

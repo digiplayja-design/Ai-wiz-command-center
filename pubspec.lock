@@ -735,6 +735,13 @@ packages:
       relative: true
     source: path
     version: "1.0.0"
+  korlix_social_core:
+    dependency: "direct main"
+    description:
+      path: "packages/korlix_social_core"
+      relative: true
+    source: path
+    version: "0.1.0"
   leak_tracker:
     dependency: transitive
     description:
@@ -1596,5 +1603,5 @@ packages:
     source: hosted
     version: "2.1.1"
 sdks:
-  dart: ">=3.12.0 <4.0.0"
+  dart: ">=3.13.5 <4.0.0"
   flutter: ">=3.44.0"

@@ -20,7 +20,8 @@ abstract interface class KorlixSecureTokenBackend {
 }
 
 class _NativeTokenBackend implements KorlixSecureTokenBackend {
-  static const _key = 'korlix_auth_tokens_v1';
+  _NativeTokenBackend([this._key = 'korlix_auth_tokens_v1']);
+  final String _key;
   static const _storage = FlutterSecureStorage(
     aOptions: AndroidOptions(resetOnError: false),
     iOptions: IOSOptions(
@@ -59,14 +60,30 @@ class KorlixTokenStore {
     bool? useSecureStorage,
     Future<SharedPreferences> Function()? preferences,
     KorlixSecureTokenBackend? secureStorage,
+    String namespace = '',
   }) : _useSecureStorage = useSecureStorage ?? !kIsWeb,
        _preferences = preferences ?? SharedPreferences.getInstance,
-       _secureStorage = secureStorage ?? _NativeTokenBackend();
+       _namespace = namespace,
+       _secureStorage =
+           secureStorage ??
+           _NativeTokenBackend(
+             namespace.isEmpty
+                 ? 'korlix_auth_tokens_v1'
+                 : '${namespace}_auth_tokens_v1',
+           );
 
   static final instance = KorlixTokenStore();
   static const accessTokenKey = 'korlix_access_token';
   static const refreshTokenKey = 'korlix_refresh_token';
   static const _signedOutKey = 'korlix_tokens_signed_out_v1';
+
+  final String _namespace;
+  String get _accessKey =>
+      _namespace.isEmpty ? accessTokenKey : '${_namespace}_access_token';
+  String get _refreshKey =>
+      _namespace.isEmpty ? refreshTokenKey : '${_namespace}_refresh_token';
+  String get _logoutKey =>
+      _namespace.isEmpty ? _signedOutKey : '${_namespace}_tokens_signed_out_v1';
 
   final bool _useSecureStorage;
   final Future<SharedPreferences> Function() _preferences;
@@ -84,50 +101,50 @@ class KorlixTokenStore {
   Future<KorlixStoredTokens?> read() {
     final generation = _generation;
     return _serial(() async {
-    final prefs = await _preferences();
-    if (generation != _generation) return null;
-    // Persisted before secure deletion: a device-storage failure during logout
-    // must not resurrect the session the next time the application opens.
-    if (prefs.getBool(_signedOutKey) == true) return null;
-
-    if (_useSecureStorage) {
-      // Keychain entries can survive an iOS uninstall. A fresh installation
-      // without our local marker or a legacy session must start signed out.
-      if (!prefs.containsKey(_signedOutKey) &&
-          _nonEmpty(prefs.getString(accessTokenKey)) == null) {
-        return null;
-      }
-      final String? value;
-      try {
-        value = await _secureStorage.read();
-      } catch (_) {
-        // Never fall back to plaintext when the keychain/keystore is locked.
-        throw const KorlixTokenStorageException();
-      }
+      final prefs = await _preferences();
       if (generation != _generation) return null;
-      if (value != null) {
-        final tokens = _decode(value);
-        _require(await prefs.setBool(_signedOutKey, false));
+      // Persisted before secure deletion: a device-storage failure during logout
+      // must not resurrect the session the next time the application opens.
+      if (prefs.getBool(_logoutKey) == true) return null;
+
+      if (_useSecureStorage) {
+        // Keychain entries can survive an iOS uninstall. A fresh installation
+        // without our local marker or a legacy session must start signed out.
+        if (!prefs.containsKey(_logoutKey) &&
+            _nonEmpty(prefs.getString(_accessKey)) == null) {
+          return null;
+        }
+        final String? value;
+        try {
+          value = await _secureStorage.read();
+        } catch (_) {
+          // Never fall back to plaintext when the keychain/keystore is locked.
+          throw const KorlixTokenStorageException();
+        }
+        if (generation != _generation) return null;
+        if (value != null) {
+          final tokens = _decode(value);
+          _require(await prefs.setBool(_logoutKey, false));
+          await _removeLegacy(prefs);
+          return generation == _generation ? tokens : null;
+        }
+      }
+
+      final accessToken = prefs.getString(_accessKey);
+      if (accessToken == null || accessToken.isEmpty) return null;
+      final refreshToken = prefs.getString(_refreshKey);
+      final tokens = KorlixStoredTokens(
+        accessToken: accessToken,
+        refreshToken: _nonEmpty(refreshToken),
+      );
+      if (_useSecureStorage) {
+        // Verify the new secure entry before removing either legacy credential.
+        await _saveSecure(tokens);
+        if (generation != _generation) return null;
+        _require(await prefs.setBool(_logoutKey, false));
         await _removeLegacy(prefs);
-        return generation == _generation ? tokens : null;
       }
-    }
-
-    final accessToken = prefs.getString(accessTokenKey);
-    if (accessToken == null || accessToken.isEmpty) return null;
-    final refreshToken = prefs.getString(refreshTokenKey);
-    final tokens = KorlixStoredTokens(
-      accessToken: accessToken,
-      refreshToken: _nonEmpty(refreshToken),
-    );
-    if (_useSecureStorage) {
-      // Verify the new secure entry before removing either legacy credential.
-      await _saveSecure(tokens);
-      if (generation != _generation) return null;
-      _require(await prefs.setBool(_signedOutKey, false));
-      await _removeLegacy(prefs);
-    }
-    return generation == _generation ? tokens : null;
+      return generation == _generation ? tokens : null;
     });
   }
 
@@ -137,14 +154,14 @@ class KorlixTokenStore {
   Future<KorlixStoredTokens?> readOnly() => _serial(() async {
     final prefs = await _preferences();
     await prefs.reload();
-    if (prefs.getBool(_signedOutKey) != false) return null;
+    if (prefs.getBool(_logoutKey) != false) return null;
     if (!_useSecureStorage) {
-      final access = _nonEmpty(prefs.getString(accessTokenKey));
+      final access = _nonEmpty(prefs.getString(_accessKey));
       return access == null
           ? null
           : KorlixStoredTokens(
               accessToken: access,
-              refreshToken: _nonEmpty(prefs.getString(refreshTokenKey)),
+              refreshToken: _nonEmpty(prefs.getString(_refreshKey)),
             );
     }
     final String? value;
@@ -154,7 +171,7 @@ class KorlixTokenStore {
       throw const KorlixTokenStorageException();
     }
     await prefs.reload();
-    if (prefs.getBool(_signedOutKey) != false || value == null) return null;
+    if (prefs.getBool(_logoutKey) != false || value == null) return null;
     return _decode(value);
   });
 
@@ -177,18 +194,18 @@ class KorlixTokenStore {
       if (_useSecureStorage) {
         await _saveSecure(tokens);
         if (!current()) return;
-        _require(await prefs.setBool(_signedOutKey, false));
+        _require(await prefs.setBool(_logoutKey, false));
         await _removeLegacy(prefs);
       } else {
-        _require(await prefs.setString(accessTokenKey, accessToken));
+        _require(await prefs.setString(_accessKey, accessToken));
         if (!current()) return;
         if (tokens.refreshToken == null) {
-          _require(await prefs.remove(refreshTokenKey));
+          _require(await prefs.remove(_refreshKey));
         } else {
-          _require(await prefs.setString(refreshTokenKey, tokens.refreshToken!));
+          _require(await prefs.setString(_refreshKey, tokens.refreshToken!));
         }
         if (!current()) return;
-        _require(await prefs.setBool(_signedOutKey, false));
+        _require(await prefs.setBool(_logoutKey, false));
       }
     });
   }
@@ -198,13 +215,15 @@ class KorlixTokenStore {
   Future<void> markSignedOut() async {
     _generation++;
     final prefs = await _preferences();
-    _require(await prefs.setBool(_signedOutKey, true));
+    _require(await prefs.setBool(_logoutKey, true));
   }
 
   Future<void> clear() {
     // Capture an early preference failure while deletion waits for storage.
-    final marked = markSignedOut().then<Object?>((_) => null,
-      onError: (Object error, StackTrace _) => error);
+    final marked = markSignedOut().then<Object?>(
+      (_) => null,
+      onError: (Object error, StackTrace _) => error,
+    );
     return _serial(() async {
       final markerError = await marked;
       if (markerError != null) throw markerError;
@@ -236,8 +255,8 @@ class KorlixTokenStore {
   }
 
   Future<void> _removeLegacy(SharedPreferences prefs) async {
-    _require(await prefs.remove(accessTokenKey));
-    _require(await prefs.remove(refreshTokenKey));
+    _require(await prefs.remove(_accessKey));
+    _require(await prefs.remove(_refreshKey));
   }
 
   static KorlixStoredTokens _decode(String value) {

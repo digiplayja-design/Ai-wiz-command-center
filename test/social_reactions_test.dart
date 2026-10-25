@@ -71,7 +71,7 @@ class ReactionsStore {
 
 Future<SocialAttachmentDraft> reactionDraft(String kind) async {
   final data = await rootBundle.load(
-    'assets/social_reactions/hey.${kind == 'gif' ? 'gif' : 'png'}',
+    'packages/korlix_social_core/assets/social_reactions/hey.${kind == 'gif' ? 'gif' : 'png'}',
   );
   return SocialAttachmentDraft(
     bytes: data.buffer.asUint8List(),

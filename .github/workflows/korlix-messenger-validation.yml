@@ -1,0 +1,99 @@
+name: KORLIX Messenger mobile validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/korlix-messenger-20261024
+    paths:
+      - .github/workflows/korlix-messenger-validation.yml
+      - apps/korlix_messenger/lib/**
+      - apps/korlix_messenger/test/**
+      - apps/korlix_messenger/android/**
+      - apps/korlix_messenger/ios/**
+      - apps/korlix_messenger/pubspec.*
+      - packages/korlix_social_core/**
+      - packages/korlix_receipt_core/lib/**
+      - packages/korlix_receipt_core/test/**
+      - packages/korlix_receipt_core/pubspec.*
+
+permissions:
+  contents: read
+
+concurrency:
+  group: korlix-messenger-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: 'true'
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
+  DART_SUPPRESS_ANALYTICS: 'true'
+  COCOAPODS_DISABLE_STATS: 'true'
+
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - name: Validate independent messenger
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter config --no-analytics
+          dart --disable-analytics
+          cd apps/korlix_messenger
+          flutter pub get --enforce-lockfile
+          flutter analyze --no-pub
+          flutter test --no-pub --reporter expanded
+      - name: Build Android test APK
+        working-directory: apps/korlix_messenger
+        run: flutter build apk --debug --no-pub
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: korlix-messenger-android-debug
+          path: apps/korlix_messenger/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  ios-simulator:
+    runs-on: macos-26
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - name: Build iOS simulator app
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter config --no-analytics
+          dart --disable-analytics
+          xcodebuild -version
+          cd apps/korlix_messenger
+          flutter pub get --enforce-lockfile
+          flutter build ios --simulator --debug --no-pub
+          cd build/ios/iphonesimulator
+          ditto -c -k --sequesterRsrc --keepParent Runner.app KorlixMessenger-Simulator.zip
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: korlix-messenger-ios-simulator
+          path: apps/korlix_messenger/build/ios/iphonesimulator/KorlixMessenger-Simulator.zip
+          if-no-files-found: error
+          retention-days: 14
