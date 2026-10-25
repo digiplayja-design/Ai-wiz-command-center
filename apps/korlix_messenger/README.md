@@ -16,4 +16,4 @@ Android: build debug APK with `flutter build apk --debug`. Release builds requir
 
 iOS: use a macOS/Xcode runner, register the Messenger bundle ID, and provision its own signing/push capabilities. Base entitlements do not enable remote push. Run `flutter build ios --no-codesign` before a signed archive; background call/notification behavior requires a real-device test. The app shares account data but not installation credential storage with KORLIX AI.
 
-The manual signed-AAB workflow and required Firebase client validation are prepared. See `docs/KORLIX_MESSENGER_ANDROID_RELEASE.md` for inputs and current release blockers. No release key, signed AAB or Play submission has been created.
+The dedicated signed-AAB release workflow and required Firebase client validation are prepared. See `docs/KORLIX_MESSENGER_ANDROID_RELEASE.md` for inputs and current release blockers. No release key, signed AAB or Play submission has been created.

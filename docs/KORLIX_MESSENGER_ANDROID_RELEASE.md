@@ -6,9 +6,9 @@ Package: `com.korlixdeveloper.messenger`. The existing APK is a debug installati
 
 ## Prepared build workflow
 
-`.github/workflows/korlix-messenger-android-release.yml` is manual-only. It validates the dedicated signing input and public Firebase client, runs Flutter analysis/tests, builds a signed AAB, verifies its JAR signature and records SHA-256. Only the AAB, signature check and checksum are uploaded. Private inputs are removed at job end. The workflow does not upload to Google Play or publish automatically.
+`.github/workflows/korlix-messenger-android-release.yml` runs only for an explicit workflow dispatch or a push to the dedicated `release/korlix-messenger-android` branch. It validates the dedicated signing input and public Firebase client, runs Flutter analysis/tests, builds a signed AAB, verifies its JAR signature and records SHA-256. Only the AAB, signature check and checksum are uploaded. Private inputs are removed at job end. The workflow does not upload to Google Play or publish automatically.
 
-Set these secrets in GitHub's `korlix-messenger-android-release` environment before running it on the reviewed Messenger source branch:
+Set these secrets in GitHub's `korlix-messenger-android-release` environment before promoting the reviewed Messenger commit to the dedicated release branch:
 
 | Secret | Required value |
 | --- | --- |
@@ -21,6 +21,8 @@ Set these secrets in GitHub's `korlix-messenger-android-release` environment bef
 Keep an owner-controlled backup of the upload key. Do not reuse the KORLIX AI hub key or a debug key. No key has been generated or provisioned by this workflow preparation.
 
 The Firebase validator accepts only the selected KORLIX app package, checks project/client identifiers and rejects service-account keys, tokens and private material. `--required` makes release preparation fail if configuration is absent; optional developer builds retain the disabled-provider behavior. Existing hub builds keep their original default package.
+
+GitHub's manual-dispatch UI requires the workflow on the default branch; this repository's default branch is older than Messenger. The dedicated release-branch trigger allows an initial candidate without replacing the default branch. Create/update that branch only after the required configuration is provisioned. Subsequent manual runs can use the registered workflow. See [GitHub trigger documentation](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch).
 
 The workflow's default candidate is version name `0.1.0`, version code `2`; choose an unused, increasing code before upload. The workflow syntax and Firebase validator are checked locally, but signing and AAB construction remain untested until the actual credentials exist.
 
