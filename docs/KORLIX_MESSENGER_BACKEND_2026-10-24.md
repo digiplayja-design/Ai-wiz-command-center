@@ -1,6 +1,6 @@
 # KORLIX Messenger companion authentication
 
-Prepared October 24, 2026 (America/New_York). Ricardo approved public source upload and continued backend deployment on October 25. Both database migrations are applied; the backend runtime rollout is the next step.
+Prepared October 24, 2026 (America/New_York). Ricardo approved public source upload and continued backend deployment on October 25. Both database migrations are applied and the backend runtime is live.
 
 The independent Flutter app uses `/api/messenger/auth/{signin,signup,refresh,signout,password-reset}` and `/api/messenger/account/delete-request`. A strict POST-only alias invokes existing verified account handlers while retaining the original namespace for authorization. Older deployments return 404 rather than creating a hub device session.
 
@@ -14,6 +14,8 @@ Latest validation: 130 backend checks passed, including nine inbox SQL/HTTP/priv
 
 Applied migration versions are `20261025014426` (sessions) and `20261025014427` (inbox). Their SQL matches the reviewed local source byte for byte; files and test references were renamed to the actual applied versions. Live verification confirmed RLS, no anonymous/authenticated access to session bindings or registration/inbox RPCs, service-role-only execution, invoker rights and empty search paths. Database guard checks rejected invalid actors/apps without creating accounts or messages. Security advisors returned only the pre-existing informational RLS-without-policy notices for server-owned tables, with no warning/error findings.
 
-Validation: 54 companion/signup/auth/security tests and 89 Social/communication tests pass. Migration exercised in isolated PGlite with row-access and RPC privilege checks. The original Social fixture omitted the deployed read-receipt migration and failed its group-read case in the unchanged checkout; that fixture now loads the existing migration. Source parses and diff checks pass. Production Supabase advisors, staged rollout and real-account/device verification are still required.
+Validation: 54 companion/signup/auth/security tests and 89 Social/communication tests pass. Migration exercised in isolated PGlite with row-access and RPC privilege checks. The original Social fixture omitted the deployed read-receipt migration and failed its group-read case in the unchanged checkout; that fixture now loads the existing migration. Source parses and diff checks pass. Production Supabase advisor and rollout checks are complete; real-account/device verification remains required.
 
 Rollout order: apply both Messenger migrations, deploy backend handlers, verify with dedicated test accounts, then distribute signed native internal-test builds. Native push provider/server configuration is a separate prerequisite; this checkout currently contains the web push sender only. Do not claim FCM/APNs delivery is ready.
+
+Production deployment `dep-dbelv67avr4c73bbp11g` became live at `2026-10-25T01:47:46.328278Z` with commit `4a4995da3f729b150c6978f83ee6fd45c3d5097e`, after a guarded fast-forward of the existing release branch. Eight public HTTP checks passed for health, configured auth, Messenger validation/routing and unauthorized access rejection, plus the original hub sign-in handler. The initial runtime error-log query returned no entries. No credentials were used and no accounts/messages were created during these checks. The production branch and service settings retain manual deployment.
