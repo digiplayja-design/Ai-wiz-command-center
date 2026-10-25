@@ -8,7 +8,7 @@ Run from this directory with `flutter pub get` and `flutter run`. Use `--dart-de
 
 Shared code lives in `packages/korlix_social_core`; `lib/social` in the hub forwards to it. Chats, groups, media, calls, read receipts, themes, blocking and reporting retain existing server checks. Companion login binding is restricted to Social/account operations. An account-deletion request affects the shared KORLIX account, and the UI explicitly explains that scope.
 
-Status: local implementation; no store submission, signed native build, live database change, or two-device call verification is implied. Android Firebase client registration, native-push backend/provider setup, Apple push entitlements and signed-device tests are release prerequisites. Native platform notification controls report unavailable when those providers are not configured. Web push requires the existing server VAPID configuration and this app's included worker.
+Status: source published, companion migrations applied and backend live. Android and iOS simulator CI builds passed. The Android debug APK is ready for owner testing with existing KORLIX credentials. Store submission, signed release builds and two-device call verification remain pending. See `docs/KORLIX_MESSENGER_2026-10-24.md` at the repository root for deployment and validation evidence. Android Firebase client registration, native-push backend/provider setup, Apple push entitlements and signed-device tests are release prerequisites. Native platform notification controls report unavailable when those providers are not configured. Web push requires the existing server VAPID configuration and this app's included worker.
 
 ## Native release
 
