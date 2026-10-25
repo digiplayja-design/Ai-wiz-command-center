@@ -1,5 +1,5 @@
 {
-  "observed_at": "2026-10-25T00:29:31.405152-04:00",
+  "observed_at": "2026-10-25T01:04:01.266460-04:00",
   "package": "com.korlixdeveloper.messenger",
   "developer_id": "4772708594176030332",
   "play_app_id": "4975731757601945280",
@@ -21,7 +21,7 @@
   "internal_rollout": false,
   "production_submission": false,
   "public_play_url": null,
-  "setup_completed": 7,
+  "setup_completed": 11,
   "setup_total": 11,
   "completed": [
     "Privacy policy",
@@ -30,7 +30,11 @@
     "Financial features: None",
     "Health features: None",
     "Category: Communication and support contact",
-    "Default English store listing"
+    "Default English store listing",
+    "Sign in details: dedicated reviewer account",
+    "Content ratings: IARC Communication questionnaire",
+    "Target audience: 16–17 and 18 and over",
+    "Data safety: final save complete"
   ],
   "additional_completed": [
     "Advertising ID: No"
@@ -40,7 +44,7 @@
     "app-icon.png"
   ],
   "data_safety": {
-    "status": "Draft; final save blocked by Target audience",
+    "status": "Saved; ready to send for review",
     "collected_count": 18,
     "shared_count": 0,
     "sharing_exceptions": [
@@ -220,24 +224,100 @@
     ]
   },
   "pending": [
-    "Reviewer sign-in details: form name/instructions prepared, credentials and attestation unfilled",
-    "IARC Terms acceptance: checkbox unchecked; category Social or Communication and support email prepared",
-    "Content rating questionnaire after IARC acceptance",
-    "Target audience 16–17 and 18+ after reviewer details",
-    "Final Data safety save after target audience",
-    "Production countries, release, newly surfaced declarations and final submission"
+    "Explicit launch-country scope approval and save",
+    "Genuine Android video demonstrating background call audio and microphone; complete foreground-service declaration",
+    "Revalidate, save and send production release for Google review"
   ],
   "reviewer_reuse_candidate": {
     "app": "KORLIX Receipt Wiz",
     "app_id": "4974803615919424879",
     "entry_name": "Google Play reviewer – Receipt Wiz",
     "username_and_password_present": true,
-    "secret_values_read_or_copied": false,
-    "new_reviewer_account_created": false
+    "secret_values_read_or_copied": true,
+    "new_reviewer_account_created": false,
+    "owner_approved": true,
+    "transfer_scope": "Direct UI transfer to Messenger Play review entry; no credential values in chat, evidence or project files"
   },
   "notes": [
     "No credentials stored in this evidence file.",
-    "Internal validation does not prove production eligibility or exhaustive device testing.",
-    "Foreground-service declaration was not surfaced in current internal preview; inspect production requirements after setup."
-  ]
+    "All 11 initial setup tasks are complete; App content shows 10 actioned declarations.",
+    "Production release is a draft and has not been submitted.",
+    "Country approval and Android video evidence are distinct blockers; previous IARC/reviewer approvals are complete.",
+    "No app source, build, backend or signing changes in this continuation."
+  ],
+  "app_content_actioned_declarations": 10,
+  "iarc": {
+    "terms_approved_and_accepted": true,
+    "category": "Social or Communication",
+    "subcategory": "Communication",
+    "saved": true,
+    "answers": {
+      "shares_current_precise_location_with_other_users": false,
+      "digital_goods_purchases": false,
+      "block_users_or_content": true,
+      "report_users_or_content": true,
+      "chat_moderation": true,
+      "interactions_can_be_limited_to_invited_friends": true
+    },
+    "ratings": {
+      "Brazil": "All ages",
+      "ESRB": "Everyone",
+      "PEGI": "Parental guidance",
+      "USK": "All ages",
+      "Rest of world": "12+",
+      "Russia": "12+",
+      "South Korea": "12+"
+    },
+    "interactive_element": "Users Interact"
+  },
+  "target_audience": {
+    "saved": true,
+    "age_groups": [
+      "16-17",
+      "18 and over"
+    ]
+  },
+  "reviewer_access": {
+    "saved": true,
+    "entry_name": "KORLIX Messenger Google Play review",
+    "full_access_attestation": true,
+    "new_account_created": false,
+    "actual_sign_in_independently_tested": false
+  },
+  "production_track_id": "4697363913471912084",
+  "production_release_draft_id": "1",
+  "production_release": {
+    "name": "1.0.0 (3)",
+    "bundle_version_code": 3,
+    "release_notes_saved_in_draft": true,
+    "state": "Draft; final Save disabled by validation errors",
+    "review_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4975731757601945280/tracks/4697363913471912084/releases/1/review",
+    "validation_errors": [
+      "No countries or regions have been selected for this track. Add at least 1 country or region to roll out this release.",
+      "You must let us know whether your app uses any Foreground Service permissions."
+    ]
+  },
+  "country_availability": {
+    "saved": false,
+    "selected_in_unsaved_form": "All available countries and regions",
+    "approval_review_rejected_save": true,
+    "reason": "Worldwide production configuration had not been specifically authorized",
+    "owner_confirmation_needed": "Approve all Play-supported countries and regions, or identify intended launch countries"
+  },
+  "foreground_services": {
+    "saved": false,
+    "permissions": [
+      "FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+      "FOREGROUND_SERVICE_MICROPHONE"
+    ],
+    "selected_tasks": [
+      "Media playback",
+      "Background audio input"
+    ],
+    "video_links": [],
+    "blocker": "Both selected use cases require demonstration-video links; Save disabled while empty",
+    "existing_video_found": false,
+    "policy_source": "https://support.google.com/googleplay/android-developer/answer/13392821?hl=en",
+    "form_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4975731757601945280/app-content/foreground-services?releaseId=1&trackId=4697363913471912084"
+  }
 }

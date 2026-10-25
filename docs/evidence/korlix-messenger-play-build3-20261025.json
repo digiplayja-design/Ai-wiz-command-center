@@ -78,6 +78,6 @@
   "flutter_analysis": "No issues found",
   "messenger_tests_passed": 18,
   "owner_reported_background_notification_test": "Passed",
-  "google_play_status": "Play app created; signed build 3 uploaded and validated in internal draft; listing ready for review; seven of eleven setup tasks complete; Data safety drafted; reviewer-access consent and IARC terms pending; no production submission",
+  "google_play_status": "All initial setup complete; approved IARC terms and dedicated reviewer credentials saved; Data safety and 16+ audience saved; production build 3 draft validated with two setup errors: country selection and foreground-service video evidence; no production submission",
   "source_change": "1.0.0+3 and installed package version display; formatted source matched isolated build"
 }
