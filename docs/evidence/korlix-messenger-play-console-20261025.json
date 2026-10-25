@@ -1,0 +1,243 @@
+{
+  "observed_at": "2026-10-25T00:29:31.405152-04:00",
+  "package": "com.korlixdeveloper.messenger",
+  "developer_id": "4772708594176030332",
+  "play_app_id": "4975731757601945280",
+  "app_created": true,
+  "new_app_policy_and_export_approval": "Owner approved; both declarations accepted",
+  "version_name": "1.0.0",
+  "version_code": 3,
+  "bundle_uploaded": true,
+  "play_app_signing": true,
+  "automatic_protection": true,
+  "internal_track_id": "4701317927777013838",
+  "release_draft_id": "1",
+  "release_name": "1.0.0 (3)",
+  "internal_validation": {
+    "errors": 0,
+    "warnings": 1,
+    "warning": "No testers selected; release would not be available to any users"
+  },
+  "internal_rollout": false,
+  "production_submission": false,
+  "public_play_url": null,
+  "setup_completed": 7,
+  "setup_total": 11,
+  "completed": [
+    "Privacy policy",
+    "Ads: No",
+    "Government apps: No",
+    "Financial features: None",
+    "Health features: None",
+    "Category: Communication and support contact",
+    "Default English store listing"
+  ],
+  "additional_completed": [
+    "Advertising ID: No"
+  ],
+  "listing_status": "Ready to send for review",
+  "ai_asset_label": [
+    "app-icon.png"
+  ],
+  "data_safety": {
+    "status": "Draft; final save blocked by Target audience",
+    "collected_count": 18,
+    "shared_count": 0,
+    "sharing_exceptions": [
+      "Service providers acting solely on behalf of developer",
+      "User-initiated expected transfers"
+    ],
+    "encrypted_in_transit": true,
+    "account_creation": [
+      "Username and password"
+    ],
+    "delete_account_url": "https://www.korlixdeveloper.com/delete-account.html",
+    "delete_selected_data_url": "https://www.korlixdeveloper.com/delete-account.html",
+    "data_types": [
+      {
+        "type": "Name",
+        "required": true,
+        "processed_ephemerally": false,
+        "purposes": [
+          "App functionality",
+          "Account management"
+        ]
+      },
+      {
+        "type": "Email address",
+        "required": true,
+        "processed_ephemerally": false,
+        "purposes": [
+          "App functionality",
+          "Fraud prevention, security, and compliance",
+          "Account management"
+        ]
+      },
+      {
+        "type": "User IDs",
+        "required": true,
+        "processed_ephemerally": false,
+        "purposes": [
+          "App functionality",
+          "Fraud prevention, security, and compliance",
+          "Account management"
+        ]
+      },
+      {
+        "type": "Phone number",
+        "required": false,
+        "processed_ephemerally": false,
+        "purposes": [
+          "App functionality",
+          "Account management"
+        ]
+      },
+      {
+        "type": "Other info",
+        "required": true,
+        "processed_ephemerally": false,
+        "purposes": [
+          "App functionality",
+          "Fraud prevention, security, and compliance",
+          "Account management"
+        ]
+      },
+      {
+        "type": "Other financial info",
+        "required": false,
+        "processed_ephemerally": false,
+        "purposes": [
+          "App functionality",
+          "Account management"
+        ]
+      },
+      {
+        "type": "Approximate location",
+        "required": false,
+        "processed_ephemerally": false,
+        "purposes": [
+          "App functionality",
+          "Account management"
+        ]
+      },
+      {
+        "type": "Other in-app messages",
+        "required": false,
+        "processed_ephemerally": false,
+        "purposes": [
+          "App functionality",
+          "Fraud prevention, security, and compliance"
+        ]
+      },
+      {
+        "type": "Photos",
+        "required": false,
+        "processed_ephemerally": false,
+        "purposes": [
+          "App functionality",
+          "Account management"
+        ]
+      },
+      {
+        "type": "Videos",
+        "required": false,
+        "processed_ephemerally": false,
+        "purposes": [
+          "App functionality"
+        ]
+      },
+      {
+        "type": "Voice or sound recordings",
+        "required": false,
+        "processed_ephemerally": false,
+        "purposes": [
+          "App functionality"
+        ]
+      },
+      {
+        "type": "Contacts",
+        "required": false,
+        "processed_ephemerally": false,
+        "purposes": [
+          "App functionality"
+        ]
+      },
+      {
+        "type": "Diagnostics",
+        "required": true,
+        "processed_ephemerally": false,
+        "purposes": [
+          "App functionality",
+          "Analytics",
+          "Fraud prevention, security, and compliance"
+        ]
+      },
+      {
+        "type": "Files and docs",
+        "required": false,
+        "processed_ephemerally": false,
+        "purposes": [
+          "App functionality"
+        ]
+      },
+      {
+        "type": "App interactions",
+        "required": true,
+        "processed_ephemerally": false,
+        "purposes": [
+          "App functionality",
+          "Fraud prevention, security, and compliance"
+        ]
+      },
+      {
+        "type": "In-app search history",
+        "required": false,
+        "processed_ephemerally": false,
+        "purposes": [
+          "App functionality"
+        ]
+      },
+      {
+        "type": "Other user-generated content",
+        "required": false,
+        "processed_ephemerally": false,
+        "purposes": [
+          "App functionality",
+          "Fraud prevention, security, and compliance",
+          "Account management"
+        ]
+      },
+      {
+        "type": "Device or other IDs",
+        "required": true,
+        "processed_ephemerally": false,
+        "purposes": [
+          "App functionality",
+          "Fraud prevention, security, and compliance",
+          "Account management"
+        ]
+      }
+    ]
+  },
+  "pending": [
+    "Reviewer sign-in details: form name/instructions prepared, credentials and attestation unfilled",
+    "IARC Terms acceptance: checkbox unchecked; category Social or Communication and support email prepared",
+    "Content rating questionnaire after IARC acceptance",
+    "Target audience 16–17 and 18+ after reviewer details",
+    "Final Data safety save after target audience",
+    "Production countries, release, newly surfaced declarations and final submission"
+  ],
+  "reviewer_reuse_candidate": {
+    "app": "KORLIX Receipt Wiz",
+    "app_id": "4974803615919424879",
+    "entry_name": "Google Play reviewer – Receipt Wiz",
+    "username_and_password_present": true,
+    "secret_values_read_or_copied": false,
+    "new_reviewer_account_created": false
+  },
+  "notes": [
+    "No credentials stored in this evidence file.",
+    "Internal validation does not prove production eligibility or exhaustive device testing.",
+    "Foreground-service declaration was not surfaced in current internal preview; inspect production requirements after setup."
+  ]
+}

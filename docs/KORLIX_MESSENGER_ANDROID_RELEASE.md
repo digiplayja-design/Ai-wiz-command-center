@@ -1,12 +1,12 @@
 # KORLIX Messenger Android release
 
-Updated October 25, 2026 (UTC). Package: `com.korlixdeveloper.messenger`.
+Updated October 25, 2026 (America/New_York). Package: `com.korlixdeveloper.messenger`.
 
 ## Current candidate
 
 A signed Android App Bundle has been built as **1.0.0 / version code 3**. Its filename is `KORLIX-Messenger-1.0.0-build3.aab`; size is 85,080,643 bytes; SHA-256 is `616e37207d32565f5354d5aea059966041ccf3e09e2ee62258c8e57f0d58f938`. The owner has a private copy of the release artifact, store assets and upload-key backup.
 
-The bundle uses a dedicated Messenger RSA-3072 upload key, distinct from both the hub and the test APK. Public upload-certificate SHA-256: `35ef7904721695155160430e265765dc7bda73ff3d9018e94f9aaadc2f66b4c3`. Private keys and credentials are not in this repository. Keep the owner-controlled backup for future releases. Google Play app-signing enrollment has not yet occurred.
+The bundle uses a dedicated Messenger RSA-3072 upload key, distinct from both the hub and the test APK. Public upload-certificate SHA-256: `35ef7904721695155160430e265765dc7bda73ff3d9018e94f9aaadc2f66b4c3`. Private keys and credentials are not in this repository. Keep the owner-controlled backup for future releases. Play Console now confirms that releases are signed by Google Play and automatic protection is on.
 
 The version label in Account & help now reads the installed package version and build number. The app and release-workflow defaults are 1.0.0+3.
 
@@ -29,15 +29,19 @@ The production backend at commit `f31c922ce3003f8e05e99746c5a7ae77c06b00c1` now 
 
 The owner subsequently reported **“Passed”** for the Samsung background-notification test using Firebase test build 2, and instructed submission to Google Play. Record this as an owner-reported pass for that test. It does not establish every foreground/background call, denied-permission, reinstall, notification-reply or two-account scenario. Build 3 is signed with the release upload key, while the tested build 2 uses the earlier debug key; they are separate signing identities.
 
-## Store preparation and current blocker
+## Store setup and current blockers
 
-Google Play Console has no existing Messenger listing. The new-app form is prepared in developer account `4772708594176030332` with KORLIX Messenger, package `com.korlixdeveloper.messenger`, English (United States), App and Free. The two legally binding declarations—Developer Program Policies and US export laws—remain unchecked pending action-time owner confirmation. The Create app button has not been submitted. **No AAB has been uploaded and no release has been submitted.**
+After the owner approved the Developer Program Policies and US export declarations, KORLIX Messenger was created in developer account `4772708594176030332`, app ID `4975731757601945280`, with package `com.korlixdeveloper.messenger`, English (United States), App and Free. The signed build 3 bundle was uploaded and processed successfully. Internal track `4701317927777013838`, release draft `1`, holds the bundle and release notes. Its preview has no errors and one warning: no testers have been selected. This draft was used to validate the upload; it has not been rolled out. **No production release has been submitted, and no public Play URL is available.**
 
-Prepared listing assets include the approved 512px icon, a 1024x500 feature graphic, two 1080x1920 opaque RGB screenshots, English store descriptions and release notes. Screenshots are direct renders of the implemented Flutter UI using synthetic conversation examples; they are not evidence of live messages. Communication is the proposed category. No paid Messenger tier or ads integration has been added.
+The default listing is saved and Ready to send for review: approved 512px icon, 1024x500 feature graphic, two 1080x1920 screenshots, and English descriptions. The icon is labeled as created or edited with AI; the screenshots are direct renders of implemented Flutter UI with synthetic conversation examples. Category is Communication; public contact is support@korlixdeveloper.com and www.korlixdeveloper.com. No paid Messenger tier or ads integration has been added. Privacy policy, Ads (No), Government apps (No), Financial features (None), Health (None), category/contact and store listing are complete: 7 of 11 initial setup tasks. Advertising ID was also saved as No, matching the release manifest.
 
 Five public policy pages now explicitly cover independent Messenger: privacy, deletion, terms, community guidelines and child-safety standards. Native FCM token/routing data, optional notification controls and retention are disclosed. Account-deletion instructions identify Account & help → Request KORLIX account deletion and explain the shared account scope. Website commit `e38d6b73a37ff812a29da3b64027a35e01979c34` is based on the prior live website commit. See `evidence/korlix-messenger-public-policies-20261025.json` for deployment and live-page verification.
 
-After owner confirmation, create the app and finish the actual Console requirements: app signing, listing uploads, app-access/reviewer instructions, content rating, target audience, Data safety, foreground-service use cases and any other required declarations. Confirm collection/sharing answers against all included SDKs and the actual Console questions. Review-account credentials and any required video evidence have not yet been supplied. Do not claim production readiness, review submission or a public Play URL until Console confirms those states.
+The Data safety questionnaire is completed as a draft, with 18 collected data types and no declared sharing under the applicable service-provider and user-initiated-transfer exceptions. Account and selected-data deletion URLs are provided, username/password account creation is declared, and encryption in transit is Yes. Source review included optional social-profile city and income fields, shared-account eligibility data, device identifiers, social connections, messages, media, files, searches, activity and provider diagnostics. See `evidence/korlix-messenger-play-console-20261025.json` for the purpose/optionality map and remaining dependencies. This draft is not a completed Google review or independent security certification.
+
+Google blocks final Data safety submission until Target audience is completed, and blocks Target audience until Sign in details is completed. Messenger's reviewer form has a name and access instructions, but no username/password and no full-access attestation. Receipt Wiz has an existing entry named Google Play reviewer – Receipt Wiz containing a username/password; its secret values were not read or copied. Owner approval is being requested to reuse that dedicated review account in Messenger's Google Play reviewer form. A new reviewer account has not been created.
+
+Content ratings is prepared with support@korlixdeveloper.com and Social or Communication. The separate IARC Terms of Use checkbox remains unchecked pending action-time owner approval. After these blockers clear, complete the rating questionnaire, audience (16–17 and 18+), final Data safety save, production-country/release setup, any newly surfaced foreground-service/other declarations, and final production review. The current internal preview did not surface a foreground-service declaration; do not assume production has no additional requirements. Production submission is already authorized; do not request general publishing approval again. Do not claim review submission or publication until Console confirms it.
 
 ## Reproducible release workflow
 
