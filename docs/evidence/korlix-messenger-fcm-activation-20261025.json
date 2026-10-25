@@ -1,0 +1,131 @@
+{
+  "verified_at": "2026-10-25T03:15:04.629831+00:00",
+  "checks": [
+    {
+      "method": "GET",
+      "path": "/api/health",
+      "status": 200,
+      "expected": 200,
+      "passed": true,
+      "auth_configured": true,
+      "database_configured": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/messenger/auth/signin",
+      "status": 400,
+      "expected": 400,
+      "passed": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/messenger/auth/refresh",
+      "status": 400,
+      "expected": 400,
+      "passed": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/messenger/auth/signout",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/messenger/account/delete-request",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/messenger/auth/signin",
+      "status": 404,
+      "expected": 404,
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/social/messenger_inbox",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/signin",
+      "status": 400,
+      "expected": 400,
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/social/native_push_state",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/social/native_push_subscribe",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/social/native_push_unsubscribe",
+      "status": 401,
+      "expected": 401,
+      "passed": true
+    }
+  ],
+  "passed": true,
+  "backend_commit": "f31c922ce3003f8e05e99746c5a7ae77c06b00c1",
+  "render_deployment": "dep-dben7l5g1s2s7384p7ug",
+  "render_live_at": "2026-10-25T03:13:58.531564Z",
+  "configuration_only_deployment": true,
+  "credential_mount_deployment": "dep-dben6pivcj2c73dgkg10",
+  "credential_validation": {
+    "service_account_type": true,
+    "expected_project": true,
+    "expected_dedicated_account": true,
+    "official_oauth_endpoint": true,
+    "valid_rsa_private_key": true,
+    "oauth_succeeded": true,
+    "credential_contents_logged": false
+  },
+  "fcm_validation": {
+    "validate_only": true,
+    "http_status": 200,
+    "successful": true,
+    "message_delivered": false
+  },
+  "native_provider_readiness": {
+    "korlix_ai": false,
+    "korlix_messenger": true
+  },
+  "readiness_log_at": "2026-10-25T03:13:50.363837449Z",
+  "runtime_error_log_check": {
+    "start": "2026-10-25T03:13:50Z",
+    "end": "2026-10-25T03:15:20Z",
+    "error_entries": 0
+  },
+  "android_test_build": {
+    "version": "0.1.0",
+    "version_code": 2,
+    "firebase_client_configuration": true,
+    "package": "com.korlixdeveloper.messenger"
+  },
+  "device_delivery_tested": false,
+  "apple_push_enabled": false,
+  "play_signed_aab_created": false,
+  "play_published": false,
+  "remaining_checks": [
+    "Android notification permission and token registration",
+    "Two-account background delivery, sound and notification tap",
+    "Logout and account-switch notification isolation",
+    "Release signing and Google Play internal testing"
+  ]
+}

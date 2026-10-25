@@ -12,7 +12,7 @@ The integration adapts the earlier staged Social native-push implementation from
 
 ## Provider configuration
 
-Firebase is not yet installed/connected in this ChatGPT session. Provider delivery remains disabled until its actual client registration and server credentials are configured and tested. Do not enable it merely because database and HTTP tests pass.
+Messenger Android FCM is now configured and enabled on the live backend. The owner saved its dedicated service-account JSON directly in Render Secret Files. Runtime validation confirmed the expected service-account type, project and account, the official OAuth token endpoint, and a valid RSA private key without printing the credential. OAuth succeeded and Firebase HTTP v1 accepted a `validate_only: true` request with HTTP 200. This proves provider authorization and request validation; it does not prove delivery to an Android device. The Firebase connector remains unavailable, so Firebase setup used the owner-approved browser workflow.
 
 Messenger uses its own environment variables:
 
@@ -31,7 +31,9 @@ Messenger uses its own environment variables:
 
 `SUPABASE_URL` remains the trusted authentication issuer. Hub notifications use `SOCIAL_NATIVE_*` with package `com.korlixdeveloper.korlixai`. Messenger never falls back to hub flags, credentials or app IDs. Provider status responses expose readiness only, not credential paths, token values or project secrets.
 
-The Android app needs the public Firebase `google-services.json` for its package and a rebuild before FCM is available. A service-account JSON must never enter an APK, AAB, repository or client artifact. The existing test APK has no Firebase client configuration and cannot demonstrate remote background delivery.
+Android test build 0.1.0, version code 2, includes the actual Firebase client registration for `com.korlixdeveloper.messenger` in project `korlix-ai`. Its package, resource values and APK signature were verified, and its debug signer matches the earlier test build. Version code 1 lacks the Firebase client configuration and must be updated for background notification testing. A service-account JSON must never enter an APK, AAB, repository or client artifact.
+
+The Render service uses `korlix-messenger-fcm.json` mounted at `/etc/secrets/korlix-messenger-fcm.json`, with both `MESSENGER_NATIVE_PUSH_ENABLED` and `MESSENGER_NATIVE_FCM_ENABLED` set to `true`, project `korlix-ai`, and Android package `com.korlixdeveloper.messenger`. Configuration was merged into existing service settings. Hub and Apple notification settings were not enabled.
 
 ## Release checks
 
@@ -41,4 +43,8 @@ Official protocol references: [FCM HTTP v1](https://firebase.google.com/docs/clo
 
 Validation: all 251 Social/Messenger/companion regression tests passed, including 54 native provider/HTTP/SQL cases. Migration `20261025020547_korlix_social_native_push.sql` is applied; its SQL MD5 `675071708d4a2c483e005dc71f1c1aa6` matches local source exactly. Live checks confirmed RLS, no anonymous/authenticated table or RPC access, invoker rights, empty search paths, service-role execution and zero enrolled native subscriptions. Security advisors reported no warnings or errors. Provider readiness is verified at server startup after deployment.
 
-The native-push backend is now deployed at `f31c922ce3003f8e05e99746c5a7ae77c06b00c1` (Render `dep-dbem8npsrm7s73cjr2lg`, live `2026-10-25T02:08:09.849148Z`). All 11 live HTTP checks passed, including authentication rejection on all three new native endpoints. Startup readiness reported `korlix_ai: false` and `korlix_messenger: false`; provider delivery is not enabled. No runtime error entries appeared during the initial deployment verification window. Evidence: `docs/evidence/korlix-messenger-native-push-20261025.json`.
+The initial native-push deployment at `f31c922ce3003f8e05e99746c5a7ae77c06b00c1` (Render `dep-dbem8npsrm7s73cjr2lg`, live `2026-10-25T02:08:09.849148Z`) passed 11 HTTP checks with both native providers disabled. That historical evidence remains in `docs/evidence/korlix-messenger-native-push-20261025.json`.
+
+FCM activation used the same runtime commit. Render deployment `dep-dben7l5g1s2s7384p7ug` became live at `2026-10-25T03:13:58.531564Z`. Startup reported `korlix_ai: false` and `korlix_messenger: true`. All 11 live HTTP checks passed again, including rejection of unauthenticated requests to all three native notification endpoints. Evidence: `docs/evidence/korlix-messenger-fcm-activation-20261025.json`.
+
+Next device check: install Android build 2, sign in, open the top-right menu, choose **Notification settings**, tap **Enable device notifications**, and allow Android permission. Put Messenger in the background and send a message from a separate authorized KORLIX account. Verify the alert, sound, tap destination, and logout/account-switch isolation. These device checks, signed Play AAB generation and Play publication remain pending.
