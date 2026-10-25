@@ -1,0 +1,21 @@
+{
+  "package": "com.korlixdeveloper.messenger",
+  "version_name": "0.1.0",
+  "version_code": 2,
+  "firebase_project_id": "korlix-ai",
+  "firebase_app_id": "1:830884744891:android:3194542789b28dd8e1e39e",
+  "apk_sha256": "576f8290a0eb8a266042797ada75ffe776d8d5f1a814d555d27c14f9197fd629",
+  "apk_bytes": 211962084,
+  "certificate_sha256": "49338605edf2665c48105459cd5c90fa83bae3fc747491aa0e4d89e17fdbc69a",
+  "matches_prior_test_apk_signer": true,
+  "compiled_resources_verified": true,
+  "server_push_delivery_tested": false,
+  "play_published": false,
+  "source_commit": "40fb7ca82c6a6c703db3a1fda2ffb230a3247aaa",
+  "firebase_client_sha256": "f4294c91183f2ae8b95758bf5bacc60ac7764e4507720e06bbed34ad0b32766e",
+  "github_environment": "korlix-messenger-android-release",
+  "github_environment_branch_pattern": "release/korlix-messenger-android",
+  "firebase_client_secret_provisioned": true,
+  "release_signing_secrets_provisioned": false,
+  "server_push_credential_provisioned": false
+}
