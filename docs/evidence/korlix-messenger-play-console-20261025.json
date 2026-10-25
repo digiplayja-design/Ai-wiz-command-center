@@ -1,5 +1,5 @@
 {
-  "observed_at": "2026-10-25T01:04:01.266460-04:00",
+  "observed_at": "2026-10-25T08:15:07.166750-04:00",
   "package": "com.korlixdeveloper.messenger",
   "developer_id": "4772708594176030332",
   "play_app_id": "4975731757601945280",
@@ -224,7 +224,6 @@
     ]
   },
   "pending": [
-    "Explicit launch-country scope approval and save",
     "Genuine Android video demonstrating background call audio and microphone; complete foreground-service declaration",
     "Revalidate, save and send production release for Google review"
   ],
@@ -242,8 +241,8 @@
     "No credentials stored in this evidence file.",
     "All 11 initial setup tasks are complete; App content shows 10 actioned declarations.",
     "Production release is a draft and has not been submitted.",
-    "Country approval and Android video evidence are distinct blockers; previous IARC/reviewer approvals are complete.",
-    "No app source, build, backend or signing changes in this continuation."
+    "No app source, build, backend or signing changes in this continuation.",
+    "Owner explicitly approved worldwide availability; saved and country validation error cleared."
   ],
   "app_content_actioned_declarations": 10,
   "iarc": {
@@ -290,19 +289,21 @@
     "name": "1.0.0 (3)",
     "bundle_version_code": 3,
     "release_notes_saved_in_draft": true,
-    "state": "Draft; final Save disabled by validation errors",
+    "state": "Draft; final Save disabled pending foreground-service video evidence",
     "review_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4975731757601945280/tracks/4697363913471912084/releases/1/review",
     "validation_errors": [
-      "No countries or regions have been selected for this track. Add at least 1 country or region to roll out this release.",
       "You must let us know whether your app uses any Foreground Service permissions."
     ]
   },
   "country_availability": {
-    "saved": false,
-    "selected_in_unsaved_form": "All available countries and regions",
+    "saved": true,
+    "selected_in_unsaved_form": null,
     "approval_review_rejected_save": true,
     "reason": "Worldwide production configuration had not been specifically authorized",
-    "owner_confirmation_needed": "Approve all Play-supported countries and regions, or identify intended launch countries"
+    "owner_confirmation_needed": null,
+    "owner_approved": true,
+    "scope": "All available Google Play countries and regions",
+    "previous_approval_rejection_resolved": true
   },
   "foreground_services": {
     "saved": false,
