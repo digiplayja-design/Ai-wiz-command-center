@@ -1,0 +1,102 @@
+{
+  "checks": [
+    {
+      "method": "GET",
+      "path": "/api/health",
+      "status": 200,
+      "expected": 200,
+      "auth_configured": true,
+      "database_configured": true,
+      "passed": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/messenger/auth/signin",
+      "status": 400,
+      "expected": 400,
+      "error": "Email and password are required.",
+      "passed": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/messenger/auth/refresh",
+      "status": 400,
+      "expected": 400,
+      "error": "Refresh token is required.",
+      "passed": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/messenger/auth/signout",
+      "status": 401,
+      "expected": 401,
+      "error": "Sign in required.",
+      "passed": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/messenger/account/delete-request",
+      "status": 401,
+      "expected": 401,
+      "error": "Sign in required.",
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/messenger/auth/signin",
+      "status": 404,
+      "expected": 404,
+      "error": "Messenger account operation not found.",
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/social/messenger_inbox",
+      "status": 401,
+      "expected": 401,
+      "error": "Sign in to use KORLIX Social.",
+      "passed": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/signin",
+      "status": 400,
+      "expected": 400,
+      "error": "Email and password are required.",
+      "passed": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/social/native_push_state",
+      "status": 401,
+      "expected": 401,
+      "passed": true,
+      "error": "Sign in to use KORLIX Social."
+    },
+    {
+      "method": "POST",
+      "path": "/api/social/native_push_subscribe",
+      "status": 401,
+      "expected": 401,
+      "passed": true,
+      "error": "Sign in to use KORLIX Social."
+    },
+    {
+      "method": "POST",
+      "path": "/api/social/native_push_unsubscribe",
+      "status": 401,
+      "expected": 401,
+      "passed": true,
+      "error": "Sign in to use KORLIX Social."
+    }
+  ],
+  "passed": true,
+  "verified_at": "2026-10-25T02:09:17.769753+00:00",
+  "backend_commit": "f31c922ce3003f8e05e99746c5a7ae77c06b00c1",
+  "render_deployment": "dep-dbem8npsrm7s73cjr2lg",
+  "render_live_at": "2026-10-25T02:08:09.849148Z",
+  "native_provider_readiness": {
+    "korlix_ai": false,
+    "korlix_messenger": false
+  }
+}
