@@ -1,0 +1,83 @@
+{
+  "date_utc": "2026-10-25",
+  "artifact": "KORLIX-Messenger-1.0.0-build3.aab",
+  "package": "com.korlixdeveloper.messenger",
+  "version_name": "1.0.0",
+  "version_code": 3,
+  "size_bytes": 85080643,
+  "sha256": "616e37207d32565f5354d5aea059966041ccf3e09e2ee62258c8e57f0d58f938",
+  "upload_certificate_sha256": "35ef7904721695155160430e265765dc7bda73ff3d9018e94f9aaadc2f66b4c3",
+  "min_sdk": 24,
+  "target_sdk": 36,
+  "debuggable": false,
+  "bundletool_version": "1.18.3",
+  "bundletool_validation": "passed",
+  "jar_signature": "verified; dedicated self-signed Android upload certificate",
+  "bundle_native_alignment": "PAGE_ALIGNMENT_16K",
+  "native_64_bit_libraries": [
+    {
+      "path": "base/lib/arm64-v8a/libapp.so",
+      "minimum_load_alignment": 65536
+    },
+    {
+      "path": "base/lib/arm64-v8a/libdartjni.so",
+      "minimum_load_alignment": 16384
+    },
+    {
+      "path": "base/lib/arm64-v8a/libdatastore_shared_counter.so",
+      "minimum_load_alignment": 16384
+    },
+    {
+      "path": "base/lib/arm64-v8a/libflutter.so",
+      "minimum_load_alignment": 65536
+    },
+    {
+      "path": "base/lib/arm64-v8a/libjingle_peerconnection_so.so",
+      "minimum_load_alignment": 16384
+    },
+    {
+      "path": "base/lib/x86_64/libapp.so",
+      "minimum_load_alignment": 65536
+    },
+    {
+      "path": "base/lib/x86_64/libdartjni.so",
+      "minimum_load_alignment": 16384
+    },
+    {
+      "path": "base/lib/x86_64/libdatastore_shared_counter.so",
+      "minimum_load_alignment": 16384
+    },
+    {
+      "path": "base/lib/x86_64/libflutter.so",
+      "minimum_load_alignment": 65536
+    },
+    {
+      "path": "base/lib/x86_64/libjingle_peerconnection_so.so",
+      "minimum_load_alignment": 16384
+    }
+  ],
+  "firebase_project": "korlix-ai",
+  "firebase_app_id": "1:830884744891:android:3194542789b28dd8e1e39e",
+  "approved_icon_verified": true,
+  "permissions": [
+    "android.permission.INTERNET",
+    "android.permission.CAMERA",
+    "android.permission.RECORD_AUDIO",
+    "android.permission.MODIFY_AUDIO_SETTINGS",
+    "android.permission.POST_NOTIFICATIONS",
+    "android.permission.FOREGROUND_SERVICE",
+    "android.permission.FOREGROUND_SERVICE_MICROPHONE",
+    "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK",
+    "android.permission.BLUETOOTH_CONNECT",
+    "android.permission.ACCESS_NETWORK_STATE",
+    "android.permission.WAKE_LOCK",
+    "com.google.android.c2dm.permission.RECEIVE",
+    "com.korlixdeveloper.messenger.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
+    "android.permission.BLUETOOTH"
+  ],
+  "flutter_analysis": "No issues found",
+  "messenger_tests_passed": 18,
+  "owner_reported_background_notification_test": "Passed",
+  "google_play_status": "New app form prepared; declarations require owner approval; no AAB uploaded or release submitted",
+  "source_change": "1.0.0+3 and installed package version display; formatted source matched isolated build"
+}

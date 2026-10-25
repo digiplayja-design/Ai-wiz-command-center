@@ -1,0 +1,37 @@
+{
+  "deployed_commit": "e38d6b73a37ff812a29da3b64027a35e01979c34",
+  "render_deploy": "dep-dbenft8m7kps73ef1td0",
+  "live_at": "2026-10-25T03:35:53.599859Z",
+  "pages": [
+    {
+      "url": "https://www.korlixdeveloper.com/privacy-policy.html",
+      "status": 200,
+      "matches_reviewed_source": true,
+      "messenger_named": true
+    },
+    {
+      "url": "https://www.korlixdeveloper.com/delete-account.html",
+      "status": 200,
+      "matches_reviewed_source": true,
+      "messenger_named": true
+    },
+    {
+      "url": "https://www.korlixdeveloper.com/terms.html",
+      "status": 200,
+      "matches_reviewed_source": true,
+      "messenger_named": true
+    },
+    {
+      "url": "https://www.korlixdeveloper.com/child-safety.html",
+      "status": 200,
+      "matches_reviewed_source": true,
+      "messenger_named": true
+    },
+    {
+      "url": "https://www.korlixdeveloper.com/community-guidelines.html",
+      "status": 200,
+      "matches_reviewed_source": true,
+      "messenger_named": true
+    }
+  ]
+}

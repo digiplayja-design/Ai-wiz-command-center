@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'messenger_auth.dart';
@@ -11,6 +12,7 @@ class MessengerAccountScreen extends StatefulWidget {
 }
 
 class _MessengerAccountScreenState extends State<MessengerAccountScreen> {
+  late final Future<PackageInfo> _packageInfo = PackageInfo.fromPlatform();
   bool _busy = false;
   String? _notice;
 
@@ -63,7 +65,8 @@ class _MessengerAccountScreenState extends State<MessengerAccountScreen> {
     if (approved == true && mounted) {
       await _run(
         widget.auth.requestAccountDeletion,
-        success: 'Your account deletion request was received. Support may contact you to verify it.',
+        success:
+            'Your account deletion request was received. Support may contact you to verify it.',
       );
     }
   }
@@ -98,9 +101,18 @@ class _MessengerAccountScreenState extends State<MessengerAccountScreen> {
           trailing: const Icon(Icons.open_in_new),
           onTap: () => _open('delete-account.html'),
         ),
-        const ListTile(
-          title: Text('KORLIX Messenger'),
-          subtitle: Text('Version 0.1.0 • Build 1'),
+        FutureBuilder<PackageInfo>(
+          future: _packageInfo,
+          builder: (context, snapshot) => ListTile(
+            title: const Text('KORLIX Messenger'),
+            subtitle: Text(
+              snapshot.hasData
+                  ? 'Version ${snapshot.data!.version} • Build ${snapshot.data!.buildNumber}'
+                  : snapshot.hasError
+                  ? 'Version information unavailable'
+                  : 'Loading version…',
+            ),
+          ),
         ),
         if (_notice != null)
           Semantics(liveRegion: true, child: SelectableText(_notice!)),

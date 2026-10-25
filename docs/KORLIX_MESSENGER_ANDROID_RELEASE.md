@@ -1,51 +1,58 @@
-# KORLIX Messenger Android release preparation
+# KORLIX Messenger Android release
 
-The owner reported the Android test app worked on October 24, 2026 (America/New_York). The next candidate keeps the approved yellow/navy icon and colorful multi-conversation inbox. It uses the existing KORLIX account and separate Messenger session.
+Updated October 25, 2026 (UTC). Package: `com.korlixdeveloper.messenger`.
 
-Package: `com.korlixdeveloper.messenger`. The existing APK is a debug installation test. No signed Messenger AAB has been produced or submitted to Google Play.
+## Current candidate
 
-## Prepared build workflow
+A signed Android App Bundle has been built as **1.0.0 / version code 3**. Its filename is `KORLIX-Messenger-1.0.0-build3.aab`; size is 85,080,643 bytes; SHA-256 is `616e37207d32565f5354d5aea059966041ccf3e09e2ee62258c8e57f0d58f938`. The owner has a private copy of the release artifact, store assets and upload-key backup.
 
-`.github/workflows/korlix-messenger-android-release.yml` runs only for an explicit workflow dispatch or a push to the dedicated `release/korlix-messenger-android` branch. It validates the dedicated signing input and public Firebase client, runs Flutter analysis/tests, builds a signed AAB, verifies its JAR signature and records SHA-256. Only the AAB, signature check and checksum are uploaded. Private inputs are removed at job end. The workflow does not upload to Google Play or publish automatically.
+The bundle uses a dedicated Messenger RSA-3072 upload key, distinct from both the hub and the test APK. Public upload-certificate SHA-256: `35ef7904721695155160430e265765dc7bda73ff3d9018e94f9aaadc2f66b4c3`. Private keys and credentials are not in this repository. Keep the owner-controlled backup for future releases. Google Play app-signing enrollment has not yet occurred.
 
-Set these secrets in GitHub's `korlix-messenger-android-release` environment before promoting the reviewed Messenger commit to the dedicated release branch:
+The version label in Account & help now reads the installed package version and build number. The app and release-workflow defaults are 1.0.0+3.
 
-| Secret | Required value |
+Verified for the final bundle:
+
+- Flutter analysis: no issues; all 18 Messenger tests passed.
+- Official bundletool 1.18.3: bundle validation passed; its downloaded tool checksum matched the official release digest.
+- JAR signature verified against the dedicated upload certificate. The self-signed certificate has the ordinary Android upload-key trust/timestamp warnings; archive validation passed.
+- Package and version match; `debuggable` is false; minimum Android API 24, target API 36.
+- Bundle configuration requests 16 KB native alignment; all ten ARM64/x86-64 native libraries have at least 16 KB load-segment alignment.
+- Actual Messenger Firebase app ID and approved icon are embedded in the bundle.
+
+See `evidence/korlix-messenger-play-build3-20261025.json` for checksums, native alignment and merged permissions. This is build validation, not an exhaustive device test or evidence of Play approval.
+
+## Push and owner testing
+
+Firebase project `korlix-ai` has the Messenger client `1:830884744891:android:3194542789b28dd8e1e39e`. The validated public client configuration is supplied outside git. No server private credential is packaged in the app.
+
+The production backend at commit `f31c922ce3003f8e05e99746c5a7ae77c06b00c1` now has Messenger FCM enabled through its dedicated server-only sender account. Render deployment `dep-dben7l5g1s2s7384p7ug` became live at 03:13:58 UTC on October 25. Runtime readiness reported Messenger enabled and the hub provider disabled. Eleven routing/access checks passed and an FCM validate-only request succeeded; the validate-only request did not deliver a notification.
+
+The owner subsequently reported **“Passed”** for the Samsung background-notification test using Firebase test build 2, and instructed submission to Google Play. Record this as an owner-reported pass for that test. It does not establish every foreground/background call, denied-permission, reinstall, notification-reply or two-account scenario. Build 3 is signed with the release upload key, while the tested build 2 uses the earlier debug key; they are separate signing identities.
+
+## Store preparation and current blocker
+
+Google Play Console has no existing Messenger listing. The new-app form is prepared in developer account `4772708594176030332` with KORLIX Messenger, package `com.korlixdeveloper.messenger`, English (United States), App and Free. The two legally binding declarations—Developer Program Policies and US export laws—remain unchecked pending action-time owner confirmation. The Create app button has not been submitted. **No AAB has been uploaded and no release has been submitted.**
+
+Prepared listing assets include the approved 512px icon, a 1024x500 feature graphic, two 1080x1920 opaque RGB screenshots, English store descriptions and release notes. Screenshots are direct renders of the implemented Flutter UI using synthetic conversation examples; they are not evidence of live messages. Communication is the proposed category. No paid Messenger tier or ads integration has been added.
+
+Five public policy pages now explicitly cover independent Messenger: privacy, deletion, terms, community guidelines and child-safety standards. Native FCM token/routing data, optional notification controls and retention are disclosed. Account-deletion instructions identify Account & help → Request KORLIX account deletion and explain the shared account scope. Website commit `e38d6b73a37ff812a29da3b64027a35e01979c34` is based on the prior live website commit. See `evidence/korlix-messenger-public-policies-20261025.json` for deployment and live-page verification.
+
+After owner confirmation, create the app and finish the actual Console requirements: app signing, listing uploads, app-access/reviewer instructions, content rating, target audience, Data safety, foreground-service use cases and any other required declarations. Confirm collection/sharing answers against all included SDKs and the actual Console questions. Review-account credentials and any required video evidence have not yet been supplied. Do not claim production readiness, review submission or a public Play URL until Console confirms those states.
+
+## Reproducible release workflow
+
+`.github/workflows/korlix-messenger-android-release.yml` runs on explicit dispatch or a push to the dedicated `release/korlix-messenger-android` branch. It validates dedicated signing input and the package-specific public Firebase client, runs analysis/tests, builds the signed AAB, verifies the JAR signature and records SHA-256. It does not upload to Play automatically.
+
+The GitHub environment `korlix-messenger-android-release` exists with deployment limited to the dedicated release branch. `KORLIX_MESSENGER_GOOGLE_SERVICES_JSON` is already provisioned. The four signing secrets below remain unprovisioned in GitHub; the dedicated release branch has not been created. The current AAB was built locally using the private upload key.
+
+| Secret | Value required |
 | --- | --- |
-| `KORLIX_MESSENGER_ANDROID_KEYSTORE_BASE64` | Base64 encoding of a dedicated Messenger upload keystore |
+| `KORLIX_MESSENGER_ANDROID_KEYSTORE_BASE64` | Dedicated Messenger JKS encoded as base64 |
 | `KORLIX_MESSENGER_ANDROID_STORE_PASSWORD` | Keystore password |
 | `KORLIX_MESSENGER_ANDROID_KEY_ALIAS` | Messenger upload-key alias |
 | `KORLIX_MESSENGER_ANDROID_KEY_PASSWORD` | Key password |
-| `KORLIX_MESSENGER_GOOGLE_SERVICES_JSON` | Public Android client JSON for the Messenger package; raw JSON, not base64 |
+| `KORLIX_MESSENGER_GOOGLE_SERVICES_JSON` | Validated public Android client JSON, already provisioned |
 
-The dedicated GitHub environment now exists, with deployment access limited to the `release/korlix-messenger-android` branch pattern. `KORLIX_MESSENGER_GOOGLE_SERVICES_JSON` is provisioned from the owner's validated public client file. The four signing secrets remain unprovisioned; the release branch has not been created and no release build has been triggered.
+Do not use the KORLIX AI hub key or a debug key. Do not put a Firebase service-account credential in the client configuration. Provision signing secrets through approved secret storage before triggering CI. The existing repository default branch predates Messenger; do not replace it wholesale to expose manual dispatch.
 
-Keep an owner-controlled backup of the upload key. Do not reuse the KORLIX AI hub key or a debug key. No key has been generated or provisioned by this workflow preparation.
-
-The Firebase validator accepts only the selected KORLIX app package, checks project/client identifiers and rejects service-account keys, tokens and private material. `--required` makes release preparation fail if configuration is absent; optional developer builds retain the disabled-provider behavior. Existing hub builds keep their original default package.
-
-GitHub's manual-dispatch UI requires the workflow on the default branch; this repository's default branch is older than Messenger. The dedicated release-branch trigger allows an initial candidate without replacing the default branch. Create/update that branch only after the required configuration is provisioned. Subsequent manual runs can use the registered workflow. See [GitHub trigger documentation](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch).
-
-The workflow's default candidate is version name `0.1.0`, version code `2`; choose an unused, increasing code before upload. Signing and AAB construction remain untested until the actual credentials exist.
-
-### Workflow definition correction
-
-GitHub run `40153397217` rejected the release workflow before creating any jobs: `runner.temp` was used in job-level `env`, where the `runner` context is unavailable. The upload-keystore path now lives in the three step-level environments that need it. The dedicated workflow check validates all three Messenger workflow expressions and contexts with checksum-pinned actionlint 1.7.12, then runs the 11 Firebase configuration tests without requiring signing credentials. Both checks passed locally and in [GitHub run 40154666438](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/40154666438) for commit `83c0ba48f682417730cf72cab2475b9aa6473192`. Basic YAML parsing alone did not detect the original context error.
-
-The FCM-enabled native source set also compiled in an isolated Android debug build using a synthetic, nonfunctional client configuration. Both `KorlixPushProvider` and `KorlixFirebaseMessagingService` classes were produced. This checks SDK/source compatibility only, not real Firebase connectivity or delivery. The fixture configuration and APK outputs were removed, and no new APK was distributed. The pinned Flutter/Android toolchain emitted existing Kotlin-plugin migration and SDK XML compatibility warnings; the build completed successfully.
-
-## Remaining connected setup and device verification
-
-The Firebase plugin could not connect. With the owner's approval, Firebase Console registered `KORLIX Messenger` (`com.korlixdeveloper.messenger`) in the existing `korlix-ai` project. Its Firebase app ID is `1:830884744891:android:3194542789b28dd8e1e39e`; the Cloud Messaging v1 API is enabled.
-
-After browser downloads failed, the owner supplied `google-services.json`. It passed private-material rejection and exact project, sender and Messenger app-ID checks. The Firebase file remains outside the public repository and is available to the dedicated release workflow through its environment secret.
-
-An actual-project debug APK was built as `0.1.0` / version code `2`: `KORLIX-Messenger-0.1.0-build2-Firebase-test.apk`. APK inspection confirmed the Messenger Firebase app ID/project and absence of the earlier synthetic fixture. Its verified signing certificate matches the previous owner-tested debug APK, so it can update that installation. This is a test APK, not a Play Store AAB. Build evidence and checksums are recorded in `docs/evidence/korlix-messenger-android-build2-20261025.json`. Real-device Firebase registration and notification delivery remain untested.
-
-The Google Cloud service-account management page remains unavailable in the browser, including the direct project link exposed by Firebase Console. Firebase's Admin SDK page is accessible, but its existing broad service account was not used to create a new key. A dedicated FCM sender account and its server-only credential are still needed.
-
-Configure the matching server provider using `MESSENGER_NATIVE_*` variables and a dedicated private server-only FCM credential. Native push server integration is tracked in the backend branch's `docs/KORLIX_MESSENGER_PUSH_2026-10-25.md`. No server credential, IAM grant, or provider activation has been created by this registration.
-
-After server configuration and dedicated release signing, build the signed candidate and use Google Play internal testing. Verify two accounts across Messenger and KORLIX Social: messages/unread state, media, permission denial, foreground/background notifications, taps/replies, logout isolation, reinstall, and audio/video calls. The original version-code-1 APK did not include Firebase configuration; build 2 includes it, but does not establish successful server delivery. A successful owner test does not establish all of these scenarios.
-
-Complete the Play listing, privacy/data declarations and review requirements against the final app behavior before production rollout. No paid Messenger tier or subscription has been added.
+The workflow's earlier job-level `runner.temp` expression error was fixed by moving that path into step-level environments. Actionlint 1.7.12 and the 11 Firebase-configuration tests passed in GitHub run [40154666438](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/40154666438). Actionlint was rerun for the current default-version edits. The pinned toolchain still emits future Kotlin-plugin migration and SDK XML warnings; both release builds completed successfully.
