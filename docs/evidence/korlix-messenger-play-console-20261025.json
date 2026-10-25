@@ -1,5 +1,5 @@
 {
-  "observed_at": "2026-10-25T08:15:07.166750-04:00",
+  "observed_at": "2026-10-25T12:54:56.933161+00:00",
   "package": "com.korlixdeveloper.messenger",
   "developer_id": "4772708594176030332",
   "play_app_id": "4975731757601945280",
@@ -19,7 +19,7 @@
     "warning": "No testers selected; release would not be available to any users"
   },
   "internal_rollout": false,
-  "production_submission": false,
+  "production_submission": true,
   "public_play_url": null,
   "setup_completed": 11,
   "setup_total": 11,
@@ -37,14 +37,15 @@
     "Data safety: final save complete"
   ],
   "additional_completed": [
-    "Advertising ID: No"
+    "Advertising ID: No",
+    "Foreground services: media playback and background audio input; video evidence saved"
   ],
-  "listing_status": "Ready to send for review",
+  "listing_status": "Included in submitted changes; Changes in review",
   "ai_asset_label": [
     "app-icon.png"
   ],
   "data_safety": {
-    "status": "Saved; ready to send for review",
+    "status": "Included in submitted changes; Changes in review",
     "collected_count": 18,
     "shared_count": 0,
     "sharing_exceptions": [
@@ -224,8 +225,8 @@
     ]
   },
   "pending": [
-    "Genuine Android video demonstrating background call audio and microphone; complete foreground-service declaration",
-    "Revalidate, save and send production release for Google review"
+    "Completion of Google automated checks and review",
+    "Google approval and public production availability"
   ],
   "reviewer_reuse_candidate": {
     "app": "KORLIX Receipt Wiz",
@@ -239,10 +240,12 @@
   },
   "notes": [
     "No credentials stored in this evidence file.",
-    "All 11 initial setup tasks are complete; App content shows 10 actioned declarations.",
-    "Production release is a draft and has not been submitted.",
+    "All 11 initial setup tasks are complete; the separately surfaced foreground-service declaration is now saved.",
+    "Production release saved and all 11 changes submitted; Console shows Changes in review while initial automated checks run.",
     "No app source, build, backend or signing changes in this continuation.",
-    "Owner explicitly approved worldwide availability; saved and country validation error cleared."
+    "Owner explicitly approved worldwide availability; submitted scope is 177 countries/regions plus rest of world.",
+    "Owner-provided demonstration URL is stored in Play Console and the private conversation, not republished in this public repository.",
+    "Submission does not establish approval or public availability."
   ],
   "app_content_actioned_declarations": 10,
   "iarc": {
@@ -289,11 +292,13 @@
     "name": "1.0.0 (3)",
     "bundle_version_code": 3,
     "release_notes_saved_in_draft": true,
-    "state": "Draft; final Save disabled pending foreground-service video evidence",
+    "state": "Changes in review; initial automated checks running",
     "review_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4975731757601945280/tracks/4697363913471912084/releases/1/review",
-    "validation_errors": [
-      "You must let us know whether your app uses any Foreground Service permissions."
-    ]
+    "validation_errors": [],
+    "release_saved": true,
+    "validation_status": "Ready to release",
+    "rollout_intent": "Start full rollout",
+    "rollout_live": false
   },
   "country_availability": {
     "saved": true,
@@ -303,10 +308,12 @@
     "owner_confirmation_needed": null,
     "owner_approved": true,
     "scope": "All available Google Play countries and regions",
-    "previous_approval_rejection_resolved": true
+    "previous_approval_rejection_resolved": true,
+    "submitted_country_region_count": 177,
+    "rest_of_world": true
   },
   "foreground_services": {
-    "saved": false,
+    "saved": true,
     "permissions": [
       "FOREGROUND_SERVICE_MEDIA_PLAYBACK",
       "FOREGROUND_SERVICE_MICROPHONE"
@@ -315,10 +322,28 @@
       "Media playback",
       "Background audio input"
     ],
-    "video_links": [],
-    "blocker": "Both selected use cases require demonstration-video links; Save disabled while empty",
-    "existing_video_found": false,
+    "video_links": [
+      "Owner-provided YouTube URL entered for both permissions; exact URL retained in Play Console and private conversation"
+    ],
+    "blocker": null,
+    "existing_video_found": true,
     "policy_source": "https://support.google.com/googleplay/android-developer/answer/13392821?hl=en",
-    "form_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4975731757601945280/app-content/foreground-services?releaseId=1&trackId=4697363913471912084"
-  }
+    "form_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4975731757601945280/app-content/foreground-services?releaseId=1&trackId=4697363913471912084",
+    "owner_uploaded_video": true,
+    "video_duration_seconds_approx": 42,
+    "visual_evidence": [
+      "User starts and connects audio call",
+      "Call continues on Android Home",
+      "Ongoing-call notification and microphone indicator",
+      "Returns to connected call",
+      "Ends call"
+    ],
+    "two_endpoint_audio_independently_verified": false
+  },
+  "publicly_available": false,
+  "managed_publishing": false,
+  "publishing_overview_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4975731757601945280/publishing",
+  "publishing_state": "Changes in review",
+  "automated_pre_review_checks": "Running; Console says changes will be sent for review as soon as checks complete successfully",
+  "submitted_change_count": 11
 }
