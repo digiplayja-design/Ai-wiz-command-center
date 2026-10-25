@@ -6,8 +6,9 @@ import { registerDomino } from './domino.mjs';
 import { registerSocialAttachments, socialAttachments } from './attachments.mjs';
 import { registerSocialAlbums } from './albums.mjs';
 import { createSocialPush } from './push.mjs';
+import { createSocialNativePush } from './native_push.mjs';
 import { registerSocialDiscover } from './discover.mjs';
-export function registerSocial(app, { database, requireUser, logger = console, env = process.env, pushSender, newsResearch, autoStart = true } = {}) {
+export function registerSocial(app, { database, requireUser, logger = console, env = process.env, pushSender, nativePushSender, newsResearch, autoStart = true } = {}) {
   const callConfig = createSocialCallConfig({env,logger});
   logger.info?.('Social calling relay readiness', socialRelayReadiness(env));
   const actions = new Set(['bootstrap', 'members', 'member', 'wall', 'connections', 'messages', 'message', 'topics', 'topic', 'blocks', 'reports',
@@ -42,6 +43,8 @@ export function registerSocial(app, { database, requireUser, logger = console, e
   registerSocialDiscover(app, {database, authenticate, logger, research:newsResearch, autoStart});
   const push = createSocialPush({ database, authenticate, env, logger, sender: pushSender, autoStart });
   push.register(app);
+  const nativePush = createSocialNativePush({ database, authenticate, env, logger, sender: nativePushSender, autoStart });
+  nativePush.register(app);
   const route = async (req, res) => {
     res.set('Cache-Control', 'no-store');
     try {
@@ -78,5 +81,5 @@ export function registerSocial(app, { database, requireUser, logger = console, e
   };
   app.get('/api/social/:action', route);
   app.post('/api/social/:action', route);
-  return push;
+  return { ...push, stop() { push.stop(); nativePush.stop(); } };
 }
