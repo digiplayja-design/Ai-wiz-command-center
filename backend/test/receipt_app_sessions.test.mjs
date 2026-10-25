@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import crypto from 'node:crypto';
 import vm from 'node:vm';
 import {PGlite} from '@electric-sql/pglite';
-import {createReceiptAppSessions, requestsReceiptApp, receiptAppRouteAllowed} from '../security/receipt_app_sessions.mjs';
+import {createReceiptAppSessions, requestsReceiptApp, receiptAppRouteAllowed, messengerAppRouteAllowed} from '../security/receipt_app_sessions.mjs';
 import {authenticatedDeveloperUser, hasUnlimitedAccess, UNLIMITED_COMPATIBILITY_LIMIT} from '../security/developer_access.mjs';
 import {createKorlixSignupHandler, KORLIX_SIGNUP_POLICY_VERSION} from '../korlix_signup_eligibility.mjs';
 
@@ -68,6 +68,7 @@ test.before(async () => {
     grant select on user_profiles,korlix_developer_access to service_role;
     grant select,insert,update on device_sessions to service_role;`);
   await db.exec(migration);
+  await db.exec(readFileSync(new URL('../../supabase/migrations/20261025014426_korlix_messenger_app_sessions.sql', import.meta.url), 'utf8'));
 });
 test.after(async () => {await db?.close();});
 test.beforeEach(async () => {
@@ -83,10 +84,10 @@ test.beforeEach(async () => {
       admin: {signOut: async token => {revoked.add(tokens.get(token)?.sid); return {error: null};}},
     },
     async rpc(name, args) {
-      assert.equal(name, 'korlix_register_receipt_app_session');
+      assert(['korlix_register_receipt_app_session','korlix_register_messenger_app_session'].includes(name));
       if (unavailable) return {error: new Error('private database details')};
       try {
-        const result = await db.query('select public.korlix_register_receipt_app_session($1,$2,$3,$4,$5) result',
+        const result = await db.query(`select public.${name}($1,$2,$3,$4,$5) result`,
           [args.p_user_id,args.p_session_id,args.p_device_id,args.p_device_label,args.p_platform]);
         return {data: result.rows[0].result};
       } catch(error) {return {error};}
@@ -274,5 +275,67 @@ test('receipt scope allowlist excludes neighboring and encoded paths and wrong m
   }
   for(const [method,path] of [['GET','/api/receipt-wiz-admin'],['POST','/api/generate'],['GET','/api/receipt-wiz/../generate'],['GET','/api/receipt-wiz/%2e%2e/generate'],['GET','/api/auth/refresh'],['POST','/api/billing/apple/verify']]) {
     assert.equal(receiptAppRouteAllowed({method,originalUrl:path}),false);
+  }
+});
+
+
+test('Messenger, Receipt Wiz and hub share identity with independent sessions and device slots', async () => {
+  const hub=await login({app:'korlix_ai',device:'hub-phone'});
+  const receipt=await login({device:'same-phone'});
+  const messenger=await login({app:'korlix_messenger',device:'same-phone'});
+  assert.equal(hub.statusCode,200); assert.equal(receipt.statusCode,200); assert.equal(messenger.statusCode,200);
+  const bindings=await rows('korlix_receipt_app_sessions');
+  assert.deepEqual(bindings.map(row=>row.client_app).sort(),['korlix_messenger','receipt_wiz']);
+  assert.equal((await context.getAuthenticatedUser(request({session:messenger.body.session,app:'korlix_messenger',device:'same-phone',path:'/api/social/connections'}))).id,userId);
+  const signedOut=await signout(messenger.body.session,{app:'korlix_messenger',device:'same-phone',path:'/api/messenger/auth/signout'});
+  assert.equal(signedOut.statusCode,200);
+  assert.equal((await context.getAuthenticatedUser(request({session:receipt.body.session,device:'same-phone'}))).id,userId);
+  assert.equal((await context.getAuthenticatedUser(request({session:hub.body.session,app:'korlix_ai',device:'hub-phone',path:'/api/generate',method:'POST'}))).id,userId);
+});
+
+test('Messenger cannot gain hub or Receipt Wiz access by changing an app header', async () => {
+  const messenger=await login({app:'korlix_messenger'});assert.equal(messenger.statusCode,200);
+  for(const app of [null,'korlix_ai','receipt_wiz','korlix_messenger']) {
+    for(const path of ['/api/generate','/api/receipt-wiz']) {
+      await assert.rejects(context.getAuthenticatedUser(request({session:messenger.body.session,app,path,method:'POST'})),e=>e.code==='messenger_app_scope');
+    }
+  }
+  const allowed=request({session:messenger.body.session,app:null,path:'/api/social/messages'});
+  assert.equal((await context.getAuthenticatedUser(allowed)).id,userId);
+});
+
+test('Messenger refresh uses its saved binding and revoked JWT cannot become a hub session', async () => {
+  const messenger=await login({app:'korlix_messenger'});
+  const rotated=await refresh(messenger.body.session,{app:'korlix_messenger',path:'/api/messenger/auth/refresh'});
+  assert.equal(rotated.statusCode,200);
+  await signout(rotated.body.session,{app:'korlix_messenger',path:'/api/messenger/auth/signout'});
+  context.receiptAppSessions=createReceiptAppSessions({database});
+  await assert.rejects(context.getAuthenticatedUser(request({session:rotated.body.session,app:null,path:'/api/social/messages'})),e=>e.statusCode===403);
+  await assert.rejects(context.getAuthenticatedUser(request({session:rotated.body.session,app:null,path:'/api/generate',method:'POST'})),e=>e.statusCode===403);
+});
+
+test('Messenger device limit is independent and wrong installation cannot read conversations', async () => {
+  const messenger=await login({app:'korlix_messenger',device:'one'});
+  assert.equal((await login({app:'korlix_messenger',device:'two'})).statusCode,403);
+  await assert.rejects(context.getAuthenticatedUser(request({session:messenger.body.session,app:'korlix_messenger',device:'wrong',path:'/api/social/connections'})),e=>e.statusCode===403);
+  assert.equal((await login({app:'receipt_wiz',device:'two'})).statusCode,200);
+});
+
+test('Messenger route scope only admits Social and namespaced account operations', () => {
+  for(const [method,path] of [['GET','/api/social/connections'],['POST','/api/social/send'],['GET','/api/social/attachment/file-id'],['POST','/api/messenger/auth/refresh'],['POST','/api/messenger/account/delete-request']]) {
+    assert.equal(messengerAppRouteAllowed({method,originalUrl:path}),true,path);
+  }
+  for(const path of ['/api/generate','/api/auth/signin','/api/receipt-wiz','/api/socialevil/messages','/api/social/../generate']) {
+    assert.equal(messengerAppRouteAllowed({method:'POST',originalUrl:path}),false,path);
+  }
+});
+
+test('Companion registration RPCs remain unavailable to anonymous and authenticated clients', async () => {
+  await db.exec('reset role');
+  for (const role of ['anon','authenticated']) {
+    await db.exec('set role '+role);
+    await assert.rejects(db.query('select public.korlix_register_messenger_app_session($1,$2,$3)',[userId,crypto.randomUUID(),'device']),/permission denied/);
+    await assert.rejects(db.query('select * from public.korlix_receipt_app_sessions'),/permission denied/);
+    await db.exec('reset role');
   }
 });

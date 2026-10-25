@@ -50,6 +50,9 @@ before(async()=>{
  await db.exec(await readFile(new URL(discover,folder),'utf8'));
  const dumpScope=(await readdir(folder)).find(f=>f.endsWith('_korlix_social_last_login_dump_scope.sql'));
  await db.exec(await readFile(new URL(dumpScope,folder),'utf8'));
+ // Current routes record group reads through the shared read-receipt RPC.
+ const receipts=(await readdir(folder)).find(f=>f.endsWith('_korlix_social_read_receipts.sql'));
+ await db.exec(await readFile(new URL(receipts,folder),'utf8'));
  const app=express();app.use(express.json({limit:'250kb'}));registerSocial(app,{database:rpc,requireUser:async q=>{if(!users.includes(q.headers.authorization))throw Error();return {id:q.headers.authorization,email_confirmed_at:'2026-01-01'};},logger:{warn(){}}});
  server=app.listen(0);await new Promise(r=>server.once('listening',r));base=`http://127.0.0.1:${server.address().port}/api/social/`;
 });

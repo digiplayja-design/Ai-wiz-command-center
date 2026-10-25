@@ -1,3 +1,4 @@
+import {messengerAuthAlias} from './security/messenger_auth_alias.mjs';
 import {createAccountRequestLimiter} from './security/account_request_limiter.mjs';
 import {createReceiptAppSessions, requestsReceiptApp} from './security/receipt_app_sessions.mjs';
 import {createOnboardingMeasurement} from './onboarding/measurement.mjs';
@@ -273,6 +274,9 @@ app.use(express.json({
     // K135Z_GATE6H_ZOOM_RAW_BODY_END
   },
 })); // KORLIX_AGENT_EMAIL_RESEND_RAW_BODY_BUILD133
+
+// Separate namespace fails closed on servers without Messenger support.
+app.use(messengerAuthAlias);
 
 async function requireDocumentUploadUser(req, res, next) {
   try {
@@ -861,7 +865,9 @@ function getRequestDeviceInfo(req) {
     deviceLabel,
     platform,
     explicitDeviceId: Boolean(rawDeviceId),
-    clientApp: requestsReceiptApp(req) ? 'receipt_wiz' : 'korlix_ai',
+    clientApp: requestsReceiptApp(req)
+      ? (req.body?.client_app === 'korlix_messenger' || req.headers?.['x-korlix-app'] === 'korlix_messenger'
+        ? 'korlix_messenger' : 'receipt_wiz') : 'korlix_ai',
   };
 }
 
@@ -905,7 +911,7 @@ async function registerDeviceSession({
   session,
 }) {
   assertAccountEnabled(profile);
-  if (deviceInfo.clientApp === 'receipt_wiz') {
+  if (['receipt_wiz', 'korlix_messenger'].includes(deviceInfo.clientApp)) {
     return receiptAppSessions.register({userId, session, deviceInfo});
   }
   if (!supabaseAdmin) {
