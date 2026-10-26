@@ -6,6 +6,7 @@ import '../theme/korlix_theme.dart';
 import '../theme/korlix_action_button.dart';
 import '../korlix_image_saver.dart';
 import '../input_tools/voice_composer.dart';
+import '../support/korlix_saved_output_report_dialog.dart';
 import 'imagine_catalog.dart';
 import 'imagine_client.dart';
 import 'imagine_art.dart';
@@ -42,6 +43,7 @@ class _ImagineStudioScreenState extends State<ImagineStudioScreen> {
   String? _selectedId, _localError;
   int _tab = 0;
   bool _consenting = false, _saving = false, _dictating = false;
+  bool _reporting = false;
   ImagineClient get c => widget.client;
   KorlixSkinPalette get s => korlixSkinOf(context);
   bool get locked => c.busy || _consenting || _dictating || !c.available;
@@ -284,6 +286,58 @@ class _ImagineStudioScreenState extends State<ImagineStudioScreen> {
     );
   }
 
+  Future<void> _report(ImagineResult result, {BuildContext? from}) async {
+    final reportContext = from ?? context;
+    if (_reporting || !mounted || !reportContext.mounted || !c.available) {
+      return;
+    }
+    setState(() => _reporting = true);
+    try {
+      final reportId = await showDialog<String>(
+        context: reportContext,
+        barrierDismissible: false,
+        builder: (_) => KorlixSavedOutputReportDialog(
+          title: 'Report AI content',
+          description:
+              'An image preview, its prompt, and your report will be '
+              'shared with KORLIX support for review.',
+          sessionChanges: c,
+          isSessionCurrent: () => mounted && c.available,
+          submitReport: (reason, details) => c.report(
+            result,
+            reason: reason,
+            details: details,
+            language: widget.language,
+          ),
+        ),
+      );
+      if (reportId == null ||
+          !mounted ||
+          !reportContext.mounted ||
+          !c.available) {
+        return;
+      }
+      await showDialog<void>(
+        context: reportContext,
+        builder: (dialogContext) => AlertDialog(
+          scrollable: true,
+          title: const Text('Report received'),
+          content: Text(
+            'Your report was saved for review. Reference: $reportId',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _reporting = false);
+    }
+  }
+
   Future<void> _zoom(ImagineResult r) async {
     await showDialog<void>(
       context: context,
@@ -297,6 +351,16 @@ class _ImagineStudioScreenState extends State<ImagineStudioScreen> {
                 tooltip: 'Close preview',
                 icon: const Icon(Icons.close),
                 onPressed: () => Navigator.pop(ctx),
+              ),
+            ),
+            bottomNavigationBar: SafeArea(
+              top: false,
+              minimum: const EdgeInsets.all(12),
+              child: TextButton.icon(
+                key: const Key('imagine-report-fullscreen'),
+                onPressed: c.available ? () => _report(r, from: ctx) : null,
+                icon: const Icon(Icons.flag_outlined),
+                label: const Text('Report AI content'),
               ),
             ),
             body: c.available
@@ -918,6 +982,15 @@ class _ImagineStudioScreenState extends State<ImagineStudioScreen> {
         heading(
           'Made from your imagination',
           subtitle: '${r.width} × ${r.height} · PNG · ${r.brief.styleLabel}',
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: TextButton.icon(
+            key: const Key('imagine-report-preview'),
+            onPressed: c.available && !_reporting ? () => _report(r) : null,
+            icon: const Icon(Icons.flag_outlined),
+            label: const Text('Report AI content'),
+          ),
         ),
         Material(
           color: s.inputFill,

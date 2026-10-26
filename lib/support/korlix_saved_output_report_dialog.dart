@@ -10,11 +10,17 @@ class KorlixSavedOutputReportDialog extends StatefulWidget {
     required this.sessionChanges,
     required this.isSessionCurrent,
     required this.submitReport,
+    this.title = 'Report saved output',
+    this.description =
+        'Tell us what needs review. An excerpt of this saved prompt '
+        'and response will be included with your report.',
   });
 
   final Listenable sessionChanges;
   final bool Function() isSessionCurrent;
   final Future<String> Function(String reason, String details) submitReport;
+  final String title;
+  final String description;
 
   @override
   State<KorlixSavedOutputReportDialog> createState() =>
@@ -79,10 +85,7 @@ class _KorlixSavedOutputReportDialogState
           child: AlertDialog(
             backgroundColor: skin.panel,
             scrollable: true,
-            title: Text(
-              'Report saved output',
-              style: TextStyle(color: skin.text),
-            ),
+            title: Text(widget.title, style: TextStyle(color: skin.text)),
             content: Form(
               key: _form,
               child: Column(
@@ -90,8 +93,7 @@ class _KorlixSavedOutputReportDialogState
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Text(
-                    'Tell us what needs review. An excerpt of this saved prompt '
-                    'and response will be included with your report.',
+                    widget.description,
                     style: TextStyle(color: skin.mutedText, height: 1.4),
                   ),
                   const SizedBox(height: 16),

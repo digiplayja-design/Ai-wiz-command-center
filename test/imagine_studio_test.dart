@@ -37,6 +37,8 @@ class Studio {
   final Briefs storage;
   final revision = ValueNotifier(0);
   final requests = <Map<String, dynamic>>[];
+  final reports = <Map<String, dynamic>>[];
+  Completer<void>? reportSent;
   String token = auth('alice');
   Completer<http.Response>? pending;
   int status = 200;
@@ -49,6 +51,17 @@ class Studio {
     logoPollInterval: Duration.zero,
     client: MockClient((r) async {
       expect(r.headers['Authorization'], token);
+      if (r.url.path == '/api/report-output') {
+        expect(r.method, 'POST');
+        reports.add(jsonDecode(r.body) as Map<String, dynamic>);
+        if (reportSent != null && !reportSent!.isCompleted) {
+          reportSent!.complete();
+        }
+        return http.Response(
+          '{"ok":true,"reportId":"korlix_report_20000000-0000-4000-8000-000000000001"}',
+          202,
+        );
+      }
       if (r.url.path == '/api/logo/jobs') {
         expect(r.method, 'POST');
         requests.add(jsonDecode(r.body) as Map<String, dynamic>);
@@ -253,6 +266,39 @@ void main() {
     expect(s.storage.values, isEmpty);
     s.client.dispose();
   });
+  test(
+    'image reports use the selected older result and reject account changes',
+    () async {
+      final s = Studio();
+      addTearDown(s.client.dispose);
+      final older = (await s.client.create(
+        const ImagineBrief(prompt: 'The older blue picture'),
+      ))!;
+      await s.client.create(const ImagineBrief(prompt: 'The newer picture'));
+      expect(
+        await s.client.report(
+          older,
+          reason: 'Privacy concern',
+          details: 'Please review this picture.',
+        ),
+        'korlix_report_20000000-0000-4000-8000-000000000001',
+      );
+      final report = s.reports.single;
+      expect(report['contentId'], older.id);
+      expect(report['prompt'], older.brief.compiledPrompt);
+      expect(report['contentType'], 'image');
+      expect(report['appArea'], 'imagine_studio');
+      expect(report['imageDataUrl'], startsWith('data:image/png;base64,'));
+      expect(report['reason'], 'Privacy concern');
+      s.change();
+      await expectLater(
+        s.client.report(older, reason: 'Privacy concern', details: ''),
+        throwsA(isA<ImagineException>()),
+      );
+      expect(s.reports, hasLength(1));
+    },
+  );
+
   Future<void> mount(
     WidgetTester t,
     Studio s, {
@@ -316,6 +362,101 @@ void main() {
       expect(t.takeException(), isNull);
     },
   );
+  testWidgets(
+    'gallery and full-screen previews open in-app reporting without sending on cancel',
+    (t) async {
+      final s = Studio();
+      addTearDown(s.client.dispose);
+      await mount(t, s, width: 320, scale: 1.6);
+      await t.enterText(
+        find.byKey(const Key('imagine-prompt')),
+        'A blue sculpture',
+      );
+      await actions.tap(t, find.byKey(const Key('imagine-create')));
+      await actions.tap(t, find.byKey(const Key('imagine-report-preview')));
+      expect(find.text('Report AI content'), findsWidgets);
+      expect(find.textContaining('shared with KORLIX support'), findsOneWidget);
+      expect(find.byKey(const Key('saved-report-reason')), findsOneWidget);
+      await actions.tap(t, find.text('Cancel'));
+      await actions.tap(t, find.text('Zoom'));
+      expect(find.text('Your creation'), findsOneWidget);
+      await actions.tap(t, find.byKey(const Key('imagine-report-fullscreen')));
+      expect(find.byKey(const Key('saved-report-submit')), findsOneWidget);
+      await actions.tap(t, find.text('Cancel'));
+      expect(find.text('Your creation'), findsOneWidget);
+      expect(s.reports, isEmpty);
+      expect(t.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'full-screen report sends the selected older image and shows its receipt',
+    (t) async {
+      final s = Studio();
+      addTearDown(s.client.dispose);
+      final older = (await t.runAsync(
+        () => s.client.create(
+          const ImagineBrief(prompt: 'The older private garden'),
+        ),
+      ))!;
+      await t.runAsync(
+        () => s.client.create(const ImagineBrief(prompt: 'The newer mountain')),
+      );
+      await mount(t, s);
+      await actions.tap(t, find.text('Gallery'));
+      await actions.tap(
+        t,
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is Semantics && widget.properties.label == 'Creation 2',
+        ),
+      );
+      await actions.tap(t, find.text('Zoom'));
+      await actions.tap(t, find.byKey(const Key('imagine-report-fullscreen')));
+      await actions.tap(t, find.byKey(const Key('saved-report-reason')));
+      await actions.tap(t, find.text('Privacy concern').last);
+      await t.enterText(
+        find.byKey(const Key('saved-report-details')),
+        'Please review the older garden picture.',
+      );
+      FocusManager.instance.primaryFocus?.unfocus();
+      await t.pumpAndSettle();
+      final submit = find.byKey(const Key('saved-report-submit'));
+      await t.ensureVisible(submit);
+      // Raster decoding/encoding uses real engine callbacks. Wait for the
+      // mocked transport under runAsync, then settle the dialog animations.
+      await t.runAsync(() async {
+        s.reportSent = Completer<void>();
+        await t.tap(submit);
+        await s.reportSent!.future.timeout(const Duration(seconds: 5));
+        await Future<void>.delayed(Duration.zero);
+      });
+      await t.pumpAndSettle();
+      expect(s.reports, hasLength(1));
+      final report = s.reports.single;
+      expect(report['contentId'], older.id);
+      expect(report['prompt'], older.brief.compiledPrompt);
+      expect(report['reason'], 'Privacy concern');
+      expect(report['details'], 'Please review the older garden picture.');
+      expect(report['imageDataUrl'], startsWith('data:image/png;base64,'));
+      expect(find.text('Report received'), findsOneWidget);
+      expect(
+        find.textContaining(
+          'korlix_report_20000000-0000-4000-8000-000000000001',
+        ),
+        findsOneWidget,
+      );
+      await actions.tap(t, find.text('Done'));
+      expect(find.text('Your creation'), findsOneWidget);
+      expect(
+        find.byKey(const Key('imagine-report-fullscreen')),
+        findsOneWidget,
+      );
+      expect(s.reports, hasLength(1));
+      expect(t.takeException(), isNull);
+    },
+  );
+
   testWidgets('declined consent sends no request and keeps typed text', (
     t,
   ) async {
