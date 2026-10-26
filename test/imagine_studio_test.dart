@@ -274,7 +274,10 @@ void main() {
       final older = (await s.client.create(
         const ImagineBrief(prompt: 'The older blue picture'),
       ))!;
-      await s.client.create(const ImagineBrief(prompt: 'The newer picture'));
+      for (var i = 0; i < 6; i++) {
+        await s.client.create(ImagineBrief(prompt: 'Newer picture $i'));
+      }
+      expect(s.client.results, isNot(contains(older)));
       expect(
         await s.client.report(
           older,

@@ -131,6 +131,7 @@ class ImagineClient extends ChangeNotifier {
   int elapsed = 0;
   Timer? _clock;
   final List<ImagineResult> results = [];
+  final _reportableResults = Expando<bool>();
   List<Map<String, dynamic>> recipes = [];
   ImagineBrief draft = const ImagineBrief();
   String? error;
@@ -380,6 +381,7 @@ class ImagineClient extends ChangeNotifier {
         logoDirection: LogoCreativeDirection.read(data['logoDirection']),
       );
       if (logoBrief != null) _pendingLogo = null;
+      _reportableResults[result] = true;
       results.insert(0, result);
       while (results.length > 6 ||
           (results.length > 1 &&
@@ -545,9 +547,10 @@ class ImagineClient extends ChangeNotifier {
     required String reason,
     required String details,
     String language = 'en',
+    String appArea = 'imagine_studio',
   }) async {
     _guard();
-    if (!results.contains(result)) {
+    if (_reportableResults[result] != true) {
       throw const KorlixAiReportException(
         'This picture is no longer available. Reopen its preview to report it.',
       );
@@ -560,10 +563,10 @@ class ImagineClient extends ChangeNotifier {
       headers: headers,
       client: _http,
       contentType: 'image',
-      appArea: 'imagine_studio',
+      appArea: appArea,
       contentId: result.id,
       prompt: result.brief.compiledPrompt,
-      outputSummary: 'Imagine a Picture: ${result.width} x ${result.height}',
+      outputSummary: 'Generated image: ${result.width} x ${result.height}',
       imageDataUrl: 'data:image/png;base64,${base64Encode(result.bytes)}',
       reason: reason,
       details: details,

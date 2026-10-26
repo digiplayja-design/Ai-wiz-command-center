@@ -3,9 +3,12 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 
+import '../live_convo/agent_studio_client.dart' show agentAccountScope;
+import '../support/korlix_ai_report_client.dart';
 import 'models/portrait_studio_callback.dart';
 
 class PictureEditOptions {
@@ -39,9 +42,15 @@ class PictureEditResult {
     this.summary = '',
     this.quality = '',
     this.size = '',
+    this.submitReport,
+    this.reportChanges,
+    this.isReportCurrent,
   });
   final Uint8List bytes;
   final String summary, quality, size;
+  final Future<String> Function(String reason, String details)? submitReport;
+  final Listenable? reportChanges;
+  final bool Function()? isReportCurrent;
 }
 
 String? pictureFileError(PlatformFile file) {
@@ -58,7 +67,7 @@ String? pictureFileError(PlatformFile file) {
   return null;
 }
 
-class PictureStudioClient {
+class PictureStudioClient extends ChangeNotifier {
   PictureStudioClient({
     required this.backendBaseUrl,
     required this.headersBuilder,
@@ -71,11 +80,20 @@ class PictureStudioClient {
   final http.Client _client;
   bool _closed = false, _sessionChanged = false;
 
+  bool get _reportCurrent =>
+      !_closed && !_sessionChanged && isSessionCurrent?.call() != false;
+
+  void _invalidate() {
+    if (_sessionChanged) return;
+    _sessionChanged = true;
+    notifyListeners();
+  }
+
   void _guard() {
     if (_closed) {
       throw Exception('Reopen Picture Studio to continue.');
     }
-    if (isSessionCurrent?.call() == false) _sessionChanged = true;
+    if (isSessionCurrent?.call() == false) _invalidate();
     if (_sessionChanged) {
       throw Exception(
         'Your session changed. Sign in again and reopen Picture Studio.',
@@ -138,7 +156,7 @@ class PictureStudioClient {
     }
     _guard();
     if ([401, 419, 440].contains(response.statusCode)) {
-      _sessionChanged = true;
+      _invalidate();
       throw Exception(
         'Your session expired. Sign in again to improve your picture.',
       );
@@ -191,17 +209,100 @@ class PictureStudioClient {
         'The returned picture could not be read. Please try again.',
       );
     }
+    final summary = data['editSummary']?.toString() ?? '';
+    final reportScope = agentAccountScope(headers);
+    final contentId = data['generationId']?.toString();
     return PictureEditResult(
       bytes: bytes,
-      summary: data['editSummary']?.toString() ?? '',
+      summary: summary,
       quality: data['imageQuality']?.toString() ?? '',
       size: data['imageSize']?.toString() ?? '',
+      reportChanges: this,
+      isReportCurrent: () => _reportCurrent,
+      submitReport: (reason, details) => _report(
+        bytes: bytes,
+        options: options,
+        summary: summary,
+        scope: reportScope,
+        headers: headers,
+        contentId: contentId,
+        reason: reason,
+        details: details,
+      ),
     );
   }
 
+  Future<String> _report({
+    required Uint8List bytes,
+    required PictureEditOptions options,
+    required String summary,
+    required String scope,
+    required Map<String, String> headers,
+    required String? contentId,
+    required String reason,
+    required String details,
+  }) async {
+    _guard();
+    Future<Map<String, String>> checkedHeaders() async {
+      _guard();
+      final fresh = Map<String, String>.from(await headersBuilder());
+      _guard();
+      if (scope.isEmpty || agentAccountScope(fresh) != scope) {
+        _invalidate();
+        throw const KorlixAiReportException(
+          'Your account changed. Reopen Picture Studio to report an image.',
+        );
+      }
+      return fresh;
+    }
+
+    final reportId = await submitKorlixAiReport(
+      endpoint: Uri.parse(
+        '${backendBaseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/report-output',
+      ),
+      headers: headers,
+      reason: reason,
+      details: details,
+      prompt: options.prompt,
+      outputSummary: '$summary\n${jsonEncode(options.fields)}',
+      contentId: contentId,
+      contentType: 'image',
+      appArea: 'picture_studio',
+      imageDataUrl: 'data:image/png;base64,${base64Encode(bytes)}',
+      language: options.language,
+      platform: defaultTargetPlatform.name,
+      isCurrent: () => _reportCurrent,
+      // Check async auth again after image preparation, immediately before POST.
+      client: _PictureReportTransport(_client, checkedHeaders),
+    );
+    await checkedHeaders();
+    return reportId;
+  }
+
+  @override
   void dispose() {
     if (_closed) return;
     _closed = true;
+    notifyListeners();
     _client.close();
+    super.dispose();
+  }
+}
+
+class _PictureReportTransport extends http.BaseClient {
+  _PictureReportTransport(this.inner, this.checkedHeaders);
+  final http.Client inner;
+  final Future<Map<String, String>> Function() checkedHeaders;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final headers = await checkedHeaders();
+    request.headers.removeWhere(
+      (name, _) => name.toLowerCase() == 'authorization',
+    );
+    request.headers.addAll(
+      headers..removeWhere((name, _) => name.toLowerCase() == 'content-type'),
+    );
+    return inner.send(request);
   }
 }
