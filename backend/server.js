@@ -1,3 +1,4 @@
+import {autoEmailAuthAlias, registerAutoEmailAppRoutes} from './security/auto_email_app.mjs';
 import {messengerAuthAlias} from './security/messenger_auth_alias.mjs';
 import {createAccountRequestLimiter} from './security/account_request_limiter.mjs';
 import {createReceiptAppSessions, requestsReceiptApp} from './security/receipt_app_sessions.mjs';
@@ -277,6 +278,8 @@ app.use(express.json({
 
 // Separate namespace fails closed on servers without Messenger support.
 app.use(messengerAuthAlias);
+app.use(autoEmailAuthAlias);
+registerAutoEmailAppRoutes(app, {requireUser, loadProfile: getOrCreateProfile});
 
 async function requireDocumentUploadUser(req, res, next) {
   try {
@@ -866,8 +869,7 @@ function getRequestDeviceInfo(req) {
     platform,
     explicitDeviceId: Boolean(rawDeviceId),
     clientApp: requestsReceiptApp(req)
-      ? (req.body?.client_app === 'korlix_messenger' || req.headers?.['x-korlix-app'] === 'korlix_messenger'
-        ? 'korlix_messenger' : 'receipt_wiz') : 'korlix_ai',
+      ? (['auto_email', 'korlix_messenger'].find(app => req.body?.client_app === app || req.headers?.['x-korlix-app'] === app) || 'receipt_wiz') : 'korlix_ai',
   };
 }
 
@@ -911,7 +913,7 @@ async function registerDeviceSession({
   session,
 }) {
   assertAccountEnabled(profile);
-  if (['receipt_wiz', 'korlix_messenger'].includes(deviceInfo.clientApp)) {
+  if (['receipt_wiz', 'korlix_messenger', 'auto_email'].includes(deviceInfo.clientApp)) {
     return receiptAppSessions.register({userId, session, deviceInfo});
   }
   if (!supabaseAdmin) {

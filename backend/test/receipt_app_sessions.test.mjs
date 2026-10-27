@@ -69,6 +69,7 @@ test.before(async () => {
     grant select,insert,update on device_sessions to service_role;`);
   await db.exec(migration);
   await db.exec(readFileSync(new URL('../../supabase/migrations/20261025014426_korlix_messenger_app_sessions.sql', import.meta.url), 'utf8'));
+  await db.exec(readFileSync(new URL('../../supabase/migrations/20261027224536_korlix_auto_email_app_sessions.sql', import.meta.url), 'utf8'));
 });
 test.after(async () => {await db?.close();});
 test.beforeEach(async () => {
@@ -84,7 +85,7 @@ test.beforeEach(async () => {
       admin: {signOut: async token => {revoked.add(tokens.get(token)?.sid); return {error: null};}},
     },
     async rpc(name, args) {
-      assert(['korlix_register_receipt_app_session','korlix_register_messenger_app_session'].includes(name));
+      assert(['korlix_register_receipt_app_session','korlix_register_messenger_app_session','korlix_register_auto_email_app_session'].includes(name));
       if (unavailable) return {error: new Error('private database details')};
       try {
         const result = await db.query(`select public.${name}($1,$2,$3,$4,$5) result`,
@@ -335,7 +336,46 @@ test('Companion registration RPCs remain unavailable to anonymous and authentica
   for (const role of ['anon','authenticated']) {
     await db.exec('set role '+role);
     await assert.rejects(db.query('select public.korlix_register_messenger_app_session($1,$2,$3)',[userId,crypto.randomUUID(),'device']),/permission denied/);
+    await assert.rejects(db.query('select public.korlix_register_auto_email_app_session($1,$2,$3)',[userId,crypto.randomUUID(),'device']),/permission denied/);
     await assert.rejects(db.query('select * from public.korlix_receipt_app_sessions'),/permission denied/);
     await db.exec('reset role');
   }
+});
+
+
+test('Auto-Email has a separate bounded session and cannot escape into hub or sending operations', async () => {
+  const hub = await login({app:'korlix_ai',device:'hub-phone'});
+  const email = await login({app:'auto_email',device:'email-browser'});
+  assert.equal(hub.statusCode,200); assert.equal(email.statusCode,200);
+  assert.equal(email.body.user.id,hub.body.user.id);
+  assert.equal((await rows('korlix_receipt_app_sessions'))[0].client_app,'auto_email');
+  assert.equal((await login({app:'auto_email',device:'second-browser'})).statusCode,403);
+  const session=email.body.session;
+  for(const path of ['/api/auto-email/session','/api/live-convo/agents/nova/email/drafts']) {
+    assert.equal((await context.getAuthenticatedUser(request({session,app:'auto_email',device:'email-browser',path}))).id,userId);
+  }
+  for(const app of [null,'korlix_ai','receipt_wiz','korlix_messenger','auto_email']) {
+    for(const path of ['/api/generate','/api/receipt-wiz','/api/social/messages','/api/live-convo/agents/nova/email/drafts/12345678-1234-1234-1234-123456789012/send']) {
+      await assert.rejects(context.getAuthenticatedUser(request({session,app,device:'email-browser',path,method:'POST'})),e=>e.code==='auto_email_app_scope');
+    }
+  }
+});
+
+test('Auto-Email refresh and sign-out preserve the KORLIX AI login and deny revoked JWTs', async () => {
+  const hub=(await login({app:'korlix_ai',device:'hub-phone'})).body.session;
+  const email=(await login({app:'auto_email',device:'email-browser'})).body.session;
+  const rotated=await refresh(email,{app:'auto_email',device:'email-browser',path:'/api/auto-email/auth/refresh'});
+  assert.equal(rotated.statusCode,200);
+  const ended=await signout(rotated.body.session,{app:'auto_email',device:'email-browser',path:'/api/auto-email/auth/signout'});
+  assert.equal(ended.statusCode,200);
+  await assert.rejects(context.getAuthenticatedUser(request({session:rotated.body.session,app:null,device:'email-browser',path:'/api/auto-email/session'})),e=>e.statusCode===403);
+  assert.equal((await context.getAuthenticatedUser(request({session:hub,app:'korlix_ai',device:'hub-phone',path:'/api/generate',method:'POST'}))).id,userId);
+});
+
+test('Auto-Email binding rejects other users and mismatched installation IDs', async () => {
+  const email=(await login({app:'auto_email',device:'email-browser'})).body.session;
+  const sid=tokens.get(email.access_token).sid;
+  const stolen=issue(otherId,sid);
+  await assert.rejects(context.getAuthenticatedUser(request({session:stolen,app:'auto_email',device:'email-browser',path:'/api/auto-email/session'})),e=>e.statusCode===403);
+  await assert.rejects(context.getAuthenticatedUser(request({session:email,app:'auto_email',device:'wrong-device',path:'/api/auto-email/session'})),e=>e.statusCode===403);
 });
