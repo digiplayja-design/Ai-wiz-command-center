@@ -1,0 +1,64 @@
+{
+  "updated_at": "2026-10-28T22:22:15.555067+00:00",
+  "source_commit": "e65a6b548656766bbfdcbddab8e1d8f939f22fd0",
+  "source_branch": "release/ios-appstore-20261028",
+  "korlix_ai": {
+    "bundle_id": "com.korlixdeveloper.korlixai",
+    "apple_app_id": "6783100102",
+    "version": "12.0.3",
+    "build": "134",
+    "minimum_ios": "15.0",
+    "codemagic_build_id": "6ae27102206ce93970c70704",
+    "codemagic_url": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae27102206ce93970c70704",
+    "signed_ipa": {
+      "name": "KorlixAI.ipa",
+      "bytes": 84330208,
+      "sha256": "4d26e9857db915ceb0450003910b8e67d34cb025dbb86af13fb5028b68f6d4f5",
+      "profile_type": "app_store",
+      "signature_verified": true
+    },
+    "apple_upload_status": "success",
+    "apple_processing_status": "completed",
+    "app_store_review_status": "WAITING_FOR_REVIEW",
+    "apple_delivery_uuid": "86f4e8c1-54a8-4f91-a1f7-34c0ea82deeb",
+    "apple_upload_at": "2026-10-28T22:15:01.741Z",
+    "apple_build_id": "86f4e8c1-54a8-4f91-a1f7-34c0ea82deeb",
+    "app_store_version_id": "c1307383-13b9-4250-aaac-4e9241bf61ef",
+    "review_submission_id": "cae973b9-318e-4a12-af42-52dac837cd82",
+    "review_submitted_at": "2026-10-28T22:18:24.938Z",
+    "release_type": "AFTER_APPROVAL",
+    "codemagic_status": "finished",
+    "release_notes_saved": true,
+    "public_release_confirmed": false
+  },
+  "messenger": {
+    "bundle_id": "com.korlixdeveloper.messenger",
+    "version": "1.0.2",
+    "source_build_floor": "5",
+    "signed_ipa_created": false,
+    "apple_upload_performed": false,
+    "app_store_submission_performed": false,
+    "app_record_status": "not_inspected",
+    "signing_status": "No matching profile appeared in Codemagic stored profiles or live Apple profile fetch.",
+    "apns_delivery_status": "not_verified_on_iPhone",
+    "listing_draft": "messenger-appstore-draft.json"
+  },
+  "validation": {
+    "korlix_ai_targeted_tests": 210,
+    "messenger_tests": 27,
+    "release_guard_tests": 9,
+    "analysis": "passed",
+    "native_runs": [
+      {
+        "id": 40772911905,
+        "conclusion": "success"
+      },
+      {
+        "id": 40775904152,
+        "conclusion": "success"
+      }
+    ],
+    "physical_ios_device_tests": "not_performed"
+  },
+  "apple_web_access": "Two-factor verification was not completed; no alternate authentication was attempted."
+}
