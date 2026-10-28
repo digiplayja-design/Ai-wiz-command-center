@@ -201,7 +201,9 @@ void main() {
         },
       });
       await a.poll();
+      await Future<void>.delayed(Duration.zero);
       await b.poll();
+      await Future<void>.delayed(Duration.zero);
       await a.poll();
       expect(aMedia.offers, 1);
       expect(bMedia.answers, 1);
