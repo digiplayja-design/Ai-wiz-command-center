@@ -18,6 +18,7 @@ export function registerSocial(app, { database, requireUser, logger = console, e
   const receiptActions = new Set(['read', 'group_read', 'message_receipts']);
   for (const action of receiptActions) actions.add(action);
   actions.add('messenger_inbox');
+  actions.add('react');
   for (const action of onlineActions) actions.add(action);
   const chatActions = new Set(['messages', 'message', 'send']);
   const groupActions = new Set(['groups','group_create','group_details','group_invite','group_accept','group_decline','group_rename','group_remove','group_leave','group_messages','group_message','group_send','group_read','group_delete_message']);
@@ -65,7 +66,7 @@ export function registerSocial(app, { database, requireUser, logger = console, e
       const groupAction = groupActions.has(action) || groupReport || action === 'moderate';
       const mediaChat = chatActions.has(action) || ['group_messages','group_message','group_send'].includes(action);
       const discoverReport = action === 'report' && ['video','news'].includes(data.kind);
-      const result = await database.rpc(action === 'messenger_inbox' ? 'korlix_messenger_inbox_v1' : receiptActions.has(action) ? 'korlix_social_receipts_v1' : onlineActions.has(action) ? 'korlix_social_online_v1' : discoverReport || action === 'moderate' ? 'korlix_social_discover_v1' : ['dump_schedule','dump_cancel'].includes(action) ? 'korlix_social_dump_v1' : mediaChat ? 'korlix_social_media_chat_v1' : groupAction ? 'korlix_social_groups_v1' : callActions.has(action) ? 'korlix_social_calls_v1' : 'korlix_social_v1', { p_actor: user.id, p_action: groupReport ? 'group_report' : action, p_data: data });
+      const result = await database.rpc(action === 'react' ? 'korlix_social_react_v1' : action === 'messenger_inbox' ? 'korlix_messenger_inbox_v1' : receiptActions.has(action) ? 'korlix_social_receipts_v1' : onlineActions.has(action) ? 'korlix_social_online_v1' : discoverReport || action === 'moderate' ? 'korlix_social_discover_v1' : ['dump_schedule','dump_cancel'].includes(action) ? 'korlix_social_dump_v1' : mediaChat ? 'korlix_social_media_chat_v1' : groupAction ? 'korlix_social_groups_v1' : callActions.has(action) ? 'korlix_social_calls_v1' : 'korlix_social_v1', { p_actor: user.id, p_action: groupReport ? 'group_report' : action, p_data: data });
       if (result.error) {
         const code = result.error.code;
         const status = { P0001: 400, P0002: 404, '42501': 403, '23505': 409, '40001': 409, '23514': 400, '22P02': 400, '22003': 400, '54000': 429 }[code];
