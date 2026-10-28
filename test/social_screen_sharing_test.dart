@@ -14,6 +14,10 @@ import 'package:korlix_social_core/sounds/korlix_sound_service.dart';
 
 class ScreenIo extends media.Io {
   final displayTrack = media.Track('display', 'video');
+  final restoredCamera = media.Track('restored-camera', 'video');
+  @override
+  Future<rtc.MediaStream> captureVideo() async =>
+      media.Stream('restored', [restoredCamera]);
   late final display = media.Stream('screen', [displayTrack]);
   bool consent = true;
   Completer<bool>? permissionGate;
@@ -75,6 +79,31 @@ void main() {
     expect(call.ready, isTrue);
     await call.close();
   });
+  test(
+    'camera stays off after sharing and its restored track can be muted',
+    () async {
+      final io = ScreenIo();
+      final call = SocialCallMedia(io: io, audio: media.Audio());
+      await call.open(true, []);
+      await call.startScreenShare(() async => true);
+      expect(io.camera.stopped, isTrue);
+      await call.stopScreenShare();
+      expect(call.camera, isFalse);
+      expect(io.restoredCamera.enabled, isTrue);
+      // Returning to the camera requires an explicit tap.
+      await call.toggleCamera();
+      expect(call.camera, isTrue);
+      expect(
+        io.connection.recordedSenders.last.current,
+        same(io.restoredCamera),
+      );
+      await call.toggleCamera();
+      expect(io.restoredCamera.enabled, isFalse);
+      expect(io.mic.enabled, isTrue);
+      await call.close();
+    },
+  );
+
   test('denied projection never captures and preserves the call', () async {
     final io = ScreenIo()..consent = false;
     final call = SocialCallMedia(io: io, audio: media.Audio());

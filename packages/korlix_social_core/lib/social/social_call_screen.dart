@@ -759,7 +759,7 @@ class _SocialCallScreenState extends State<SocialCallScreen>
                         padding: const EdgeInsets.only(top: 12),
                         child: Text(
                           m.screenSharing
-                              ? 'Your screen is being shared. Use Stop sharing to finish.'
+                              ? 'Your screen is being shared. Device audio is not shared. Use Stop sharing to finish.'
                               : m.screenError,
                           textAlign: TextAlign.center,
                         ),

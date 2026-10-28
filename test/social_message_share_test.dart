@@ -10,6 +10,7 @@ import 'package:korlix_social_core/social/social_client.dart';
 import 'package:korlix_social_core/social/social_message_share.dart';
 import 'package:korlix_social_core/social/social_media_widgets.dart';
 import 'package:korlix_social_core/social/social_threads.dart';
+import 'package:korlix_social_core/social/social_screen.dart';
 import 'package:korlix_social_core/social/social_video_attachment.dart';
 
 import 'social_test.dart' as social;
@@ -181,6 +182,39 @@ void main() {
     await t.pumpWidget(const SizedBox());
     store.client.dispose();
   });
+  testWidgets(
+    'floating Messenger returns from a chat to its inbox without a second call host',
+    (t) async {
+      final store = social.Store();
+      await t.pumpWidget(
+        MaterialApp(
+          home: SocialScreen(
+            client: store.client,
+            messengerMode: true,
+            bubbleMode: true,
+            ownsClient: false,
+            initialConversation: social.peer,
+          ),
+        ),
+      );
+      await t.pumpAndSettle();
+      expect(find.byType(SocialChatScreen), findsOneWidget);
+      expect(
+        t.widget<SocialChatScreen>(find.byType(SocialChatScreen)).bubbleMode,
+        isTrue,
+      );
+      await t.pageBack();
+      await t.pumpAndSettle();
+      expect(find.byType(SocialChatScreen), findsNothing);
+      expect(find.byType(SocialScreen), findsOneWidget);
+      await t.pump(const Duration(seconds: 4));
+      expect(store.calls.where((r) => r['action'] == 'call_inbox'), isEmpty);
+      await t.pumpWidget(const SizedBox());
+      expect(store.client.available, isTrue);
+      store.client.dispose();
+    },
+  );
+
   testWidgets('private video is not fetched or played until Play', (t) async {
     final client = ShareClient();
     await t.pumpWidget(

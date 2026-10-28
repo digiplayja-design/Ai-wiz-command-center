@@ -229,7 +229,7 @@ void main() {
     await h.dispose(tester);
   });
 
-  testWidgets('incoming ring transfers to call route without answering', (
+  testWidgets('incoming ring survives minimizing and stops on explicit end', (
     tester,
   ) async {
     const channel = MethodChannel('FlutterWebRTC.Method');
@@ -267,7 +267,13 @@ void main() {
     expect(store.requests, isNot(contains('call_accept')));
     expect(store.requests, isNot(contains('call_config')));
     expect(deviceCalls, isEmpty);
+    final dynamic state = tester.state(find.byType(SocialCallScreen));
+    final controller = state.call as SocialCallController;
     h.navigator.currentState!.pop();
+    await tester.pumpAndSettle();
+    expect(h.sounds.rings, hasLength(1));
+    expect(store.requests, isNot(contains('call_end')));
+    await controller.end('Call ended');
     await tester.pumpAndSettle();
     expect(h.sounds.rings, isEmpty);
     expect(h.sounds.quietOwners, isEmpty);

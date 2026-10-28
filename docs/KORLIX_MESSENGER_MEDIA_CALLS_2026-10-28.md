@@ -1,0 +1,21 @@
+# Messenger media and call update
+
+The app changes are in PR #26; the private-video backend is in PR #27. They extend the earlier default online visibility, required profile, background-call and black/yellow theme fixes. Source changes do not update the installed Google Play app until a signed release is distributed.
+
+## Resulting behavior
+
+- Video joins Photo, File and Voice note in the composer. MP4, MOV and WebM clips are limited to 20 MB and three minutes. The backend normalizes clips, strips metadata and retains existing private attachment permissions. Video playback starts only after Play and pauses on background/navigation; removing the message or losing the account releases the player.
+- Each visible message has a Share button. Text and downloaded attachment bytes go to the OS chooser. Temporary private links are never placed in shared text; deletion, expiry and account loss cancel a pending share.
+- Incoming alerts and Android call notifications display **Accept Call**. The primary action begins answering immediately. View call remains available without opening the microphone. Notification acceptance must match the current account, caller and exact still-ringing call ID.
+- Ringback can start after delayed audio activation instead of being permanently silenced during microphone setup. Ring preparation has a bounded 1.5-second allowance. Message tones are clearer and longer; Android alerts use the notification volume stream. Existing channel mute, custom sound, importance and vibration preferences are preserved when the new default sound channel is created.
+- Setup and recovery polling runs every 350 ms without overlapping requests; an established call retains its two-second heartbeat. Automated handshake coverage checks this signaling delay, not real-device time to first audible speech.
+- Android and supported browsers can share a screen during a connected call. Capture requires an explicit action and OS consent. Android starts its media-projection foreground service after consent and before capture. A visible Stop sharing action stops screen tracks while keeping the microphone/call alive. Audio-only calls reserve a video sender without opening a camera. Device playback audio is not shared. The camera remains off after sharing until explicitly enabled again. iOS receives shared screens but this release does not add a ReplayKit broadcast extension for originating iOS screen sharing.
+- A pinned Messenger conversation opens in a floating window with Back navigation to inbox, groups and members. Calls and account settings hand off to the main app. The independent window revalidates the same account and never rotates its tokens or starts a second call host. Android still controls bubble permission/availability; this does not override force-stop or create a home-screen widget. The main activity is explicitly resizable for supported system app bubbles.
+
+## Release and verification
+
+Deploy PR #27 before distributing the Video composer. No database migration is required: verified videos use the existing private file kind and `video/mp4` content type. Existing Discover media processing defaults stay unchanged. The native notification sound is original PCM generated from `korlixSoundWav(KorlixSound.message, KorlixSoundPack.signature)`.
+
+The mobile validation workflow analyzes the app, runs app/shared regression suites, and builds Android and iOS simulator artifacts. It blocks cloud metadata access before toolchain initialization. The backend media/permission suite passes 72 tests and call/relay/native-push coverage passes 53 tests.
+
+Before a Play rollout, use two physical devices to verify acceptance-to-audio latency, ringback, Bluetooth routing, camera restoration, screen-share consent/cancellation, Stop sharing from the notification, switching apps and locking the screen during a call. Test the floating inbox after collapsing/reopening and after sign-out. Verify existing muted/custom notification channels remain respected. The new Android `mediaProjection` foreground-service use must be included in the Play service declaration and release evidence. No Play upload or production backend deployment was performed as part of these source changes.

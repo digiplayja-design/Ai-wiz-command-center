@@ -252,7 +252,7 @@ private class KorlixSoundEffects(
         if (pool != null) return
         val next = SoundPool.Builder().setMaxStreams(3).setAudioAttributes(
             AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build()
         ).build()

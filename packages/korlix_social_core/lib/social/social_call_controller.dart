@@ -462,7 +462,10 @@ class SocialCallMedia extends ChangeNotifier {
       return;
     }
     camera = !camera;
-    for (final track in _stream?.getVideoTracks() ?? <rtc.MediaStreamTrack>[]) {
+    for (final track in [
+      ...?_stream?.getVideoTracks(),
+      ...?_replacementVideo?.getVideoTracks(),
+    ]) {
       track.enabled = camera;
     }
     notifyListeners();
@@ -582,8 +585,11 @@ class SocialCallMedia extends ChangeNotifier {
   }
 
   Future<void> switchCamera() async {
-    final tracks = _stream?.getVideoTracks() ?? <rtc.MediaStreamTrack>[];
-    if (tracks.isNotEmpty) await rtc.Helper.switchCamera(tracks.first);
+    final tracks =
+        (_replacementVideo ?? _stream)?.getVideoTracks() ??
+        <rtc.MediaStreamTrack>[];
+    if (tracks.isNotEmpty && !screenSharing)
+      await rtc.Helper.switchCamera(tracks.first);
   }
 
   void remoteStatus(SocialMap payload) {
@@ -1252,7 +1258,7 @@ class SocialCallController extends ChangeNotifier {
         _sendSignal('media', {
           'camera': media.camera || media.screenSharing,
           'screenSharing': media.screenSharing,
-          'screenSharingSupported': media.canShareScreen,
+          'screenSharingSupported': true,
           'microphone': media.microphone,
         }),
       );

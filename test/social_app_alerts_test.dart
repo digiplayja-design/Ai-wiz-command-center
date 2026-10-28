@@ -550,6 +550,8 @@ void main() {
       expect(find.text('Open message'), findsNothing);
       expect(find.byType(SocialCallScreen), findsOneWidget);
       expect(find.byType(SocialScreen), findsNothing);
+      final dynamic state = tester.state(find.byType(SocialCallScreen));
+      await (state.call as SocialCallController).end('Call ended');
       harness.navigator.currentState!.pop();
       await tester.pump();
       expect(harness.notifications.callOpen, isTrue);
