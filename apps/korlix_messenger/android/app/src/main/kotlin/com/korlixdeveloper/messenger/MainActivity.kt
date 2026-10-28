@@ -114,7 +114,10 @@ class MainActivity: FlutterActivity() {
         KorlixSocialCallService.onStarted = { id, ready -> pendingCalls.remove(id)?.success(ready); callKinds.remove(id) }
         KorlixSocialCallService.onProjectionChanged = { id, ready -> pendingProjections.remove(id)?.success(ready) }
         KorlixSocialCallService.onScreenStopRequested = { id -> socialCalls?.invokeMethod("stopScreenSharing", mapOf("id" to id)) }
-        KorlixSocialCallService.onStopped = { id -> socialCalls?.invokeMethod("stopped", mapOf("id" to id)) }
+        KorlixSocialCallService.onStopped = { id ->
+            pendingProjections.remove(id)?.success(false)
+            socialCalls?.invokeMethod("stopped", mapOf("id" to id))
+        }
         socialCalls?.setMethodCallHandler { call, result ->
             val id = call.argument<String>("id")
             if (id == null || !id.matches(Regex("[A-Za-z0-9-]{1,80}"))) {
@@ -124,6 +127,7 @@ class MainActivity: FlutterActivity() {
                 callKinds.remove(id)
                 if (approvedCall == id) approvedCall = null
                 pendingCalls.remove(id)?.success(false)
+                pendingProjections.remove(id)?.success(false)
                 if (KorlixSocialCallService.activeId == id) stopService(Intent(this, KorlixSocialCallService::class.java))
                 result.success(true)
             } else if (call.method == "screenSharing") {
@@ -131,6 +135,9 @@ class MainActivity: FlutterActivity() {
                     result.success(false)
                 } else {
                     pendingProjections[id] = result
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        if (pendingProjections[id] === result) pendingProjections.remove(id)?.success(false)
+                    }, 8000)
                     try {
                         startService(Intent(this, KorlixSocialCallService::class.java).setAction("projection")
                             .putExtra("id", id).putExtra("screenSharing", call.argument<Boolean>("active") == true))
@@ -193,8 +200,6 @@ class MainActivity: FlutterActivity() {
         KorlixSocialCallService.authorized.clear()
         stopService(Intent(this, KorlixSocialCallService::class.java))
         KorlixSocialCallService.onStarted = null
-        KorlixSocialCallService.onProjectionChanged = { id, ready -> pendingProjections.remove(id)?.success(ready) }
-        KorlixSocialCallService.onScreenStopRequested = { id -> socialCalls?.invokeMethod("stopScreenSharing", mapOf("id" to id)) }
         KorlixSocialCallService.onStopped = null
         socialCalls?.setMethodCallHandler(null)
         socialCalls = null
