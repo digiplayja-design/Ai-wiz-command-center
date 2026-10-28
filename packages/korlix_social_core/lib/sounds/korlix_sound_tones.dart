@@ -12,7 +12,7 @@ Duration korlixSoundDuration(KorlixSound sound, {bool outgoing = false}) =>
       KorlixSound.click => const Duration(milliseconds: 45),
       KorlixSound.orbitBreeze => const Duration(milliseconds: 420),
       KorlixSound.bell => const Duration(milliseconds: 650),
-      KorlixSound.message => const Duration(milliseconds: 280),
+      KorlixSound.message => const Duration(milliseconds: 520),
       KorlixSound.success => const Duration(milliseconds: 480),
       KorlixSound.warning => const Duration(milliseconds: 360),
       KorlixSound.ringtone => const Duration(seconds: 2),
@@ -96,8 +96,8 @@ Uint8List korlixSoundWav(
         note(0, 0.65, base, bell: true);
         note(0.10, 0.50, base * 1.5, gain: 0.16, bell: true);
       case KorlixSound.message:
-        note(0, 0.15, base, gain: 0.36);
-        note(0.08, 0.20, base * 1.5, gain: 0.34);
+        note(0, 0.24, base, gain: 0.62);
+        note(0.24, 0.28, base * 1.5, gain: 0.62);
       case KorlixSound.success:
         note(0, 0.22, base, gain: 0.33);
         note(0.11, 0.23, base * 1.25, gain: 0.33);
@@ -107,9 +107,9 @@ Uint8List korlixSoundWav(
         note(0.19, 0.17, base * 0.72, gain: 0.38);
       case KorlixSound.ringtone:
         if (ringback) {
-          // A restrained dual tone distinguishes outgoing from incoming calls.
-          note(0, 0.7, base * 0.64, gain: 0.22);
-          note(0, 0.7, base * 0.73, gain: 0.22);
+          // A clear dual tone distinguishes outgoing from incoming calls.
+          note(0, 0.7, base * 0.64, gain: 0.32);
+          note(0, 0.7, base * 0.73, gain: 0.32);
         } else {
           for (final start in [0.0, 0.70]) {
             note(start, 0.22, base, gain: 0.32);

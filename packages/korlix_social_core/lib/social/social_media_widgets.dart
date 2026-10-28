@@ -1,12 +1,17 @@
 import 'social_appearance.dart';
+
 import 'dart:async';
 import 'dart:typed_data';
+
 import 'social_note_playback.dart';
+import 'social_video_attachment.dart';
 import 'social_note_playback_native.dart'
     if (dart.library.js_interop) 'social_note_playback_web.dart'
     as playback;
+
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import '../theme/korlix_theme.dart';
 import 'social_client.dart';
 import 'social_design.dart';
@@ -653,6 +658,8 @@ class _SocialAttachmentViewState extends State<SocialAttachmentView> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (socialAttachmentIsVideo(a))
+          SocialVideoAttachment(client: widget.client, attachment: a),
         if (a['kind'] == 'image') ...[
           ClipRRect(
             borderRadius: BorderRadius.circular(16),

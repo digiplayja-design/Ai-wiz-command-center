@@ -14,8 +14,9 @@ Future<void> socialOpenGroup(
   BuildContext context,
   SocialClient client,
   SocialMap me,
-  SocialMap group,
-) => Navigator.push<void>(
+  SocialMap group, {
+  bool bubbleMode = false,
+}) => Navigator.push<void>(
   context,
   SocialPageRoute(
     builder: (chatContext) => SocialChatScreen(
@@ -23,6 +24,7 @@ Future<void> socialOpenGroup(
       me: me,
       peer: group,
       groupChat: true,
+      bubbleMode: bubbleMode,
       onGroupDetails: () async =>
           await Navigator.push<bool>(
             chatContext,

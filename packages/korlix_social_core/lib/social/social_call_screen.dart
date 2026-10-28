@@ -522,7 +522,6 @@ class _SocialCallScreenState extends State<SocialCallScreen>
                                 ),
                               ),
                               if (!call.ended &&
-                                  widget.video &&
                                   m.ready &&
                                   m.remoteCamera &&
                                   m.remote.srcObject != null)
@@ -595,9 +594,8 @@ class _SocialCallScreenState extends State<SocialCallScreen>
                                   ),
                                 ),
                               if (!call.ended &&
-                                  widget.video &&
                                   m.ready &&
-                                  m.camera)
+                                  (m.camera || m.screenSharing))
                                 Positioned(
                                   right: 12,
                                   top: 12,
@@ -609,7 +607,7 @@ class _SocialCallScreenState extends State<SocialCallScreen>
                                       color: s.panelDeep,
                                       child: rtc.RTCVideoView(
                                         m.local,
-                                        mirror: true,
+                                        mirror: !m.screenSharing,
                                         objectFit: rtc
                                             .RTCVideoViewObjectFit
                                             .RTCVideoViewObjectFitCover,
@@ -678,7 +676,7 @@ class _SocialCallScreenState extends State<SocialCallScreen>
                             danger: true,
                           ),
                           _control(
-                            call.busy ? 'Preparing…' : 'Answer',
+                            call.busy ? 'Preparing…' : 'Accept Call',
                             widget.video
                                 ? Icons.videocam_rounded
                                 : Icons.call_rounded,
@@ -703,13 +701,29 @@ class _SocialCallScreenState extends State<SocialCallScreen>
                                 : null,
                             selected: !m.microphone,
                           ),
+                          if (m.canShareScreen &&
+                              (widget.video || m.remoteScreenSharingSupported))
+                            _control(
+                              m.screenBusy
+                                  ? 'Preparing…'
+                                  : m.screenSharing
+                                  ? 'Stop sharing'
+                                  : 'Share screen',
+                              m.screenSharing
+                                  ? Icons.stop_screen_share_outlined
+                                  : Icons.screen_share_outlined,
+                              call.connected && !m.screenBusy
+                                  ? () => unawaited(call.toggleScreenShare())
+                                  : null,
+                              selected: m.screenSharing,
+                            ),
                           _control(
                             'Speaker',
                             Icons.volume_up_rounded,
                             m.ready ? _speakerPressed : null,
                             selected: _soundPanelOpen || m.audio.selected,
                           ),
-                          if (widget.video)
+                          if (widget.video && !m.screenSharing && !m.screenBusy)
                             _control(
                               m.camera ? 'Camera off' : 'Camera on',
                               m.camera
@@ -739,6 +753,19 @@ class _SocialCallScreenState extends State<SocialCallScreen>
                           style: TextStyle(color: s.mutedText, fontSize: 13),
                         ),
                     ],
+                    if (!call.ended &&
+                        (m.screenSharing || m.screenError.isNotEmpty))
+                      Padding(
+                        padding: const EdgeInsets.only(top: 12),
+                        child: Text(
+                          m.screenSharing
+                              ? 'Your screen is being shared. Use Stop sharing to finish.'
+                              : m.screenError,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    if (!call.ended && m.remoteScreenSharing)
+                      const Text('Their screen is being shared'),
                     if (!call.ended && m.audio.blocked)
                       Padding(
                         padding: const EdgeInsets.only(top: 16),

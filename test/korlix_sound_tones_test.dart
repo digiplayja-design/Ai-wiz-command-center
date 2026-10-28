@@ -186,7 +186,7 @@ void main() {
         duration: const Duration(milliseconds: 45),
         channel: 'effect',
       );
-      await tester.pump(const Duration(milliseconds: 251));
+      await tester.pump(const Duration(milliseconds: 501));
       expect(calls.last.method, 'stop');
       gate.complete(true);
       await tester.pump();

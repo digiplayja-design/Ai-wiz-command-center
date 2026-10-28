@@ -1,5 +1,6 @@
 package com.korlixdeveloper.messenger
 
+import android.media.AudioAttributes
 import android.Manifest
 import android.app.Activity
 import android.app.Notification
@@ -313,13 +314,31 @@ object KorlixSocialNative {
                      explicit: Boolean, silent: Boolean = false, expires: Long? = null): Boolean {
       return try {
         val notifications = manager(context)
-        val channelId = if (silent) "${NOTIFICATIONS}_silent" else NOTIFICATIONS
+        val channelId = if (silent) "${NOTIFICATIONS}_silent" else "korlix_social_conversations_v2"
         if (Build.VERSION.SDK_INT >= 26) {
+            val previous = if (!silent) notifications.getNotificationChannel(NOTIFICATIONS) else null
             val channel = NotificationChannel(channelId, if (silent) "KORLIX Messenger quiet alerts" else "KORLIX Messenger",
-                if (silent) NotificationManager.IMPORTANCE_LOW else NotificationManager.IMPORTANCE_DEFAULT)
+                if (silent) NotificationManager.IMPORTANCE_LOW else previous?.importance ?: NotificationManager.IMPORTANCE_DEFAULT)
             channel.description = "Private Social messages and conversation bubbles"
             channel.lockscreenVisibility = Notification.VISIBILITY_PRIVATE
             if (silent) { channel.setSound(null, null); channel.enableVibration(false) }
+            else {
+                // A new default tone must not undo a person's channel mute,
+                // custom sound, importance, vibration, or lock-screen choice.
+                val preserveSound = previous != null && (previous.sound == null ||
+                    Build.VERSION.SDK_INT < 30 || previous.hasUserSetSound())
+                channel.setSound(if (preserveSound) previous?.sound else
+                    Uri.parse("android.resource://${context.packageName}/raw/korlix_message"),
+                    if (preserveSound) previous?.audioAttributes else AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
+                if (previous != null) {
+                    channel.enableVibration(previous.shouldVibrate())
+                    channel.vibrationPattern = previous.vibrationPattern
+                    channel.enableLights(previous.shouldShowLights())
+                    channel.lightColor = previous.lightColor
+                    channel.lockscreenVisibility = previous.lockscreenVisibility
+                }
+            }
             if (Build.VERSION.SDK_INT >= 29) channel.setAllowBubbles(true)
             notifications.createNotificationChannel(channel)
             if (notifications.getNotificationChannel(channelId)?.importance == NotificationManager.IMPORTANCE_NONE) return false
@@ -340,7 +359,10 @@ object KorlixSocialNative {
             .setContentText(text).setContentIntent(openPending).setVisibility(Notification.VISIBILITY_PRIVATE)
             .setCategory(Notification.CATEGORY_MESSAGE).setAutoCancel(true).setOnlyAlertOnce(explicit)
         if (expires != null && Build.VERSION.SDK_INT >= 26 && !bubbleMessage) builder.setTimeoutAfter((expires - System.currentTimeMillis()).coerceAtLeast(1))
-        if (silent && Build.VERSION.SDK_INT < 26) builder.setSound(null).setVibrate(null)
+        if (Build.VERSION.SDK_INT < 26) {
+            if (silent) builder.setSound(null).setVibrate(null)
+            else builder.setSound(Uri.parse("android.resource://${context.packageName}/raw/korlix_message"))
+        }
         if (Build.VERSION.SDK_INT >= 28) {
             val person = Person.Builder().setName("KORLIX Messenger").setKey(shortcutId).build()
             builder.setStyle(Notification.MessagingStyle(Person.Builder().setName("You").build())

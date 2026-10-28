@@ -12,11 +12,13 @@ class SocialCallBackground {
   static const _channel = MethodChannel('korlix/social_call_background');
   static final _owners = <String, VoidCallback>{};
   static bool _listening = false;
+  static final _screenStops = <String, VoidCallback>{};
   bool ready = false;
   String? _id;
   Completer<bool>? _pending;
   Timer? _deadline;
   VoidCallback? onStopped;
+  VoidCallback? onScreenStopRequested;
   bool get starting => _pending != null;
 
   /// A lifecycle transition may arrive before native service startup completes.
@@ -37,6 +39,7 @@ class SocialCallBackground {
       return false;
     }
     _id = id;
+    _screenStops[id] = () => onScreenStopRequested?.call();
     _owners[id] = () {
       ready = false;
       onStopped?.call();
@@ -44,6 +47,9 @@ class SocialCallBackground {
     if (!_listening) {
       _listening = true;
       _channel.setMethodCallHandler((call) async {
+        if (call.method == 'stopScreenSharing' && call.arguments is Map) {
+          _screenStops[call.arguments['id']]?.call();
+        }
         if (call.method == 'stopped' && call.arguments is Map) {
           _owners[call.arguments['id']]?.call();
         }
@@ -95,6 +101,23 @@ class SocialCallBackground {
     }
   }
 
+  Future<bool> setScreenSharing(bool active) async {
+    if (kIsWeb) return true;
+    if (defaultTargetPlatform != TargetPlatform.android ||
+        _id == null ||
+        !ready)
+      return false;
+    try {
+      return await _channel.invokeMethod<bool>('screenSharing', {
+            'id': _id,
+            'active': active,
+          }) ==
+          true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> stop() async {
     final id = _id;
     _id = null;
@@ -103,6 +126,7 @@ class SocialCallBackground {
     if (_pending?.isCompleted == false) _pending!.complete(false);
     if (id == null) return;
     _owners.remove(id);
+    _screenStops.remove(id);
     try {
       await _channel.invokeMethod<void>('stop', {'id': id});
     } catch (_) {}

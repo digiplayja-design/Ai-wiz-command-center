@@ -537,7 +537,7 @@ private final class KorlixSoundEffects {
             let milliseconds = args["durationMs"] as? NSNumber,
             milliseconds.intValue > 0 else { result(false); return }
       let nowEpoch = Date().timeIntervalSince1970 * 1000
-      let prepareRemaining = min(250,
+      let prepareRemaining = min(name == "ring" ? 1500 : 500,
         ((args["prepareDeadlineEpochMs"] as? NSNumber)?.doubleValue ?? 0) - nowEpoch)
       let ringRemaining = min(45000,
         ((args["expiresEpochMs"] as? NSNumber)?.doubleValue ?? 0) - nowEpoch)

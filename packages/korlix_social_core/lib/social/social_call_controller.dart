@@ -61,6 +61,20 @@ class SocialCallIo {
         },
       });
 
+  bool get canShareScreen =>
+      kIsWeb || defaultTargetPlatform == TargetPlatform.android;
+  Future<bool> screenPermission() async =>
+      kIsWeb || await rtc.Helper.requestCapturePermission();
+  Future<rtc.MediaStream> captureScreen() => rtc.navigator.mediaDevices
+      .getDisplayMedia({'video': true, 'audio': false});
+  Future<rtc.RTCRtpSender> reserveVideo(rtc.RTCPeerConnection peer) async =>
+      (await peer.addTransceiver(
+        kind: rtc.RTCRtpMediaType.RTCRtpMediaTypeVideo,
+        init: rtc.RTCRtpTransceiverInit(
+          direction: rtc.TransceiverDirection.SendRecv,
+        ),
+      )).sender;
+
   Future<void> configure() async {
     if (!kIsWeb &&
         (defaultTargetPlatform == TargetPlatform.iOS ||
@@ -99,6 +113,14 @@ class SocialCallMedia extends ChangeNotifier {
   rtc.RTCRtpSender? _videoSender;
   rtc.MediaStream? _replacementVideo;
   bool _cameraSuspended = false, _repairingCamera = false;
+  rtc.MediaStream? _displayStream;
+  bool screenSharing = false, screenBusy = false;
+  bool remoteScreenSharing = false, remoteScreenSharingSupported = false;
+  int _screenRevision = 0;
+  String screenError = '';
+  VoidCallback? onScreenStopped;
+  bool get canShareScreen => io.canShareScreen;
+
   bool get cameraSuspended => _cameraSuspended;
   rtc.MediaStreamTrack? _microphoneTrack;
   rtc.MediaStream? _replacementAudio, _pendingAudio;
@@ -187,6 +209,7 @@ class SocialCallMedia extends ChangeNotifier {
 
   Future<void> open(bool video, List<dynamic> servers) async {
     camera = video;
+    remoteCamera = video;
     _rendererInit = Future.wait([local.initialize(), remote.initialize()])
         .then((_) {});
     await _rendererInit;
@@ -273,6 +296,10 @@ class SocialCallMedia extends ChangeNotifier {
       }
       if (track.kind == 'video') _videoSender = sender;
     }
+    if (_closed) return;
+    // Negotiate a video slot even for audio calls without opening a camera.
+    // Screen capture can then replace the sender without another SDP round.
+    _videoSender ??= await io.reserveVideo(peer);
     if (_closed) return;
     await io.configure();
     if (video && audio.canRouteSpeaker && !_closed) {
@@ -428,7 +455,8 @@ class SocialCallMedia extends ChangeNotifier {
   }
 
   Future<void> toggleCamera() async {
-    if (_closed || !ready || _repairingCamera) return;
+    if (_closed || !ready || _repairingCamera || screenSharing || screenBusy)
+      return;
     if (_cameraSuspended) {
       await _restoreCamera();
       return;
@@ -491,6 +519,68 @@ class SocialCallMedia extends ChangeNotifier {
     }
   }
 
+  Future<void> startScreenShare(
+    Future<bool> Function() prepareProjection,
+  ) async {
+    if (_closed || !ready || screenBusy || screenSharing || !canShareScreen)
+      return;
+    screenBusy = true;
+    screenError = '';
+    final revision = ++_screenRevision;
+    rtc.MediaStream? display;
+    bool current() => !_closed && revision == _screenRevision;
+    notifyListeners();
+    try {
+      // Android consent precedes the mediaProjection foreground service, which
+      // must be running before flutter_webrtc creates its MediaProjection.
+      if (!await io.screenPermission() || !current()) return;
+      if (!await prepareProjection() || !current()) {
+        if (current()) screenError = 'Screen sharing could not start. Keep Messenger open and try again.';
+        return;
+      }
+      display = await io.captureScreen();
+      if (!current()) return;
+      final track = display.getVideoTracks().first;
+      await suspendCamera();
+      if (!current()) return;
+      await _videoSender!.replaceTrack(track);
+      if (!current()) return;
+      _displayStream = display;
+      display = null;
+      screenSharing = true;
+      local.srcObject = _displayStream;
+      track.onEnded = () => unawaited(stopScreenShare());
+    } catch (_) {
+      if (current()) screenError = 'Screen sharing was cancelled or unavailable. Your call is still active.';
+    } finally {
+      if (display != null) await _releaseStream(display);
+      screenBusy = false;
+      if (!_closed) notifyListeners();
+    }
+  }
+
+  Future<void> stopScreenShare() async {
+    _screenRevision++;
+    final display = _displayStream;
+    _displayStream = null;
+    screenSharing = false;
+    if (display != null) {
+      for (final track in display.getTracks()) {
+        track.onEnded = null;
+        track.enabled = false;
+      }
+      local.srcObject = null;
+      try {
+        await _videoSender?.replaceTrack(null);
+      } catch (_) {}
+      await _releaseStream(display);
+    }
+    if (!_closed) {
+      onScreenStopped?.call();
+      notifyListeners();
+    }
+  }
+
   Future<void> switchCamera() async {
     final tracks = _stream?.getVideoTracks() ?? <rtc.MediaStreamTrack>[];
     if (tracks.isNotEmpty) await rtc.Helper.switchCamera(tracks.first);
@@ -498,6 +588,8 @@ class SocialCallMedia extends ChangeNotifier {
 
   void remoteStatus(SocialMap payload) {
     remoteCamera = payload['camera'] == true;
+    remoteScreenSharing = payload['screenSharing'] == true;
+    remoteScreenSharingSupported = payload['screenSharingSupported'] == true;
     remoteMicrophone = payload['microphone'] == true;
     notifyListeners();
   }
@@ -523,7 +615,15 @@ class SocialCallMedia extends ChangeNotifier {
   Future<void> _close() async {
     if (_closed) return;
     _closed = true;
+    _screenRevision++;
     ready = false;
+    final display = _displayStream;
+    _displayStream = null;
+    screenSharing = false;
+    for (final track in display?.getTracks() ?? <rtc.MediaStreamTrack>[]) {
+      track.onEnded = null;
+      track.enabled = false;
+    }
     audio.removeListener(_audioChanged);
     final audioClosing = audio.close();
     final stream = _stream,
@@ -552,6 +652,7 @@ class SocialCallMedia extends ChangeNotifier {
     }
     await audioClosing;
     try {
+      if (display != null) await _releaseStream(display);
       if (stream != null) await _releaseStream(stream);
       if (replacement != null) await _releaseStream(replacement);
       if (replacementVideo != null) await _releaseStream(replacementVideo);
@@ -601,6 +702,12 @@ class SocialCallController extends ChangeNotifier {
       _sendSignal('candidate', {...candidate, 'generation': _generation}),
     );
     this.media.onState = _mediaState;
+    this.media.onScreenStopped = () {
+      unawaited(this.background.setScreenSharing(false));
+      if (!ended) _publishMedia();
+    };
+    this.background.onScreenStopRequested = () =>
+        unawaited(this.media.stopScreenShare());
     this.media.addListener(_notify);
     this.background.onStopped = () =>
         unawaited(end('Call ended by your device.'));
@@ -636,6 +743,7 @@ class SocialCallController extends ChangeNotifier {
       ? 'Call relay available'
       : 'Direct connection';
   Timer? _timer, _clock;
+  DateTime? _lastPollStarted;
   DateTime? connectedAt, _acceptedAt, _disconnectedAt;
   DateTime _lastResponse = DateTime.now();
   Future<void> _outbox = Future.value();
@@ -791,10 +899,16 @@ class SocialCallController extends ChangeNotifier {
   }
 
   void _startPolling() {
-    _timer ??= Timer.periodic(
-      const Duration(seconds: 2),
-      (_) => unawaited(poll()),
-    );
+    _timer ??= Timer.periodic(const Duration(milliseconds: 350), (_) {
+      // Only setup/recovery needs low latency. Established calls keep the
+      // previous two-second heartbeat and never overlap requests.
+      if (!connected ||
+          _lastPollStarted == null ||
+          DateTime.now().difference(_lastPollStarted!) >=
+              const Duration(seconds: 2)) {
+        unawaited(poll());
+      }
+    });
   }
 
   Future<void> accept() async {
@@ -817,6 +931,7 @@ class SocialCallController extends ChangeNotifier {
       if (ended) return;
       _lastResponse = DateTime.now();
       _applyCall(socialMap(result['call']));
+      unawaited(poll());
     } catch (e) {
       if (!ended) await end(_friendly(e));
     } finally {
@@ -854,6 +969,7 @@ class SocialCallController extends ChangeNotifier {
 
   Future<void> poll() async {
     if (ended || _polling) return;
+    _lastPollStarted = DateTime.now();
     _polling = true;
     try {
       final result = await client.get('call_poll', {
@@ -1079,7 +1195,7 @@ class SocialCallController extends ChangeNotifier {
   }
 
   Future<void> _continueInBackground(int revision) async {
-    if (video && media.ready) {
+    if (video && media.ready && !media.screenSharing) {
       await media.suspendCamera();
       if (!ended) _publishMedia();
     }
@@ -1117,11 +1233,26 @@ class SocialCallController extends ChangeNotifier {
     );
   }
 
+  Future<void> toggleScreenShare() async {
+    if (ended || !connected || media.screenBusy) return;
+    if (media.screenSharing) {
+      await media.stopScreenShare();
+    } else {
+      await media.startScreenShare(
+        () async => !ended && await background.setScreenSharing(true),
+      );
+      if (!media.screenSharing) await background.setScreenSharing(false);
+    }
+    if (!ended) _publishMedia();
+  }
+
   void _publishMedia() {
     if (state == 'accepted') {
       unawaited(
         _sendSignal('media', {
-          'camera': media.camera,
+          'camera': media.camera || media.screenSharing,
+          'screenSharing': media.screenSharing,
+          'screenSharingSupported': media.canShareScreen,
           'microphone': media.microphone,
         }),
       );

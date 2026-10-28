@@ -455,7 +455,7 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
     );
   }
 
-  Future<void> _openCall(SocialMap incoming) async {
+  Future<void> _openCall(SocialMap incoming, {bool accept = false}) async {
     final navigator = widget.navigatorKey.currentState;
     final client = _notifications.client;
     if (navigator == null ||
@@ -475,6 +475,7 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
       incoming['mode'] == 'video',
       incoming: incoming,
       ringExpiresAt: ringExpiresAt,
+      acceptIncoming: accept,
     );
   }
 
@@ -542,7 +543,7 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
       notifications: _notifications,
       onOpenMessage: _openMessage,
       onOpenOnline: _openOnline,
-      onOpenCall: _openCall,
+      onOpenCall: (call) => _openCall(call, accept: true),
       onDeclineCall: _declineCall,
       callActionBusy: _declining,
       callError: _callError,

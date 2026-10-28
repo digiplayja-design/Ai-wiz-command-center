@@ -12,7 +12,7 @@ import 'social_appearance.dart';
 import 'social_floating_chat.dart';
 import 'social_native_bridge.dart';
 import 'social_push_platform.dart';
-import 'social_threads.dart';
+import 'social_screen.dart';
 
 const _bubbleBackend = String.fromEnvironment(
   'AI_WIZARD_BACKEND_URL',
@@ -378,7 +378,7 @@ class _SocialBubbleAppState extends State<SocialBubbleApp>
                       key: const ValueKey('bubble-open-korlix'),
                       onPressed: () => SocialFloatingChat.openMain(_target),
                       icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                      label: const Text('Open KORLIX'),
+                      label: const Text('Open full Messenger'),
                     ),
                   ),
                   IconButton(
@@ -403,15 +403,25 @@ class _SocialBubbleAppState extends State<SocialBubbleApp>
                     )
                   : _profile == null || _client == null || _target == null
                   ? const Center(child: CircularProgressIndicator())
-                  : SocialChatScreen(
-                      key: ValueKey(
-                        '${_target!.kind}:${_target!.id}:$_revision',
-                      ),
+                  : SocialScreen(
+                      key: ValueKey('floating-messenger:$_revision'),
                       client: _client!,
-                      me: _profile!,
-                      peer: {'id': _target!.id, 'name': 'Conversation'},
-                      groupChat: _target!.kind == 'group',
+                      ownsClient: false,
+                      messengerMode: widget.messengerMode,
                       bubbleMode: true,
+                      initialConversation: {
+                        'id': _target!.id,
+                        'name': 'Conversation',
+                      },
+                      initialGroupChat: _target!.kind == 'group',
+                      onOpenAccount: () => SocialFloatingChat.openMain(_target),
+                      onOpenMain: (peer, group) => SocialFloatingChat.openMain(
+                        SocialFloatingTarget(
+                          owner: _target!.owner,
+                          kind: group ? 'group' : 'peer',
+                          id: '${peer['id']}',
+                        ),
+                      ),
                     ),
             ),
           ],

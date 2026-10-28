@@ -32,6 +32,7 @@ class SocialCallSession extends ChangeNotifier {
     SocialMap? incoming,
     DateTime? ringExpiresAt,
     SocialCallMedia? media,
+    bool acceptIncoming = false,
   }) async {
     if (current != null) {
       await restore();
@@ -44,6 +45,7 @@ class SocialCallSession extends ChangeNotifier {
         !notifications.beginCall()) {
       return;
     }
+    unawaited(sounds.activate());
     beforeOpenCall?.call();
     final call = SocialCallController(
       client: client,
@@ -58,6 +60,10 @@ class SocialCallSession extends ChangeNotifier {
     call.addListener(_changed);
     if (incoming == null) unawaited(call.media.audio.activate());
     _changed();
+    if (incoming != null && acceptIncoming) {
+      // Only the explicit Accept Call action opts into media capture.
+      unawaited(call.initialize().then((_) => call.accept()));
+    }
     await restore();
   }
 

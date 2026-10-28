@@ -8,6 +8,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'social_media_widgets.dart';
+import 'social_message_share.dart';
 import 'social_reaction_picker.dart';
 import 'social_voice_note.dart';
 
@@ -38,10 +39,12 @@ class SocialChatScreen extends StatefulWidget {
     this.groupChat = false,
     this.onGroupDetails,
     this.attachmentPicker,
+    this.messageSharer,
     this.autoDumpNow,
     this.bubbleMode = false,
   });
   final SocialClient client;
+  final SocialMessageSharer? messageSharer;
   final SocialMap me, peer;
   final Future<void> Function(bool video)? onCall;
   final bool groupChat;
@@ -78,6 +81,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
   int _dumpAnimation = 0;
   SocialAttachmentDraft? _attachment;
   bool _pickingAttachment = false, _uploading = false;
+  final _sharing = <String>{};
   String? _sendAttachmentId;
   List<SocialMap> _messages = [];
   late SocialMap _peer = widget.peer;
@@ -758,6 +762,33 @@ class _SocialChatScreenState extends State<SocialChatScreen>
     if (mounted && widget.client.available) unawaited(_load(quiet: true));
   }
 
+  Future<void> _shareMessage(
+    SocialMap message,
+    BuildContext buttonContext,
+  ) async {
+    final id = '${message['id']}';
+    if (_sharing.contains(id)) return;
+    final box = buttonContext.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+    final origin = box.localToGlobal(Offset.zero) & box.size;
+    setState(() => _sharing.add(id));
+    try {
+      await (widget.messageSharer ?? SocialMessageSharer()).share(
+        client: widget.client,
+        message: message,
+        origin: origin,
+        stillAvailable: () =>
+            mounted &&
+            !_unavailable &&
+            _messages.any((m) => m['id'] == id && m['deleted'] != true),
+      );
+    } catch (e) {
+      if (mounted && widget.client.available) socialNotice(context, e);
+    } finally {
+      if (mounted) setState(() => _sharing.remove(id));
+    }
+  }
+
   Future<void> _pickAttachment(String kind) async {
     if (_sending ||
         _pickingAttachment ||
@@ -816,18 +847,20 @@ class _SocialChatScreenState extends State<SocialChatScreen>
       } else {
         final result = await FilePicker.platform.pickFiles(
           type: FileType.custom,
-          allowedExtensions: [
-            'pdf',
-            'doc',
-            'docx',
-            'xls',
-            'xlsx',
-            'ppt',
-            'pptx',
-            'txt',
-            'csv',
-            'zip',
-          ],
+          allowedExtensions: kind == 'video'
+              ? ['mp4', 'mov', 'webm']
+              : [
+                  'pdf',
+                  'doc',
+                  'docx',
+                  'xls',
+                  'xlsx',
+                  'ppt',
+                  'pptx',
+                  'txt',
+                  'csv',
+                  'zip',
+                ],
           withData: false,
           withReadStream: true,
         );
@@ -852,7 +885,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
           picked = SocialAttachmentDraft(
             bytes: data.takeBytes(),
             filename: file.name,
-            kind: 'file',
+            kind: kind == 'video' ? 'video' : 'file',
           );
         }
       }
@@ -1407,6 +1440,21 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                   ),
                 ),
                 const SizedBox(height: 8),
+                if (!removed)
+                  Builder(
+                    builder: (buttonContext) => TextButton.icon(
+                      key: ValueKey('share-${m['id']}'),
+                      onPressed: _unavailable || _sharing.contains('${m['id']}')
+                          ? null
+                          : () => _shareMessage(m, buttonContext),
+                      icon: const Icon(Icons.share_outlined, size: 18),
+                      label: Text(
+                        _sharing.contains('${m['id']}')
+                            ? 'Preparing…'
+                            : 'Share',
+                      ),
+                    ),
+                  ),
                 if (mine && !removed)
                   SocialMessageReceipt(
                     key: ValueKey('receipt-${m['id']}'),
@@ -1737,6 +1785,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                               Icons.auto_awesome_outlined,
                             ),
                             ('image', 'Photo', Icons.photo_outlined),
+                            ('video', 'Video', Icons.video_library_outlined),
                             ('file', 'File', Icons.attach_file_rounded),
                             if (!widget.bubbleMode)
                               ('voice', 'Voice note', Icons.mic_none_rounded),
