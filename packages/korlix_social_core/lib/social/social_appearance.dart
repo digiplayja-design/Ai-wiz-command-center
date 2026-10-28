@@ -66,13 +66,23 @@ class SocialAppearancePreferences extends ChangeNotifier {
 }
 
 final kSocialAppearance = SocialAppearancePreferences();
+final messengerDefaultAppearance = KorlixAppearanceChoice(
+  'pure_black',
+  'bubbles',
+);
 
 /// Every Social route gets its own live theme boundary. Updating the look
 /// keeps the same child element, so drafts, scroll positions and calls survive.
 class SocialAppearance extends StatefulWidget {
-  const SocialAppearance({super.key, required this.child, this.preferences});
+  const SocialAppearance({
+    super.key,
+    required this.child,
+    this.preferences,
+    this.defaultChoice,
+  });
   final Widget child;
   final SocialAppearancePreferences? preferences;
+  final KorlixAppearanceChoice? defaultChoice;
   @override
   State<SocialAppearance> createState() => _SocialAppearanceState();
 }
@@ -101,12 +111,14 @@ class _SocialAppearanceState extends State<SocialAppearance> {
       final inherited = Theme.of(context);
       final choice =
           preferences.choice ??
+          widget.defaultChoice ??
+          SocialAppearanceScope.maybeOf(context)?.choice ??
           KorlixAppearanceChoice(
             korlixSkinOf(context).id,
             kKorlixScreenSkinNotifier.value,
           );
       return Theme(
-        data: preferences.choice == null
+        data: preferences.choice == null && widget.defaultChoice == null
             ? inherited
             : korlixBuildTheme(choice.themeId),
         child: SocialAppearanceScope(
@@ -210,6 +222,7 @@ BoxDecoration socialSurfaceDecoration(
   final base = message && !mine ? palette.panelDeep : palette.panel;
   final quiet = skin == 'linen' || skin == 'contour';
   final glass = skin == 'glass' || skin == 'glass_break';
+  final yellowMessage = message && _yellowMessages(palette, skin);
   final top = Color.alphaBlend(
     color.withValues(
       alpha: message ? (mine ? .16 : .025) : (quiet ? .035 : .09),
@@ -229,16 +242,20 @@ BoxDecoration socialSurfaceDecoration(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
       colors: [
-        top,
-        glass
+        yellowMessage ? const Color(0xFFFFDD00) : top,
+        yellowMessage
+            ? const Color(0xFFFFDD00)
+            : glass
             ? Color.alphaBlend(palette.secondary.withValues(alpha: .045), base)
             : base,
       ],
     ),
     border: Border.all(
-      color: (glass || skin == 'prism' ? color : palette.border).withValues(
-        alpha: glass ? .4 : .45,
-      ),
+      color: yellowMessage
+          ? const Color(0xFFE5BD00)
+          : (glass || skin == 'prism' ? color : palette.border).withValues(
+              alpha: glass ? .4 : .45,
+            ),
       width: skin == 'prism' ? 1.4 : 1,
     ),
     boxShadow: message && skin == 'classic'
@@ -256,6 +273,16 @@ BoxDecoration socialSurfaceDecoration(
   );
 }
 
+bool _yellowMessages(KorlixSkinPalette palette, String skin) =>
+    palette.id == 'pure_black' && skin == 'bubbles';
+
+/// Apply dark ink to every message child, including quotes, receipts and media
+/// controls, while the conversation and composer retain the selected theme.
+ThemeData socialMessageTheme(BuildContext context) =>
+    _yellowMessages(korlixSkinOf(context), socialScreenSkinOf(context))
+    ? korlixBuildTheme('pure_white')
+    : Theme.of(context);
+
 Future<void> showSocialAppearancePicker(BuildContext context) async {
   final scope = SocialAppearanceScope.maybeOf(context);
   final preferences = scope?.preferences ?? kSocialAppearance;
@@ -263,6 +290,7 @@ Future<void> showSocialAppearancePicker(BuildContext context) async {
   if (!context.mounted) return;
   final current =
       preferences.choice ??
+      scope?.choice ??
       KorlixAppearanceChoice(
         korlixSkinOf(context).id,
         kKorlixScreenSkinNotifier.value,
@@ -453,7 +481,13 @@ class SocialAppearancePreview extends StatelessWidget {
       ),
       child: Text(
         text,
-        style: TextStyle(color: palette.text, fontSize: 14, height: 1.35),
+        style: TextStyle(
+          color: _yellowMessages(palette, choice.skinId)
+              ? korlixSkinPaletteFor('pure_white').text
+              : palette.text,
+          fontSize: 14,
+          height: 1.35,
+        ),
       ),
     ),
   );

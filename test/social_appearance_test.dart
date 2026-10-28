@@ -163,7 +163,7 @@ void main() {
         (i) => {
           'id': 'message-$i',
           'seq': i + 1,
-          'sender': 'peer',
+          'sender': i.isEven ? 'peer' : 'me',
           'body': 'Sample conversation message $i',
           'created_at': '2026-10-11T12:00:00Z',
         },
@@ -173,6 +173,7 @@ void main() {
       t,
       SocialAppearance(
         preferences: store,
+        defaultChoice: messengerDefaultAppearance,
         child: SocialChatScreen(
           client: data.client,
           me: fixtures.me,
@@ -181,6 +182,9 @@ void main() {
       ),
     );
     final input = find.byType(TextField).last;
+    expect(korlixSkinOf(t.element(input)).id, 'pure_black');
+    expect(socialScreenSkinOf(t.element(input)), 'bubbles');
+    await shots.capture(t, 'messenger-black-yellow-chat');
     await t.enterText(input, 'Keep this draft exactly.');
     final chatState = t.state(find.byType(SocialChatScreen));
     final scroll = t.widget<ListView>(find.byType(ListView).first).controller!;
@@ -203,6 +207,18 @@ void main() {
     expect(data.calls.where((c) => c['action'] == 'send'), isEmpty);
     expect(t.takeException(), isNull);
     await shots.capture(t, 'social-chat-white-glass');
+    await store.apply(null);
+    await t.pumpAndSettle();
+    expect(socialScreenSkinOf(t.element(input)), 'bubbles');
+    expect(korlixSkinOf(t.element(input)).id, 'pure_black');
+    expect(
+      identical(t.state(find.byType(SocialChatScreen)), chatState),
+      isTrue,
+    );
+    expect(
+      t.widget<TextField>(input).controller!.text,
+      'Keep this draft exactly.',
+    );
   });
 
   testWidgets(

@@ -75,7 +75,15 @@ jobs:
         run: |
           set -euo pipefail
           flutter pub get --enforce-lockfile
-          flutter test --no-pub --reporter expanded test/social_test.dart test/social_communication_upgrade_test.dart test/social_calls_test.dart test/social_call_audio_test.dart test/social_presence_ui_test.dart test/messenger_screen_test.dart
+          export KORLIX_FLUTTER_ROOT="$FLUTTER_ROOT"
+          export AGENT_STUDIO_SCREENSHOTS="$RUNNER_TEMP/messenger-previews"
+          flutter test --no-pub --reporter expanded test/social_test.dart test/social_communication_upgrade_test.dart test/social_calls_test.dart test/social_call_audio_test.dart test/social_presence_ui_test.dart test/messenger_screen_test.dart test/social_appearance_test.dart
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: korlix-messenger-appearance-previews
+          path: ${{ runner.temp }}/messenger-previews
+          if-no-files-found: error
+          retention-days: 14
       - name: Build Android test APK
         working-directory: apps/korlix_messenger
         run: flutter build apk --debug --no-pub

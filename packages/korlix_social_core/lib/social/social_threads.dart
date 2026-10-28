@@ -48,6 +48,7 @@ class SocialChatScreen extends StatefulWidget {
   final Future<SocialAttachmentDraft?> Function(String kind)? attachmentPicker;
   final Future<bool> Function()? onGroupDetails;
   final DateTime Function()? autoDumpNow;
+
   /// A native bubble is a compact chat surface; calls and microphone capture
   /// stay in the main app, which owns their permissions and audio lifecycle.
   final bool bubbleMode;
@@ -707,14 +708,16 @@ class _SocialChatScreenState extends State<SocialChatScreen>
             _loading = false;
           });
           try {
-            final result = await widget.client
-                .post(seconds == null ? 'dump_cancel' : 'dump_schedule', {
-                  'id': id,
-                  ..._destination,
-                  'seconds': ?seconds,
-                  'request_id': requestId,
-                  'dump_scope': scope,
-                });
+            final result = await widget.client.post(
+              seconds == null ? 'dump_cancel' : 'dump_schedule',
+              {
+                'id': id,
+                ..._destination,
+                'seconds': ?seconds,
+                'request_id': requestId,
+                'dump_scope': scope,
+              },
+            );
             if (!mounted || !widget.client.available || _unavailable) {
               throw const SocialException(
                 'Your session changed. Reopen Social.',
@@ -1268,8 +1271,10 @@ class _SocialChatScreenState extends State<SocialChatScreen>
   }
 
   Widget _bubble(SocialMap m) {
+    final palette = korlixSkinOf(context);
+    final bubbleTheme = socialMessageTheme(context);
     final mine = m['sender'] == widget.me['id'],
-        s = korlixSkinOf(context),
+        s = bubbleTheme.extension<KorlixPaletteExtension>()?.palette ?? palette,
         removed = m['deleted'] == true;
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
@@ -1284,162 +1289,167 @@ class _SocialChatScreenState extends State<SocialChatScreen>
           ),
           padding: const EdgeInsets.fromLTRB(16, 8, 10, 12),
           decoration: socialSurfaceDecoration(
-            s,
+            palette,
             socialScreenSkinOf(context),
             message: true,
             mine: mine,
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (!removed) ...[
-                    SocialAvatar(
-                      member: mine
-                          ? widget.me
-                          : widget.groupChat
-                          ? socialMap(m['author'])
-                          : _peer,
-                      size: 26,
-                      showStatus: false,
+          child: Theme(
+            data: bubbleTheme,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!removed) ...[
+                      SocialAvatar(
+                        member: mine
+                            ? widget.me
+                            : widget.groupChat
+                            ? socialMap(m['author'])
+                            : _peer,
+                        size: 26,
+                        showStatus: false,
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    Flexible(
+                      child: SocialMemberName(
+                        member: mine
+                            ? widget.me
+                            : widget.groupChat
+                            ? socialMap(m['author'])
+                            : _peer,
+                        name: _author(m),
+                        showStatus: !mine && !removed && !_unavailable,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: s.mutedText,
+                        ),
+                      ),
                     ),
-                    const SizedBox(width: 8),
+                    if (!removed)
+                      IconButton(
+                        key: ValueKey('reply-${m['id']}'),
+                        tooltip: 'Reply to message',
+                        onPressed: _sending || _unavailable
+                            ? null
+                            : () => _chooseReply(m),
+                        icon: Icon(
+                          Icons.reply_rounded,
+                          size: 20,
+                          color: s.primary,
+                        ),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    if (!removed)
+                      PopupMenuButton<String>(
+                        tooltip: 'Message options',
+                        onSelected: (v) {
+                          if (v != 'reply') _messageAction(v, m);
+                        },
+                        itemBuilder: (_) => [
+                          PopupMenuItem(
+                            value: 'reply',
+                            enabled: !_sending && !_unavailable,
+                            // PopupMenuItem dismisses its route before onTap.
+                            // Keep keyboard activation inside the user's tap.
+                            onTap: () => _chooseReply(m),
+                            child: const Text('Reply'),
+                          ),
+                          PopupMenuItem(
+                            value: 'dump',
+                            enabled: !_dumpSaving && !_unavailable,
+                            child: Text(
+                              _dumps.deadlines.containsKey('${m['id']}')
+                                  ? 'Manage Auto Dump'
+                                  : 'Auto Dump',
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: mine ? 'delete' : 'report',
+                            child: Text(
+                              mine ? 'Remove message' : 'Report message',
+                            ),
+                          ),
+                        ],
+                        icon: const Icon(Icons.more_horiz_rounded, size: 18),
+                        padding: EdgeInsets.zero,
+                      ),
                   ],
-                  Flexible(
-                    child: SocialMemberName(
-                      member: mine
-                          ? widget.me
-                          : widget.groupChat
-                          ? socialMap(m['author'])
-                          : _peer,
-                      name: _author(m),
-                      showStatus: !mine && !removed && !_unavailable,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: s.mutedText,
-                      ),
-                    ),
-                  ),
-                  if (!removed)
-                    IconButton(
-                      key: ValueKey('reply-${m['id']}'),
-                      tooltip: 'Reply to message',
-                      onPressed: _sending || _unavailable
-                          ? null
-                          : () => _chooseReply(m),
-                      icon: Icon(
-                        Icons.reply_rounded,
-                        size: 20,
-                        color: s.primary,
-                      ),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  if (!removed)
-                    PopupMenuButton<String>(
-                      tooltip: 'Message options',
-                      onSelected: (v) {
-                        if (v != 'reply') _messageAction(v, m);
-                      },
-                      itemBuilder: (_) => [
-                        PopupMenuItem(
-                          value: 'reply',
-                          enabled: !_sending && !_unavailable,
-                          // PopupMenuItem dismisses its route before onTap.
-                          // Keep keyboard activation inside the user's tap.
-                          onTap: () => _chooseReply(m),
-                          child: const Text('Reply'),
-                        ),
-                        PopupMenuItem(
-                          value: 'dump',
-                          enabled: !_dumpSaving && !_unavailable,
-                          child: Text(
-                            _dumps.deadlines.containsKey('${m['id']}')
-                                ? 'Manage Auto Dump'
-                                : 'Auto Dump',
-                          ),
-                        ),
-                        PopupMenuItem(
-                          value: mine ? 'delete' : 'report',
-                          child: Text(
-                            mine ? 'Remove message' : 'Report message',
-                          ),
-                        ),
-                      ],
-                      icon: const Icon(Icons.more_horiz_rounded, size: 18),
-                      padding: EdgeInsets.zero,
-                    ),
-                ],
-              ),
-              if (!removed && socialMap(m['reply']).isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: SocialMessageQuote(
-                    key: ValueKey('quote-${m['id']}'),
-                    message: socialMap(m['reply']),
-                    author: _author(socialMap(m['reply'])),
-                    onOpen: () => _viewOriginal('${m['reply']['id']}'),
-                  ),
                 ),
-              if (!removed && socialMap(m['attachment']).isNotEmpty) ...[
-                SocialAttachmentView(
-                  key: ValueKey('attachment-${m['id']}'),
-                  client: widget.client,
-                  attachment: socialMap(m['attachment']),
+                if (!removed && socialMap(m['reply']).isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: SocialMessageQuote(
+                      key: ValueKey('quote-${m['id']}'),
+                      message: socialMap(m['reply']),
+                      author: _author(socialMap(m['reply'])),
+                      onOpen: () => _viewOriginal('${m['reply']['id']}'),
+                    ),
+                  ),
+                if (!removed && socialMap(m['attachment']).isNotEmpty) ...[
+                  SocialAttachmentView(
+                    key: ValueKey('attachment-${m['id']}'),
+                    client: widget.client,
+                    attachment: socialMap(m['attachment']),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                SelectableText(
+                  removed ? 'Message removed' : m['body'],
+                  style: TextStyle(
+                    height: 1.5,
+                    color: removed ? s.mutedText : s.text,
+                    fontStyle: removed ? FontStyle.italic : FontStyle.normal,
+                  ),
                 ),
                 const SizedBox(height: 8),
-              ],
-              SelectableText(
-                removed ? 'Message removed' : m['body'],
-                style: TextStyle(
-                  height: 1.5,
-                  color: removed ? s.mutedText : s.text,
-                  fontStyle: removed ? FontStyle.italic : FontStyle.normal,
-                ),
-              ),
-              const SizedBox(height: 8),
-              if (mine && !removed)
-                SocialMessageReceipt(
-                  key: ValueKey('receipt-${m['id']}'),
-                  messageId: '${m['id']}',
-                  createdAt: m['created_at'],
-                  groupChat: widget.groupChat,
-                  readAt: _receipts['${m['id']}']?['read_at'] ?? m['read_at'],
-                  readers: socialItems(_receipts['${m['id']}']?['readers'])
-                      .where((reader) => !_hiddenReaders.contains(reader['id']))
-                      .toList(),
-                )
-              else
-                Text(
-                  socialTime(m['created_at']),
-                  style: TextStyle(fontSize: 10, color: s.mutedText),
-                ),
-              if (!removed &&
-                  (_dumpMode || _dumps.deadlines.containsKey('${m['id']}')))
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: TextButton.icon(
-                    key: ValueKey('dump-message-${m['id']}'),
-                    onPressed: _dumpSaving || _unavailable
-                        ? null
-                        : () => _chooseAutoDump(m),
-                    icon: const Icon(Icons.local_shipping_rounded, size: 18),
-                    style: TextButton.styleFrom(
-                      foregroundColor: s.isLight
-                          ? const Color(0xffa84800)
-                          : const Color(0xffffba75),
-                      backgroundColor: Colors.orange.withValues(alpha: .12),
-                    ),
-                    label: Text(
-                      _dumps.deadlines.containsKey('${m['id']}')
-                          ? _dumps.countdown('${m['id']}')
-                          : 'Select for Auto Dump',
+                if (mine && !removed)
+                  SocialMessageReceipt(
+                    key: ValueKey('receipt-${m['id']}'),
+                    messageId: '${m['id']}',
+                    createdAt: m['created_at'],
+                    groupChat: widget.groupChat,
+                    readAt: _receipts['${m['id']}']?['read_at'] ?? m['read_at'],
+                    readers: socialItems(_receipts['${m['id']}']?['readers'])
+                        .where(
+                          (reader) => !_hiddenReaders.contains(reader['id']),
+                        )
+                        .toList(),
+                  )
+                else
+                  Text(
+                    socialTime(m['created_at']),
+                    style: TextStyle(fontSize: 10, color: s.mutedText),
+                  ),
+                if (!removed &&
+                    (_dumpMode || _dumps.deadlines.containsKey('${m['id']}')))
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: TextButton.icon(
+                      key: ValueKey('dump-message-${m['id']}'),
+                      onPressed: _dumpSaving || _unavailable
+                          ? null
+                          : () => _chooseAutoDump(m),
+                      icon: const Icon(Icons.local_shipping_rounded, size: 18),
+                      style: TextButton.styleFrom(
+                        foregroundColor: s.isLight
+                            ? const Color(0xffa84800)
+                            : const Color(0xffffba75),
+                        backgroundColor: Colors.orange.withValues(alpha: .12),
+                      ),
+                      label: Text(
+                        _dumps.deadlines.containsKey('${m['id']}')
+                            ? _dumps.countdown('${m['id']}')
+                            : 'Select for Auto Dump',
+                      ),
                     ),
                   ),
-                ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1602,9 +1612,9 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                               child: Text(
                                 _error!,
                                 style: TextStyle(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onErrorContainer,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onErrorContainer,
                                 ),
                               ),
                             ),
@@ -1800,9 +1810,8 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                             onPressed: _sending ? null : _send,
                             style: IconButton.styleFrom(
                               minimumSize: const Size(52, 52),
-                              foregroundColor: korlixSkinOf(
-                                context,
-                              ).textOnAccent,
+                              foregroundColor: korlixSkinOf(context)
+                                  .textOnAccent,
                             ),
                             icon: _sending
                                 ? const SizedBox(
@@ -2517,8 +2526,7 @@ class _SocialTopicScreenState extends State<SocialTopicScreen>
                   const SocialEmpty(
                     icon: Icons.lock_outline,
                     title: 'This discussion is locked.',
-                    body:
-                        'Existing posts can still be read. New replies are closed.',
+                    body: 'Existing posts can still be read. New replies are closed.',
                   )
                 else
                   _composer(),
@@ -2713,9 +2721,7 @@ class _SocialManagementScreenState extends State<SocialManagementScreen> {
     if (!await socialConfirm(
       context,
       _reports ? 'Confirm moderation action?' : 'Unblock this member?',
-      _reports
-          ? 'Apply “$decision” and resolve this report?'
-          : 'Unblocking does not restore your connection. A new follow request must be accepted.',
+      _reports ? 'Apply “$decision” and resolve this report?' : 'Unblocking does not restore your connection. A new follow request must be accepted.',
       action: _reports ? 'Apply' : 'Unblock',
     )) {
       return;

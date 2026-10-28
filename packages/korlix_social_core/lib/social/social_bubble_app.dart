@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../auth/korlix_token_store.dart';
 import '../theme/korlix_theme.dart';
 import 'social_client.dart';
+import 'social_appearance.dart';
 import 'social_floating_chat.dart';
 import 'social_native_bridge.dart';
 import 'social_push_platform.dart';
@@ -357,7 +358,13 @@ class _SocialBubbleAppState extends State<SocialBubbleApp>
   @override
   Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner: false,
-    theme: korlixBuildTheme('korlix_blue'),
+    theme: korlixBuildTheme(
+      widget.messengerMode ? messengerDefaultAppearance.themeId : 'korlix_blue',
+    ),
+    builder: (_, child) => SocialAppearance(
+      defaultChoice: widget.messengerMode ? messengerDefaultAppearance : null,
+      child: child!,
+    ),
     home: Scaffold(
       body: SafeArea(
         child: Column(
