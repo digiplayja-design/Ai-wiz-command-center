@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { processDiscoverVideo } from './discover.mjs';
 export const attachmentBucket = 'korlix-social-attachments';
 export const attachmentLimit = 20 * 1024 * 1024;
 const bad = message => Object.assign(new Error(message), { status: 400 });
@@ -6,11 +7,20 @@ const links = new Map();
 
 export async function validateAttachment(file, kind) {
   if (!file?.buffer?.length || file.buffer.length > attachmentLimit) throw bad('Choose a file smaller than 20 MB.');
-  if (!['image', 'gif', 'sticker', 'file', 'voice'].includes(kind)) throw bad('Choose a photo, GIF, sticker, file or voice note.');
+  if (!['image', 'gif', 'sticker', 'file', 'voice', 'video'].includes(kind)) throw bad('Choose a photo, GIF, sticker, video, file or voice note.');
   let bytes = file.buffer;
   let filename = String(file.originalname || 'Attachment').replace(/[\x00-\x1f\x7f/\\<>:"|?*]/g, '_').slice(-140);
   let extension = filename.split('.').at(-1).toLowerCase(), content_type, duration_ms = null;
-  if (kind === 'gif' || kind === 'sticker') {
+  if (kind === 'video') {
+    const media = await processDiscoverVideo(bytes, {maxBytes: attachmentLimit, maxSeconds: 180, makeThumbnail: false});
+    bytes = media.video;
+    duration_ms = media.duration_ms;
+    filename = filename.replace(/\.[^.]+$/, '').slice(0, 130) + '.mp4';
+    extension = 'mp4'; content_type = 'video/mp4';
+    // Keep existing private-file permissions and older clients compatible.
+    // Video is identified by its verified content type, never its filename.
+    kind = 'file';
+  } else if (kind === 'gif' || kind === 'sticker') {
     const gif = kind === 'gif';
     try {
       const { default: sharp } = await import('sharp');
