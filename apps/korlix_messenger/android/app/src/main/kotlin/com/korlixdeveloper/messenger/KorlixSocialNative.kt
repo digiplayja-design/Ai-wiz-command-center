@@ -317,8 +317,16 @@ object KorlixSocialNative {
                      explicit: Boolean, silent: Boolean = false, expires: Long? = null, callId: String? = null): Boolean {
       return try {
         val notifications = manager(context)
-        val channelId = if (silent) "${NOTIFICATIONS}_silent" else "korlix_social_conversations_v2"
-        if (Build.VERSION.SDK_INT >= 26) {
+        val shortcutId = conversation(requestedOwner, kind, id)
+        // Android may have created a child channel when someone customized or
+        // muted this conversation. Keep that exact channel and all its choices.
+        val legacyConversation = if (!silent && Build.VERSION.SDK_INT >= 30)
+            notifications.getNotificationChannel(NOTIFICATIONS, shortcutId)
+                ?.takeIf { it.conversationId == shortcutId } else null
+        val channelId = if (silent) "${NOTIFICATIONS}_silent" else
+            legacyConversation?.id ?: "korlix_social_conversations_v2"
+        if (legacyConversation?.importance == NotificationManager.IMPORTANCE_NONE) return false
+        if (Build.VERSION.SDK_INT >= 26 && legacyConversation == null) {
             val previous = if (!silent) notifications.getNotificationChannel(NOTIFICATIONS) else null
             val channel = NotificationChannel(channelId, if (silent) "KORLIX Messenger quiet alerts" else "KORLIX Messenger",
                 if (silent) NotificationManager.IMPORTANCE_LOW else previous?.importance ?: NotificationManager.IMPORTANCE_DEFAULT)
@@ -346,7 +354,6 @@ object KorlixSocialNative {
             notifications.createNotificationChannel(channel)
             if (notifications.getNotificationChannel(channelId)?.importance == NotificationManager.IMPORTANCE_NONE) return false
         }
-        val shortcutId = conversation(requestedOwner, kind, id)
         val bubbleMessage = Build.VERSION.SDK_INT >= 30 && shortcutId in pins(context) && type == "message"
         val open = intent(context, MainActivity::class.java, requestedOwner, kind, id)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
