@@ -495,7 +495,10 @@ test('private videos send in direct and group chats and enforce download authori
   await api(grouped?'group_send':'send',{id:randomUUID(),...destination,body:'Clip',attachment_id:attachment.id});
   const messages=await api(grouped?'group_messages':'messages',grouped?{group:group.id}:{peer:a.id},users[1],'GET');
   assert.equal(messages.items.find(m=>m.attachment?.id===attachment.id).attachment.content_type,'video/mp4');
-  await api('attachment_link',{id:attachment.id},users[1],'GET');
+  const playback=await api('attachment_link',{id:attachment.id},users[1],'GET');
+  assert.match(playback.url,/expires=300&download=$/);
+  const download=await api('attachment_link',{id:attachment.id,download:true},users[1],'GET');
+  assert.match(download.url,/expires=60&download=Clip.mp4$/);
   await api('attachment_link',{id:attachment.id},users[2],'GET',grouped?403:404);
  }
 });

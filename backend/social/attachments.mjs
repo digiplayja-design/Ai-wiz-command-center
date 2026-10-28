@@ -165,7 +165,11 @@ export function registerSocialAttachments(app, { database, authenticate, logger 
     try {
       const user = await authenticate(req, res); if (!user) return;
       const { attachment } = await rpc(user, 'link', { id: req.query.id });
-      const download = req.query.download === 'true' || attachment.kind === 'file';
+      // Private chat videos use the compatible file kind, but playback may need
+      // fresh byte ranges throughout a three-minute clip. Keep its link alive
+      // for five minutes; explicit downloads retain the shorter lifetime.
+      const videoPlayback = attachment.content_type === 'video/mp4' && req.query.download !== 'true';
+      const download = req.query.download === 'true' || (attachment.kind === 'file' && !videoPlayback);
       const result = await database.storage.from(attachmentBucket).createSignedUrl(attachment.object_path, download || attachment.scope === 'wall' ? 60 : 300, download ? { download: attachment.filename } : {});
       if (result.error || !result.data?.signedUrl) throw storageError();
       res.json({ url: result.data.signedUrl });

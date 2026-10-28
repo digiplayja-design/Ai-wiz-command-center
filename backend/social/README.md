@@ -181,4 +181,6 @@ Auto Dump remains a server-enforced visibility action. It does not physically er
 
 Deploy this backend capability before distributing the Messenger video composer. The current FFmpeg/ffprobe dependency used by Discover is also required for chat videos. Videos remain subject to existing conversation membership, blocks, expiry, immutable upload retries, storage quotas and fresh download authorization.
 
+Authorized video playback links expire after five minutes, allowing byte-range requests throughout a three-minute clip. Explicit downloads and ordinary file links still expire after sixty seconds. Every new link rechecks access; previously issued links remain usable until their expiry.
+
 Validation: `node --test backend/test/social_videos.test.mjs backend/test/social.test.mjs backend/test/social_reactions.test.mjs backend/test/social_discover.test.mjs` exercises actual media conversion plus SQL/HTTP permissions. Call and native notification regressions run through `social_communication.test.mjs`, `social_relay.test.mjs` and `social_native_push.test.mjs`.
