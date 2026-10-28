@@ -1,6 +1,6 @@
 # Messenger reactions, selection tools and realistic media
 
-This continues the app work in PR #26 and backend work in PR #27. It preserves the previously approved Pure Black/Bubbles default, yellow message bubbles and call/sharing work.
+This continues the app work in PR #26 and the backend work originally prepared in PR #27. Production integration PR #28 supersedes #27 and preserves the newer live backend changes. It preserves the previously approved Pure Black/Bubbles default, yellow message bubbles and call/sharing work. See [the release record](KORLIX_MESSENGER_RELEASE_2026-10-28.md) for the deployed backend and signed Android build 4 status.
 
 ## Conversation behavior
 
@@ -21,7 +21,7 @@ Prompt specification: photorealistic-natural studio cutouts, exactly four sequen
 
 ## Backend rollout
 
-Apply `20261028145105_korlix_social_message_interactions.sql` from the backend PR before deploying its route change or distributing the app update. The migration adds service-only reaction storage and formatting columns, wraps the existing media-chat RPC without replacing its access checks, and adds the authenticated POST `/api/social/react` action. A missing emoji field is rejected; an explicit JSON null removes the caller's reaction. Do not distribute this app with an older backend that ignores formatting or lacks reactions.
+Production migration `20261028160934_korlix_social_message_interactions.sql` from PR #28 was applied before deploying the backend route change. This is the canonical applied version; it supersedes the draft migration version in #27. The migration adds service-only reaction storage and formatting columns, wraps the existing media-chat RPC without replacing its access checks, and adds the authenticated POST `/api/social/react` action. A missing emoji field is rejected; an explicit JSON null removes the caller's reaction. Do not distribute this app with an older backend that ignores formatting or lacks reactions.
 
 Authorization remains governed by accepted connections/group membership, joined-history floors, blocks, suspension, deletion and personal/everyone Auto Dump. Public/anonymous/authenticated database roles receive no direct table or RPC access. A message-row lock and deletion cleanup prevent a reaction from surviving a concurrent removal. New sends validate ranges before delivery; retrying an existing send ID with changed styles fails atomically.
 
@@ -29,4 +29,4 @@ Authorization remains governed by accepted connections/group membership, joined-
 
 Local validation includes 86 Flutter interaction/media/reply/group/read-receipt/Auto Dump/share tests and all 27 standalone Messenger tests. Standalone and focused Dart analysis report no issues, and all 96 media assets decode successfully. Backend validation includes 24 focused SQL/HTTP/media/privacy tests and 117 additional Social, communication, Auto Dump, history-scope and inbox regressions. The new interaction tests cover Unicode and style combinations, changing/removing reactions in both scopes, request failures, account changes, dictionary scope and retry identity. The mobile validation workflow includes the new interaction tests and the expanded asset tests.
 
-No store release or production backend/database mutation is part of this implementation. Retain the physical two-device call/sharing checks from the earlier work and add Android/iPhone long-press selection, keyboard/IME input, reaction synchronization, and GIF playback checks before distribution. Signed Play/App Store release remains separate from a passing debug/simulator build.
+The subsequent authorized release applied the production migration, deployed backend PR #28, merged app PR #26 and uploaded signed Messenger 1.0.1 (build 4) to a Play production draft. The release has not been submitted or published: Play requires a video demonstrating the new media-projection foreground service. Physical two-device call/sharing checks and Android/iPhone long-press selection, keyboard/IME input, reaction synchronization and GIF playback checks remain unverified. See the release record for the exact commits, bundle digest and remaining steps.
