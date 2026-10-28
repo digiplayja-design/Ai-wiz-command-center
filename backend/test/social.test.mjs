@@ -484,3 +484,21 @@ test('album image route rejects invalid data; quota, RLS, RPC and bucket access 
  await db.exec('set role authenticated');try{assert.equal((await db.query("select * from storage.objects where bucket_id='korlix-social-albums'")).rows.length,0);}finally{await db.exec('reset role');}
  await db.exec('set role service_role');try{assert.equal((await albumCall(0,'albums',{})).items.length,20);}finally{await db.exec('reset role');}
 });
+
+test('private videos send in direct and group chats and enforce download authorization', async () => {
+ await connectAll(); const {videoFixture}=await import('./fixtures/video.mjs'); const bytes=await videoFixture();
+ const {group}=await createGroup(); await api('group_accept',{group:group.id},users[1]);
+ for (const grouped of [false,true]) {
+  const destination=grouped?{group:group.id}:{peer:b.id};
+  const {attachment}=await uploadAttachment({kind:'video',name:'Clip.mov',bytes,destination});
+  assert.equal(attachment.kind,'file'); assert.equal(attachment.content_type,'video/mp4'); assert.equal(attachment.url,undefined);
+  await api(grouped?'group_send':'send',{id:randomUUID(),...destination,body:'Clip',attachment_id:attachment.id});
+  const messages=await api(grouped?'group_messages':'messages',grouped?{group:group.id}:{peer:a.id},users[1],'GET');
+  assert.equal(messages.items.find(m=>m.attachment?.id===attachment.id).attachment.content_type,'video/mp4');
+  const playback=await api('attachment_link',{id:attachment.id},users[1],'GET');
+  assert.match(playback.url,/expires=300&download=$/);
+  const download=await api('attachment_link',{id:attachment.id,download:true},users[1],'GET');
+  assert.match(download.url,/expires=60&download=Clip.mp4$/);
+  await api('attachment_link',{id:attachment.id},users[2],'GET',grouped?403:404);
+ }
+});

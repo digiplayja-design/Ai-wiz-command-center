@@ -174,3 +174,13 @@ Personal and shared timers are independent. Message/quote cards and mutation res
 History retains the effective `dump_schedules` map and union `dumped_ids`, and adds complete `dump_self_schedules` and `dump_everyone_schedules` maps for all pages in that conversation. Empty maps are authoritative. Clients must reconcile cached rows, quote cards and media using these snapshots, retain server-clock adjustment, and immediately scrub expired content on resume. Everyone expiry also applies to original-message access, new replies, unread counts, thread previews, new attachment links and pending push delivery eligibility.
 
 Auto Dump remains a server-enforced visibility action. It does not physically erase message rows or shared attachment objects, recall downloaded/screenshotted/copied content, or revoke already issued signed URLs before their expiry. Previously cached/offline content can remain on devices until synchronization. Do not represent this feature as secure destruction.
+
+### Messenger video attachments
+
+`attachment_upload?kind=video` accepts MP4, MOV and WebM clips up to 20 MB and 180 seconds. The existing bounded FFmpeg pipeline verifies a real video stream, normalizes it to H.264/AAC MP4 and removes source metadata. It does not silently shorten long clips. Both direct messages and groups use the existing private `file` attachment kind with verified `content_type: video/mp4`; older clients can still download them. No database migration or public bucket is required.
+
+Deploy this backend capability before distributing the Messenger video composer. The current FFmpeg/ffprobe dependency used by Discover is also required for chat videos. Videos remain subject to existing conversation membership, blocks, expiry, immutable upload retries, storage quotas and fresh download authorization.
+
+Authorized video playback links expire after five minutes, allowing byte-range requests throughout a three-minute clip. Explicit downloads and ordinary file links still expire after sixty seconds. Every new link rechecks access; previously issued links remain usable until their expiry.
+
+Validation: `node --test backend/test/social_videos.test.mjs backend/test/social.test.mjs backend/test/social_reactions.test.mjs backend/test/social_discover.test.mjs` exercises actual media conversion plus SQL/HTTP permissions. Call and native notification regressions run through `social_communication.test.mjs`, `social_relay.test.mjs` and `social_native_push.test.mjs`.

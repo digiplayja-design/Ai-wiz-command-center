@@ -12,8 +12,8 @@ const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const bad = message => Object.assign(Error(message),{status:400});
 const errorFor = error => Object.assign(Error(error?.message || 'Discover could not finish this request. Refresh before retrying.'),{status:({'42501':403,P0002:404,'54000':429,'22P02':400,'23514':400,'23505':409,P0001:400}[error?.code] || 503)});
 
-export async function processDiscoverVideo(bytes) {
-  if (!bytes?.length || bytes.length > discoverVideoLimit) throw bad('Choose a video smaller than 50 MB.');
+export async function processDiscoverVideo(bytes, {maxBytes = discoverVideoLimit, maxSeconds = 60, makeThumbnail = true} = {}) {
+  if (!bytes?.length || bytes.length > maxBytes) throw bad(`Choose a video smaller than ${Math.floor(maxBytes / 1024 / 1024)} MB.`);
   // Accept media containers only. Playlists and network/file indirection are not inputs.
   if (bytes.toString('ascii',4,8) !== 'ftyp' && bytes.subarray(0,4).toString('hex') !== '1a45dfa3') throw bad('Choose an MP4, MOV or WebM video.');
   const directory = await mkdtemp(join(tmpdir(),'korlix-discover-'));
@@ -23,12 +23,12 @@ export async function processDiscoverVideo(bytes) {
     const common=['-v','error','-protocol_whitelist','file,pipe','-format_whitelist','mov,matroska,webm'];
     const {stdout}=await run('ffprobe',[...common,'-show_format','-show_streams','-of','json',input],{timeout:15000,maxBuffer:1024*1024});
     const meta=JSON.parse(stdout), stream=meta.streams?.find(s=>s.codec_type==='video'), duration=Number(meta.format?.duration);
-    if (!stream || !Number.isFinite(duration) || duration < .5 || duration > 60 || stream.width*stream.height > 9000000 || !stream.width || !stream.height) throw bad('Choose a video between 1 and 60 seconds, up to 4K resolution.');
-    await run('ffmpeg',[...common,'-threads','2','-i',input,'-map','0:v:0','-map','0:a:0?','-t','60','-sn','-dn','-map_metadata','-1','-map_chapters','-1',
-      '-vf','scale=w=min(720\\,iw):h=min(1280\\,ih):force_original_aspect_ratio=decrease:force_divisible_by=2','-r','30','-c:v','libx264','-preset','veryfast','-crf','25','-threads','2','-pix_fmt','yuv420p','-c:a','aac','-b:a','96k','-ac','2','-movflags','+faststart','-fs',String(discoverVideoLimit),output],{timeout:120000,maxBuffer:1024*1024});
-    await run('ffmpeg',['-v','error','-i',output,'-frames:v','1','-vf','scale=480:-2','-q:v','4','-map_metadata','-1',cover],{timeout:15000,maxBuffer:1024*1024});
-    const video=await readFile(output),thumbnail=await readFile(cover);
-    if (!video.length || video.length >= discoverVideoLimit || !thumbnail.length || thumbnail.length>1048576) throw bad('This video could not be prepared. Try a smaller clip.');
+    if (!stream || !Number.isFinite(duration) || duration < .5 || duration > maxSeconds || stream.width*stream.height > 9000000 || !stream.width || !stream.height) throw bad(`Choose a video between 1 and ${maxSeconds} seconds, up to 4K resolution.`);
+    await run('ffmpeg',[...common,'-threads','2','-i',input,'-map','0:v:0','-map','0:a:0?','-t',String(maxSeconds),'-sn','-dn','-map_metadata','-1','-map_chapters','-1',
+      '-vf','scale=w=min(720\\,iw):h=min(1280\\,ih):force_original_aspect_ratio=decrease:force_divisible_by=2','-r','30','-c:v','libx264','-preset','veryfast','-crf','25','-threads','2','-pix_fmt','yuv420p','-c:a','aac','-b:a','96k','-ac','2','-movflags','+faststart','-fs',String(maxBytes),output],{timeout:120000,maxBuffer:1024*1024});
+    if (makeThumbnail) await run('ffmpeg',['-v','error','-i',output,'-frames:v','1','-vf','scale=480:-2','-q:v','4','-map_metadata','-1',cover],{timeout:15000,maxBuffer:1024*1024});
+    const video=await readFile(output),thumbnail=makeThumbnail ? await readFile(cover) : null;
+    if (!video.length || video.length >= maxBytes || makeThumbnail && (!thumbnail?.length || thumbnail.length>1048576)) throw bad('This video could not be prepared. Try a smaller clip.');
     return {video,thumbnail,duration_ms:Math.round(duration*1000)};
   } catch(e) { if(e.status) throw e; throw bad('That video could not be opened. Try a shorter MP4, MOV or WebM clip.'); }
   finally { await rm(directory,{recursive:true,force:true}); }
