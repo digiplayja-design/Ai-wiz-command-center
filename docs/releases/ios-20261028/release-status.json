@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-10-28T22:22:15.555067+00:00",
+  "updated_at": "2026-10-28T23:42:30.212013+00:00",
   "source_commit": "e65a6b548656766bbfdcbddab8e1d8f939f22fd0",
   "source_branch": "release/ios-appstore-20261028",
   "korlix_ai": {
@@ -29,7 +29,8 @@
     "release_type": "AFTER_APPROVAL",
     "codemagic_status": "finished",
     "release_notes_saved": true,
-    "public_release_confirmed": false
+    "public_release_confirmed": false,
+    "app_store_review_status_web_confirmed": "WAITING_FOR_REVIEW"
   },
   "messenger": {
     "bundle_id": "com.korlixdeveloper.messenger",
@@ -38,10 +39,25 @@
     "signed_ipa_created": false,
     "apple_upload_performed": false,
     "app_store_submission_performed": false,
-    "app_record_status": "not_inspected",
+    "app_record_status": "Not created. App Store Connect lists only Korlix AI; Messenger creation form is prepared but has no available bundle ID.",
     "signing_status": "No matching profile appeared in Codemagic stored profiles or live Apple profile fetch.",
     "apns_delivery_status": "not_verified_on_iPhone",
-    "listing_draft": "messenger-appstore-draft.json"
+    "listing_draft": "messenger-appstore-draft.json",
+    "identifier_registration_status": "Prepared at Confirm your App ID for com.korlixdeveloper.messenger with Push Notifications; Register has not been clicked.",
+    "testflight_workflow": "korlix-messenger-ios-testflight",
+    "testflight_status": "Not uploaded. Upload-only workflow prepared; internal testers and build processing remain pending.",
+    "pending_security_setup": {
+      "description": "KORLIX Messenger",
+      "bundle_id": "com.korlixdeveloper.messenger",
+      "capabilities": [
+        "Push Notifications"
+      ],
+      "distribution_type": "App Store",
+      "reuse_certificate": "KORLIX_APP_STORE_CERT",
+      "profile_reference": "KORLIX_MESSENGER_APP_STORE_PROFILE",
+      "registered": false,
+      "profile_created": false
+    }
   },
   "validation": {
     "korlix_ai_targeted_tests": 210,
@@ -60,5 +76,6 @@
     ],
     "physical_ios_device_tests": "not_performed"
   },
-  "apple_web_access": "Two-factor verification was not completed; no alternate authentication was attempted."
+  "apple_web_access": "Authenticated; App Store Connect app list and Apple Developer identifiers inspected successfully.",
+  "apple_team_id": "FJKJ9MUDZ4"
 }

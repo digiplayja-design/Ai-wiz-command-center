@@ -81,7 +81,7 @@ workflows:
         cancel_previous_submissions: false
         release_type: AFTER_APPROVAL
 
-  korlix-messenger-ios-appstore:
+  korlix-messenger-ios-appstore: &messenger_ios_release
     name: KORLIX Messenger iOS App Store
     instance_type: mac_mini_m2
     max_build_duration: 60
@@ -159,6 +159,17 @@ workflows:
         submit_to_app_store: true
         cancel_previous_submissions: false
         release_type: AFTER_APPROVAL
+
+  korlix-messenger-ios-testflight:
+    <<: *messenger_ios_release
+    name: KORLIX Messenger iOS TestFlight Upload
+    publishing:
+      app_store_connect:
+        auth: integration
+        # Upload for internal testing. Beta review and tester distribution are
+        # configured after Apple's processing and the first-app setup checks.
+        submit_to_testflight: false
+        submit_to_app_store: false
 
   korlix-ios-testflight:
     name: Korlix AI iOS TestFlight
