@@ -114,6 +114,12 @@ class Peer implements rtc.RTCPeerConnection {
   Function(rtc.RTCPeerConnectionState)? onConnectionState;
   final sent = <rtc.MediaStreamTrack>[];
   final recordedSenders = <Sender>[];
+  final configurations = <Map<String, dynamic>>[];
+  @override
+  Future<void> setConfiguration(Map<String, dynamic> configuration) async {
+    configurations.add(configuration);
+  }
+
   bool closed = false;
   List<rtc.StatsReport> reports = [];
   @override
@@ -242,7 +248,8 @@ class Io extends SocialCallIo {
   @override
   Future<void> prepare() async {}
   @override
-  Future<rtc.RTCRtpSender> reserveVideo(rtc.RTCPeerConnection peer) async => Sender(null);
+  Future<rtc.RTCRtpSender> reserveVideo(rtc.RTCPeerConnection peer) async =>
+      Sender(null);
   @override
   Future<void> configure() async {}
   @override

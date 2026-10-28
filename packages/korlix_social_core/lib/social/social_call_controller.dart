@@ -109,6 +109,8 @@ class SocialCallMedia extends ChangeNotifier {
   }
 
   rtc.RTCPeerConnection? _peer;
+  List<dynamic> _iceServers = [];
+  bool _relayOnly = false;
   rtc.RTCRtpSender? _audioSender;
   rtc.RTCRtpSender? _videoSender;
   rtc.MediaStream? _replacementVideo;
@@ -208,6 +210,7 @@ class SocialCallMedia extends ChangeNotifier {
   void Function(String state)? onState;
 
   Future<void> open(bool video, List<dynamic> servers) async {
+    _iceServers = servers;
     camera = video;
     remoteCamera = video;
     _rendererInit = Future.wait([local.initialize(), remote.initialize()])
@@ -360,6 +363,32 @@ class SocialCallMedia extends ChangeNotifier {
     return offer();
   }
 
+  /// A mobile NAT route can connect briefly and then lose consent. If that
+  /// happens, the next ICE generation can use the already-authorized relay.
+  Future<void> useRelayForRecovery() async {
+    if (_closed || _peer == null || _relayOnly) return;
+    final hasRelay = _iceServers.any((value) {
+      final server = socialMap(value);
+      final urls = server['urls'] is List
+          ? server['urls'] as List
+          : [server['urls']];
+      return urls.any((url) => RegExp(r'^turns?:').hasMatch('$url')) &&
+          server['username'] != null &&
+          server['credential'] != null;
+    });
+    if (!hasRelay) return;
+    try {
+      await _peer!.setConfiguration({
+        'iceServers': _iceServers,
+        'sdpSemantics': 'unified-plan',
+        'iceTransportPolicy': 'relay',
+      });
+      _relayOnly = true;
+    } catch (_) {
+      // Older platform implementations can still use their normal ICE restart.
+    }
+  }
+
   Future<String> answer() async {
     final description = await _peer!.createAnswer();
     if (_closed) throw StateError('Call closed');
@@ -455,8 +484,9 @@ class SocialCallMedia extends ChangeNotifier {
   }
 
   Future<void> toggleCamera() async {
-    if (_closed || !ready || _repairingCamera || screenSharing || screenBusy)
+    if (_closed || !ready || _repairingCamera || screenSharing || screenBusy) {
       return;
+    }
     if (_cameraSuspended) {
       await _restoreCamera();
       return;
@@ -525,8 +555,9 @@ class SocialCallMedia extends ChangeNotifier {
   Future<void> startScreenShare(
     Future<bool> Function() prepareProjection,
   ) async {
-    if (_closed || !ready || screenBusy || screenSharing || !canShareScreen)
+    if (_closed || !ready || screenBusy || screenSharing || !canShareScreen) {
       return;
+    }
     screenBusy = true;
     screenError = '';
     final revision = ++_screenRevision;
@@ -588,8 +619,9 @@ class SocialCallMedia extends ChangeNotifier {
     final tracks =
         (_replacementVideo ?? _stream)?.getVideoTracks() ??
         <rtc.MediaStreamTrack>[];
-    if (tracks.isNotEmpty && !screenSharing)
+    if (tracks.isNotEmpty && !screenSharing) {
       await rtc.Helper.switchCamera(tracks.first);
+    }
   }
 
   void remoteStatus(SocialMap payload) {
@@ -695,7 +727,9 @@ class SocialCallController extends ChangeNotifier {
     KorlixSoundService? sounds,
     DateTime? ringExpiresAt,
     SocialCallBackground? background,
+    DateTime Function()? now,
   }) : media = media ?? SocialCallMedia(),
+       _now = now ?? DateTime.now,
        background = background ?? SocialCallBackground(),
        sounds = sounds ?? kKorlixSounds,
        // Only incoming invitations inherit the app-wide alert's deadline.
@@ -703,6 +737,8 @@ class SocialCallController extends ChangeNotifier {
        incoming = incoming != null,
        id = incoming?['id'] ?? socialId(),
        state = incoming?['state'] ?? 'preparing' {
+    _lastResponse = _now();
+    _registered = incoming != null;
     client.addListener(_session);
     this.media.onCandidate = (candidate) => unawaited(
       _sendSignal('candidate', {...candidate, 'generation': _generation}),
@@ -725,6 +761,7 @@ class SocialCallController extends ChangeNotifier {
   final SocialCallMedia media;
   final KorlixSoundService sounds;
   final SocialCallBackground background;
+  final DateTime Function() _now;
   DateTime? _ringExpiresAt;
   bool _closingMedia = false;
   String state, status = '', error = '';
@@ -736,6 +773,7 @@ class SocialCallController extends ChangeNotifier {
       _offered = false,
       _description = false;
   bool _started = false;
+  late bool _registered;
   bool _foreground = true;
   int _lifecycleRevision = 0;
   bool _answerStarted = false;
@@ -751,13 +789,17 @@ class SocialCallController extends ChangeNotifier {
   Timer? _timer, _clock;
   DateTime? _lastPollStarted;
   DateTime? connectedAt, _acceptedAt, _disconnectedAt;
-  DateTime _lastResponse = DateTime.now();
+  late DateTime _lastResponse;
   Future<void> _outbox = Future.value();
+  final _candidateOutboxes = List<Future<void>>.generate(
+    4,
+    (_) => Future.value(),
+  );
+  int _candidateLane = 0;
   final List<SocialMap> _candidates = [];
   SocialMap get _data => {'id': id, 'device': client.callDevice};
-  Duration get elapsed => connectedAt == null
-      ? Duration.zero
-      : DateTime.now().difference(connectedAt!);
+  Duration get elapsed =>
+      connectedAt == null ? Duration.zero : _now().difference(connectedAt!);
   void _notify() {
     _syncSounds();
     if (!_disposed) notifyListeners();
@@ -767,7 +809,7 @@ class SocialCallController extends ChangeNotifier {
     final ringing =
         !ended && !_disposed && state == 'ringing' && !_answerStarted;
     if (ringing) {
-      _ringExpiresAt ??= DateTime.now().add(const Duration(seconds: 45));
+      _ringExpiresAt ??= _now().add(const Duration(seconds: 45));
     }
     // Ringback is allowed while waiting for an answer. Effects stay silent
     // during capture setup, answering, connection, and track teardown.
@@ -809,11 +851,12 @@ class SocialCallController extends ChangeNotifier {
         : 'Preparing your ${video ? 'camera and microphone' : 'microphone'}…';
     _clock = Timer.periodic(const Duration(seconds: 1), (_) {
       if (ended) return;
-      if (!busy && DateTime.now().difference(_lastResponse).inSeconds > 45) {
+      if (!busy && _now().difference(_lastResponse).inSeconds > 45) {
         unawaited(end('Connection lost. Please try calling again.'));
       } else if (_acceptedAt != null &&
+          connectedAt == null &&
           !connected &&
-          DateTime.now().difference(_acceptedAt!).inSeconds > 40) {
+          _now().difference(_acceptedAt!).inSeconds > 40) {
         unawaited(
           end(
             relay
@@ -822,14 +865,15 @@ class SocialCallController extends ChangeNotifier {
           ),
         );
       } else if (_disconnectedAt != null &&
-          DateTime.now().difference(_disconnectedAt!).inSeconds > 40) {
+          _now().difference(_disconnectedAt!).inSeconds > 40) {
         unawaited(end('The connection was interrupted. Please call again.'));
       } else if (_disconnectedAt != null &&
+          _now().difference(_disconnectedAt!).inSeconds >= 3 &&
           (_lastRecovery == null ||
-              DateTime.now().difference(_lastRecovery!).inSeconds >= 10)) {
+              _now().difference(_lastRecovery!).inSeconds >= 10)) {
         unawaited(reconnect());
       }
-      if (media.ready && DateTime.now().second.isEven) {
+      if (media.ready && _now().second.isEven) {
         unawaited(media.checkAudio());
       }
       _notify();
@@ -859,8 +903,9 @@ class SocialCallController extends ChangeNotifier {
           }
           return;
         }
+        _registered = true;
         _applyCall(socialMap(result['call']));
-        _lastResponse = DateTime.now();
+        _lastResponse = _now();
         _startPolling();
       } catch (e) {
         if (!ended) await end(_friendly(e));
@@ -910,8 +955,7 @@ class SocialCallController extends ChangeNotifier {
       // previous two-second heartbeat and never overlap requests.
       if (!connected ||
           _lastPollStarted == null ||
-          DateTime.now().difference(_lastPollStarted!) >=
-              const Duration(seconds: 2)) {
+          _now().difference(_lastPollStarted!) >= const Duration(seconds: 2)) {
         unawaited(poll());
       }
     });
@@ -935,7 +979,7 @@ class SocialCallController extends ChangeNotifier {
         'protocol': 2,
       });
       if (ended) return;
-      _lastResponse = DateTime.now();
+      _lastResponse = _now();
       _applyCall(socialMap(result['call']));
       unawaited(poll());
     } catch (e) {
@@ -964,7 +1008,7 @@ class SocialCallController extends ChangeNotifier {
         ),
       );
     } else if (state == 'accepted') {
-      _acceptedAt ??= DateTime.now();
+      _acceptedAt ??= _now();
       if (!connected) status = 'Connecting…';
     } else {
       status = incoming
@@ -974,8 +1018,8 @@ class SocialCallController extends ChangeNotifier {
   }
 
   Future<void> poll() async {
-    if (ended || _polling) return;
-    _lastPollStarted = DateTime.now();
+    if (ended || !_registered || _polling) return;
+    _lastPollStarted = _now();
     _polling = true;
     try {
       final result = await client.get('call_poll', {
@@ -983,14 +1027,16 @@ class SocialCallController extends ChangeNotifier {
         'after': _cursor,
       });
       if (ended) return;
-      _lastResponse = DateTime.now();
+      _lastResponse = _now();
       _applyCall(socialMap(result['call']));
       if (ended) return;
       if (state == 'accepted' && !incoming && !_offered && media.ready) {
         _offered = true;
         final sdp = await media.offer();
         if (ended) return;
-        await _sendSignal('offer', {'sdp': sdp, 'generation': _generation});
+        unawaited(
+          _sendSignal('offer', {'sdp': sdp, 'generation': _generation}),
+        );
       }
       for (final signal in socialItems(result['signals'])) {
         if (ended) return;
@@ -1015,10 +1061,10 @@ class SocialCallController extends ChangeNotifier {
           }
           _candidates.clear();
           if (kind == 'offer' && !ended) {
-            await _sendSignal('answer', {
-              'sdp': await media.answer(),
-              'generation': generation,
-            });
+            final answer = await media.answer();
+            unawaited(
+              _sendSignal('answer', {'sdp': answer, 'generation': generation}),
+            );
           }
         } else if (kind == 'candidate') {
           if (_description && generation == _generation) {
@@ -1051,38 +1097,55 @@ class SocialCallController extends ChangeNotifier {
 
   Future<void> _sendSignal(String kind, SocialMap payload) {
     final signalId = socialId();
-    _outbox = _outbox
-        .then((_) async {
-          if (ended ||
-              kind != 'media' && (payload['generation'] ?? 0) < _generation) {
+    Future<void> send() async {
+      final data = {
+        ..._data,
+        'kind': kind,
+        'payload': payload,
+        'signal_id': signalId,
+      };
+      for (var attempt = 0; attempt < 3; attempt++) {
+        if (ended ||
+            !client.available ||
+            kind != 'media' && (payload['generation'] ?? 0) < _generation) {
+          return;
+        }
+        try {
+          await client.post('call_signal', data);
+          return;
+        } catch (e) {
+          if (ended) return;
+          if (e is SocialException && [401, 403, 404].contains(e.status)) {
+            await end('$e', notifyServer: false);
             return;
           }
-          final data = {
-            ..._data,
-            'kind': kind,
-            'payload': payload,
-            'signal_id': signalId,
-          };
-          try {
-            await client.post('call_signal', data);
-          } catch (e) {
-            if (e is SocialException && e.status == 409) {
-              // A peer can restart ICE while an earlier candidate is in
-              // flight. The next poll supplies the current offer.
-              unawaited(poll());
-              return;
-            }
-            if (!ended && client.available) {
-              await client.post('call_signal', data);
-            }
+          if (e is SocialException && e.status == 409) {
+            unawaited(poll());
+            return;
           }
-        })
-        .catchError((Object _) async {
-          if (!ended) {
-            await end('The call connection was interrupted. Please try again.');
-          }
-        });
-    return _outbox;
+          final retryable =
+              e is SocialException &&
+              (e.status == 0 ||
+                  e.status == 408 ||
+                  e.status == 429 ||
+                  e.status >= 500);
+          if (!retryable || attempt == 2) return;
+          await Future<void>.delayed(Duration(seconds: attempt + 1));
+        }
+      }
+    }
+
+    // SDP and restart requests must not wait behind a slow candidate or UI
+    // media update. Candidate concurrency is bounded; retries retain their ID.
+    // Polling remains independent, so signaling delays cannot expire the lease.
+    if (kind == 'candidate') {
+      final lane = _candidateLane++ % _candidateOutboxes.length;
+      return _candidateOutboxes[lane] = _candidateOutboxes[lane].then(
+        (_) => send(),
+      );
+    }
+    if (kind == 'media') return send();
+    return _outbox = _outbox.then((_) => send());
   }
 
   Future<void> _applyCandidate(SocialMap candidate) async {
@@ -1097,16 +1160,22 @@ class SocialCallController extends ChangeNotifier {
   void _mediaState(String value) {
     if (ended) return;
     if (value == 'connected') {
+      if (!connected) {
+        _recoveries = 0;
+        _lastRecovery = null;
+      }
       connected = true;
-      connectedAt ??= DateTime.now();
+      connectedAt ??= _now();
       _disconnectedAt = null;
       status = 'Connected';
       _publishMedia();
     } else if (value == 'disconnected' || value == 'failed') {
       connected = false;
-      _disconnectedAt ??= DateTime.now();
+      _disconnectedAt ??= _now();
       status = 'Reconnecting…';
-      unawaited(reconnect());
+      // Disconnected is transient: let a short network handoff recover before
+      // replacing its ICE credentials. Failed can restart immediately.
+      if (value == 'failed') unawaited(reconnect());
     } else if (['closed', 'device-ended'].contains(value)) {
       unawaited(
         end(
@@ -1129,16 +1198,20 @@ class SocialCallController extends ChangeNotifier {
         _recovering ||
         _recoveries >= 3 ||
         _lastRecovery != null &&
-            DateTime.now().difference(_lastRecovery!).inSeconds < 8) {
+            _now().difference(_lastRecovery!).inSeconds < 8) {
       return;
     }
     _recovering = true;
-    _lastRecovery = DateTime.now();
+    _lastRecovery = _now();
     _recoveries++;
-    _disconnectedAt ??= DateTime.now();
+    // The peer can request a restart while our transport is still connected.
+    // Such a request must not invent a local disconnection deadline.
+    if (!connected) _disconnectedAt ??= _now();
     status = 'Reconnecting · attempt $_recoveries of 3…';
     _notify();
     try {
+      if (relay && !connected) await media.useRelayForRecovery();
+      if (ended) return;
       if (incoming) {
         await _sendSignal('restart_request', {'generation': _generation});
       } else {
@@ -1185,7 +1258,7 @@ class SocialCallController extends ChangeNotifier {
     if (media.ready && !background.ready && !background.starting) {
       unawaited(background.start(id).then((_) => _notify()));
     }
-    _lastResponse = DateTime.now();
+    _lastResponse = _now();
     unawaited(poll());
     if (_disconnectedAt != null) unawaited(reconnect());
   }

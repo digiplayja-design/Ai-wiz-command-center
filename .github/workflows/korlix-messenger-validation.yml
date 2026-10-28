@@ -6,6 +6,7 @@ on:
     branches:
       - feature/korlix-messenger-20261024
       - fix/messenger-calls-profile-20261028
+      - fix/messenger-call-recovery-20261028
     paths:
       - .github/workflows/korlix-messenger-validation.yml
       - apps/korlix_messenger/lib/**
@@ -17,6 +18,9 @@ on:
       - packages/korlix_receipt_core/lib/**
       - packages/korlix_receipt_core/test/**
       - packages/korlix_receipt_core/pubspec.*
+      - test/social_call*test.dart
+      - test/social_communication_upgrade_test.dart
+      - test/social_screen_sharing_test.dart
 
 permissions:
   contents: read
@@ -77,7 +81,19 @@ jobs:
           flutter pub get --enforce-lockfile
           export KORLIX_FLUTTER_ROOT="$FLUTTER_ROOT"
           export AGENT_STUDIO_SCREENSHOTS="$RUNNER_TEMP/messenger-previews"
-          flutter test --no-pub --reporter expanded --timeout 2m test/social_test.dart test/social_communication_upgrade_test.dart test/social_calls_test.dart test/social_call_audio_test.dart test/social_presence_ui_test.dart test/messenger_screen_test.dart test/social_appearance_test.dart test/korlix_sound_service_test.dart test/korlix_sound_tones_test.dart test/social_screen_sharing_test.dart test/social_message_share_test.dart test/social_app_alerts_test.dart test/social_alert_overlay_test.dart test/social_sound_integration_test.dart test/social_floating_chat_test.dart test/social_native_settings_test.dart test/social_message_interactions_test.dart test/social_reactions_test.dart test/social_replies_test.dart
+          flutter test --no-pub --reporter expanded --timeout 2m test/social_test.dart test/social_communication_upgrade_test.dart test/social_calls_test.dart test/social_call_audio_test.dart test/social_call_reliability_test.dart test/social_presence_ui_test.dart test/messenger_screen_test.dart test/social_appearance_test.dart test/korlix_sound_service_test.dart test/korlix_sound_tones_test.dart test/social_screen_sharing_test.dart test/social_message_share_test.dart test/social_app_alerts_test.dart test/social_alert_overlay_test.dart test/social_sound_integration_test.dart test/social_floating_chat_test.dart test/social_native_settings_test.dart test/social_message_interactions_test.dart test/social_reactions_test.dart test/social_replies_test.dart
+      - name: Verify sustained WebRTC and legacy audio interoperability
+        shell: bash
+        run: |
+          set -euo pipefail
+          export KORLIX_TEST_CHROME="$(command -v google-chrome || command -v chromium)"
+          export CHROME_EXECUTABLE="$RUNNER_TEMP/messenger-test-chrome"
+          cat > "$CHROME_EXECUTABLE" <<'SH'
+          #!/usr/bin/env bash
+          exec "$KORLIX_TEST_CHROME" --use-fake-device-for-media-stream --use-fake-ui-for-media-stream --autoplay-policy=no-user-gesture-required "$@"
+          SH
+          chmod 700 "$CHROME_EXECUTABLE"
+          flutter test --no-pub --platform chrome --reporter expanded test/social_call_browser_test.dart
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: korlix-messenger-appearance-previews

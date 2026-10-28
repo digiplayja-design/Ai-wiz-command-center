@@ -244,13 +244,16 @@ void main() {
         await right.initialize();
         await right.accept();
         await left.poll();
+        await Future<void>.delayed(Duration.zero);
         await right.poll();
+        await Future<void>.delayed(Duration.zero);
         await left.poll();
         leftMedia.onState!('connected');
         rightMedia.onState!('connected');
         final id = left.id;
         await left.reconnect();
         await right.poll();
+        await Future<void>.delayed(Duration.zero);
         await left.poll();
         expect(left.id, id);
         expect(leftMedia.restarts, 1);

@@ -1,0 +1,13 @@
+# Messenger 1.0.2 (5): call recovery candidate
+
+Device testing of Messenger 1.0.1 against the main KORLIX app exposed calls ending after approximately 30–45 seconds. Server metadata confirmed several accepted calls ended after 41–42 seconds while participant heartbeats were still fresh. Both peers negotiated calling protocol 2; the server's 60-second lease was not the cause of those endings.
+
+The shared controller now limits the initial connection deadline to calls that have never connected. A later interruption receives its own bounded recovery window. A restart requested by the other phone no longer creates a local disconnection deadline while our transport remains connected. Brief disconnected events receive a three-second grace period; failed transports recover immediately, and successful recovery resets the consecutive-attempt budget. When configured, recovery can switch to authenticated TURN relay candidates instead of repeatedly selecting a failing direct route.
+
+Offers, answers, and restart requests no longer queue behind ICE candidates or media-button updates. Candidate delivery has four bounded lanes and three idempotent attempts with backoff. Polling continues during signaling delivery. Transient candidate or media-update failures no longer hang up working media; authorization failures, remote hangup, initial setup timeout, heartbeat loss, and prolonged transport loss still terminate the call. Outgoing calls cannot poll before server registration completes, including when Android resumes after a permission dialog.
+
+Validation before remote builds: six new regressions failed against the prior behavior; all nine focused reliability tests pass after the fix. The combined call, audio, screen-sharing, and communication suite passes 54 tests. Standalone Messenger analysis and all 27 tests pass. Changed Dart files have no analyzer findings. Existing negotiation tests now allow asynchronous signal delivery before the other peer polls.
+
+Mobile CI passed for Android and the iOS simulator in [run 40748956280](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/40748956280), validating commit `1d5901ec8e708841026ad703568e90ecbc4bdee1`. The real-browser step passed sustained audio/video and legacy-style audio-only offer/answer checks in both directions, including an ICE restart. Local browser execution was blocked by the test environment's socket restriction; these browser results are from CI.
+
+A signed Android internal build remains required. Physical Messenger-to-Messenger and Messenger-to-KORLIX calls, screen-share start/stop, and network switching must still be tested on devices. Production remains a draft until those checks and the genuine screen-sharing declaration video are complete.
