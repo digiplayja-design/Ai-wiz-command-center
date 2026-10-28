@@ -140,7 +140,11 @@ class KorlixSoundService extends ChangeNotifier {
     }
     return activation.then(
       (ok) {
-        if (_disposed || epoch != _epoch) return false;
+        if (_disposed) return false;
+        // Capture setup can change the quiet lease while audio is unlocking.
+        // Re-evaluate current leases; never permanently lose a pending ring.
+        _syncRing();
+        if (epoch != _epoch) return false;
         _blocked = !ok;
         _notify();
         return ok;
@@ -155,10 +159,11 @@ class KorlixSoundService extends ChangeNotifier {
     );
   }
 
-  bool get _audible =>
+  bool get _audible => ready && _policyAllowsSound;
+
+  bool get _policyAllowsSound =>
       !_disposed &&
       _foreground &&
-      ready &&
       _settings.enabled &&
       _settings.volume > 0 &&
       _quietOwners.isEmpty &&
@@ -312,7 +317,8 @@ class KorlixSoundService extends ChangeNotifier {
     if (original != null && original.isBefore(end)) end = original;
     _callDeadlines[id] = end;
     final prior = _rings[owner];
-    final allowed = _audible && _settings.calls && !_silencedCalls.contains(id);
+    final allowed =
+        _policyAllowsSound && _settings.calls && !_silencedCalls.contains(id);
     _rings[owner] = _Ring(
       id,
       end,
@@ -392,7 +398,7 @@ class KorlixSoundService extends ChangeNotifier {
   }
 
   void _enforceSettings() {
-    if (!_audible || !_settings.calls) {
+    if (!_policyAllowsSound || !_settings.calls) {
       _silence();
     } else {
       _player.stop('effect');

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+
 import '../accessibility/korlix_accessibility.dart';
 
 import 'social_client.dart';
@@ -18,6 +19,7 @@ class SocialAlertOverlay extends StatefulWidget {
     required this.onOpenCall,
     required this.onDeclineCall,
     this.onOpenOnline,
+    this.onAcceptCall,
     this.callActionBusy = false,
     this.callError,
   });
@@ -26,6 +28,7 @@ class SocialAlertOverlay extends StatefulWidget {
   final Widget child;
   final Future<void> Function(SocialUnreadConversation) onOpenMessage;
   final Future<void> Function(SocialMap) onOpenCall;
+  final Future<void> Function(SocialMap)? onAcceptCall;
   final Future<void> Function(SocialMap) onDeclineCall;
   final Future<void> Function(SocialOnlineAlert)? onOpenOnline;
   final bool callActionBusy;
@@ -297,10 +300,8 @@ class _SocialAlertOverlayState extends State<SocialAlertOverlay>
             key: const ValueKey('social-alert-scroll'),
             padding: const EdgeInsets.all(18),
             child: DefaultTextStyle(
-              style: Theme.of(context).textTheme.bodyMedium!.copyWith(
-                color: Colors.white,
-                fontSize: 16,
-              ),
+              style: Theme.of(context).textTheme.bodyMedium!
+                  .copyWith(color: Colors.white, fontSize: 16),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -355,7 +356,7 @@ class _SocialAlertOverlayState extends State<SocialAlertOverlay>
                   const SizedBox(height: 4),
                   Text(
                     isCall
-                        ? 'View the call to answer.'
+                        ? 'Tap Accept Call to answer.'
                         : isOnline
                         ? 'Is online now. Say hello when you’re ready.'
                         : message!.group
@@ -377,7 +378,7 @@ class _SocialAlertOverlayState extends State<SocialAlertOverlay>
                     children: [
                       _button(
                         label: isCall
-                            ? 'View call'
+                            ? 'Accept Call'
                             : isOnline
                             ? 'Open chat'
                             : 'Open message',
@@ -391,7 +392,8 @@ class _SocialAlertOverlayState extends State<SocialAlertOverlay>
                             : () => unawaited(
                                 _run(
                                   () => isCall
-                                      ? widget.onOpenCall(call)
+                                      ? (widget.onAcceptCall ??
+                                            widget.onOpenCall)(call)
                                       : isOnline
                                       ? (widget.onOpenOnline?.call(online) ??
                                             Future<void>.value())
@@ -400,6 +402,21 @@ class _SocialAlertOverlayState extends State<SocialAlertOverlay>
                                 ),
                               ),
                       ),
+                      if (isCall)
+                        TextButton(
+                          onPressed: busy
+                              ? null
+                              : () => unawaited(
+                                  _run(
+                                    () => widget.onOpenCall(call),
+                                    call: true,
+                                  ),
+                                ),
+                          child: const Text(
+                            'View call',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
                       _button(
                         label: isCall ? 'Decline' : 'Dismiss',
                         icon: isCall ? Icons.call_end_rounded : Icons.close,
@@ -445,10 +462,8 @@ class _SocialAlertOverlayState extends State<SocialAlertOverlay>
       disabledBackgroundColor: const Color(0xFF35445E),
       minimumSize: const Size(0, 48),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      textStyle: Theme.of(context).textTheme.labelLarge!.copyWith(
-        fontWeight: FontWeight.w700,
-        fontSize: 14,
-      ),
+      textStyle: Theme.of(context).textTheme.labelLarge!
+          .copyWith(fontWeight: FontWeight.w700, fontSize: 14),
     ),
     icon: busy
         ? const SizedBox(

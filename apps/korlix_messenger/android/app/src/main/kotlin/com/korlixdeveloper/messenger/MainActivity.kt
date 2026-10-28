@@ -21,8 +21,8 @@ class MainActivity: FlutterActivity() {
     private var socialCalls: MethodChannel? = null
     private var foreground = false
     private val callKinds = mutableMapOf<String, String>()
+    private val pendingProjections = mutableMapOf<String, MethodChannel.Result>()
     private val pendingCalls = mutableMapOf<String, MethodChannel.Result>()
-    private var notificationPermissionCall: String? = null
     private var approvedCall: String? = null
     private var storeReviews: MethodChannel? = null
     private var pendingStoreReview: MethodChannel.Result? = null
@@ -112,7 +112,12 @@ class MainActivity: FlutterActivity() {
         )
         socialCalls = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "korlix/social_call_background")
         KorlixSocialCallService.onStarted = { id, ready -> pendingCalls.remove(id)?.success(ready); callKinds.remove(id) }
-        KorlixSocialCallService.onStopped = { id -> socialCalls?.invokeMethod("stopped", mapOf("id" to id)) }
+        KorlixSocialCallService.onProjectionChanged = { id, ready -> pendingProjections.remove(id)?.success(ready) }
+        KorlixSocialCallService.onScreenStopRequested = { id -> socialCalls?.invokeMethod("stopScreenSharing", mapOf("id" to id)) }
+        KorlixSocialCallService.onStopped = { id ->
+            pendingProjections.remove(id)?.success(false)
+            socialCalls?.invokeMethod("stopped", mapOf("id" to id))
+        }
         socialCalls?.setMethodCallHandler { call, result ->
             val id = call.argument<String>("id")
             if (id == null || !id.matches(Regex("[A-Za-z0-9-]{1,80}"))) {
@@ -122,24 +127,35 @@ class MainActivity: FlutterActivity() {
                 callKinds.remove(id)
                 if (approvedCall == id) approvedCall = null
                 pendingCalls.remove(id)?.success(false)
+                pendingProjections.remove(id)?.success(false)
                 if (KorlixSocialCallService.activeId == id) stopService(Intent(this, KorlixSocialCallService::class.java))
                 result.success(true)
+            } else if (call.method == "screenSharing") {
+                if (KorlixSocialCallService.activeId != id || !KorlixSocialCallService.authorized.contains(id) || pendingProjections.containsKey(id)) {
+                    result.success(false)
+                } else {
+                    pendingProjections[id] = result
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        if (pendingProjections[id] === result) pendingProjections.remove(id)?.success(false)
+                    }, 8000)
+                    try {
+                        startService(Intent(this, KorlixSocialCallService::class.java).setAction("projection")
+                            .putExtra("id", id).putExtra("screenSharing", call.argument<Boolean>("active") == true))
+                    } catch (_: Exception) { pendingProjections.remove(id)?.success(false) }
+                }
             } else if (call.method == "start") {
                 // Start while the Activity is visible, after getUserMedia has
-                // granted RECORD_AUDIO. Require a visible notification too.
+                // granted RECORD_AUDIO. POST_NOTIFICATIONS is not required to
+                // start an FGS; waiting for that prompt can strand an active call.
                 val kind = call.argument<String>("kind") ?: "social"
                 val microphone = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-                val notifications = Build.VERSION.SDK_INT < 33 || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-                if (kind !in setOf("social", "rici") || !foreground || !microphone || pendingCalls.containsKey(id) || notificationPermissionCall != null) {
+                if (kind !in setOf("social", "rici") || !foreground || !microphone || pendingCalls.containsKey(id)) {
                     result.success(false)
                 } else {
                     callKinds[id] = kind
                     pendingCalls[id] = result
                     KorlixSocialCallService.authorized.add(id)
-                    if (!notifications && Build.VERSION.SDK_INT >= 33) {
-                        notificationPermissionCall = id
-                        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 4817)
-                    } else { launchSocialCall(id) }
+                    launchSocialCall(id)
                 }
             } else { result.notImplemented() }
         }
@@ -164,16 +180,7 @@ class MainActivity: FlutterActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (socialNative?.onPermissionResult(requestCode, grantResults) == true) return
-        if (requestCode != 4817) return
-        val id = notificationPermissionCall ?: return
-        notificationPermissionCall = null
-        if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
-            launchSocialCall(id)
-        } else {
-            KorlixSocialCallService.authorized.remove(id)
-            pendingCalls.remove(id)?.success(false)
-        }
+        socialNative?.onPermissionResult(requestCode, grantResults)
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
@@ -184,9 +191,12 @@ class MainActivity: FlutterActivity() {
         storeReviews = null
         pendingCalls.values.forEach { it.success(false) }
         pendingCalls.clear()
+        pendingProjections.values.forEach { it.success(false) }
+        pendingProjections.clear()
+        KorlixSocialCallService.onProjectionChanged = null
+        KorlixSocialCallService.onScreenStopRequested = null
         callKinds.clear()
         approvedCall = null
-        notificationPermissionCall = null
         KorlixSocialCallService.authorized.clear()
         stopService(Intent(this, KorlixSocialCallService::class.java))
         KorlixSocialCallService.onStarted = null
@@ -247,7 +257,7 @@ private class KorlixSoundEffects(
         if (pool != null) return
         val next = SoundPool.Builder().setMaxStreams(3).setAudioAttributes(
             AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build()
         ).build()
@@ -358,7 +368,7 @@ private class KorlixSoundEffects(
                 val duration = call.argument<Number>("durationMs")?.toLong() ?: 0
                 val activePool = pool
                 val nowEpoch = System.currentTimeMillis()
-                val prepareBudget = ((call.argument<Number>("prepareDeadlineEpochMs")?.toLong() ?: 0) - nowEpoch).coerceAtMost(250)
+                val prepareBudget = ((call.argument<Number>("prepareDeadlineEpochMs")?.toLong() ?: 0) - nowEpoch).coerceAtMost(if (validName == "ring") 1500L else 500L)
                 val ringBudget = ((call.argument<Number>("expiresEpochMs")?.toLong() ?: 0) - nowEpoch).coerceAtMost(45000)
                 val loop = call.argument<Boolean>("loop") == true
                 if (!foreground || activePool == null || wav == null || wav.size !in 44..200000 ||

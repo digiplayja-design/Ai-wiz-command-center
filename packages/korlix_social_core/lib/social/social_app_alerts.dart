@@ -209,6 +209,27 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
     final action = SocialNativeAction.parse(value, owner);
     if (action == null || !_nativeSeen.add(action.requestId)) return;
     if (_nativeSeen.length > 64) _nativeSeen.remove(_nativeSeen.first);
+    if (action.callId != null) {
+      final current = _calls.current;
+      if (current?.id == action.callId) {
+        if (action.acceptCall && current!.incoming) unawaited(current.accept());
+        await _calls.restore();
+        return;
+      }
+      await _notifications.refreshCalls();
+      if (!mounted ||
+          !identical(sessionClient, _notifications.client) ||
+          !action.matches(sessionClient))
+        return;
+      final incoming = _notifications.incomingCall;
+      // An old notification must never accept a newer call, even from the
+      // same person. The backend rechecks the exact call and device on accept.
+      if (incoming?['id'] == action.callId &&
+          socialMap(incoming?['peer'])['id'] == action.id) {
+        await _openCall(incoming!, accept: action.acceptCall);
+      }
+      return;
+    }
     final client =
         widget.clientBuilder?.call() ??
         SocialClient(
@@ -455,7 +476,7 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
     );
   }
 
-  Future<void> _openCall(SocialMap incoming) async {
+  Future<void> _openCall(SocialMap incoming, {bool accept = false}) async {
     final navigator = widget.navigatorKey.currentState;
     final client = _notifications.client;
     if (navigator == null ||
@@ -475,6 +496,7 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
       incoming['mode'] == 'video',
       incoming: incoming,
       ringExpiresAt: ringExpiresAt,
+      acceptIncoming: accept,
     );
   }
 
@@ -543,6 +565,7 @@ class _SocialAppAlertsState extends State<SocialAppAlerts>
       onOpenMessage: _openMessage,
       onOpenOnline: _openOnline,
       onOpenCall: _openCall,
+      onAcceptCall: (call) => _openCall(call, accept: true),
       onDeclineCall: _declineCall,
       callActionBusy: _declining,
       callError: _callError,

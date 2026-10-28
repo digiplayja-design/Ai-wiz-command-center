@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+
 import '../theme/korlix_theme.dart';
 import 'social_client.dart';
+import 'social_video_attachment.dart';
 import 'social_media_widgets.dart' show socialImageLabel;
 
 class SocialMessageQuote extends StatelessWidget {
@@ -25,6 +27,8 @@ class SocialMessageQuote extends StatelessWidget {
         ? socialImageLabel(attachment)
         : attachment['kind'] == 'voice'
         ? 'Voice note'
+        : socialAttachmentIsVideo(attachment)
+        ? 'Video'
         : attachment.isNotEmpty
         ? 'Attachment'
         : '';

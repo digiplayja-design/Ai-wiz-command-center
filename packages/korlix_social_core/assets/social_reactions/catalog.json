@@ -142,5 +142,197 @@
     "label": "Coffee time",
     "category": "Everyday",
     "keywords": "coffee break tired work"
+  },
+  {
+    "id": "real-thumbs-up",
+    "label": "Looking good",
+    "category": "Reactions",
+    "keywords": "approve yes thumbs up smile",
+    "pack": "People",
+    "frames": 6
+  },
+  {
+    "id": "real-laugh",
+    "label": "That is hilarious",
+    "category": "Reactions",
+    "keywords": "laugh funny lol laughing",
+    "pack": "People",
+    "frames": 6
+  },
+  {
+    "id": "real-wave",
+    "label": "Hello there",
+    "category": "Greetings",
+    "keywords": "hi hey hello wave",
+    "pack": "People",
+    "frames": 6
+  },
+  {
+    "id": "real-thanks",
+    "label": "So grateful",
+    "category": "Greetings",
+    "keywords": "thanks thank you grateful appreciation",
+    "pack": "People",
+    "frames": 6
+  },
+  {
+    "id": "real-kiss",
+    "label": "Sending love",
+    "category": "Love",
+    "keywords": "kiss love affection",
+    "pack": "People",
+    "frames": 6
+  },
+  {
+    "id": "real-cheer",
+    "label": "We did it",
+    "category": "Celebrate",
+    "keywords": "yes win celebrate success cheer",
+    "pack": "People",
+    "frames": 6
+  },
+  {
+    "id": "real-tears",
+    "label": "Feeling emotional",
+    "category": "Reactions",
+    "keywords": "cry tears sad sorry emotional",
+    "pack": "People",
+    "frames": 6
+  },
+  {
+    "id": "real-surprise",
+    "label": "No way",
+    "category": "Reactions",
+    "keywords": "surprised shocked wow gasp",
+    "pack": "People",
+    "frames": 6
+  },
+  {
+    "id": "real-skeptical",
+    "label": "Really though",
+    "category": "Reactions",
+    "keywords": "skeptical doubt really seriously",
+    "pack": "People",
+    "frames": 6
+  },
+  {
+    "id": "real-applause",
+    "label": "You deserve it",
+    "category": "Celebrate",
+    "keywords": "clap applause bravo well done",
+    "pack": "People",
+    "frames": 6
+  },
+  {
+    "id": "real-thinking",
+    "label": "Let me think",
+    "category": "Reactions",
+    "keywords": "think ponder idea hmm",
+    "pack": "People",
+    "frames": 6
+  },
+  {
+    "id": "real-giggle",
+    "label": "Cannot stop laughing",
+    "category": "Reactions",
+    "keywords": "giggle funny laugh lol",
+    "pack": "People",
+    "frames": 6
+  },
+  {
+    "id": "real-puppy",
+    "label": "Happy puppy",
+    "category": "Animals",
+    "keywords": "dog puppy happy cute golden retriever",
+    "pack": "Animals",
+    "frames": 6
+  },
+  {
+    "id": "real-cat",
+    "label": "Sleepy kitty",
+    "category": "Animals",
+    "keywords": "cat sleepy tired good night",
+    "pack": "Animals",
+    "frames": 6
+  },
+  {
+    "id": "real-bunny",
+    "label": "Curious bunny",
+    "category": "Animals",
+    "keywords": "rabbit bunny curious cute nose",
+    "pack": "Animals",
+    "frames": 6
+  },
+  {
+    "id": "real-panda",
+    "label": "Paws up",
+    "category": "Animals",
+    "keywords": "red panda excited cheer celebrate",
+    "pack": "Animals",
+    "frames": 6
+  },
+  {
+    "id": "real-pug",
+    "label": "Not convinced",
+    "category": "Animals",
+    "keywords": "pug dog skeptical side eye",
+    "pack": "Animals",
+    "frames": 6
+  },
+  {
+    "id": "real-kitten",
+    "label": "Tiny hello",
+    "category": "Animals",
+    "keywords": "kitten cat hello hi wave",
+    "pack": "Animals",
+    "frames": 6
+  },
+  {
+    "id": "real-fist-bump",
+    "label": "Fist bump",
+    "category": "Reactions",
+    "keywords": "fist bump respect teamwork friends",
+    "pack": "Moments",
+    "frames": 6
+  },
+  {
+    "id": "real-clapping",
+    "label": "Round of applause",
+    "category": "Celebrate",
+    "keywords": "clapping bravo confetti congratulations",
+    "pack": "Moments",
+    "frames": 6
+  },
+  {
+    "id": "real-rose",
+    "label": "For you",
+    "category": "Love",
+    "keywords": "rose flower heart love romance",
+    "pack": "Moments",
+    "frames": 6
+  },
+  {
+    "id": "real-coffee",
+    "label": "Coffee time",
+    "category": "Everyday",
+    "keywords": "coffee morning break hello",
+    "pack": "Moments",
+    "frames": 6
+  },
+  {
+    "id": "real-cake",
+    "label": "Make a wish",
+    "category": "Celebrate",
+    "keywords": "birthday cake candle wish party",
+    "pack": "Moments",
+    "frames": 6
+  },
+  {
+    "id": "real-peace",
+    "label": "Peace and love",
+    "category": "Greetings",
+    "keywords": "peace victory hand bye",
+    "pack": "Moments",
+    "frames": 6
   }
 ]

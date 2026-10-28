@@ -9,24 +9,46 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.Handler
+import android.os.Looper
+import android.os.PowerManager
+import android.util.Log
 import android.media.MediaMetadata
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 
 /** Holds an explicitly started call, never starts capture or answers a call. */
 class KorlixSocialCallService : Service() {
+    private var sharingScreen = false
     private var mediaSession: MediaSession? = null
+    private var callWakeLock: PowerManager.WakeLock? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private val renewWakeLock = object : Runnable {
+        override fun run() {
+            if (activeId == null) return
+            // Bound every acquisition and renew only while the foreground call
+            // is alive. This keeps signaling timers running with the screen off.
+            callWakeLock?.acquire(10 * 60 * 1000L)
+            handler.postDelayed(this, 5 * 60 * 1000L)
+        }
+    }
     companion object {
         const val CHANNEL = "korlix_social_active_call"
         const val NOTIFICATION = 4815
         var activeId: String? = null
         val authorized = mutableSetOf<String>()
         var onStarted: ((String, Boolean) -> Unit)? = null
+        var onProjectionChanged: ((String, Boolean) -> Unit)? = null
+        var onScreenStopRequested: ((String) -> Unit)? = null
         var onStopped: ((String) -> Unit)? = null
     }
     override fun onBind(intent: Intent?): IBinder? = null
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val id = intent?.getStringExtra("id") ?: return START_NOT_STICKY
+        if (intent.action == "stopProjection") {
+            if (activeId == id) onScreenStopRequested?.invoke(id)
+            return START_NOT_STICKY
+        }
         if (intent.action == "stop") {
             if (activeId == id) stopSelf()
             return START_NOT_STICKY
@@ -37,6 +59,8 @@ class KorlixSocialCallService : Service() {
             return START_NOT_STICKY
         }
         try {
+            val projectionChange = intent.action == "projection"
+            if (projectionChange) sharingScreen = intent.getBooleanExtra("screenSharing", false)
             val rici = intent.getStringExtra("kind") == "rici"
             val channel = if (rici) "korlix_rici_voice" else CHANNEL
             val manager = getSystemService(NotificationManager::class.java)
@@ -63,20 +87,41 @@ class KorlixSocialCallService : Service() {
                 }
                 builder.setStyle(Notification.MediaStyle().setMediaSession(mediaSession!!.sessionToken).setShowActionsInCompactView(0))
             }
+            if (sharingScreen) {
+                val stopShare = PendingIntent.getService(this, 4817,
+                    Intent(this, KorlixSocialCallService::class.java).setAction("stopProjection").putExtra("id", id),
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+                builder.addAction(Notification.Action.Builder(android.R.drawable.ic_menu_close_clear_cancel, "Stop sharing", stopShare).build())
+            }
             val notification = builder.setSmallIcon(android.R.drawable.sym_action_call)
-                .setContentTitle(if (rici) "Rici voice is active" else "KORLIX call in progress")
-                .setContentText(if (rici) "Voice conversation continues with the screen locked." else "Audio call active. Tap to return to KORLIX.")
+                .setContentTitle(if (rici) "Rici voice is active" else if (sharingScreen) "KORLIX is sharing your screen" else "KORLIX call in progress")
+                .setContentText(if (rici) "Voice conversation continues with the screen locked." else if (sharingScreen) "Your screen is visible to the other caller." else "Audio call active. Tap to return to KORLIX.")
                 .setContentIntent(openIntent).setOngoing(true).setCategory(Notification.CATEGORY_CALL)
                 .setVisibility(Notification.VISIBILITY_PRIVATE)
                 .addAction(Notification.Action.Builder(android.R.drawable.ic_media_pause, if (rici) "Stop voice" else "End call", endIntent).build()).build()
             if (Build.VERSION.SDK_INT >= 30) {
-                startForeground(NOTIFICATION, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+                startForeground(NOTIFICATION, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK or
+                    (if (sharingScreen) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION else 0))
             } else if (Build.VERSION.SDK_INT >= 29) {
-                startForeground(NOTIFICATION, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
+                startForeground(NOTIFICATION, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK or
+                    (if (sharingScreen) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION else 0))
             } else { startForeground(NOTIFICATION, notification) }
             activeId = id
-            onStarted?.invoke(id, true)
-        } catch (_: Exception) {
+            if (callWakeLock == null) {
+                callWakeLock = getSystemService(PowerManager::class.java)
+                    .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "KORLIX:activeCall")
+                    .apply { setReferenceCounted(false) }
+            }
+            handler.removeCallbacks(renewWakeLock)
+            renewWakeLock.run()
+            if (projectionChange) onProjectionChanged?.invoke(id, true) else onStarted?.invoke(id, true)
+        } catch (error: Exception) {
+            Log.w("KorlixCall", "Unable to start foreground call service", error)
+            if (intent.action == "projection" && activeId == id) {
+                sharingScreen = false
+                onProjectionChanged?.invoke(id, false)
+                return START_NOT_STICKY
+            }
             authorized.remove(id)
             onStarted?.invoke(id, false)
             stopSelf()
@@ -85,6 +130,9 @@ class KorlixSocialCallService : Service() {
     }
     override fun onTaskRemoved(rootIntent: Intent?) { stopSelf(); super.onTaskRemoved(rootIntent) }
     override fun onDestroy() {
+        handler.removeCallbacks(renewWakeLock)
+        callWakeLock?.let { if (it.isHeld) it.release() }
+        callWakeLock = null
         mediaSession?.release()
         mediaSession = null
         val id = activeId

@@ -79,8 +79,9 @@ class _NativeSoundPlayer implements KorlixSoundPlayer {
 
     // Loading a 45ms click must not consume its actual playback duration.
     // Preparation has its own short deadline; rings retain an absolute expiry.
+    final preparationMs = channel == 'ring' ? 1500 : 500;
     _preparationTimers[channel] = Timer(
-      const Duration(milliseconds: 250),
+      Duration(milliseconds: preparationMs),
       expire,
     );
     if (loop) _timers[channel] = Timer(Duration(milliseconds: limit), expire);
@@ -92,7 +93,7 @@ class _NativeSoundPlayer implements KorlixSoundPlayer {
       'volume': volume.clamp(0.0, 1.0),
       'durationMs': limit,
       'loop': loop,
-      'prepareDeadlineEpochMs': requestedAt + 250,
+      'prepareDeadlineEpochMs': requestedAt + preparationMs,
       'expiresEpochMs': requestedAt + limit,
     });
     if (!ready || _revisions[channel] != revision) return true;

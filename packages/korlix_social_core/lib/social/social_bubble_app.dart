@@ -8,9 +8,11 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../auth/korlix_token_store.dart';
 import '../theme/korlix_theme.dart';
 import 'social_client.dart';
+import 'social_appearance.dart';
 import 'social_floating_chat.dart';
 import 'social_native_bridge.dart';
 import 'social_push_platform.dart';
+import 'social_screen.dart';
 import 'social_threads.dart';
 
 const _bubbleBackend = String.fromEnvironment(
@@ -357,7 +359,13 @@ class _SocialBubbleAppState extends State<SocialBubbleApp>
   @override
   Widget build(BuildContext context) => MaterialApp(
     debugShowCheckedModeBanner: false,
-    theme: korlixBuildTheme('korlix_blue'),
+    theme: korlixBuildTheme(
+      widget.messengerMode ? messengerDefaultAppearance.themeId : 'korlix_blue',
+    ),
+    builder: (_, child) => SocialAppearance(
+      defaultChoice: widget.messengerMode ? messengerDefaultAppearance : null,
+      child: child!,
+    ),
     home: Scaffold(
       body: SafeArea(
         child: Column(
@@ -371,7 +379,7 @@ class _SocialBubbleAppState extends State<SocialBubbleApp>
                       key: const ValueKey('bubble-open-korlix'),
                       onPressed: () => SocialFloatingChat.openMain(_target),
                       icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                      label: const Text('Open KORLIX'),
+                      label: const Text('Open full Messenger'),
                     ),
                   ),
                   IconButton(
@@ -396,15 +404,33 @@ class _SocialBubbleAppState extends State<SocialBubbleApp>
                     )
                   : _profile == null || _client == null || _target == null
                   ? const Center(child: CircularProgressIndicator())
-                  : SocialChatScreen(
-                      key: ValueKey(
-                        '${_target!.kind}:${_target!.id}:$_revision',
-                      ),
+                  : !widget.messengerMode
+                  ? SocialChatScreen(
                       client: _client!,
                       me: _profile!,
                       peer: {'id': _target!.id, 'name': 'Conversation'},
                       groupChat: _target!.kind == 'group',
                       bubbleMode: true,
+                    )
+                  : SocialScreen(
+                      key: ValueKey('floating-messenger:$_revision'),
+                      client: _client!,
+                      ownsClient: false,
+                      messengerMode: widget.messengerMode,
+                      bubbleMode: true,
+                      initialConversation: {
+                        'id': _target!.id,
+                        'name': 'Conversation',
+                      },
+                      initialGroupChat: _target!.kind == 'group',
+                      onOpenAccount: () => SocialFloatingChat.openMain(_target),
+                      onOpenMain: (peer, group) => SocialFloatingChat.openMain(
+                        SocialFloatingTarget(
+                          owner: _target!.owner,
+                          kind: group ? 'group' : 'peer',
+                          id: '${peer['id']}',
+                        ),
+                      ),
                     ),
             ),
           ],

@@ -33,11 +33,15 @@ class SocialScreen extends StatefulWidget {
     this.initialGroupChat = false,
     this.messengerMode = false,
     this.onOpenAccount,
+    this.bubbleMode = false,
+    this.ownsClient = true,
+    this.onOpenMain,
   });
   final SocialClient client;
   final SocialMap? initialConversation;
   final bool initialGroupChat;
-  final bool messengerMode;
+  final bool messengerMode, bubbleMode, ownsClient;
+  final void Function(SocialMap peer, bool group)? onOpenMain;
   final VoidCallback? onOpenAccount;
   @override
   State<SocialScreen> createState() => _SocialScreenState();
@@ -107,7 +111,7 @@ class _SocialScreenState extends State<SocialScreen>
       _notifications = notifications;
       _notifications?.addListener(_callCountsChanged);
     }
-    if (_notifications != null) {
+    if (_notifications != null || widget.bubbleMode) {
       _calls?.cancel();
       _calls = null;
     } else {
@@ -182,14 +186,15 @@ class _SocialScreenState extends State<SocialScreen>
     _notifications?.removeListener(_callCountsChanged);
     WidgetsBinding.instance.removeObserver(this);
     client.removeListener(_access);
-    client.dispose();
+    if (widget.ownsClient) client.dispose();
     _search.dispose();
     _scroll.dispose();
     super.dispose();
   }
 
   Future<void> _incomingCall() async {
-    if (_notifications != null ||
+    if (widget.bubbleMode ||
+        _notifications != null ||
         _checkingCalls ||
         _callOpen ||
         !_foreground ||
@@ -231,6 +236,10 @@ class _SocialScreenState extends State<SocialScreen>
     SocialMap? incoming,
   }) async {
     if (_callOpen || !client.available || !mounted) return;
+    if (widget.bubbleMode) {
+      widget.onOpenMain?.call(peer, false);
+      return;
+    }
     final hostedCalls = SocialAlertScope.maybeOf(context)?.calls;
     if (hostedCalls != null) {
       await hostedCalls.start(peer, video, incoming: incoming);
@@ -488,6 +497,13 @@ class _SocialScreenState extends State<SocialScreen>
     }
   }
 
+  void _completeMessengerProfile(SocialMap profile) {
+    if (!mounted || _denied || !client.available) return;
+    setState(() => _profile = profile);
+    _presence(refreshHosted: true);
+    unawaited(_load());
+  }
+
   void _hideMember(String id) {
     if (!mounted) return;
     _generation++;
@@ -582,6 +598,7 @@ class _SocialScreenState extends State<SocialScreen>
           me: me,
           peer: p,
           onCall: (video) => _openCall(p, video),
+          bubbleMode: widget.bubbleMode,
         ),
       ),
     );
@@ -656,7 +673,13 @@ class _SocialScreenState extends State<SocialScreen>
 
   Future<void> _openGroup(SocialMap group) async {
     if (_profile == null || _denied) return;
-    await socialOpenGroup(context, client, _profile!, group);
+    await socialOpenGroup(
+      context,
+      client,
+      _profile!,
+      group,
+      bubbleMode: widget.bubbleMode,
+    );
     if (mounted && !_denied) await _load();
   }
 
@@ -1234,7 +1257,19 @@ class _SocialScreenState extends State<SocialScreen>
       MessengerConversationTile(peer: peer, onTap: () => _chat(peer));
 
   @override
-  Widget build(BuildContext context) => SocialScaffold(
+  Widget build(BuildContext context) {
+    if (widget.messengerMode && _initialized && !_denied && _profile == null) {
+      return SocialProfileForm(
+        client: client,
+        messengerSetup: true,
+        onOpenAccount: widget.onOpenAccount,
+        onSaved: _completeMessengerProfile,
+      );
+    }
+    return _buildSocialScreen(context);
+  }
+
+  Widget _buildSocialScreen(BuildContext context) => SocialScaffold(
     appBar: AppBar(
       title: Text(
         widget.messengerMode
@@ -1284,6 +1319,8 @@ class _SocialScreenState extends State<SocialScreen>
                 ? _load()
                 : v == 'appearance'
                 ? showSocialAppearancePicker(context)
+                : v == 'notifications' && widget.bubbleMode
+                ? widget.onOpenAccount?.call()
                 : v == 'notifications'
                 ? Navigator.of(context).push(
                     SocialPageRoute<void>(

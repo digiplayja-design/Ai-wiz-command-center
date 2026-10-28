@@ -8,7 +8,10 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'social_media_widgets.dart';
+import 'social_message_share.dart';
 import 'social_reaction_picker.dart';
+import 'social_message_reactions.dart';
+import 'social_message_text.dart';
 import 'social_voice_note.dart';
 
 import 'package:flutter/material.dart';
@@ -38,16 +41,19 @@ class SocialChatScreen extends StatefulWidget {
     this.groupChat = false,
     this.onGroupDetails,
     this.attachmentPicker,
+    this.messageSharer,
     this.autoDumpNow,
     this.bubbleMode = false,
   });
   final SocialClient client;
+  final SocialMessageSharer? messageSharer;
   final SocialMap me, peer;
   final Future<void> Function(bool video)? onCall;
   final bool groupChat;
   final Future<SocialAttachmentDraft?> Function(String kind)? attachmentPicker;
   final Future<bool> Function()? onGroupDetails;
   final DateTime Function()? autoDumpNow;
+
   /// A native bubble is a compact chat surface; calls and microphone capture
   /// stay in the main app, which owns their permissions and audio lifecycle.
   final bool bubbleMode;
@@ -57,7 +63,10 @@ class SocialChatScreen extends StatefulWidget {
 
 class _SocialChatScreenState extends State<SocialChatScreen>
     with WidgetsBindingObserver, RouteAware {
-  final _text = TextEditingController(), _scroll = ScrollController();
+  final _text = SocialTextController();
+  final _scroll = ScrollController();
+  final _reacting = <String>{};
+  String? _sendFormatting;
   final _composeFocus = FocusNode();
   SocialMap? _replyTo;
   String? _sendReplyId;
@@ -77,6 +86,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
   int _dumpAnimation = 0;
   SocialAttachmentDraft? _attachment;
   bool _pickingAttachment = false, _uploading = false;
+  final _sharing = <String>{};
   String? _sendAttachmentId;
   List<SocialMap> _messages = [];
   late SocialMap _peer = widget.peer;
@@ -707,14 +717,16 @@ class _SocialChatScreenState extends State<SocialChatScreen>
             _loading = false;
           });
           try {
-            final result = await widget.client
-                .post(seconds == null ? 'dump_cancel' : 'dump_schedule', {
-                  'id': id,
-                  ..._destination,
-                  'seconds': ?seconds,
-                  'request_id': requestId,
-                  'dump_scope': scope,
-                });
+            final result = await widget.client.post(
+              seconds == null ? 'dump_cancel' : 'dump_schedule',
+              {
+                'id': id,
+                ..._destination,
+                'seconds': ?seconds,
+                'request_id': requestId,
+                'dump_scope': scope,
+              },
+            );
             if (!mounted || !widget.client.available || _unavailable) {
               throw const SocialException(
                 'Your session changed. Reopen Social.',
@@ -753,6 +765,34 @@ class _SocialChatScreenState extends State<SocialChatScreen>
       ),
     );
     if (mounted && widget.client.available) unawaited(_load(quiet: true));
+  }
+
+  Future<void> _shareMessage(
+    SocialMap message,
+    BuildContext buttonContext,
+  ) async {
+    final id = '${message['id']}';
+    if (_sharing.contains(id)) return;
+    final box = buttonContext.findRenderObject() as RenderBox?;
+    if (box == null || !box.hasSize) return;
+    final origin = box.localToGlobal(Offset.zero) & box.size;
+    setState(() => _sharing.add(id));
+    try {
+      await (widget.messageSharer ?? SocialMessageSharer()).share(
+        client: widget.client,
+        message: message,
+        origin: origin,
+        stillAvailable: () =>
+            mounted &&
+            !_unavailable &&
+            !_dumps.hidden(id) &&
+            _messages.any((m) => m['id'] == id && m['deleted'] != true),
+      );
+    } catch (e) {
+      if (mounted && widget.client.available) socialNotice(context, e);
+    } finally {
+      if (mounted) setState(() => _sharing.remove(id));
+    }
   }
 
   Future<void> _pickAttachment(String kind) async {
@@ -813,18 +853,20 @@ class _SocialChatScreenState extends State<SocialChatScreen>
       } else {
         final result = await FilePicker.platform.pickFiles(
           type: FileType.custom,
-          allowedExtensions: [
-            'pdf',
-            'doc',
-            'docx',
-            'xls',
-            'xlsx',
-            'ppt',
-            'pptx',
-            'txt',
-            'csv',
-            'zip',
-          ],
+          allowedExtensions: kind == 'video'
+              ? ['mp4', 'mov', 'webm']
+              : [
+                  'pdf',
+                  'doc',
+                  'docx',
+                  'xls',
+                  'xlsx',
+                  'ppt',
+                  'pptx',
+                  'txt',
+                  'csv',
+                  'zip',
+                ],
           withData: false,
           withReadStream: true,
         );
@@ -849,7 +891,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
           picked = SocialAttachmentDraft(
             bytes: data.takeBytes(),
             filename: file.name,
-            kind: 'file',
+            kind: kind == 'video' ? 'video' : 'file',
           );
         }
       }
@@ -882,11 +924,15 @@ class _SocialChatScreenState extends State<SocialChatScreen>
         _unavailable) {
       return;
     }
+    final formatting = _text.formatting;
+    final encodedFormatting = jsonEncode(formatting);
     final replyId = _replyTo?['id'] as String?;
     if (_sendBody != body ||
+        _sendFormatting != encodedFormatting ||
         _sendReplyId != replyId ||
         _sendAttachmentId != draft?.id) {
       _sendBody = body;
+      _sendFormatting = encodedFormatting;
       _sendReplyId = replyId;
       _sendAttachmentId = draft?.id;
       _sendKey = socialId();
@@ -915,6 +961,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
         'id': _sendKey,
         ..._destination,
         'body': body,
+        if (formatting.isNotEmpty) 'formatting': formatting,
         'reply_to': ?replyId,
         if (draft != null) 'attachment_id': draft.id,
       });
@@ -1138,14 +1185,19 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                         ),
                         const SizedBox(height: 12),
                       ],
-                      SelectableText(
-                        removed
-                            ? 'Message removed'
-                            : '${message['body'] ?? ''}',
-                        style: TextStyle(
-                          height: 1.5,
-                          color: removed ? s.mutedText : s.text,
+                      SelectableText.rich(
+                        socialMessageSpan(
+                          removed
+                              ? 'Message removed'
+                              : '${message['body'] ?? ''}',
+                          removed ? null : message['formatting'],
+                          TextStyle(
+                            height: 1.5,
+                            color: removed ? s.mutedText : s.text,
+                          ),
                         ),
+                        contextMenuBuilder: (context, editor) =>
+                            socialTextSelectionMenu(context, editor),
                       ),
                       const SizedBox(height: 12),
                       Text(
@@ -1178,7 +1230,79 @@ class _SocialChatScreenState extends State<SocialChatScreen>
     }
   }
 
+  String? _myReaction(SocialMap m) {
+    for (final reaction in socialItems(m['reactions'])) {
+      if (reaction['mine'] == true) return reaction['emoji'] as String?;
+    }
+    return null;
+  }
+
+  Future<void> _react(SocialMap message, String emoji) async {
+    final id = '${message['id']}';
+    if (!mounted ||
+        _unavailable ||
+        !widget.client.available ||
+        _reacting.contains(id) ||
+        _dumps.hidden(id)) {
+      return;
+    }
+    final current = _messages.where((m) => m['id'] == id).firstOrNull;
+    if (current == null || current['deleted'] == true) return;
+    setState(() => _reacting.add(id));
+    try {
+      final result = await widget.client.post('react', {
+        ..._destination,
+        'id': id,
+        'emoji': emoji.isEmpty || _myReaction(current) == emoji ? null : emoji,
+      });
+      if (!mounted ||
+          !widget.client.available ||
+          _unavailable ||
+          _dumps.hidden(id)) {
+        return;
+      }
+      setState(() {
+        ++_generation;
+        _loading = false;
+        _messages = [
+          for (final m in _messages)
+            if (m['id'] == id && m['deleted'] != true)
+              {...m, 'reactions': result['reactions']}
+            else
+              m,
+        ];
+      });
+    } catch (error) {
+      if (mounted && widget.client.available) socialNotice(context, error);
+    } finally {
+      if (mounted) setState(() => _reacting.remove(id));
+    }
+  }
+
+  Future<void> _showReactions(SocialMap message) async {
+    if (_unavailable ||
+        !widget.client.available ||
+        message['deleted'] == true ||
+        _dumps.hidden('${message['id']}')) {
+      return;
+    }
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => SocialMessageReactionSheet(
+        client: widget.client,
+        selected: _myReaction(message),
+      ),
+    );
+    if (choice != null && mounted) await _react(message, choice);
+  }
+
   Future<void> _messageAction(String action, SocialMap m) async {
+    if (action == 'react') {
+      await _showReactions(m);
+      return;
+    }
     if (action == 'dump') {
       await _chooseAutoDump(m);
       return;
@@ -1267,179 +1391,286 @@ class _SocialChatScreenState extends State<SocialChatScreen>
     }
   }
 
+  Widget _attachmentActions() {
+    final buttons = <Widget>[
+      for (final item in [
+        ('gif', 'GIF', Icons.gif_box_outlined),
+        ('sticker', 'Stickers', Icons.auto_awesome_outlined),
+        ('image', 'Photo', Icons.photo_outlined),
+        ('video', 'Video', Icons.video_library_outlined),
+        ('file', 'File', Icons.attach_file_rounded),
+        if (!widget.bubbleMode) ('voice', 'Voice note', Icons.mic_none_rounded),
+      ])
+        TextButton.icon(
+          onPressed: _sending || _pickingAttachment
+              ? null
+              : () => _pickAttachment(item.$1),
+          icon: Icon(item.$3, size: 19),
+          label: Text(item.$2),
+        ),
+    ];
+    final media = MediaQuery.of(context);
+    if (media.textScaler.scale(14) > 21 ||
+        media.size.height - media.viewInsets.bottom < 500) {
+      return SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(children: buttons),
+      );
+    }
+    return Wrap(spacing: 4, alignment: WrapAlignment.center, children: buttons);
+  }
+
   Widget _bubble(SocialMap m) {
+    final palette = korlixSkinOf(context);
+    final bubbleTheme = socialMessageTheme(context);
     final mine = m['sender'] == widget.me['id'],
-        s = korlixSkinOf(context),
+        s = bubbleTheme.extension<KorlixPaletteExtension>()?.palette ?? palette,
         removed = m['deleted'] == true;
     return Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 620),
-        child: Container(
-          key: _messageKeys.putIfAbsent('${m['id']}', GlobalKey.new),
-          margin: EdgeInsets.only(
-            left: mine ? 28 : 0,
-            right: mine ? 0 : 28,
-            bottom: 12,
-          ),
-          padding: const EdgeInsets.fromLTRB(16, 8, 10, 12),
-          decoration: socialSurfaceDecoration(
-            s,
-            socialScreenSkinOf(context),
-            message: true,
-            mine: mine,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
+        child: GestureDetector(
+          onLongPress: removed || _unavailable ? null : () => _showReactions(m),
+          child: Container(
+            key: _messageKeys.putIfAbsent('${m['id']}', GlobalKey.new),
+            margin: EdgeInsets.only(
+              left: mine ? 28 : 0,
+              right: mine ? 0 : 28,
+              bottom: 12,
+            ),
+            padding: const EdgeInsets.fromLTRB(16, 8, 10, 12),
+            decoration: socialSurfaceDecoration(
+              palette,
+              socialScreenSkinOf(context),
+              message: true,
+              mine: mine,
+            ),
+            child: Theme(
+              data: bubbleTheme,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (!removed) ...[
-                    SocialAvatar(
-                      member: mine
-                          ? widget.me
-                          : widget.groupChat
-                          ? socialMap(m['author'])
-                          : _peer,
-                      size: 26,
-                      showStatus: false,
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  Flexible(
-                    child: SocialMemberName(
-                      member: mine
-                          ? widget.me
-                          : widget.groupChat
-                          ? socialMap(m['author'])
-                          : _peer,
-                      name: _author(m),
-                      showStatus: !mine && !removed && !_unavailable,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: s.mutedText,
-                      ),
-                    ),
-                  ),
-                  if (!removed)
-                    IconButton(
-                      key: ValueKey('reply-${m['id']}'),
-                      tooltip: 'Reply to message',
-                      onPressed: _sending || _unavailable
-                          ? null
-                          : () => _chooseReply(m),
-                      icon: Icon(
-                        Icons.reply_rounded,
-                        size: 20,
-                        color: s.primary,
-                      ),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                  if (!removed)
-                    PopupMenuButton<String>(
-                      tooltip: 'Message options',
-                      onSelected: (v) {
-                        if (v != 'reply') _messageAction(v, m);
-                      },
-                      itemBuilder: (_) => [
-                        PopupMenuItem(
-                          value: 'reply',
-                          enabled: !_sending && !_unavailable,
-                          // PopupMenuItem dismisses its route before onTap.
-                          // Keep keyboard activation inside the user's tap.
-                          onTap: () => _chooseReply(m),
-                          child: const Text('Reply'),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (!removed) ...[
+                        SocialAvatar(
+                          member: mine
+                              ? widget.me
+                              : widget.groupChat
+                              ? socialMap(m['author'])
+                              : _peer,
+                          size: 26,
+                          showStatus: false,
                         ),
-                        PopupMenuItem(
-                          value: 'dump',
-                          enabled: !_dumpSaving && !_unavailable,
-                          child: Text(
-                            _dumps.deadlines.containsKey('${m['id']}')
-                                ? 'Manage Auto Dump'
-                                : 'Auto Dump',
-                          ),
-                        ),
-                        PopupMenuItem(
-                          value: mine ? 'delete' : 'report',
-                          child: Text(
-                            mine ? 'Remove message' : 'Report message',
-                          ),
-                        ),
+                        const SizedBox(width: 8),
                       ],
-                      icon: const Icon(Icons.more_horiz_rounded, size: 18),
-                      padding: EdgeInsets.zero,
+                      Flexible(
+                        child: SocialMemberName(
+                          member: mine
+                              ? widget.me
+                              : widget.groupChat
+                              ? socialMap(m['author'])
+                              : _peer,
+                          name: _author(m),
+                          showStatus: !mine && !removed && !_unavailable,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: s.mutedText,
+                          ),
+                        ),
+                      ),
+                      if (!removed)
+                        IconButton(
+                          tooltip: 'React to message',
+                          key: ValueKey('react-${m['id']}'),
+                          onPressed:
+                              _unavailable || _reacting.contains('${m['id']}')
+                              ? null
+                              : () => _showReactions(m),
+                          icon: const Icon(
+                            Icons.add_reaction_outlined,
+                            size: 20,
+                          ),
+                        ),
+                      if (!removed)
+                        IconButton(
+                          key: ValueKey('reply-${m['id']}'),
+                          tooltip: 'Reply to message',
+                          onPressed: _sending || _unavailable
+                              ? null
+                              : () => _chooseReply(m),
+                          icon: Icon(
+                            Icons.reply_rounded,
+                            size: 20,
+                            color: s.primary,
+                          ),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      if (!removed)
+                        PopupMenuButton<String>(
+                          tooltip: 'Message options',
+                          onSelected: (v) {
+                            if (v != 'reply') _messageAction(v, m);
+                          },
+                          itemBuilder: (_) => [
+                            PopupMenuItem(
+                              value: 'react',
+                              enabled: !_unavailable,
+                              child: const Text('React'),
+                            ),
+                            PopupMenuItem(
+                              value: 'reply',
+                              enabled: !_sending && !_unavailable,
+                              // PopupMenuItem dismisses its route before onTap.
+                              // Keep keyboard activation inside the user's tap.
+                              onTap: () => _chooseReply(m),
+                              child: const Text('Reply'),
+                            ),
+                            PopupMenuItem(
+                              value: 'dump',
+                              enabled: !_dumpSaving && !_unavailable,
+                              child: Text(
+                                _dumps.deadlines.containsKey('${m['id']}')
+                                    ? 'Manage Auto Dump'
+                                    : 'Auto Dump',
+                              ),
+                            ),
+                            PopupMenuItem(
+                              value: mine ? 'delete' : 'report',
+                              child: Text(
+                                mine ? 'Remove message' : 'Report message',
+                              ),
+                            ),
+                          ],
+                          icon: const Icon(Icons.more_horiz_rounded, size: 18),
+                          padding: EdgeInsets.zero,
+                        ),
+                    ],
+                  ),
+                  if (!removed && socialMap(m['reply']).isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: SocialMessageQuote(
+                        key: ValueKey('quote-${m['id']}'),
+                        message: socialMap(m['reply']),
+                        author: _author(socialMap(m['reply'])),
+                        onOpen: () => _viewOriginal('${m['reply']['id']}'),
+                      ),
+                    ),
+                  if (!removed && socialMap(m['attachment']).isNotEmpty) ...[
+                    SocialAttachmentView(
+                      key: ValueKey('attachment-${m['id']}'),
+                      client: widget.client,
+                      attachment: socialMap(m['attachment']),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  SelectableText.rich(
+                    socialMessageSpan(
+                      removed ? 'Message removed' : '${m['body'] ?? ''}',
+                      removed ? null : m['formatting'],
+                      TextStyle(
+                        height: 1.5,
+                        color: removed ? s.mutedText : s.text,
+                        fontStyle: removed
+                            ? FontStyle.italic
+                            : FontStyle.normal,
+                      ),
+                    ),
+                    contextMenuBuilder: (selectionContext, editor) =>
+                        socialTextSelectionMenu(
+                          selectionContext,
+                          editor,
+                          header: removed || _unavailable
+                              ? null
+                              : SocialQuickReactions(
+                                  onPick: (emoji) {
+                                    editor.hideToolbar();
+                                    _react(m, emoji);
+                                  },
+                                  onMore: () {
+                                    editor.hideToolbar();
+                                    _showReactions(m);
+                                  },
+                                ),
+                        ),
+                  ),
+                  if (!removed) ...[
+                    SocialMessageReactions(
+                      reactions: m['reactions'],
+                      onPick: _unavailable || _reacting.contains('${m['id']}')
+                          ? null
+                          : (emoji) => _react(m, emoji),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  if (!removed)
+                    Builder(
+                      builder: (buttonContext) => TextButton.icon(
+                        key: ValueKey('share-${m['id']}'),
+                        onPressed:
+                            _unavailable || _sharing.contains('${m['id']}')
+                            ? null
+                            : () => _shareMessage(m, buttonContext),
+                        icon: const Icon(Icons.share_outlined, size: 18),
+                        label: Text(
+                          _sharing.contains('${m['id']}')
+                              ? 'Preparing…'
+                              : 'Share',
+                        ),
+                      ),
+                    ),
+                  if (mine && !removed)
+                    SocialMessageReceipt(
+                      key: ValueKey('receipt-${m['id']}'),
+                      messageId: '${m['id']}',
+                      createdAt: m['created_at'],
+                      groupChat: widget.groupChat,
+                      readAt:
+                          _receipts['${m['id']}']?['read_at'] ?? m['read_at'],
+                      readers: socialItems(_receipts['${m['id']}']?['readers'])
+                          .where(
+                            (reader) => !_hiddenReaders.contains(reader['id']),
+                          )
+                          .toList(),
+                    )
+                  else
+                    Text(
+                      socialTime(m['created_at']),
+                      style: TextStyle(fontSize: 10, color: s.mutedText),
+                    ),
+                  if (!removed &&
+                      (_dumpMode || _dumps.deadlines.containsKey('${m['id']}')))
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: TextButton.icon(
+                        key: ValueKey('dump-message-${m['id']}'),
+                        onPressed: _dumpSaving || _unavailable
+                            ? null
+                            : () => _chooseAutoDump(m),
+                        icon: const Icon(
+                          Icons.local_shipping_rounded,
+                          size: 18,
+                        ),
+                        style: TextButton.styleFrom(
+                          foregroundColor: s.isLight
+                              ? const Color(0xffa84800)
+                              : const Color(0xffffba75),
+                          backgroundColor: Colors.orange.withValues(alpha: .12),
+                        ),
+                        label: Text(
+                          _dumps.deadlines.containsKey('${m['id']}')
+                              ? _dumps.countdown('${m['id']}')
+                              : 'Select for Auto Dump',
+                        ),
+                      ),
                     ),
                 ],
               ),
-              if (!removed && socialMap(m['reply']).isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: SocialMessageQuote(
-                    key: ValueKey('quote-${m['id']}'),
-                    message: socialMap(m['reply']),
-                    author: _author(socialMap(m['reply'])),
-                    onOpen: () => _viewOriginal('${m['reply']['id']}'),
-                  ),
-                ),
-              if (!removed && socialMap(m['attachment']).isNotEmpty) ...[
-                SocialAttachmentView(
-                  key: ValueKey('attachment-${m['id']}'),
-                  client: widget.client,
-                  attachment: socialMap(m['attachment']),
-                ),
-                const SizedBox(height: 8),
-              ],
-              SelectableText(
-                removed ? 'Message removed' : m['body'],
-                style: TextStyle(
-                  height: 1.5,
-                  color: removed ? s.mutedText : s.text,
-                  fontStyle: removed ? FontStyle.italic : FontStyle.normal,
-                ),
-              ),
-              const SizedBox(height: 8),
-              if (mine && !removed)
-                SocialMessageReceipt(
-                  key: ValueKey('receipt-${m['id']}'),
-                  messageId: '${m['id']}',
-                  createdAt: m['created_at'],
-                  groupChat: widget.groupChat,
-                  readAt: _receipts['${m['id']}']?['read_at'] ?? m['read_at'],
-                  readers: socialItems(_receipts['${m['id']}']?['readers'])
-                      .where((reader) => !_hiddenReaders.contains(reader['id']))
-                      .toList(),
-                )
-              else
-                Text(
-                  socialTime(m['created_at']),
-                  style: TextStyle(fontSize: 10, color: s.mutedText),
-                ),
-              if (!removed &&
-                  (_dumpMode || _dumps.deadlines.containsKey('${m['id']}')))
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: TextButton.icon(
-                    key: ValueKey('dump-message-${m['id']}'),
-                    onPressed: _dumpSaving || _unavailable
-                        ? null
-                        : () => _chooseAutoDump(m),
-                    icon: const Icon(Icons.local_shipping_rounded, size: 18),
-                    style: TextButton.styleFrom(
-                      foregroundColor: s.isLight
-                          ? const Color(0xffa84800)
-                          : const Color(0xffffba75),
-                      backgroundColor: Colors.orange.withValues(alpha: .12),
-                    ),
-                    label: Text(
-                      _dumps.deadlines.containsKey('${m['id']}')
-                          ? _dumps.countdown('${m['id']}')
-                          : 'Select for Auto Dump',
-                    ),
-                  ),
-                ),
-            ],
+            ),
           ),
         ),
       ),
@@ -1602,9 +1833,9 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                               child: Text(
                                 _error!,
                                 style: TextStyle(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onErrorContainer,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onErrorContainer,
                                 ),
                               ),
                             ),
@@ -1715,31 +1946,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                   if (!_unavailable)
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Wrap(
-                        spacing: 4,
-                        alignment: WrapAlignment.center,
-                        children: [
-                          for (final item in [
-                            ('gif', 'GIF', Icons.gif_box_outlined),
-                            (
-                              'sticker',
-                              'Stickers',
-                              Icons.auto_awesome_outlined,
-                            ),
-                            ('image', 'Photo', Icons.photo_outlined),
-                            ('file', 'File', Icons.attach_file_rounded),
-                            if (!widget.bubbleMode)
-                              ('voice', 'Voice note', Icons.mic_none_rounded),
-                          ])
-                            TextButton.icon(
-                              onPressed: _sending || _pickingAttachment
-                                  ? null
-                                  : () => _pickAttachment(item.$1),
-                              icon: Icon(item.$3, size: 19),
-                              label: Text(item.$2),
-                            ),
-                        ],
-                      ),
+                      child: _attachmentActions(),
                     ),
                   if (!_unavailable && _replyTo != null)
                     Padding(
@@ -1779,6 +1986,12 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                           Expanded(
                             child: TextField(
                               controller: _text,
+                              contextMenuBuilder: (context, editor) =>
+                                  socialTextSelectionMenu(
+                                    context,
+                                    editor,
+                                    controller: _text,
+                                  ),
                               focusNode: _composeFocus,
                               enabled: !_sending,
                               minLines: 1,
@@ -1800,9 +2013,8 @@ class _SocialChatScreenState extends State<SocialChatScreen>
                             onPressed: _sending ? null : _send,
                             style: IconButton.styleFrom(
                               minimumSize: const Size(52, 52),
-                              foregroundColor: korlixSkinOf(
-                                context,
-                              ).textOnAccent,
+                              foregroundColor: korlixSkinOf(context)
+                                  .textOnAccent,
                             ),
                             icon: _sending
                                 ? const SizedBox(
@@ -2517,8 +2729,7 @@ class _SocialTopicScreenState extends State<SocialTopicScreen>
                   const SocialEmpty(
                     icon: Icons.lock_outline,
                     title: 'This discussion is locked.',
-                    body:
-                        'Existing posts can still be read. New replies are closed.',
+                    body: 'Existing posts can still be read. New replies are closed.',
                   )
                 else
                   _composer(),
@@ -2713,9 +2924,7 @@ class _SocialManagementScreenState extends State<SocialManagementScreen> {
     if (!await socialConfirm(
       context,
       _reports ? 'Confirm moderation action?' : 'Unblock this member?',
-      _reports
-          ? 'Apply “$decision” and resolve this report?'
-          : 'Unblocking does not restore your connection. A new follow request must be accepted.',
+      _reports ? 'Apply “$decision” and resolve this report?' : 'Unblocking does not restore your connection. A new follow request must be accepted.',
       action: _reports ? 'Apply' : 'Unblock',
     )) {
       return;

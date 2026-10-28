@@ -1,14 +1,17 @@
 import 'social_appearance.dart';
+
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import 'social_call_controller.dart';
 import 'social_call_screen.dart';
 import 'social_client.dart';
 import 'social_notifications.dart';
 import '../sounds/korlix_sound_service.dart';
 
-/// Keeps media alive above Social routes. Only an explicit minimize retains a
-/// call; Back, End, logout and account replacement release the devices.
+/// Keeps media alive above Social routes. Navigation minimizes an active call;
+/// ending the call, logout and account replacement release the devices.
 class SocialCallSession extends ChangeNotifier {
   SocialCallSession({
     required this.notifications,
@@ -29,6 +32,7 @@ class SocialCallSession extends ChangeNotifier {
     SocialMap? incoming,
     DateTime? ringExpiresAt,
     SocialCallMedia? media,
+    bool acceptIncoming = false,
   }) async {
     if (current != null) {
       await restore();
@@ -41,6 +45,7 @@ class SocialCallSession extends ChangeNotifier {
         !notifications.beginCall()) {
       return;
     }
+    unawaited(sounds.activate());
     beforeOpenCall?.call();
     final call = SocialCallController(
       client: client,
@@ -55,6 +60,10 @@ class SocialCallSession extends ChangeNotifier {
     call.addListener(_changed);
     if (incoming == null) unawaited(call.media.audio.activate());
     _changed();
+    if (incoming != null && acceptIncoming) {
+      // Only the explicit Accept Call action opts into media capture.
+      unawaited(call.initialize().then((_) => call.accept()));
+    }
     await restore();
   }
 
@@ -94,10 +103,10 @@ class SocialCallSession extends ChangeNotifier {
     await route.completed;
     routeOpen = false;
     if (_disposed || !identical(current, call)) return;
-    if (!minimized || call.ended) {
-      await call.end('Call ended');
+    if (call.ended) {
       _release();
     } else {
+      minimized = true;
       notifyListeners();
     }
   }

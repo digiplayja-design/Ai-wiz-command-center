@@ -6,6 +6,7 @@ import 'package:korlix_receipt_core/auth/korlix_http.dart' as korlix_http;
 import 'package:korlix_receipt_core/auth/korlix_session_refresh.dart';
 import 'package:korlix_social_core/auth/social_identity.dart';
 import 'package:korlix_social_core/social/social_app_alerts.dart';
+import 'package:korlix_social_core/social/social_appearance.dart';
 import 'package:korlix_social_core/social/social_client.dart';
 import 'package:korlix_social_core/social/social_screen.dart';
 import 'package:korlix_social_core/sounds/korlix_sound_host.dart';
@@ -98,23 +99,29 @@ class _MessengerSessionAppState extends State<_MessengerSessionApp> {
     title: 'KORLIX Messenger',
     navigatorKey: _navigator,
     navigatorObservers: [_observer],
-    theme: korlixBuildTheme('lavender_mist'),
-    builder: (_, child) => KorlixSoundHost(
-      child: SocialAppAlerts(
-        baseUrl: widget.auth.backendUrl,
-        headersBuilder: widget.auth.headers,
-        sessionChanges: widget.auth,
-        sessionReady: () => widget.auth.ready,
-        navigatorKey: _navigator,
-        routeObserver: _observer,
-        messengerMode: true,
-        child: child!,
+    theme: korlixBuildTheme(messengerDefaultAppearance.themeId),
+    builder: (_, child) => SocialAppearance(
+      defaultChoice: messengerDefaultAppearance,
+      child: KorlixSoundHost(
+        child: SocialAppAlerts(
+          baseUrl: widget.auth.backendUrl,
+          headersBuilder: widget.auth.headers,
+          sessionChanges: widget.auth,
+          sessionReady: () => widget.auth.ready,
+          navigatorKey: _navigator,
+          routeObserver: _observer,
+          messengerMode: true,
+          child: child!,
+        ),
       ),
     ),
     home: !widget.auth.ready
         ? const Scaffold(body: Center(child: CircularProgressIndicator()))
         : _client == null
-        ? MessengerAuthScreen(auth: widget.auth)
+        ? Theme(
+            data: korlixBuildTheme('lavender_mist'),
+            child: MessengerAuthScreen(auth: widget.auth),
+          )
         : SocialScreen(
             client: _client!,
             messengerMode: true,

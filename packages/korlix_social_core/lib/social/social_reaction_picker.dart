@@ -10,12 +10,20 @@ import 'social_client.dart';
 import 'social_media_widgets.dart';
 
 class SocialReaction {
-  const SocialReaction(this.id, this.label, this.category, this.keywords);
-  final String id, label, category, keywords;
+  const SocialReaction(
+    this.id,
+    this.label,
+    this.category,
+    this.keywords, {
+    this.pack = 'Classic',
+    this.frames = 16,
+  });
+  final String id, label, category, keywords, pack;
+  final int frames;
   String asset(String kind) =>
       'packages/korlix_social_core/assets/social_reactions/$id.${kind == 'gif' ? 'gif' : 'png'}';
   bool matches(String query) {
-    final text = '$label $category $keywords'.toLowerCase();
+    final text = '$label $category $keywords $pack'.toLowerCase();
     return query
         .toLowerCase()
         .trim()
@@ -25,15 +33,21 @@ class SocialReaction {
 }
 
 Future<List<SocialReaction>> loadSocialReactions() async {
-  final rows =
-      jsonDecode(
-            await rootBundle.loadString('packages/korlix_social_core/assets/social_reactions/catalog.json'),
-          )
-          as List;
+  final rows = jsonDecode(
+    await rootBundle.loadString(
+      'packages/korlix_social_core/assets/social_reactions/catalog.json',
+    ),
+  ) as List;
   return rows
       .map(
-        (r) =>
-            SocialReaction(r['id'], r['label'], r['category'], r['keywords']),
+        (r) => SocialReaction(
+          r['id'],
+          r['label'],
+          r['category'],
+          r['keywords'],
+          pack: r['pack'] ?? 'Classic',
+          frames: r['frames'] ?? 16,
+        ),
       )
       .toList();
 }
@@ -94,6 +108,7 @@ class _SocialReactionSheetState extends State<SocialReactionSheet> {
   List<SocialReaction> _catalog = [];
   late String _kind = widget.initialKind;
   String _category = 'All';
+  String _pack = 'All styles';
   String? _error, _label;
   bool _loading = true, _busy = false;
   SocialAttachmentDraft? _selected;
@@ -133,12 +148,18 @@ class _SocialReactionSheetState extends State<SocialReactionSheet> {
     });
     try {
       final catalog = await loadSocialReactions();
-      if (_active) setState(() => _catalog = catalog);
+      if (_active) {
+        setState(
+          () => _catalog = [
+            ...catalog.where((r) => r.pack != 'Classic'),
+            ...catalog.where((r) => r.pack == 'Classic'),
+          ],
+        );
+      }
     } catch (_) {
       if (_active) {
         setState(
-          () => _error =
-              'The reaction collection could not load. Try again, or upload your own.',
+          () => _error = 'The reaction collection could not load. Try again, or upload your own.',
         );
       }
     } finally {
@@ -208,6 +229,7 @@ class _SocialReactionSheetState extends State<SocialReactionSheet> {
     final items = _catalog
         .where(
           (r) =>
+              (_pack == 'All styles' || r.pack == _pack) &&
               (_category == 'All' || r.category == _category) &&
               r.matches(_search.text),
         )
@@ -350,6 +372,7 @@ class _SocialReactionSheetState extends State<SocialReactionSheet> {
                       'Love',
                       'Celebrate',
                       'Everyday',
+                      'Animals',
                     ])
                       Padding(
                         padding: const EdgeInsets.only(right: 7),
@@ -369,9 +392,29 @@ class _SocialReactionSheetState extends State<SocialReactionSheet> {
                 child: Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        'KORLIX Originals · ${_catalog.length}',
-                        style: TextStyle(color: skin.mutedText, fontSize: 12),
+                      child: DropdownButton<String>(
+                        value: _pack,
+                        isExpanded: true,
+                        underline: const SizedBox.shrink(),
+                        items: [
+                          for (final pack in [
+                            'All styles',
+                            'People',
+                            'Animals',
+                            'Moments',
+                            'Classic',
+                          ])
+                            DropdownMenuItem(
+                              value: pack,
+                              child: Text(
+                                pack,
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                        ],
+                        onChanged: !_active || _busy
+                            ? null
+                            : (value) => setState(() => _pack = value!),
                       ),
                     ),
                     TextButton.icon(
@@ -455,7 +498,7 @@ class _SocialReactionSheetState extends State<SocialReactionSheet> {
                                             8,
                                           ),
                                           child: Text(
-                                            gif ? 'Preview GIF' : item.label,
+                                            item.label,
                                             maxLines: 1,
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(

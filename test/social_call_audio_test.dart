@@ -91,14 +91,14 @@ class Renderer extends rtc.RTCVideoRenderer {
 
 class Sender implements rtc.RTCRtpSender {
   Sender(this.current);
-  rtc.MediaStreamTrack current;
+  rtc.MediaStreamTrack? current;
   Completer<void>? pending;
   bool fail = false;
   @override
   Future<void> replaceTrack(rtc.MediaStreamTrack? track) async {
     if (pending != null) await pending!.future;
     if (fail) throw StateError('Cannot replace');
-    current = track!;
+    current = track;
   }
 
   @override
@@ -241,6 +241,8 @@ class Io extends SocialCallIo {
 
   @override
   Future<void> prepare() async {}
+  @override
+  Future<rtc.RTCRtpSender> reserveVideo(rtc.RTCPeerConnection peer) async => Sender(null);
   @override
   Future<void> configure() async {}
   @override

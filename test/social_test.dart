@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,6 +12,7 @@ import 'package:ai_wiz_command_center/theme/korlix_theme.dart';
 import 'package:ai_wiz_command_center/social/social_screen.dart';
 import 'package:ai_wiz_command_center/social/social_forms.dart';
 import 'package:ai_wiz_command_center/social/social_threads.dart';
+
 import 'agent_studio_test.dart' as fixtures;
 
 final me = <String, dynamic>{
@@ -52,8 +54,7 @@ final topic = <String, dynamic>{
   'id': 'topic',
   'category': 'sports',
   'title': 'What makes a great team?',
-  'body':
-      'Talent, trust, or the moments in between? Let’s talk about what brings a team together.',
+  'body': 'Talent, trust, or the moments in between? Let’s talk about what brings a team together.',
   'author': peer,
   'created_at': '2026-09-28T16:00:00Z',
   'updated_at': '2026-09-28T16:00:00Z',
@@ -292,7 +293,7 @@ void main() {
     });
   }
   testWidgets(
-    'joining requires agreement and keeps online status off by default',
+    'joining requires agreement and enables online status by default',
     (t) async {
       final s = Store(joined: false);
       await mount(
@@ -309,7 +310,7 @@ void main() {
       final switches = t
           .widgetList<SwitchListTile>(find.byType(SwitchListTile))
           .toList();
-      expect(switches[1].value, false);
+      expect(switches[1].value, true);
       expect(s.calls.where((c) => c['action'] == 'save_profile'), isEmpty);
       FocusManager.instance.primaryFocus?.unfocus();
       await t.pumpAndSettle();
@@ -323,7 +324,7 @@ void main() {
       await fixtures.tap(t, find.text('Create my Social profile').last);
       final saved = s.calls.singleWhere((c) => c['action'] == 'save_profile');
       expect(saved['accepted_rules'], true);
-      expect(saved['show_online'], false);
+      expect(saved['show_online'], true);
       expect(t.takeException(), isNull);
       await t.pumpWidget(const SizedBox());
     },
