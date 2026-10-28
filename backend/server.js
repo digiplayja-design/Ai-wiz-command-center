@@ -1,3 +1,4 @@
+import {registerAutoEmailOutboxRoutes} from './auto_email/outbox.mjs';
 import {registerAutoEmailMailboxRoutes} from './auto_email/mailboxes.mjs';
 import {createAutoEmailVoiceBridge, autoEmailVoiceInstructions, autoEmailVoiceTools} from './auto_email/voice.mjs';
 import {autoEmailAuthAlias, registerAutoEmailAppRoutes} from './security/auto_email_app.mjs';
@@ -328,6 +329,7 @@ const supabaseAdmin =
     : null;
 
 registerAutoEmailMailboxRoutes(app,{requireUser,database:supabaseAdmin});
+registerAutoEmailOutboxRoutes(app,{requireUser,database:supabaseAdmin,loadAgentProfile:korlixAgentLoadProfileV1});
 
 const videoAccess = createVideoAccess({database:supabaseAdmin});
 const receiptAppSessions = createReceiptAppSessions({database:supabaseAdmin});

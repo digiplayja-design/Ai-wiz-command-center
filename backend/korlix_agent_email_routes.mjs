@@ -342,6 +342,7 @@ function messagePublicView(row) {
 
   return Object.freeze({
     id: line(row.id, 80),
+    outboxId: typeof row.metadata?.autoEmailOutboxId === "string" ? row.metadata.autoEmailOutboxId : null,
     agentId: line(row.agent_id, 96).toLowerCase(),
     recipientId: line(row.recipient_id, 80) || null,
     ruleId: line(row.rule_id, 80) || null,

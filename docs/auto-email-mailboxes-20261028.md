@@ -18,7 +18,7 @@ Applied Supabase migration: `20261028022242_auto_email_mailbox_connections.sql` 
 
 `korlix_auto_email_mailboxes` and `korlix_auto_email_mailbox_flows` have RLS enabled with no client policies. Anon and authenticated roles have neither table CRUD nor function execution; the backend service role has the necessary grants. The four mutation/cleanup functions are SECURITY INVOKER with a fixed search path. The security advisor's informational [RLS without policies](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy) finding is expected for these service-only tables.
 
-AES-256-GCM ciphertext is bound to owner/agent/provider and, for pending flows, flow/device. Row locks and a monotonically increasing connection generation prevent old callbacks or confirmations from restoring a disconnected/replaced connection. Only the existing approved owner/agent can access these endpoints; a general KORLIX sign-in is insufficient. Exact companion-session route/method restrictions still deny sending, approval, scheduling and unrelated app access.
+AES-256-GCM ciphertext is bound to owner/agent/provider and, for pending flows, flow/device. Row locks and a monotonically increasing connection generation prevent old callbacks or confirmations from restoring a disconnected/replaced connection. Only the existing approved owner/agent can access these endpoints; a general KORLIX sign-in is insufficient. Exact companion-session route/method restrictions deny legacy sending/approval, scheduling and unrelated app access. The later reviewed-delivery increment adds only its dedicated review/submit routes.
 
 Pending attempts expire after ten minutes. Cleanup runs on API activity and best-effort at startup/every sixty seconds in the backend process. Expired attempts cannot be used before cleanup. An outage can delay physical cleanup until the backend restarts; no database cron was installed. Flow metadata is purged after one day. Token key rotation needs a separate re-encryption or reconnection procedure.
 
@@ -43,7 +43,7 @@ The names-only configuration is in `backend/.env.example`. Set the dedicated cli
 
 Desktop and 390 px mobile browser QA exercised sample-data connection status and sender-review layouts. Desktop confirmation and disconnect used an injected fake API; no real account credentials, provider consent, microphone call or email delivery was exercised. Test fixture files are excluded from deployed assets.
 
-Token refresh, delegated sending, provider delivery reconciliation and durable job supervision are not implemented in this increment. General business release also needs business workspaces, member roles, mailbox ownership, plan entitlements, approved sending policies, bounded retries and delivery audit history. The main KORLIX website and existing sender/recipient consent were not changed.
+Token refresh, explicitly reviewed delegated sending and a durable outbox were subsequently added in `auto-email-delivery-20261028.md`, and remain gated pending activation. Provider delivery reconciliation and automatic job execution remain unimplemented. General business release also needs business workspaces, member roles, mailbox ownership, plan entitlements, approved sending policies, bounded retries and delivery audit history. The main KORLIX website and existing sender/recipient consent were not changed.
 
 ## Primary references
 
