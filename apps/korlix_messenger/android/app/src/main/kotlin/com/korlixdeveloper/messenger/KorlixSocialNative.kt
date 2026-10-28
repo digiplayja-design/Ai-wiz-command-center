@@ -244,7 +244,9 @@ object KorlixSocialNative {
         if (requestedOwner != owner(context) || !validOwner(requestedOwner) || !validTarget(kind, id) ||
             intent.getStringExtra("socialEpoch") != epoch(context) || epoch(context) == null) return null
         return mapOf("type" to "open", "owner" to requestedOwner, "kind" to kind, "id" to id,
-            "requestId" to (intent.getStringExtra("socialRequestId") ?: UUID.randomUUID().toString()))
+            "requestId" to (intent.getStringExtra("socialRequestId") ?: UUID.randomUUID().toString()),
+            "callId" to (intent.getStringExtra("socialCallId") ?: ""),
+            "acceptCall" to intent.getBooleanExtra("socialAcceptCall", false)).filterValues { it != "" }
     }
 
     @Synchronized fun acceptIntent(context: Context, intent: Intent?) {
@@ -301,7 +303,8 @@ object KorlixSocialNative {
         val eventKey = digest("$binding\n$eventId")
         if (eventKey in seen) return
         if (post(context, requestedOwner, kind, id, type, explicit = false,
-                silent = data["silent"] in setOf("true", "1"), expires = expires)) {
+                silent = data["silent"] in setOf("true", "1"), expires = expires,
+                callId = if (type == "call") data["event_id"] else null)) {
             // A bounded, body-free delivery de-duplication cache.
             if (seen.size >= 100) seen.clear()
             seen.add(eventKey)
@@ -311,7 +314,7 @@ object KorlixSocialNative {
 
     @Suppress("DEPRECATION")
     private fun post(context: Context, requestedOwner: String, kind: String, id: String, type: String,
-                     explicit: Boolean, silent: Boolean = false, expires: Long? = null): Boolean {
+                     explicit: Boolean, silent: Boolean = false, expires: Long? = null, callId: String? = null): Boolean {
       return try {
         val notifications = manager(context)
         val channelId = if (silent) "${NOTIFICATIONS}_silent" else "korlix_social_conversations_v2"
@@ -332,8 +335,8 @@ object KorlixSocialNative {
                     if (preserveSound) previous?.audioAttributes else AudioAttributes.Builder()
                         .setUsage(AudioAttributes.USAGE_NOTIFICATION).setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
                 if (previous != null) {
-                    channel.enableVibration(previous.shouldVibrate())
                     channel.vibrationPattern = previous.vibrationPattern
+                    channel.enableVibration(previous.shouldVibrate())
                     channel.enableLights(previous.shouldShowLights())
                     channel.lightColor = previous.lightColor
                     channel.lockscreenVisibility = previous.lockscreenVisibility
@@ -347,17 +350,27 @@ object KorlixSocialNative {
         val bubbleMessage = Build.VERSION.SDK_INT >= 30 && shortcutId in pins(context) && type == "message"
         val open = intent(context, MainActivity::class.java, requestedOwner, kind, id)
             .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        if (type == "call" && callId != null) open.putExtra("socialCallId", callId)
         val openPending = PendingIntent.getActivity(context, 0, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(context, channelId) else Notification.Builder(context)
         val text = when {
             explicit -> "Your floating conversation is ready."
-            type == "call" -> "You have a Social call. Open Messenger to respond."
+            type == "call" -> "Incoming call. Tap Accept Call to answer."
             type == "online" -> "A Social online alert is ready."
             else -> "You have a new Social message."
         }
         builder.setSmallIcon(R.drawable.ic_social_notification).setContentTitle("KORLIX Messenger")
             .setContentText(text).setContentIntent(openPending).setVisibility(Notification.VISIBILITY_PRIVATE)
             .setCategory(Notification.CATEGORY_MESSAGE).setAutoCancel(true).setOnlyAlertOnce(explicit)
+        if (type == "call" && callId != null) {
+            val accept = Intent(open).setData(open.data!!.buildUpon().appendPath("accept").appendPath(callId).build())
+                .putExtra("socialAcceptCall", true)
+            val acceptPending = PendingIntent.getActivity(context, 4819, accept,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+            val acceptAction = Notification.Action.Builder(android.R.drawable.sym_action_call, "Accept Call", acceptPending)
+            if (Build.VERSION.SDK_INT >= 31) acceptAction.setAuthenticationRequired(true)
+            builder.addAction(acceptAction.build()).setCategory(Notification.CATEGORY_CALL)
+        }
         if (expires != null && Build.VERSION.SDK_INT >= 26 && !bubbleMessage) builder.setTimeoutAfter((expires - System.currentTimeMillis()).coerceAtLeast(1))
         if (Build.VERSION.SDK_INT < 26) {
             if (silent) builder.setSound(null).setVibrate(null)

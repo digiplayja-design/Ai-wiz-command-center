@@ -780,6 +780,7 @@ class _SocialChatScreenState extends State<SocialChatScreen>
         stillAvailable: () =>
             mounted &&
             !_unavailable &&
+            !_dumps.hidden(id) &&
             _messages.any((m) => m['id'] == id && m['deleted'] != true),
       );
     } catch (e) {

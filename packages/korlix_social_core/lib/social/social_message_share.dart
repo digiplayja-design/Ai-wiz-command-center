@@ -82,7 +82,9 @@ class SocialMessageSharer {
     final params = ShareParams(
       text: body.isEmpty ? null : body,
       files: files.isEmpty ? null : files,
-      fileNameOverrides: files.isEmpty ? null : [files.single.name],
+      fileNameOverrides: files.isEmpty
+          ? null
+          : ['${attachment['filename'] ?? 'Attachment'}'],
       sharePositionOrigin: origin,
     );
     if (present != null) {

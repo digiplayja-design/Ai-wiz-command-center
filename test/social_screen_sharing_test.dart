@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
 import 'package:korlix_social_core/social/social_call_controller.dart';
+import 'package:korlix_social_core/social/social_call_background.dart';
 
 import 'social_call_audio_test.dart' as media;
 import 'social_calls_test.dart' as calls;
@@ -35,6 +36,19 @@ class ScreenIo extends media.Io {
   @override
   Future<rtc.RTCRtpSender> reserveVideo(rtc.RTCPeerConnection peer) async =>
       reserved = media.Sender(null);
+}
+
+class Background extends SocialCallBackground {
+  @override
+  Future<bool> start(String id) async {
+    ready = true;
+    return true;
+  }
+
+  @override
+  Future<void> stop() async {
+    ready = false;
+  }
 }
 
 void main() {
@@ -86,9 +100,9 @@ void main() {
     expect(io.order, ['consent']);
     expect(io.mic.stopped, isTrue);
   });
-  testWidgets(
+  test(
     'answer handshake progresses at setup cadence without manual polls',
-    (t) async {
+    () async {
       final store = calls.CallStore();
       final callerClient = store.client('caller'),
           calleeClient = store.client('callee');
@@ -98,6 +112,7 @@ void main() {
         peer: social.peer,
         video: false,
         media: callerMedia,
+        background: Background(),
       );
       await caller.initialize();
       final callee = SocialCallController(
@@ -105,19 +120,21 @@ void main() {
         peer: social.peer,
         video: false,
         media: calleeMedia,
+        background: Background(),
         incoming: {'id': caller.id, 'state': 'ringing'},
       );
       await callee.initialize();
       await callee.accept();
-      for (var i = 0; i < 3; i++) {
-        await t.pump(const Duration(milliseconds: 350));
-        await t.pump();
+      final deadline = DateTime.now().add(const Duration(milliseconds: 1900));
+      while (callerMedia.descriptions.isEmpty &&
+          DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 25));
       }
       expect(callerMedia.descriptions, contains('answer:callee-sdp'));
       expect(calleeMedia.descriptions, contains('offer:caller-sdp'));
       caller.dispose();
       callee.dispose();
-      await t.pump();
+      await Future<void>.delayed(Duration.zero);
       callerClient.dispose();
       calleeClient.dispose();
     },

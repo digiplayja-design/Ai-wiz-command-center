@@ -19,6 +19,7 @@ class SocialAlertOverlay extends StatefulWidget {
     required this.onOpenCall,
     required this.onDeclineCall,
     this.onOpenOnline,
+    this.onAcceptCall,
     this.callActionBusy = false,
     this.callError,
   });
@@ -27,6 +28,7 @@ class SocialAlertOverlay extends StatefulWidget {
   final Widget child;
   final Future<void> Function(SocialUnreadConversation) onOpenMessage;
   final Future<void> Function(SocialMap) onOpenCall;
+  final Future<void> Function(SocialMap)? onAcceptCall;
   final Future<void> Function(SocialMap) onDeclineCall;
   final Future<void> Function(SocialOnlineAlert)? onOpenOnline;
   final bool callActionBusy;
@@ -390,7 +392,8 @@ class _SocialAlertOverlayState extends State<SocialAlertOverlay>
                             : () => unawaited(
                                 _run(
                                   () => isCall
-                                      ? widget.onOpenCall(call)
+                                      ? (widget.onAcceptCall ??
+                                            widget.onOpenCall)(call)
                                       : isOnline
                                       ? (widget.onOpenOnline?.call(online) ??
                                             Future<void>.value())
@@ -399,6 +402,21 @@ class _SocialAlertOverlayState extends State<SocialAlertOverlay>
                                 ),
                               ),
                       ),
+                      if (isCall)
+                        TextButton(
+                          onPressed: busy
+                              ? null
+                              : () => unawaited(
+                                  _run(
+                                    () => widget.onOpenCall(call),
+                                    call: true,
+                                  ),
+                                ),
+                          child: const Text(
+                            'View call',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
                       _button(
                         label: isCall ? 'Decline' : 'Dismiss',
                         icon: isCall ? Icons.call_end_rounded : Icons.close,

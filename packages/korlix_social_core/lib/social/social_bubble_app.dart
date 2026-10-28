@@ -13,6 +13,7 @@ import 'social_floating_chat.dart';
 import 'social_native_bridge.dart';
 import 'social_push_platform.dart';
 import 'social_screen.dart';
+import 'social_threads.dart';
 
 const _bubbleBackend = String.fromEnvironment(
   'AI_WIZARD_BACKEND_URL',
@@ -403,6 +404,14 @@ class _SocialBubbleAppState extends State<SocialBubbleApp>
                     )
                   : _profile == null || _client == null || _target == null
                   ? const Center(child: CircularProgressIndicator())
+                  : !widget.messengerMode
+                  ? SocialChatScreen(
+                      client: _client!,
+                      me: _profile!,
+                      peer: {'id': _target!.id, 'name': 'Conversation'},
+                      groupChat: _target!.kind == 'group',
+                      bubbleMode: true,
+                    )
                   : SocialScreen(
                       key: ValueKey('floating-messenger:$_revision'),
                       client: _client!,

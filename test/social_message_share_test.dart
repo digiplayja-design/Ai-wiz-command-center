@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:korlix_social_core/social/social_native_actions.dart';
 import 'package:korlix_social_core/social/social_client.dart';
 import 'package:korlix_social_core/social/social_message_share.dart';
 import 'package:korlix_social_core/social/social_media_widgets.dart';
@@ -28,6 +29,33 @@ class ShareClient extends SocialClient {
 }
 
 void main() {
+  test('native Accept Call requires an exact call ID and current owner', () {
+    const owner = '["https://fixture.test/auth/v1","account"]';
+    final value = <String, dynamic>{
+      'owner': owner,
+      'type': 'open',
+      'kind': 'peer',
+      'id': 'person',
+      'requestId': 'request',
+      'acceptCall': true,
+    };
+    expect(SocialNativeAction.parse(value, owner), isNull);
+    value['callId'] = '12345678-1234-1234-1234-123456789abc';
+    expect(SocialNativeAction.parse(value, owner)!.acceptCall, isTrue);
+    expect(SocialNativeAction.parse(value, 'different-owner'), isNull);
+    expect(
+      SocialNativeAction.parse({...value, 'kind': 'group'}, owner),
+      isNull,
+    );
+    expect(
+      SocialNativeAction.parse({
+        ...value,
+        'acceptCall': false,
+      }, owner)!.acceptCall,
+      isFalse,
+    );
+  });
+
   test(
     'sharing a video exports bytes and never exposes its private link',
     () async {

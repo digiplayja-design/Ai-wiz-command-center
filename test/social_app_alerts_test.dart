@@ -388,6 +388,20 @@ void main() {
     );
   }
 
+  testWidgets('Accept Call begins answering directly from the incoming alert', (tester) async {
+    final harness = _Harness(_AlertStore());
+    await harness.mount(tester);
+    await harness.call(tester);
+    expect(harness.store.requests.where((r) => r['action'] == 'call_config'), isEmpty);
+    await tester.tap(find.text('Accept Call'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SocialCallScreen), findsOneWidget);
+    expect(harness.store.requests.where((r) => r['action'] == 'call_config'), hasLength(1));
+    // The fixture disables calling, so answering fails safely before capture.
+    expect(harness.store.requests.where((r) => r['action'] == 'call_start'), isEmpty);
+    await harness.dispose(tester);
+  });
+
   testWidgets(
     'View call uses the receiving device without accepting or capturing media',
     (tester) async {
@@ -423,7 +437,7 @@ void main() {
       expect(harness.beforeOpenCall, 1);
       expect(harness.notifications.callOpen, isTrue);
       expect(find.text('View call'), findsNothing);
-      expect(find.text('Answer'), findsOneWidget);
+      expect(find.text('Accept Call'), findsOneWidget);
       await tester.pump(const Duration(seconds: 2));
       await tester.pumpAndSettle();
       expect(
@@ -449,7 +463,7 @@ void main() {
       expect(polls.every((r) => r['device'] == receiver.callDevice), isTrue);
       // Answer is the first operation permitted to request call configuration.
       // Disabled fixture calling then stops before touching a real device.
-      await tester.tap(find.byTooltip('Answer'));
+      await tester.tap(find.byTooltip('Accept Call'));
       await tester.pumpAndSettle();
       expect(
         harness.store.requests.where((r) => r['action'] == 'call_config'),

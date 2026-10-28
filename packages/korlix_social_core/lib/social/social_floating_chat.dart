@@ -148,7 +148,9 @@ Future<void> keepSocialChatFloating(
       content: SingleChildScrollView(
         child: Text(
           'Keep this conversation in an Android chat bubble while you use '
-          'other apps. Tap the bubble to read and reply; drag it away to dismiss. '
+          'other apps. Tap the bubble to read and reply, or use Back to open your '
+          'Messenger inbox, groups and members. Calls and account settings open '
+          'the full app. Drag the bubble away to dismiss it. '
           'Android may ask you to allow notifications and bubbles for KORLIX.'
           '${capabilities['push'] == true ? '' : '\n\nYou can read and reply while the bubble is open. Alerts for new messages when it is closed need background notifications to be configured.'}',
         ),
