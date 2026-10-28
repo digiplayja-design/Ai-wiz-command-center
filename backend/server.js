@@ -1,3 +1,4 @@
+import {createAutoEmailVoiceBridge, autoEmailVoiceInstructions, autoEmailVoiceTools} from './auto_email/voice.mjs';
 import {autoEmailAuthAlias, registerAutoEmailAppRoutes} from './security/auto_email_app.mjs';
 import {messengerAuthAlias} from './security/messenger_auth_alias.mjs';
 import {createAccountRequestLimiter} from './security/account_request_limiter.mjs';
@@ -279,6 +280,8 @@ app.use(express.json({
 // Separate namespace fails closed on servers without Messenger support.
 app.use(messengerAuthAlias);
 app.use(autoEmailAuthAlias);
+const autoEmailVoiceBridge=createAutoEmailVoiceBridge({requireUser});
+app.use(autoEmailVoiceBridge.alias);
 registerAutoEmailAppRoutes(app, {requireUser, loadProfile: getOrCreateProfile});
 
 async function requireDocumentUploadUser(req, res, next) {
@@ -8442,7 +8445,8 @@ function korlixLiveConvoSessionConfigV1(req) {
   const config = {
     type: "realtime",
     model: korlixLiveConvoModelV1(),
-    instructions: req.korlixWorkforceVoice ? workforceVoiceInstructions({ language: korlixLiveConvoEnvStringV1('KORLIX_LIVE_CONVO_LANGUAGE', String(req.headers?.['x-korlix-language'] || 'English')) }) + '\n' + korlixLiveConvoAccentInstructionV1(req)
+    instructions: req.korlixAutoEmailVoice ? autoEmailVoiceInstructions()
+      : req.korlixWorkforceVoice ? workforceVoiceInstructions({ language: korlixLiveConvoEnvStringV1('KORLIX_LIVE_CONVO_LANGUAGE', String(req.headers?.['x-korlix-language'] || 'English')) }) + '\n' + korlixLiveConvoAccentInstructionV1(req)
       : req.korlixCrmVoice ? crmVoiceInstructions({language:korlixLiveConvoEnvStringV1('KORLIX_LIVE_CONVO_LANGUAGE',String(req.headers?.['x-korlix-language']||'English'))}) + '\n' + korlixLiveConvoAccentInstructionV1(req)
       : req.korlixFieldProofVoice ? fieldProofVoiceInstructions({ language: korlixLiveConvoEnvStringV1('KORLIX_LIVE_CONVO_LANGUAGE', String(req.headers?.['x-korlix-language'] || 'English')) }) + '\n' + korlixLiveConvoAccentInstructionV1(req)
       : req.korlixBookkeepingVoice ? bookkeepingVoiceInstructions(req.korlixBookkeepingVoice, { language: korlixLiveConvoEnvStringV1('KORLIX_LIVE_CONVO_LANGUAGE', String(req.headers?.['x-korlix-language'] || 'English')) }) + '\n' + korlixLiveConvoAccentInstructionV1(req)
@@ -8474,6 +8478,7 @@ function korlixLiveConvoSessionConfigV1(req) {
       },
     },
   };
+  if(req.korlixAutoEmailVoice){config.tools=autoEmailVoiceTools;config.tool_choice="auto";config.max_output_tokens=1500;}
   config.instructions = riciRealtimeInstructions(config.instructions);
   return config;
 }
@@ -9413,7 +9418,7 @@ app.use("/api/live-convo/session", async (req, res, next) => {
       ...korlixLiveConvoBuild131EntitlementFields(entitlement),
     };
 
-    korlixLiveConvoBuild129ExposeHeaders(res, reservation);
+    korlixLiveConvoBuild129ExposeHeaders(res, autoEmailVoiceBridge.limits(req,reservation));
 
     res.once("finish", () => {
       if (res.statusCode >= 400) {
@@ -9507,7 +9512,7 @@ app.post(
         });
       }
 
-      if (!req.korlixWorkforceVoice && !req.korlixFieldProofVoice && !req.korlixBookkeepingVoice && !req.korlixMusicVoice && !req.korlixCrmVoice) await korlixLiveConvoAttachAgentSessionV1({ req, user });
+      if (!req.korlixAutoEmailVoice && !req.korlixWorkforceVoice && !req.korlixFieldProofVoice && !req.korlixBookkeepingVoice && !req.korlixMusicVoice && !req.korlixCrmVoice) await korlixLiveConvoAttachAgentSessionV1({ req, user });
 
       // KORLIX_LIVE_CONVO_SDP_CRLF_FIX_V1
       // Preserve the complete SDP offer, including its final CRLF.
@@ -9609,6 +9614,7 @@ app.post(
           });
       }
 
+      autoEmailVoiceBridge.started(req,res,providerResponse);
       res.status(200);
       res.set("Content-Type", "application/sdp");
       return res.send(providerBody);

@@ -1,3 +1,4 @@
+import {autoEmailVoiceReady} from '../auto_email/voice.mjs';
 import {korlixAgentEmailNovaBinding} from '../korlix_agent_email.mjs';
 
 const ACCOUNT_ROUTES = new Set(['signin', 'refresh', 'signout']);
@@ -23,10 +24,11 @@ export function autoEmailAppRouteAllowed(req) {
   const method = String(req?.method || '').toUpperCase();
   const path = String(req?.originalUrl || req?.url || req?.path || '').split('?')[0];
   if (['GET', 'HEAD'].includes(method)) {
-    if (path === '/api/auto-email/session') return true;
+    if (['/api/auto-email/session','/api/auto-email/voice/status','/api/auto-email/voice/usage'].includes(path)) return true;
     return new RegExp(`^/api/live-convo/agents/${AGENT}/email/(status|settings|recipients|drafts|delivery/status|events|rules)$`, 'i').test(path)
       || new RegExp(`^/api/live-convo/agents/${AGENT}/email/drafts/${UUID}$`, 'i').test(path);
   }
+  if (method === 'POST' && ['/api/auto-email/voice/session','/api/auto-email/voice/usage','/api/auto-email/voice/end'].includes(path)) return true;
   if (method === 'POST' && ['/api/auto-email/auth/refresh', '/api/auto-email/auth/signout'].includes(path)) return true;
   // This pilot can save correspondence, but cannot send, approve messages,
   // change consent, alter settings, or activate any sending rule.
@@ -38,8 +40,8 @@ export function autoEmailAppRouteAllowed(req) {
 export function registerAutoEmailAppRoutes(app, {requireUser, loadProfile, environment = process.env}) {
   app.get('/api/auto-email/status', (_req, res) => {
     res.set('Cache-Control', 'no-store');
-    res.json({ok: true, version: 1, app: 'auto_email', sharedAccount: true,
-      draftSync: true, liveVoice: false, mailboxOAuth: false, sending: false});
+    res.json({ok: true, version: 2, app: 'auto_email', sharedAccount: true,
+      draftSync: true, liveVoice: autoEmailVoiceReady(environment), mailboxOAuth: false, sending: false});
   });
   app.get('/api/auto-email/session', async (req, res) => {
     res.set('Cache-Control', 'no-store');
@@ -51,7 +53,7 @@ export function registerAutoEmailAppRoutes(app, {requireUser, loadProfile, envir
       res.json({ok: true, user: {id: user.id, email: user.email},
         profile: {name: String(profile?.full_name || profile?.display_name || '').slice(0,160), tier: profile?.tier || 'basic'},
         workspace: ownsWorkspace ? {agentId: binding.agentId} : null,
-        capabilities: {draftSync: ownsWorkspace, sending: false, liveVoice: false, mailboxOAuth: false}});
+        capabilities: {draftSync: ownsWorkspace, sending: false, liveVoice: ownsWorkspace && autoEmailVoiceReady(environment), mailboxOAuth: false}});
     } catch (error) {
       const status = [401,403].includes(error?.statusCode) ? error.statusCode : 503;
       res.status(status).json({error: status === 503 ? 'Your email workspace could not be loaded. Please retry.' : 'Sign in to your KORLIX account to continue.'});
