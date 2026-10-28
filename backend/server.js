@@ -1,3 +1,4 @@
+import {registerAutoEmailMailboxRoutes} from './auto_email/mailboxes.mjs';
 import {createAutoEmailVoiceBridge, autoEmailVoiceInstructions, autoEmailVoiceTools} from './auto_email/voice.mjs';
 import {autoEmailAuthAlias, registerAutoEmailAppRoutes} from './security/auto_email_app.mjs';
 import {messengerAuthAlias} from './security/messenger_auth_alias.mjs';
@@ -325,6 +326,8 @@ const supabaseAdmin =
         },
       })
     : null;
+
+registerAutoEmailMailboxRoutes(app,{requireUser,database:supabaseAdmin});
 
 const videoAccess = createVideoAccess({database:supabaseAdmin});
 const receiptAppSessions = createReceiptAppSessions({database:supabaseAdmin});
