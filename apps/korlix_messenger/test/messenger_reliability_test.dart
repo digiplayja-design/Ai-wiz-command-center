@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -282,6 +283,47 @@ void main() {
     client.dispose();
     fixture.revision.dispose();
   });
+
+  testWidgets(
+    'returning before a failed background startup keeps the foreground call',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      final ready = Completer<bool>();
+      var starts = 0;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(backgroundChannel, (method) async {
+            if (method.method != 'start') return true;
+            starts++;
+            return starts == 1 ? ready.future : true;
+          });
+      final fixture = Fixture(), media = FakeMedia();
+      final client = fixture.client();
+      final call = SocialCallController(
+        client: client,
+        peer: peer,
+        video: false,
+        media: media,
+      );
+      final initialized = call.initialize();
+      await tester.pump();
+      call.backgrounded();
+      call.resume();
+      ready.complete(false);
+      await tester.pump();
+      await initialized;
+      expect(call.ended, false);
+      expect(media.stopped, false);
+      call.resume();
+      await tester.pump();
+      expect(starts, 2);
+      expect(call.background.ready, true);
+      await call.end('End call');
+      await tester.pump();
+      call.dispose();
+      client.dispose();
+      fixture.revision.dispose();
+    },
+  );
 
   testWidgets(
     'Back, Home and return keep the same active call; End still releases it',
