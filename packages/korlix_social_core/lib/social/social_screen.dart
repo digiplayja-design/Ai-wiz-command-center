@@ -488,6 +488,13 @@ class _SocialScreenState extends State<SocialScreen>
     }
   }
 
+  void _completeMessengerProfile(SocialMap profile) {
+    if (!mounted || _denied || !client.available) return;
+    setState(() => _profile = profile);
+    _presence(refreshHosted: true);
+    unawaited(_load());
+  }
+
   void _hideMember(String id) {
     if (!mounted) return;
     _generation++;
@@ -1234,7 +1241,19 @@ class _SocialScreenState extends State<SocialScreen>
       MessengerConversationTile(peer: peer, onTap: () => _chat(peer));
 
   @override
-  Widget build(BuildContext context) => SocialScaffold(
+  Widget build(BuildContext context) {
+    if (widget.messengerMode && _initialized && !_denied && _profile == null) {
+      return SocialProfileForm(
+        client: client,
+        messengerSetup: true,
+        onOpenAccount: widget.onOpenAccount,
+        onSaved: _completeMessengerProfile,
+      );
+    }
+    return _buildSocialScreen(context);
+  }
+
+  Widget _buildSocialScreen(BuildContext context) => SocialScaffold(
     appBar: AppBar(
       title: Text(
         widget.messengerMode

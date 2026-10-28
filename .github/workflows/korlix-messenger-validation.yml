@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - feature/korlix-messenger-20261024
+      - fix/messenger-calls-profile-20261028
     paths:
       - .github/workflows/korlix-messenger-validation.yml
       - apps/korlix_messenger/lib/**
@@ -35,6 +36,18 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
+      - name: Block instance metadata before toolchain setup
+        shell: bash
+        run: |
+          set -euo pipefail
+          for network in 169.254.0.0/16 100.100.100.200/32; do
+            sudo iptables -I OUTPUT 1 -d "$network" -j REJECT
+            sudo iptables -C OUTPUT -d "$network" -j REJECT
+          done
+          for network in fe80::/10 fd00:ec2::254/128; do
+            sudo ip6tables -I OUTPUT 1 -d "$network" -j REJECT
+            sudo ip6tables -C OUTPUT -d "$network" -j REJECT
+          done
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
@@ -57,6 +70,12 @@ jobs:
           flutter pub get --enforce-lockfile
           flutter analyze --no-pub
           flutter test --no-pub --reporter expanded
+      - name: Validate shared Social call and profile regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter pub get --enforce-lockfile
+          flutter test --no-pub --reporter expanded test/social_test.dart test/social_communication_upgrade_test.dart test/social_calls_test.dart test/social_call_audio_test.dart test/social_presence_ui_test.dart test/messenger_screen_test.dart
       - name: Build Android test APK
         working-directory: apps/korlix_messenger
         run: flutter build apk --debug --no-pub
@@ -71,6 +90,18 @@ jobs:
     runs-on: macos-26
     timeout-minutes: 35
     steps:
+      - name: Block instance metadata before toolchain setup
+        shell: bash
+        run: |
+          set -euo pipefail
+          rules="$RUNNER_TEMP/korlix-metadata-block.pf"
+          cat > "$rules" <<'PF'
+          block drop out quick inet to { 169.254.0.0/16, 100.100.100.200/32 }
+          block drop out quick inet6 to { fe80::/10, fd00:ec2::254/128 }
+          PF
+          sudo pfctl -f "$rules"
+          sudo pfctl -e 2>/dev/null || sudo pfctl -s info | grep -q 'Status: Enabled'
+          sudo pfctl -s rules | grep -q '169.254.0.0/16'
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false

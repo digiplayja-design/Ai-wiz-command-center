@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' as rtc;
+
 import '../sounds/korlix_sound_service.dart';
 import 'social_client.dart';
 import 'social_audio_output.dart';
@@ -185,10 +187,8 @@ class SocialCallMedia extends ChangeNotifier {
 
   Future<void> open(bool video, List<dynamic> servers) async {
     camera = video;
-    _rendererInit = Future.wait([
-      local.initialize(),
-      remote.initialize(),
-    ]).then((_) {});
+    _rendererInit = Future.wait([local.initialize(), remote.initialize()])
+        .then((_) {});
     await _rendererInit;
     if (_closed) return;
     await io.prepare();
@@ -417,8 +417,7 @@ class SocialCallMedia extends ChangeNotifier {
       if (!_closed) await audio.resume();
     } catch (_) {
       if (!_closed) {
-        microphoneIssue =
-            'Could not reopen the microphone. Allow microphone access for KORLIX in your browser settings, close other microphone apps or tabs, then try again.';
+        microphoneIssue = 'Could not reopen the microphone. Allow microphone access for KORLIX in your browser settings, close other microphone apps or tabs, then try again.';
       }
     } finally {
       if (identical(_pendingAudio, fresh)) _pendingAudio = null;
@@ -624,6 +623,8 @@ class SocialCallController extends ChangeNotifier {
       _offered = false,
       _description = false;
   bool _started = false;
+  bool _foreground = true;
+  int _lifecycleRevision = 0;
   bool _answerStarted = false;
   int _cursor = 0;
   int _generation = 0, _remoteGeneration = -1, _recoveries = 0;
@@ -1057,13 +1058,33 @@ class SocialCallController extends ChangeNotifier {
 
   void resume() {
     if (ended) return;
+    _foreground = true;
+    _lifecycleRevision++;
+    if (media.ready && !background.ready && !background.starting) {
+      unawaited(background.start(id).then((_) => _notify()));
+    }
     _lastResponse = DateTime.now();
     unawaited(poll());
     if (_disconnectedAt != null) unawaited(reconnect());
   }
 
   void backgrounded() {
-    if (ended || kIsWeb) return;
+    if (ended || kIsWeb || !_foreground) return;
+    _foreground = false;
+    final revision = ++_lifecycleRevision;
+    // An unanswered invitation has no microphone to preserve. Its normal
+    // ringing deadline remains authoritative while the user switches apps.
+    if (incoming && !_answerStarted) return;
+    unawaited(_continueInBackground(revision));
+  }
+
+  Future<void> _continueInBackground(int revision) async {
+    if (video && media.ready) {
+      await media.suspendCamera();
+      if (!ended) _publishMedia();
+    }
+    if (background.starting) await background.waitUntilReady();
+    if (ended || _foreground || revision != _lifecycleRevision) return;
     if (!background.ready || !media.ready) {
       unawaited(
         end(
@@ -1071,13 +1092,6 @@ class SocialCallController extends ChangeNotifier {
         ),
       );
       return;
-    }
-    if (video) {
-      unawaited(
-        media.suspendCamera().then((_) {
-          if (!ended) _publishMedia();
-        }),
-      );
     }
   }
 

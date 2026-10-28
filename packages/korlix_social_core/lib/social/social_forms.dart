@@ -1,4 +1,5 @@
 import 'social_appearance.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -18,10 +19,16 @@ class SocialProfileForm extends StatefulWidget {
     required this.client,
     this.profile,
     this.photoPicker,
+    this.onSaved,
+    this.onOpenAccount,
+    this.messengerSetup = false,
   });
   final SocialClient client;
   final SocialMap? profile;
   final Future<Uint8List?> Function()? photoPicker;
+  final ValueChanged<SocialMap>? onSaved;
+  final VoidCallback? onOpenAccount;
+  final bool messengerSetup;
   @override
   State<SocialProfileForm> createState() => _SocialProfileFormState();
 }
@@ -41,7 +48,8 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
   Uint8List? _photo;
   bool _removePhoto = false, _picking = false;
   late bool _discoverable = widget.profile?['discoverable'] != false,
-      _online = widget.profile?['show_online'] == true,
+      _online =
+          widget.profile == null || widget.profile?['show_online'] == true,
       _rules = widget.profile != null;
   late String _color = widget.profile?['color'] ?? 'cyan';
   bool _saving = false;
@@ -121,10 +129,20 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
         }
       }
       if (mounted) {
+        final profile = socialMap(r['profile']);
+        if ('${profile['id'] ?? ''}'.isEmpty) {
+          throw const SocialException(
+            'Your profile could not be confirmed. Please try again.',
+          );
+        }
         unawaited(
           SocialAlertScope.maybeOf(context)?.notifications.refreshPresence(),
         );
-        Navigator.pop(context, socialMap(r['profile']));
+        if (widget.onSaved != null) {
+          widget.onSaved!(profile);
+        } else {
+          Navigator.pop(context, profile);
+        }
       }
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
@@ -167,8 +185,21 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
   Widget build(BuildContext context) => SocialScaffold(
     appBar: AppBar(
       title: Text(
-        widget.profile == null ? 'Join KORLIX Social' : 'Your Social profile',
+        widget.messengerSetup
+            ? 'Complete your profile'
+            : widget.profile == null
+            ? 'Join KORLIX Social'
+            : 'Your Social profile',
       ),
+      automaticallyImplyLeading: !widget.messengerSetup,
+      actions: [
+        if (widget.onOpenAccount != null)
+          IconButton(
+            tooltip: 'Account & help',
+            onPressed: widget.onOpenAccount,
+            icon: const Icon(Icons.account_circle_outlined),
+          ),
+      ],
     ),
     body: Center(
       child: ConstrainedBox(
@@ -180,6 +211,13 @@ class _SocialProfileFormState extends State<SocialProfileForm> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (widget.messengerSetup) ...[
+                  const Text(
+                    'Create your profile to use Messenger. Choose a display name and handle so people can find you. You can change your visibility below; other profile details are optional.',
+                    style: TextStyle(height: 1.5),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 SocialPanel(
                   child: Column(
                     children: [

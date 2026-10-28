@@ -9,6 +9,10 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.Handler
+import android.os.Looper
+import android.os.PowerManager
+import android.util.Log
 import android.media.MediaMetadata
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
@@ -16,6 +20,17 @@ import android.media.session.PlaybackState
 /** Holds an explicitly started call, never starts capture or answers a call. */
 class KorlixSocialCallService : Service() {
     private var mediaSession: MediaSession? = null
+    private var callWakeLock: PowerManager.WakeLock? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private val renewWakeLock = object : Runnable {
+        override fun run() {
+            if (activeId == null) return
+            // Bound every acquisition and renew only while the foreground call
+            // is alive. This keeps signaling timers running with the screen off.
+            callWakeLock?.acquire(10 * 60 * 1000L)
+            handler.postDelayed(this, 5 * 60 * 1000L)
+        }
+    }
     companion object {
         const val CHANNEL = "korlix_social_active_call"
         const val NOTIFICATION = 4815
@@ -75,8 +90,16 @@ class KorlixSocialCallService : Service() {
                 startForeground(NOTIFICATION, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
             } else { startForeground(NOTIFICATION, notification) }
             activeId = id
+            if (callWakeLock == null) {
+                callWakeLock = getSystemService(PowerManager::class.java)
+                    .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "KORLIX:activeCall")
+                    .apply { setReferenceCounted(false) }
+            }
+            handler.removeCallbacks(renewWakeLock)
+            renewWakeLock.run()
             onStarted?.invoke(id, true)
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            Log.w("KorlixCall", "Unable to start foreground call service", error)
             authorized.remove(id)
             onStarted?.invoke(id, false)
             stopSelf()
@@ -85,6 +108,9 @@ class KorlixSocialCallService : Service() {
     }
     override fun onTaskRemoved(rootIntent: Intent?) { stopSelf(); super.onTaskRemoved(rootIntent) }
     override fun onDestroy() {
+        handler.removeCallbacks(renewWakeLock)
+        callWakeLock?.let { if (it.isHeld) it.release() }
+        callWakeLock = null
         mediaSession?.release()
         mediaSession = null
         val id = activeId

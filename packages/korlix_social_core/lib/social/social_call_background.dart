@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
@@ -6,7 +7,7 @@ import 'package:flutter/services.dart';
 /// Old app builds and missing/failed native services return false safely.
 class SocialCallBackground {
   SocialCallBackground({this.kind = 'social'})
-      : assert(kind == 'social' || kind == 'rici');
+    : assert(kind == 'social' || kind == 'rici');
   final String kind;
   static const _channel = MethodChannel('korlix/social_call_background');
   static final _owners = <String, VoidCallback>{};
@@ -16,7 +17,18 @@ class SocialCallBackground {
   Completer<bool>? _pending;
   Timer? _deadline;
   VoidCallback? onStopped;
+  bool get starting => _pending != null;
+
+  /// A lifecycle transition may arrive before native service startup completes.
+  Future<bool> waitUntilReady() async {
+    final pending = _pending;
+    if (pending != null) await pending.future;
+    return ready;
+  }
+
   Future<bool> start(String id) async {
+    if (_id == id && ready) return true;
+    if (_id == id && _pending != null) return waitUntilReady();
     if (kIsWeb ||
         ![
           TargetPlatform.android,

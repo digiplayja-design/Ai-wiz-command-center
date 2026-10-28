@@ -22,7 +22,6 @@ class MainActivity: FlutterActivity() {
     private var foreground = false
     private val callKinds = mutableMapOf<String, String>()
     private val pendingCalls = mutableMapOf<String, MethodChannel.Result>()
-    private var notificationPermissionCall: String? = null
     private var approvedCall: String? = null
     private var storeReviews: MethodChannel? = null
     private var pendingStoreReview: MethodChannel.Result? = null
@@ -126,20 +125,17 @@ class MainActivity: FlutterActivity() {
                 result.success(true)
             } else if (call.method == "start") {
                 // Start while the Activity is visible, after getUserMedia has
-                // granted RECORD_AUDIO. Require a visible notification too.
+                // granted RECORD_AUDIO. POST_NOTIFICATIONS is not required to
+                // start an FGS; waiting for that prompt can strand an active call.
                 val kind = call.argument<String>("kind") ?: "social"
                 val microphone = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-                val notifications = Build.VERSION.SDK_INT < 33 || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-                if (kind !in setOf("social", "rici") || !foreground || !microphone || pendingCalls.containsKey(id) || notificationPermissionCall != null) {
+                if (kind !in setOf("social", "rici") || !foreground || !microphone || pendingCalls.containsKey(id)) {
                     result.success(false)
                 } else {
                     callKinds[id] = kind
                     pendingCalls[id] = result
                     KorlixSocialCallService.authorized.add(id)
-                    if (!notifications && Build.VERSION.SDK_INT >= 33) {
-                        notificationPermissionCall = id
-                        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 4817)
-                    } else { launchSocialCall(id) }
+                    launchSocialCall(id)
                 }
             } else { result.notImplemented() }
         }
@@ -164,16 +160,7 @@ class MainActivity: FlutterActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (socialNative?.onPermissionResult(requestCode, grantResults) == true) return
-        if (requestCode != 4817) return
-        val id = notificationPermissionCall ?: return
-        notificationPermissionCall = null
-        if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
-            launchSocialCall(id)
-        } else {
-            KorlixSocialCallService.authorized.remove(id)
-            pendingCalls.remove(id)?.success(false)
-        }
+        socialNative?.onPermissionResult(requestCode, grantResults)
     }
 
     override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
@@ -186,7 +173,6 @@ class MainActivity: FlutterActivity() {
         pendingCalls.clear()
         callKinds.clear()
         approvedCall = null
-        notificationPermissionCall = null
         KorlixSocialCallService.authorized.clear()
         stopService(Intent(this, KorlixSocialCallService::class.java))
         KorlixSocialCallService.onStarted = null

@@ -1,4 +1,5 @@
 import 'social_appearance.dart';
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -491,7 +492,7 @@ class _SocialCallScreenState extends State<SocialCallScreen>
                               ? 'Minimize to keep using KORLIX during your call. Keep this browser open; device sleep or closing the tab can interrupt it.'
                               : call.background.ready
                               ? 'Your audio can continue when KORLIX is in the background. Your camera turns off; tap Camera to turn it back on after returning.'
-                              : 'Minimize to keep using KORLIX. Keep the app in the foreground on this device. Background audio also needs notification permission on Android.',
+                              : 'Your call stays active while you navigate in KORLIX. Keep the app open until background audio is ready.',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: s.mutedText, height: 1.4),
                         ),
@@ -771,7 +772,9 @@ class _SocialCallScreenState extends State<SocialCallScreen>
                     Text(
                       incoming
                           ? 'Your microphone${widget.video ? ' and camera' : ''} start only after you answer.'
-                          : 'Calls are not recorded by KORLIX. Leaving this screen or putting Social in the background ends the call.',
+                          : widget.controller != null
+                          ? 'Calls are not recorded by KORLIX. Navigate freely and tap End call when you are finished.'
+                          : 'Calls are not recorded by KORLIX. Use End call when you are finished.',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 12,
