@@ -1,6 +1,6 @@
 # Korlix AI and Messenger iOS release preparation — October 28, 2026
 
-The owner requested an updated Korlix AI App Store release after Apple approved the earlier submission, plus the latest KORLIX Messenger on the App Store. This authorizes preparing, uploading and submitting both apps. **Neither new iOS release has been uploaded or submitted during this task.** Apple and Codemagic browser access failed at the browser-service connection, before either site could be inspected.
+The owner requested an updated Korlix AI App Store release after Apple approved the earlier submission, plus the latest KORLIX Messenger on the App Store. This authorizes preparing, uploading and submitting both apps. **Neither new iOS release has been uploaded or submitted during this task.** Browser access recovered. The existing Codemagic session and Apple API integration work. App Store Connect web sign-in reached two-factor verification, which the owner declined; no subsequent authentication method was attempted.
 
 ## Source and versions
 
@@ -33,9 +33,17 @@ This source change is not proof that notification delivery works. Confirm that A
 
 ## Validation and remaining steps
 
-Local validation passed: 210 targeted Korlix AI/shared calling checks, 27 standalone Messenger tests, nine release identity/signing guard tests, focused Korlix AI analysis and full Messenger analysis. Codemagic's current JSON schema, the new Bash scripts, the modified plist and `git diff --check` pass. Dependency lockfiles were preserved. Native iOS compilation is handled by `.github/workflows/ios-appstore-validation.yml`; its result must be recorded separately.
+Local validation passed: 210 targeted Korlix AI/shared calling checks, 27 standalone Messenger tests, nine release identity/signing guard tests, focused Korlix AI analysis and full Messenger analysis. Codemagic's current JSON schema, the new Bash scripts, the modified plist and `git diff --check` pass. Dependency lockfiles were preserved. Both native iOS simulator jobs passed in GitHub run [40772911905](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/40772911905) at commit `1303f07561c4648119605d9ce8ad6e9232821181`. This is not signed-device or App Store validation.
 
-When browser access returns:
+## Live release attempt
+
+Codemagic build `6ae26d64206ce93970c705c7` resolved the existing Apple app and confirmed latest build 133, selecting **12.0.3 (134)**. Signing identities and all targeted checks succeeded. It stopped before archive/upload because direct `pod install` saw the old iOS 13 deployment target. The successful simulator job had migrated this automatically to iOS 15.
+
+The release fix makes the root deployment target explicitly iOS 15, matching Flutter 3.47, and runs `flutter build ios --release --config-only --no-codesign` before profile application. This prepares the native dependencies for both the existing CocoaPods app and Messenger's Swift Package Manager/CocoaPods combination. CI now exercises that release configuration step before simulator compilation.
+
+Codemagic's provisioning-profile inventory and its live Fetch profiles result both contain only the Korlix AI profile (`com.korlixdeveloper.korlixai`). No Messenger profile was available. No signing record was downloaded, generated, changed or removed. Messenger's App Store app record remains unverified; a missing provisioning profile does not establish whether that app record exists.
+
+Remaining steps:
 
 1. Inspect App Store Connect's actual Korlix AI version/release state and current builds. Prepare version 12.0.3 in the existing record, preserving approved purchases, review access and verified metadata. Check changed privacy answers against the current implementation.
 2. Locate or create Messenger's separate record with the exact bundle ID. Complete its actual iPhone/iPad screenshots, privacy answers, age rating, support/privacy links, category and reviewer access; no new metadata is claimed saved yet.

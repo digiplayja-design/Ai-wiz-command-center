@@ -24,33 +24,18 @@ workflows:
       - name: Verify existing Apple app and choose next build
         script: |
           set -euo pipefail
-          python3 scripts/prepare_ios_release.py \
-            --bundle-id com.korlixdeveloper.korlixai --app-id 6783100102 \
-            --require-existing-build --environment-file "$CM_ENV"
-          cp docs/releases/ios-20261028/korlix-ai-notes.txt release_notes_en-US.txt
-      - name: Validate current iOS app and shared calling code
-        script: |
-          set -euo pipefail
-          flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
-          flutter analyze --no-pub lib/auth/korlix_email_confirmation.dart lib/support test/support
-          flutter test --no-pub --reporter expanded \
-            test/auth/korlix_email_confirmation_test.dart test/auth_welcome_test.dart \
-            test/auth_remember_login_test.dart test/auth_october_integration_test.dart \
-            test/signup_eligibility_test.dart test/signup_accessibility_release_test.dart \
-            test/auth_device_session_test.dart test/auth/korlix_session_refresh_test.dart \
-            test/auth/korlix_http_test.dart test/registration_discovery_test.dart \
-            test/korlix_entry_intro_test.dart test/apple_billing_test.dart \
-            test/privacy/korlix_privacy_settings_test.dart \
+          pyth…290 tokens truncated…            test/privacy/korlix_privacy_settings_test.dart \
             test/privacy/korlix_third_party_ai_consent_test.dart \
             test/privacy/korlix_third_party_ai_privacy_statement_test.dart \
             test/support/ai_output_report_test.dart test/support/report_image_test.dart \
             test/social_calls_test.dart test/social_call_audio_test.dart \
             test/social_call_reliability_test.dart test/social_screen_sharing_test.dart \
             test/social_communication_upgrade_test.dart
-      - name: Install pods and apply existing app signing
+      - name: Prepare native dependencies and apply existing app signing
         script: |
           set -euo pipefail
-          (cd ios && pod install --repo-update)
+          flutter build ios --release --config-only --no-codesign --no-pub \
+            --build-name="$KORLIX_IOS_VERSION" --build-number="$KORLIX_IOS_BUILD_NUMBER"
           xcode-project use-profiles --project ios/Runner.xcodeproj \
             --export-options-plist "$CM_BUILD_DIR/ios-release-export.plist" \
             --custom-export-options '{"manageAppVersionAndBuildNumber": false}'
@@ -124,10 +109,11 @@ workflows:
             test/social_calls_test.dart test/social_call_audio_test.dart \
             test/social_call_reliability_test.dart test/social_screen_sharing_test.dart \
             test/social_communication_upgrade_test.dart
-      - name: Install pods and apply Messenger signing
+      - name: Prepare native dependencies and apply Messenger signing
         script: |
           set -euo pipefail
-          (cd ios && pod install --repo-update)
+          flutter build ios --release --config-only --no-codesign --no-pub \
+            --build-name="$KORLIX_IOS_VERSION" --build-number="$KORLIX_IOS_BUILD_NUMBER"
           xcode-project use-profiles --project ios/Runner.xcodeproj \
             --export-options-plist "$CM_BUILD_DIR/messenger-ios-release-export.plist" \
             --custom-export-options '{"manageAppVersionAndBuildNumber": false}'

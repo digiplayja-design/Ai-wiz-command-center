@@ -1,0 +1,24 @@
+{
+  "status": "Prepared copy; not saved in App Store Connect",
+  "bundle_id": "com.korlixdeveloper.messenger",
+  "version": "1.0.2",
+  "locale": "en-US",
+  "name": "KORLIX Messenger",
+  "subtitle": "Chats, voice and video calls",
+  "description": "Keep your KORLIX conversations together in a dedicated messaging app. Sign in with your existing KORLIX account to use your profile, connections and conversations.\n\nSend direct and group messages, share photos, videos, files and voice notes, and express yourself with GIFs, stickers and message reactions. Format selected message text and see supported read receipts.\n\nConnect with voice and video calls. Choose your appearance and accessibility preferences, manage your profile, and use blocking and reporting controls when needed.\n\nKORLIX Messenger has its own sign-in session and works alongside KORLIX AI. A KORLIX account and internet connection are required. Camera and microphone access are requested for the features that use them.\n\nKORLIX is for users aged 16 and older. Users aged 16 or 17 need permission from a parent or legal guardian.",
+  "keywords": "korlix,messenger,chat,messages,voice,video,calls,groups,photos,stickers",
+  "support_url": "https://www.korlixdeveloper.com/support.html",
+  "privacy_policy_url": "https://www.korlixdeveloper.com/privacy-policy.html",
+  "marketing_url": "https://www.korlixdeveloper.com/",
+  "suggested_primary_category": "SOCIAL_NETWORKING",
+  "review_notes": "KORLIX Messenger is the standalone client for KORLIX Social. Existing KORLIX credentials are supported. Use two separate reviewer accounts/devices to verify calls and messaging. Direct conversations require an accepted connection, and group conversations require membership. Open Account & help for account support and Request KORLIX account deletion; the deletion request explains that it covers the shared KORLIX account. This iOS release can receive shared screens during a call; it does not include a ReplayKit broadcast extension for originating screen sharing. Dedicated reviewer credentials must be supplied securely in App Store Connect and verified before submission.",
+  "remaining": [
+    "Verify or create the separate App Store Connect app record.",
+    "Provide its App Store provisioning profile with production Push Notifications capability.",
+    "Verify the backend APNs provider and physical-device calls and notifications.",
+    "Capture actual iPhone/iPad screenshots for the supported device families.",
+    "Complete Apple's current age-rating, privacy and export-compliance questions from the actual implementation; do not copy Google declarations as Apple answers.",
+    "Confirm current support/privacy pages and securely verify reviewer access.",
+    "Upload the verified signed build and submit the complete Apple record."
+  ]
+}
