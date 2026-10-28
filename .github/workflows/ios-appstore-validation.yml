@@ -1,0 +1,110 @@
+name: iOS App Store release validation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - release/ios-appstore-20261028
+    paths:
+      - .github/workflows/ios-appstore-validation.yml
+      - codemagic.yaml
+      - scripts/prepare_ios_release.py
+      - scripts/verify_ios_ipa.py
+      - scripts/tests/test_ios_release.py
+      - pubspec.yaml
+      - ios/**
+      - apps/korlix_messenger/ios/**
+      - apps/korlix_messenger/pubspec.*
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-appstore-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    runs-on: macos-26
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: korlix-ai
+            directory: .
+          - app: korlix-messenger
+            directory: apps/korlix_messenger
+    env:
+      CI: 'true'
+      FLUTTER_SUPPRESS_ANALYTICS: 'true'
+      DART_SUPPRESS_ANALYTICS: 'true'
+      COCOAPODS_DISABLE_STATS: 'true'
+    steps:
+      - name: Block instance metadata before toolchain setup
+        shell: bash
+        run: |
+          set -euo pipefail
+          rules="$RUNNER_TEMP/korlix-metadata-block.pf"
+          cat > "$rules" <<'PF'
+          block drop out quick inet to { 169.254.0.0/16, 100.100.100.200/32 }
+          block drop out quick inet6 to { fe80::/10, fd00:ec2::254/128 }
+          PF
+          sudo pfctl -f "$rules"
+          sudo pfctl -e 2>/dev/null || sudo pfctl -s info | grep -q 'Status: Enabled'
+          sudo pfctl -s rules | grep -q '169.254.0.0/16'
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - name: Verify release identity and artifact checks
+        run: python3 -m unittest discover -s scripts/tests -p test_ios_release.py -v
+      - name: Resolve locked dependencies
+        working-directory: ${{ matrix.directory }}
+        run: flutter pub get --enforce-lockfile
+      - name: Validate Korlix AI update
+        if: matrix.app == 'korlix-ai'
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter analyze --no-pub lib/auth/korlix_email_confirmation.dart lib/support test/support
+          flutter test --no-pub --reporter expanded \
+            test/auth/korlix_email_confirmation_test.dart test/auth_welcome_test.dart \
+            test/auth_remember_login_test.dart test/auth_october_integration_test.dart \
+            test/signup_eligibility_test.dart test/signup_accessibility_release_test.dart \
+            test/auth_device_session_test.dart test/auth/korlix_session_refresh_test.dart \
+            test/auth/korlix_http_test.dart test/registration_discovery_test.dart \
+            test/korlix_entry_intro_test.dart test/apple_billing_test.dart \
+            test/privacy/korlix_privacy_settings_test.dart \
+            test/privacy/korlix_third_party_ai_consent_test.dart \
+            test/privacy/korlix_third_party_ai_privacy_statement_test.dart \
+            test/support/ai_output_report_test.dart test/support/report_image_test.dart \
+            test/social_calls_test.dart test/social_call_audio_test.dart \
+            test/social_call_reliability_test.dart test/social_screen_sharing_test.dart \
+            test/social_communication_upgrade_test.dart
+      - name: Validate Messenger update
+        if: matrix.app == 'korlix-messenger'
+        working-directory: apps/korlix_messenger
+        run: |
+          set -euo pipefail
+          flutter analyze --no-pub
+          flutter test --no-pub --reporter expanded
+      - name: Compile iOS simulator
+        working-directory: ${{ matrix.directory }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          flutter build ios --simulator --debug --no-pub
+          cd build/ios/iphonesimulator
+          ditto -c -k --sequesterRsrc --keepParent Runner.app Simulator.zip
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ matrix.app }}-ios-simulator
+          path: ${{ matrix.directory }}/build/ios/iphonesimulator/Simulator.zip
+          if-no-files-found: error
+          retention-days: 14

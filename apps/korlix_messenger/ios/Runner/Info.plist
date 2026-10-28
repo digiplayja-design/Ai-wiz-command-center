@@ -80,7 +80,7 @@
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
-	<key>KorlixSocialPushEnabled</key>
-	<false/>
+	<key>KorlixAPNsEnvironment</key>
+	<string>$(KORLIX_APNS_ENVIRONMENT)</string>
 </dict>
 </plist>

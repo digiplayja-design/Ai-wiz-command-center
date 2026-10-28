@@ -1,0 +1,1 @@
+KORLIX Messenger brings your KORLIX conversations into a dedicated app with its own sign-in session. Send private messages, photos, videos, voice notes, GIFs, and stickers. React to messages, format selected text, and connect through voice and video calls. This release includes improved call recovery, profile setup, appearance options, and accessibility improvements.
