@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -101,7 +100,6 @@ void main() {
   const backgroundChannel = MethodChannel('korlix/social_call_background');
   setUp(() => SharedPreferences.setMockInitialValues({}));
   tearDown(() {
-    debugDefaultTargetPlatformOverride = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(backgroundChannel, null);
   });
@@ -243,7 +241,6 @@ void main() {
   testWidgets('switching apps during service startup preserves the call', (
     tester,
   ) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.android;
     final ready = Completer<bool>();
     var starts = 0;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -282,12 +279,11 @@ void main() {
     call.dispose();
     client.dispose();
     fixture.revision.dispose();
-  });
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
   testWidgets(
     'returning before a failed background startup keeps the foreground call',
     (tester) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.android;
       final ready = Completer<bool>();
       var starts = 0;
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -323,12 +319,12 @@ void main() {
       client.dispose();
       fixture.revision.dispose();
     },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
   );
 
   testWidgets(
     'Back, Home and return keep the same active call; End still releases it',
     (tester) async {
-      debugDefaultTargetPlatformOverride = TargetPlatform.android;
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(backgroundChannel, (_) async => true);
       final fixture = Fixture(), media = FakeMedia();
@@ -397,5 +393,6 @@ void main() {
       notifications.dispose();
       fixture.revision.dispose();
     },
+    variant: TargetPlatformVariant.only(TargetPlatform.android),
   );
 }
