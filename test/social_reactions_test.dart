@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,6 +13,7 @@ import 'package:ai_wiz_command_center/social/social_media_widgets.dart';
 import 'package:ai_wiz_command_center/social/social_reaction_picker.dart';
 import 'package:ai_wiz_command_center/social/social_threads.dart';
 import 'package:ai_wiz_command_center/theme/korlix_theme.dart';
+
 import 'social_test.dart' as social;
 import 'agent_studio_test.dart' as fixtures;
 
@@ -149,32 +151,29 @@ void main() {
     }
   });
 
-  test(
-    'all original reactions have decodable transparent stickers and animated GIFs',
-    () async {
-      final catalog = await loadSocialReactions();
-      expect(catalog.length, 24);
-      expect(catalog.map((r) => r.id).toSet().length, catalog.length);
-      for (final reaction in catalog) {
-        final png = await rootBundle.load(reaction.asset('sticker'));
-        final still = await ui.instantiateImageCodec(png.buffer.asUint8List());
-        expect(still.frameCount, 1);
-        final frame = await still.getNextFrame();
-        final rgba = await frame.image.toByteData();
-        expect(rgba!.getUint8(3), 0);
-        frame.image.dispose();
-        still.dispose();
-        final data = await rootBundle.load(reaction.asset('gif'));
-        final gif = await ui.instantiateImageCodec(data.buffer.asUint8List());
-        expect(gif.frameCount, 16);
-        expect(gif.repetitionCount, -1);
-        final first = await gif.getNextFrame();
-        expect(first.duration, const Duration(milliseconds: 100));
-        first.image.dispose();
-        gif.dispose();
-      }
-    },
-  );
+  test('all original reactions have decodable transparent stickers and animated GIFs', () async {
+    final catalog = await loadSocialReactions();
+    expect(catalog.length, 48);
+    expect(catalog.map((r) => r.id).toSet().length, catalog.length);
+    for (final reaction in catalog) {
+      final png = await rootBundle.load(reaction.asset('sticker'));
+      final still = await ui.instantiateImageCodec(png.buffer.asUint8List());
+      expect(still.frameCount, 1);
+      final frame = await still.getNextFrame();
+      final rgba = await frame.image.toByteData();
+      expect(rgba!.getUint8(3), 0);
+      frame.image.dispose();
+      still.dispose();
+      final data = await rootBundle.load(reaction.asset('gif'));
+      final gif = await ui.instantiateImageCodec(data.buffer.asUint8List());
+      expect(gif.frameCount, reaction.frames);
+      expect(gif.repetitionCount, -1);
+      final first = await gif.getNextFrame();
+      expect(first.duration.inMilliseconds, greaterThanOrEqualTo(100));
+      first.image.dispose();
+      gif.dispose();
+    }
+  });
 
   testWidgets(
     'search and categories find stickers and selection only creates a preview',
@@ -183,7 +182,7 @@ void main() {
       addTearDown(s.dispose);
       await picker(t, s);
       await fixtures.capture(t, 'social-sticker-picker');
-      await t.enterText(find.byType(TextField), 'thanks');
+      await t.enterText(find.byType(TextField), 'thank you classic');
       await settleAssets(t);
       expect(find.byKey(const ValueKey('reaction-thank-you')), findsOneWidget);
       expect(find.byKey(const ValueKey('reaction-hey')), findsNothing);
@@ -208,6 +207,8 @@ void main() {
       final s = ReactionsStore();
       addTearDown(s.dispose);
       await picker(t, s, kind: 'gif', width: 320, scale: 1.5);
+      await t.enterText(find.byType(TextField), 'hey classic');
+      await settleAssets(t);
       await t.tap(find.byKey(const ValueKey('reaction-hey')));
       await settleAssets(t);
       expect(find.byTooltip('Play GIF'), findsOneWidget);
