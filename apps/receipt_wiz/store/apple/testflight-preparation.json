@@ -1,0 +1,18 @@
+{
+  "status": "Prepared; new App Store Connect record and TestFlight upload pending",
+  "name": "KORLIX Receipt Wiz",
+  "bundleId": "com.korlixdeveloper.receiptwiz",
+  "sku": "korlix-receipt-wiz-ios",
+  "primaryLocale": "en-US",
+  "platform": "IOS",
+  "version": "1.2.0",
+  "sourceBuild": "3",
+  "releaseType": "TestFlight first; no public App Review submission",
+  "testerEmail": "ricardo@korlixdeveloper.com",
+  "betaDescription": "Scan or upload receipt photos and PDFs, review extracted details, and organize originals in your private KORLIX receipt library. Sign in with your existing KORLIX account or create a Free account. Optional AI reading requires consent; manual review and CSV export are available.",
+  "whatToTest": "Test camera capture, Upload receipt files, and Import multiple files (up to 10; 8 MB each; 40 MB total). Check duplicate reuse, interrupted-upload retries, manual review after declining AI, edits, deletion, search, filters, and CSV export. Confirm that your KORLIX AI and Receipt WIZ sessions work independently. Check the new red icon.",
+  "feedbackEmail": "support@korlixdeveloper.com",
+  "privacyPolicy": "https://www.korlixdeveloper.com/privacy-policy.html",
+  "supportURL": "https://www.korlixdeveloper.com",
+  "notes": "Google Play billing is not shown on iOS. Existing shared account entitlements and Free receipt allowance apply. Real reviewer credentials must be supplied securely if external beta review or public App Review is requested."
+}
