@@ -1,4 +1,20 @@
 workflows:
+  korlix-testflight-access-check:
+    name: KORLIX TestFlight access check
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    scripts:
+      - name: Read existing Apple release and tester assignments
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.testflight-tools"
+          "$CM_BUILD_DIR/.testflight-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+          "$CM_BUILD_DIR/.testflight-tools/bin/python" scripts/check_testflight_access.py
+    artifacts:
+      - artifacts/testflight-access.json
+
   korlix-ai-ios-appstore:
     name: Korlix AI iOS App Store
     instance_type: mac_mini_m2
