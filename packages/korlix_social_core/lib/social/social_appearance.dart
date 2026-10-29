@@ -361,8 +361,8 @@ class SocialAppearancePreview extends StatelessWidget {
                   child: MediaQuery.withNoTextScaling(
                     child: SizedBox(
                       width: 320,
-                      height: 270,
                       child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Row(
@@ -399,7 +399,7 @@ class SocialAppearancePreview extends StatelessWidget {
                             'A little more color, a lot more me.',
                             true,
                           ),
-                          const Spacer(),
+                          const SizedBox(height: 16),
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 13,
