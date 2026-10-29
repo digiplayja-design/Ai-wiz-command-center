@@ -164,7 +164,8 @@ workflows:
         auth: integration
         submit_to_testflight: false
         submit_to_app_store: true
-        cancel_previous_submissions: false
+        # Replace the existing Messenger review with the corrected build.
+        cancel_previous_submissions: true
         release_type: AFTER_APPROVAL
 
   korlix-messenger-ios-testflight:
@@ -431,3 +432,4 @@ workflows:
       - apps/receipt_wiz/build/app/outputs/flutter-apk/app-debug.apk
       - apps/receipt_wiz/build/ios/iphonesimulator/ReceiptWiz-Simulator.zip
       - /tmp/xcodebuild_logs/*.log
+
