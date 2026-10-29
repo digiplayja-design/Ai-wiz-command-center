@@ -2,9 +2,9 @@
 
 The owner requested an updated Korlix AI App Store release after Apple approved the earlier submission, plus the latest KORLIX Messenger on the App Store. This authorizes preparing, uploading and submitting both apps. **Korlix AI 12.0.3 (134) was signed, uploaded and submitted to Apple at 22:18:24 UTC. Its review status is WAITING_FOR_REVIEW, also confirmed in the signed-in App Store Connect web UI. Release is configured for after approval; public availability is not confirmed. Messenger has not been uploaded or submitted.**
 
-Authenticated App Store Connect and Apple Developer access is available for Korlix LLC, team `FJKJ9MUDZ4`. The Apple app list contains only Korlix AI, and the Developer identifier list contains only `com.korlixdeveloper.korlixai`. Messenger's app creation form is prepared, but its separate identifier does not yet exist. Registration is staged at **Confirm your App ID**, with description `KORLIX Messenger`, explicit bundle `com.korlixdeveloper.messenger`, and Push Notifications selected. **Register has not been clicked; no identifier, profile, certificate, key or capability has been created.**
+Authenticated App Store Connect and Apple Developer access is available for Korlix LLC, team `FJKJ9MUDZ4`. After the owner approved the new signing setup, the separate `com.korlixdeveloper.messenger` identifier was registered with Push Notifications, and App Store Connect record **6828213082** was created for **KORLIX Messenger** with Limited Access (the owner retains access).
 
-The prepared security setup is the Messenger identifier with Push Notifications and a separate App Store profile referencing the existing distribution certificate already stored as `KORLIX_APP_STORE_CERT`. The intended Codemagic profile reference is `KORLIX_MESSENGER_APP_STORE_PROFILE`. This still requires action-time confirmation before granting the new signing capability.
+The dedicated App Store profile **KORLIX_MESSENGER_APP_STORE_PROFILE**, Apple profile ID `PGGJCCFT9T`, was created using existing distribution certificate `4635LCY72R`, the same certificate selected in the known-working Korlix AI profile. It expires June 22, 2027 and was fetched into Codemagic under its dedicated reference. The certificate/private key already stored as `KORLIX_APP_STORE_CERT` is reused. No certificate or private key was created. Messenger workflows now explicitly reference these signing assets and enforce Apple app ID 6828213082. The TestFlight upload has not yet started.
 
 ## Source and versions
 
@@ -13,7 +13,7 @@ Release branch: `release/ios-appstore-20261028`, based on Messenger frontend com
 | App | Bundle ID | Candidate | Apple record |
 | --- | --- | --- | --- |
 | Korlix AI | `com.korlixdeveloper.korlixai` | `12.0.3`, build floor `134` | Existing ID `6783100102` |
-| KORLIX Messenger | `com.korlixdeveloper.messenger` | `1.0.2`, build floor `5` | Separate record not created; identifier registration is staged |
+| KORLIX Messenger | `com.korlixdeveloper.messenger` | `1.0.2`, build floor `5` | Existing ID `6828213082`; signing profile ready |
 
 The owner's approval email refers to an October 13 submission; prior release evidence identifies Korlix AI 12.0.0 (131). Repository records also confirm subsequent TestFlight uploads 12.0.1 (132) and 12.0.2 (133). Those earlier uploads are historical checkpoints; the current live record now shows 12.0.3 Waiting for Review, matching the successful build 134 submission below.
 
@@ -25,7 +25,7 @@ The owner's approval email refers to an October 13 submission; prior release evi
 
 The separate `korlix-messenger-ios-testflight` workflow reuses the exact Messenger signing, tests and IPA verification through a YAML anchor, but uploads without requesting either App Store review or TestFlight beta review. After processing, configure an internal tester group and resolve any export-compliance questions in App Store Connect. External testing needs its own beta-review information and approval. The IPA is not restricted to internal-only distribution so a validated build can later be selected for App Store review.
 
-Korlix AI reuses the existing `Codemagic Korlix AI` integration and existing profile/certificate references. Messenger uses the same integration with signing-file lookup restricted to its own bundle ID and App Store distribution. Its Apple identifier, profile and signing capabilities must exist in Codemagic first. No credentials, profiles, certificates, bundle identifiers or APNs permissions were created or changed in this task. The existing Korlix AI app now has a new App Store version and review submission, with its English release notes updated.
+Korlix AI reuses the existing `Codemagic Korlix AI` integration and existing profile/certificate references. Messenger uses the same integration with its explicit dedicated profile and existing distribution certificate. Its identifier, Push Notifications capability and App Store profile were created with owner approval and the profile was stored in Codemagic. No new certificate or private key was created. The existing Korlix AI app now has a new App Store version and review submission, with its English release notes updated.
 
 Signing is restricted to the selected Runner project so the monorepo's other apps are not assigned the wrong profile. Exported packages are checked for the expected app, version, build number, iPhoneOS platform, App Store profile, distribution entitlements and valid code signature before entering the publishable artifact directory. Build metadata management during export is disabled so the verified build number is preserved.
 
@@ -58,7 +58,7 @@ The standalone Messenger listing copy is in `messenger-appstore-draft.json`; it 
 Remaining steps:
 
 1. Korlix AI: await Apple's review decision. The submitted update is set to release after approval. No repeat upload or submission is needed for 12.0.3 (134).
-2. Messenger: finish the prepared identifier/signing setup after action-time confirmation, create its separate app record for `com.korlixdeveloper.messenger`, then upload using `korlix-messenger-ios-testflight` and verify Apple processing and internal tester access. The saved listing remains draft copy only.
+2. Messenger: upload using `korlix-messenger-ios-testflight` from the release branch and verify Apple processing and internal tester access. Apple app 6828213082 and the dedicated signing profile are ready. The saved listing remains draft copy only.
 3. Complete Messenger signing/push setup and physical-device behavior checks, including its production APNs provider. The Android call reported at 90 seconds was manually stopped; it is not an iOS device test. Server APNs readiness remains unverified.
 4. Finish actual iPhone/iPad screenshots, privacy answers, age rating, support/privacy links, category and reviewer access. Submit the validated processed build through App Store Connect, or run `korlix-messenger-ios-appstore` from the release branch if a newer signed build is required. Verify the actual review submission. Do not reuse the Korlix AI provisioning profile.
 5. Preserve exact signed artifacts and Apple IDs in `release-status.json`. Future credential use, legal agreements or new security access must follow the appropriate user action. The earlier declined two-factor request was retried only after the owner explicitly requested verification again.

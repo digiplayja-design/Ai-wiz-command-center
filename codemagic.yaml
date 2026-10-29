@@ -92,11 +92,13 @@ workflows:
       flutter: 3.47.7
       xcode: 26.6
       cocoapods: default
-      # Fetch an already configured profile for Messenger's separate identity.
-      # This workflow does not create identifiers, certificates, or profiles.
+      # Messenger has its own App Store profile and reuses the existing
+      # distribution certificate. Never use Korlix AI's provisioning profile.
       ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.korlixdeveloper.messenger
+        provisioning_profiles:
+          - KORLIX_MESSENGER_APP_STORE_PROFILE
+        certificates:
+          - KORLIX_APP_STORE_CERT
     scripts:
       - name: Install pinned Apple release tools
         script: |
@@ -108,7 +110,8 @@ workflows:
         script: |
           set -euo pipefail
           python3 "$CM_BUILD_DIR/scripts/prepare_ios_release.py" \
-            --bundle-id com.korlixdeveloper.messenger --environment-file "$CM_ENV"
+            --bundle-id com.korlixdeveloper.messenger --app-id 6828213082 \
+            --environment-file "$CM_ENV"
           cp "$CM_BUILD_DIR/docs/releases/ios-20261028/korlix-messenger-notes.txt" release_notes_en-US.txt
       - name: Validate standalone Messenger
         script: |
