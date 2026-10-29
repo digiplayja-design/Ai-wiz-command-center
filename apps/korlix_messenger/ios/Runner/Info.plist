@@ -72,6 +72,10 @@
 	<string>Use your microphone for voice notes and voice or video calls in Messenger.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Choose photos and videos to share in your conversations.</string>
+	<!-- file_picker includes DKCamera's optional GPS photo metadata API.
+	     Declaring its purpose does not enable photo geotagging or location requests. -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Your location can be added to photos taken with the media picker to show where they were captured.</string>
 	<key>NSContactsUsageDescription</key>
 	<string>Choose contacts to invite to KORLIX. Contacts are not uploaded automatically.</string>
 	<key>UIBackgroundModes</key>
@@ -84,3 +88,4 @@
 	<string>$(KORLIX_APNS_ENVIRONMENT)</string>
 </dict>
 </plist>
+

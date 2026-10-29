@@ -79,6 +79,21 @@ class ReleaseIdentityTests(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 verify.verify_profile(value, "com.example.app")
 
+    def test_messenger_export_rejects_missing_or_invalid_location_purpose(self):
+        bundle_id = "com.korlixdeveloper.messenger"
+        info = {"CFBundleIdentifier": bundle_id, "CFBundleShortVersionString": "1.0.2",
+                "CFBundleVersion": "6", "CFBundleSupportedPlatforms": ["iPhoneOS"]}
+        # This is the metadata omission Apple reported for build 5.
+        with self.assertRaisesRegex(ValueError, "NSLocationWhenInUseUsageDescription"):
+            verify.verify_info(info, bundle_id, "1.0.2", "6")
+        for value in ["", "   ", None, True]:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                verify.verify_info({**info, "NSLocationWhenInUseUsageDescription": value},
+                                   bundle_id, "1.0.2", "6")
+        verify.verify_info({**info, "NSLocationWhenInUseUsageDescription":
+                            "Your location can be added to photos taken with the media picker."},
+                           bundle_id, "1.0.2", "6")
+
     def test_push_requires_matching_signed_profile_and_runtime_environment(self):
         signed = {"application-identifier": "TEAM.com.example.app", "get-task-allow": False,
                   "aps-environment": "production"}
@@ -97,3 +112,4 @@ class ReleaseIdentityTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
