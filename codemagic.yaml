@@ -150,10 +150,14 @@ workflows:
             --build "$KORLIX_IOS_BUILD_NUMBER" --require-push \
             --output artifacts/KorlixMessenger-verification.json
           cp "${IPA_FILES[0]}" artifacts/KorlixMessenger.ipa
+          test -s "$CM_BUILD_DIR/apps/korlix_messenger/artifacts/KorlixMessenger.ipa"
+          test -s "$CM_BUILD_DIR/apps/korlix_messenger/artifacts/KorlixMessenger-verification.json"
     artifacts:
-      - apps/korlix_messenger/artifacts/*.ipa
-      - apps/korlix_messenger/artifacts/*-verification.json
-      - apps/korlix_messenger/build/ios/archive/Runner.xcarchive/dSYMs/*.dSYM
+      # Use absolute clone paths so artifact collection is independent of the
+      # workflow working_directory used by the standalone Messenger app.
+      - $CM_BUILD_DIR/apps/korlix_messenger/artifacts/*.ipa
+      - $CM_BUILD_DIR/apps/korlix_messenger/artifacts/*-verification.json
+      - $CM_BUILD_DIR/apps/korlix_messenger/build/ios/archive/Runner.xcarchive/dSYMs/*.dSYM
       - /tmp/xcodebuild_logs/*.log
     publishing:
       app_store_connect:
