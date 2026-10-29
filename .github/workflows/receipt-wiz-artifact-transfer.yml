@@ -1,0 +1,35 @@
+name: Receipt WIZ signed artifact transfer
+
+on:
+  push:
+    branches: [release/receipt-wiz-20261029]
+    paths: [.github/workflows/receipt-wiz-artifact-transfer.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  transfer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Retrieve and verify the existing signed candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir artifacts
+          gh release download receipt-wiz-1.2.0-build3 \
+            --repo digiplayja-design/Ai-wiz-command-center \
+            --pattern KORLIX-Receipt-Wiz-3.aab --dir artifacts
+          cd artifacts
+          printf '%s  %s\n' \
+            ee8209b85387017dbe5a4efeab79b6728eb3af2f2c20295834d07e88335baabf \
+            KORLIX-Receipt-Wiz-3.aab | sha256sum --check
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: receipt-wiz-signed-android-1.2.0-3
+          path: artifacts/KORLIX-Receipt-Wiz-3.aab
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
