@@ -1,7 +1,6 @@
 // Optional store-assets export of the real app UI with local sample data.
 // No production service is contacted and no real account credentials are used.
 import 'dart:io';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
