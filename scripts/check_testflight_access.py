@@ -48,7 +48,16 @@ def main():
     def collection(path, **params):
         return client.paginate(f"{client.API_URL}/{path}", params=params, page_size=200)
 
+    def link(path, resource_type, resource_id):
+        response = client.session.post(
+            f"{client.API_URL}/{path}",
+            json={"data": [{"type": resource_type, "id": resource_id}]},
+        )
+        if response.status_code != 204:
+            raise RuntimeError(f"Apple relationship update returned HTTP {response.status_code}")
+
     report = []
+    errors = []
     for app_id, bundle_id, version, build_number in APPS:
         app = read(f"apps/{app_id}")["data"]
         if app["attributes"]["bundleId"] != bundle_id:
@@ -129,38 +138,82 @@ def main():
             existing_tester = ai_group["target_testers"][0]
             if existing_tester["state"] != "INSTALLED":
                 raise ValueError("Ricardo's existing installed AI tester could not be confirmed")
-            if not messenger_group["target_testers"]:
-                response = client.session.post(
-                    f"{client.API_URL}/betaGroups/{messenger_group['id']}/relationships/betaTesters",
-                    json={"data": [{"type": "betaTesters", "id": existing_tester["id"]}]},
-                )
-                if response.status_code != 204:
-                    raise RuntimeError(
-                        f"Apple did not accept the existing tester membership: HTTP {response.status_code}"
-                    )
-            members = collection(f"betaGroups/{messenger_group['id']}/betaTesters")
-            matched = [t for t in members
-                       if t["attributes"].get("email", "").casefold() == TESTER_EMAIL.casefold()]
-            if len(matched) != 1:
-                raise ValueError("Ricardo's Messenger tester membership was not confirmed")
-            messenger_group["tester_count"] = len(members)
-            messenger_group["target_testers"] = [
-                {"id": t["id"], "email": TESTER_EMAIL,
-                 "state": t["attributes"].get("state"),
-                 "invite_type": t["attributes"].get("inviteType")}
-                for t in matched
-            ]
-            messenger_item["membership_verified"] = True
+            try:
+                if not messenger_group["target_testers"]:
+                    # Resolve the destination app's own tester record. Apple
+                    # rejected copying the installed AI record into this group.
+                    candidates = collection("betaTesters", **{
+                        "filter[email]": TESTER_EMAIL,
+                        "filter[apps]": messenger_item["app_id"],
+                    })
+                    candidates = [t for t in candidates
+                                  if t["attributes"].get("email", "").casefold() == TESTER_EMAIL.casefold()]
+                    print(f"Existing Messenger tester records for {TESTER_EMAIL}: {len(candidates)}")
+                    if len(candidates) > 1:
+                        raise ValueError("Ambiguous existing Messenger tester records")
+                    if candidates:
+                        link(f"betaGroups/{messenger_group['id']}/relationships/betaTesters",
+                             "betaTesters", candidates[0]["id"])
+                    else:
+                        # This enrolls only the approved email in the approved
+                        # beta group; it does not create an App Store team user.
+                        response = client.session.post(
+                            f"{client.API_URL}/betaTesters",
+                            json={"data": {
+                                "type": "betaTesters",
+                                "attributes": {"email": TESTER_EMAIL},
+                                "relationships": {"betaGroups": {"data": [
+                                    {"type": "betaGroups", "id": messenger_group["id"]}
+                                ]}},
+                            }},
+                        )
+                        if response.status_code != 201:
+                            raise RuntimeError(f"Apple tester enrollment returned HTTP {response.status_code}")
+                members = collection(f"betaGroups/{messenger_group['id']}/betaTesters")
+                matched = [t for t in members
+                           if t["attributes"].get("email", "").casefold() == TESTER_EMAIL.casefold()]
+                if len(matched) != 1:
+                    raise ValueError("Ricardo's Messenger tester membership was not confirmed")
+                messenger_group["tester_count"] = len(members)
+                messenger_group["target_testers"] = [
+                    {"id": t["id"], "email": TESTER_EMAIL,
+                     "state": t["attributes"].get("state"),
+                     "invite_type": t["attributes"].get("inviteType")}
+                    for t in matched
+                ]
+                messenger_item["membership_verified"] = True
+            except Exception as error:
+                messenger_item["membership_error"] = str(error)
+                errors.append(f"Messenger membership: {error}")
+                # Read only this user's existing eligibility to explain a
+                # rejection. Never change team roles or app permissions.
+                try:
+                    users = collection("users", **{"filter[username]": TESTER_EMAIL,
+                                                    "include": "visibleApps"})
+                    messenger_item["target_user_access"] = [
+                        {"roles": u["attributes"].get("roles"),
+                         "all_apps_visible": u["attributes"].get("allAppsVisible"),
+                         "visible_apps": u.get("relationships", {}).get("visibleApps", {}).get("data")}
+                        for u in users
+                        if u["attributes"].get("username", "").casefold() == TESTER_EMAIL.casefold()
+                    ]
+                    print("Existing App Store user access: " + json.dumps(messenger_item["target_user_access"]))
+                except Exception as lookup_error:
+                    print(f"User eligibility lookup unavailable: {lookup_error}")
         for item, group, build_id in assignments:
-            if not any(b["id"] == build_id for b in group["builds"]):
-                client.beta_groups.add_build(group["id"], build_id)
-            linked = collection(f"betaGroups/{group['id']}/builds")
-            if not any(b["id"] == build_id for b in linked):
-                raise ValueError(f"Build assignment was not confirmed for {item['app_id']}")
-            group["builds"] = [{"id": b["id"], "number": b["attributes"].get("version")}
-                               for b in linked]
-            item["beta_detail"] = read(f"builds/{build_id}/buildBetaDetail")["data"]["attributes"]
-            item["assignment_verified"] = True
+            try:
+                if not any(b["id"] == build_id for b in group["builds"]):
+                    link(f"betaGroups/{group['id']}/relationships/builds", "builds", build_id)
+                linked = collection(f"betaGroups/{group['id']}/builds")
+                if not any(b["id"] == build_id for b in linked):
+                    raise ValueError(f"Build assignment was not confirmed for {item['app_id']}")
+                group["builds"] = [{"id": b["id"], "number": b["attributes"].get("version")}
+                                   for b in linked]
+                item["beta_detail"] = read(f"builds/{build_id}/buildBetaDetail")["data"]["attributes"]
+                item["assignment_verified"] = True
+            except Exception as error:
+                item["assignment_error"] = str(error)
+                errors.append(f"{item['app_name']} build assignment: {error}")
     output = Path("artifacts/testflight-access.json")
     output.parent.mkdir(exist_ok=True)
     output.write_text(json.dumps(report, indent=2) + "\n")
@@ -176,6 +229,10 @@ def main():
                 print(f"Tester: {TESTER_EMAIL}; not a member of this group")
             for tester in group["target_testers"]:
                 print(f"Tester: {tester['email']}; invitation: {tester['state']}")
+    for error in errors:
+        print(f"UNRESOLVED: {error}")
+    if errors:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":
