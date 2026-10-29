@@ -1,4 +1,20 @@
 workflows:
+  korlix-messenger-invitation-recovery:
+    name: Check and resend KORLIX Messenger invitation to Ricardo
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    scripts:
+      - name: Verify Messenger build 7 and resend only Ricardo's pending invitation
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.testflight-tools"
+          "$CM_BUILD_DIR/.testflight-tools/bin/pip" install --quiet 'codemagic-cli-tools==0.69.0'
+          "$CM_BUILD_DIR/.testflight-tools/bin/python" -u scripts/check_testflight_access.py --resend-messenger-invitation
+    artifacts:
+      - artifacts/testflight-access.json
+
   korlix-testflight-assign-current:
     name: Enable KORLIX TestFlight for ricardo@korlixdeveloper.com
     instance_type: mac_mini_m2

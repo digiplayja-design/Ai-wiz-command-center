@@ -29,9 +29,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--assign-current-builds", action="store_true")
     parser.add_argument("--add-existing-ricardo-to-messenger", action="store_true")
+    parser.add_argument("--resend-messenger-invitation", action="store_true")
     args = parser.parse_args()
     if args.add_existing_ricardo_to_messenger and not args.assign_current_builds:
         parser.error("Adding the existing tester requires --assign-current-builds")
+    if args.resend_messenger_invitation and args.assign_current_builds:
+        parser.error("Invitation recovery must run separately from access changes")
     # Use only the existing Codemagic integration. Never log credentials or HTTP
     # headers, enable request logging, or export the key/token as an artifact.
     client = AppStoreConnectApiClient(
@@ -214,6 +217,50 @@ def main():
             except Exception as error:
                 item["assignment_error"] = str(error)
                 errors.append(f"{item['app_name']} build assignment: {error}")
+    if args.resend_messenger_invitation:
+        item = next(i for i in report if i["app_id"] == "6828213082")
+        group_id, group_name = EXPECTED_GROUPS[item["app_id"]]
+        groups = [g for g in item["groups"] if g["id"] == group_id]
+        if len(groups) != 1:
+            raise ValueError("Messenger's expected tester group is missing")
+        group = groups[0]
+        build_id = EXPECTED_BUILDS[item["app_id"]]
+        if (group["name"] != group_name or not group["internal"]
+                or len(group["target_testers"]) != 1
+                or item["build"]["id"] != build_id or item["build"].get("expired")
+                or not any(b["id"] == build_id for b in group["builds"])
+                or item["beta_detail"].get("internalBuildState") != "IN_BETA_TESTING"):
+            raise ValueError("Messenger's verified tester/build access changed; no invitation sent")
+        tester = group["target_testers"][0]
+        current = read(f"betaTesters/{tester['id']}")["data"]
+        if current["attributes"].get("email", "").casefold() != TESTER_EMAIL.casefold():
+            raise ValueError("Messenger tester email mismatch; no invitation sent")
+        tester["state"] = current["attributes"].get("state")
+        if tester["state"] == "INVITED":
+            response = client.session.post(
+                f"{client.API_URL}/betaTesterInvitations",
+                json={"data": {
+                    "type": "betaTesterInvitations",
+                    "relationships": {
+                        "app": {"data": {"type": "apps", "id": item["app_id"]}},
+                        "betaTester": {"data": {"type": "betaTesters", "id": tester["id"]}},
+                    },
+                }},
+            )
+            if response.status_code != 201:
+                raise RuntimeError(f"Apple invitation request returned HTTP {response.status_code}")
+            invitation = response.json()["data"]
+            if invitation["type"] != "betaTesterInvitations":
+                raise ValueError("Apple returned an unexpected invitation resource")
+            item["invitation_resend"] = {"accepted_by_apple": True, "id": invitation["id"]}
+            refreshed = read(f"betaTesters/{tester['id']}")["data"]
+            tester["state"] = refreshed["attributes"].get("state")
+            print(f"Apple accepted the Messenger invitation resend for {TESTER_EMAIL}")
+        elif tester["state"] in {"ACCEPTED", "INSTALLED"}:
+            item["invitation_resend"] = {"skipped": "Invitation already accepted"}
+            print(f"Messenger invitation already {tester['state']}; no resend needed")
+        else:
+            raise ValueError(f"Unexpected Messenger tester state: {tester['state']}; no invitation sent")
     output = Path("artifacts/testflight-access.json")
     output.parent.mkdir(exist_ok=True)
     output.write_text(json.dumps(report, indent=2) + "\n")
