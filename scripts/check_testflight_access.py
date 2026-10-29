@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read existing Apple release and TestFlight access without changing either."""
+"""Inspect TestFlight access; make only explicitly requested, guarded changes."""
 
 import argparse
 import json
@@ -28,7 +28,10 @@ EXPECTED_BUILDS = {
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--assign-current-builds", action="store_true")
+    parser.add_argument("--add-existing-ricardo-to-messenger", action="store_true")
     args = parser.parse_args()
+    if args.add_existing_ricardo_to_messenger and not args.assign_current_builds:
+        parser.error("Adding the existing tester requires --assign-current-builds")
     # Use only the existing Codemagic integration. Never log credentials or HTTP
     # headers, enable request logging, or export the key/token as an artifact.
     client = AppStoreConnectApiClient(
@@ -95,9 +98,10 @@ def main():
         report.append(item)
     if args.assign_current_builds:
         assignments = []
-        # Validate both targets before adding either build. This changes only
-        # the two observed build/group relationships, never tester membership,
-        # roles, invitations, automatic distribution, or App Store submissions.
+        # Validate both apps before any write. The separate membership flag
+        # permits only the existing Ricardo tester to join Messenger's group.
+        # Never create users, change roles, enable automatic distribution,
+        # resend invitations, or alter App Store submissions.
         for item in report:
             app_id = item["app_id"]
             build_id = EXPECTED_BUILDS[app_id]
@@ -106,15 +110,47 @@ def main():
                 raise ValueError(f"Unexpected or expired build for {app_id}")
             versions = [v for v in item["app_store_versions"]
                         if v["version"] == item["expected_version"]]
-            if len(versions) != 1 or versions[0]["build"]["id"] != build_id:
+            if len(versions) != 1 or (versions[0]["build"] or {}).get("id") != build_id:
                 raise ValueError(f"Build is not attached to the expected App Store version for {app_id}")
             groups = [g for g in item["groups"] if g["id"] == group_id]
             if len(groups) != 1:
                 raise ValueError(f"Expected existing internal group for {app_id}")
             group = groups[0]
-            if group["name"] != group_name or not group["internal"] or len(group["target_testers"]) != 1:
+            allow_missing = args.add_existing_ricardo_to_messenger and app_id == "6828213082"
+            valid_count = len(group["target_testers"]) in ((0, 1) if allow_missing else (1,))
+            if group["name"] != group_name or not group["internal"] or not valid_count:
                 raise ValueError(f"Group or existing tester membership changed for {app_id}")
             assignments.append((item, group, build_id))
+        if args.add_existing_ricardo_to_messenger:
+            ai_group = next(g for i, g, _ in assignments if i["app_id"] == "6783100102")
+            messenger_item, messenger_group, _ = next(
+                entry for entry in assignments if entry[0]["app_id"] == "6828213082"
+            )
+            existing_tester = ai_group["target_testers"][0]
+            if existing_tester["state"] != "INSTALLED":
+                raise ValueError("Ricardo's existing installed AI tester could not be confirmed")
+            if not messenger_group["target_testers"]:
+                response = client.session.post(
+                    f"{client.API_URL}/betaGroups/{messenger_group['id']}/relationships/betaTesters",
+                    json={"data": [{"type": "betaTesters", "id": existing_tester["id"]}]},
+                )
+                if response.status_code != 204:
+                    raise RuntimeError(
+                        f"Apple did not accept the existing tester membership: HTTP {response.status_code}"
+                    )
+            members = collection(f"betaGroups/{messenger_group['id']}/betaTesters")
+            matched = [t for t in members
+                       if t["attributes"].get("email", "").casefold() == TESTER_EMAIL.casefold()]
+            if len(matched) != 1:
+                raise ValueError("Ricardo's Messenger tester membership was not confirmed")
+            messenger_group["tester_count"] = len(members)
+            messenger_group["target_testers"] = [
+                {"id": t["id"], "email": TESTER_EMAIL,
+                 "state": t["attributes"].get("state"),
+                 "invite_type": t["attributes"].get("inviteType")}
+                for t in matched
+            ]
+            messenger_item["membership_verified"] = True
         for item, group, build_id in assignments:
             if not any(b["id"] == build_id for b in group["builds"]):
                 client.beta_groups.add_build(group["id"], build_id)
