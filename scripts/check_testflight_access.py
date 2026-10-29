@@ -14,7 +14,7 @@ APPS = (
     ("6783100102", "com.korlixdeveloper.korlixai", "12.0.3", "134"),
     ("6828213082", "com.korlixdeveloper.messenger", "1.0.2", "7"),
 )
-TESTER_EMAIL = "digiplayja@gmail.com"
+TESTER_EMAIL = "ricardo@korlixdeveloper.com"
 EXPECTED_GROUPS = {
     "6783100102": ("d00681e0-53e5-47e7-a3a2-f97a95e17c8f", "Korlix internal testers"),
     "6828213082": ("b1dfb03e-0029-4274-9402-c01ee7452eb6", "KORLIX Messenger Internal"),
@@ -136,6 +136,8 @@ def main():
         for group in item["groups"]:
             assigned = any(b["id"] == item["build"]["id"] for b in group["builds"])
             print(f"Group: {group['name']}; current build assigned: {assigned}")
+            if not group["target_testers"]:
+                print(f"Tester: {TESTER_EMAIL}; not a member of this group")
             for tester in group["target_testers"]:
                 print(f"Tester: {tester['email']}; invitation: {tester['state']}")
 
