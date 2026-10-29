@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 from codemagic.apple.app_store_connect import AppStoreConnectApiClient
+from codemagic.tools.app_store_connect.arguments import Types
 
 
 APPS = (
@@ -19,9 +20,9 @@ def main():
     # Use only the existing Codemagic integration. Never log credentials or HTTP
     # headers, enable request logging, or export the key/token as an artifact.
     client = AppStoreConnectApiClient(
-        key_identifier=os.environ["APP_STORE_CONNECT_KEY_IDENTIFIER"],
-        issuer_id=os.environ["APP_STORE_CONNECT_ISSUER_ID"],
-        private_key=os.environ["APP_STORE_CONNECT_PRIVATE_KEY"],
+        key_identifier=Types.KeyIdentifierArgument(os.environ["APP_STORE_CONNECT_KEY_IDENTIFIER"]).value,
+        issuer_id=Types.IssuerIdArgument(os.environ["APP_STORE_CONNECT_ISSUER_ID"]).value,
+        private_key=Types.PrivateKeyArgument(os.environ["APP_STORE_CONNECT_PRIVATE_KEY"]).value,
         log_requests=False,
         enable_jwt_cache=False,
     )
