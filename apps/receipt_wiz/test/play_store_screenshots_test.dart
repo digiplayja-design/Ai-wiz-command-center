@@ -1,6 +1,7 @@
 // Optional store-assets export of the real app UI with local sample data.
 // No production service is contacted and no real account credentials are used.
 import 'dart:io';
+import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -13,6 +14,8 @@ import 'package:korlix_receipt_core/auth/korlix_http.dart' as korlix_http;
 import 'package:korlix_receipt_core/auth/korlix_token_store.dart';
 import 'package:korlix_receipt_wiz/receipt_app.dart';
 import 'package:korlix_receipt_wiz/receipt_auth.dart';
+import 'package:korlix_receipt_core/bookkeeping/receipt_picker.dart';
+import 'package:korlix_receipt_core/receipt_wiz/receipt_wiz_batch.dart';
 
 import '../../../packages/korlix_receipt_core/test/receipt_wiz_test.dart'
     show FakeVault;
@@ -121,6 +124,30 @@ void main() {
     await capture('05-full-plan');
     await tester.pumpWidget(const SizedBox());
     billing.dispose();
+    final batchClient = vault.client();
+    await tester.pumpWidget(
+      RepaintBoundary(
+        key: const Key('play-screenshot'),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          home: ReceiptWizBatchImport(
+            client: batchClient,
+            files: [
+              for (final name in ['Office supplies.pdf', 'Travel receipt.pdf'])
+                BookkeepingPickedReceipt(
+                  name,
+                  Uint8List.fromList([37, 80, 68, 70]),
+                ),
+            ],
+            ensureConsent: () async => false,
+            scanAvailable: true,
+          ),
+        ),
+      ),
+    );
+    await capture('06-file-import');
+    await tester.pumpWidget(const SizedBox());
+    batchClient.dispose();
     korlix_http.configureClientFactory(null);
   }, skip: Platform.environment['RECEIPT_WIZ_PLAY_ASSETS'] == null);
 }

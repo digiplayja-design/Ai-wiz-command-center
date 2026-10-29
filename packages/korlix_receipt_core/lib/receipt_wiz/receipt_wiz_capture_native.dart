@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+
 import '../bookkeeping/receipt_picker.dart';
+import '../bookkeeping/file_reader.dart';
 import 'receipt_wiz_client.dart';
 
 Future<BookkeepingPickedReceipt?> captureReceiptWiz(
@@ -16,5 +18,12 @@ Future<BookkeepingPickedReceipt?> captureReceiptWiz(
     maxHeight: 2400,
   );
   if (photo == null || client.sessionChanged) return null;
-  return BookkeepingPickedReceipt(photo.name, await photo.readAsBytes());
+  final bytes = await readBookkeepingFile(
+    advertisedSize: await photo.length(),
+    maxBytes: receiptFileLimit,
+    limitMessage: 'Choose a receipt photo up to 8 MB.',
+    stream: photo.openRead(),
+  );
+  if (client.sessionChanged) return null;
+  return BookkeepingPickedReceipt(photo.name, bytes);
 }

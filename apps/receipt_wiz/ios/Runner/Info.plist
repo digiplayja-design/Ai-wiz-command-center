@@ -70,6 +70,10 @@
 	<string>Photograph receipts to save them in your private KORLIX receipt library.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Choose a receipt photo to save and organize in KORLIX Receipt Wiz.</string>
+	<!-- file_picker bundles DKCamera's optional geotagging APIs. This purpose
+	     string does not enable geotagging or request location permission. -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>The optional media picker can add the capture location to receipt photos. Location is not required to upload or scan receipts.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 </dict>

@@ -1,7 +1,7 @@
 name: korlix_receipt_wiz
 description: Independent KORLIX receipt scanner with a shared KORLIX account and private receipt library.
 publish_to: 'none'
-version: 1.1.0+2
+version: 1.2.0+3
 
 environment:
   sdk: ^3.13.5

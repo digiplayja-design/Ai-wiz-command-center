@@ -1,8 +1,16 @@
 # KORLIX Receipt Wiz
 
-Independent Flutter app for the existing KORLIX receipt scanner and private
-receipt library. Candidate version **1.1.0 (2)**; **1.0.0 (1)** remains the active internal test release. Android/iOS identifier:
-**com.korlixdeveloper.receiptwiz**. Android internal testing is configured, and the owner confirmed downloading and testing version 1.0.0 successfully. iOS store records and signing remain separate.
+Independent Flutter app for the shared KORLIX receipt scanner and private receipt library. Candidate **1.2.0 (3)**, identifier **com.korlixdeveloper.receiptwiz**. Android upgrades the existing Play app; iOS is a separate first submission. Build and submission status must be verified in the stores.
+
+## Receipt imports in 1.2
+
+- **Upload receipt files** opens the system file picker for JPG, JPEG, PNG, WebP or PDF (8 MB per file).
+- **Import multiple files** previews up to 10 receipts, at most 40 MB total. Nothing uploads until Upload files is tapped.
+- Optional AI reading uses existing consent and server-owned allowances. Originals remain saved when reading fails or the allowance runs out.
+- Sequential imports show per-file results, reuse exact duplicates, and keep stable retry keys. Stop finishes the current request; unsaved files can be retried while the queue stays open.
+- Account changes clear the queue and block subsequent requests. The queue is in memory, not an offline background uploader.
+- Camera data uses bounded stream reads. Deletion, unsaved-edit navigation, retry selection, pagination and filtered exports have regression coverage.
+- The existing KORLIX logo is red across native launcher assets, the app and store icon. The raster color edit used image_gen; flutter_launcher_icons generated platform sizes.
 
 ## Shared account
 

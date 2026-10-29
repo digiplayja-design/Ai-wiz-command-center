@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+
 import '../bookkeeping/bookkeeping_file_save.dart';
 import '../bookkeeping/bookkeeping_models.dart';
 import '../bookkeeping/bookkeeping_ui.dart';
@@ -228,8 +230,7 @@ class _ReceiptWizReviewState extends State<ReceiptWizReview> {
     } catch (_) {
       if (_alive && op == _operation) {
         setState(
-          () => _notice =
-              'The preview is unavailable. Your original can still be downloaded.',
+          () => _notice = 'The preview is unavailable. Your original can still be downloaded.',
         );
       }
     }
@@ -429,8 +430,13 @@ class _ReceiptWizReviewState extends State<ReceiptWizReview> {
         body: {'confirmed': true},
       );
       if (!mounted || !_alive || op != _operation) return;
-      setState(() => _dirty = false);
-      Navigator.pop(context);
+      setState(() {
+        _dirty = false;
+        _busy = false;
+      });
+      // PopScope must observe the new state before the route can close.
+      await WidgetsBinding.instance.endOfFrame;
+      if (mounted && _alive && op == _operation) Navigator.pop(context);
     } catch (e) {
       if (_alive) setState(() => _error = e.toString());
     } finally {
@@ -613,6 +619,7 @@ class _ReceiptWizReviewState extends State<ReceiptWizReview> {
         if (_busy) return;
         if (!didPop && await _discard() && mounted) {
           setState(() => _dirty = false);
+          await WidgetsBinding.instance.endOfFrame;
           if (context.mounted) Navigator.pop(context);
         }
       },
@@ -681,16 +688,14 @@ class _ReceiptWizReviewState extends State<ReceiptWizReview> {
                                 'Original saved',
                                 icon: Icons.lock_outline,
                               ),
-                              if (wizRows(
-                                widget.integrations['bookkeeping'],
-                              ).isNotEmpty)
+                              if (wizRows(widget.integrations['bookkeeping'])
+                                  .isNotEmpty)
                                 wizChip(
                                   'Bookkeeping inbox',
                                   icon: Icons.account_balance_wallet_outlined,
                                 ),
-                              if (wizRows(
-                                widget.integrations['tax_prep'],
-                              ).isNotEmpty)
+                              if (wizRows(widget.integrations['tax_prep'])
+                                  .isNotEmpty)
                                 wizChip(
                                   'Tax Prep inbox',
                                   icon: Icons.folder_open_outlined,
@@ -860,8 +865,7 @@ class _ReceiptWizReviewState extends State<ReceiptWizReview> {
                                 maxLines: 8,
                                 decoration: const InputDecoration(
                                   labelText: 'Receipt items (optional)',
-                                  helperText:
-                                      'One item per line · Up to 40 items, 180 characters each',
+                                  helperText: 'One item per line · Up to 40 items, 180 characters each',
                                   helperMaxLines: 3,
                                 ),
                                 onChanged: (_) => setState(() => _dirty = true),

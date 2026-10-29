@@ -94,6 +94,15 @@ class ReleaseIdentityTests(unittest.TestCase):
                             "Your location can be added to photos taken with the media picker."},
                            bundle_id, "1.0.2", "6")
 
+    def test_receipt_wiz_export_requires_media_picker_purpose(self):
+        bundle_id = "com.korlixdeveloper.receiptwiz"
+        info = {"CFBundleIdentifier": bundle_id, "CFBundleShortVersionString": "1.2.0",
+                "CFBundleVersion": "3", "CFBundleSupportedPlatforms": ["iPhoneOS"]}
+        with self.assertRaisesRegex(ValueError, "NSLocationWhenInUseUsageDescription"):
+            verify.verify_info(info, bundle_id, "1.2.0", "3")
+        verify.verify_info({**info, "NSLocationWhenInUseUsageDescription": "Optional photo metadata."},
+                           bundle_id, "1.2.0", "3")
+
     def test_push_requires_matching_signed_profile_and_runtime_environment(self):
         signed = {"application-identifier": "TEAM.com.example.app", "get-task-allow": False,
                   "aps-environment": "production"}

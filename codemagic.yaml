@@ -393,6 +393,77 @@ workflows:
     artifacts:
       - artifacts/*.aab
 
+  receipt-wiz-ios-candidate: &receipt_ios_candidate
+    name: Receipt WIZ — signed iOS candidate
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    working_directory: apps/receipt_wiz
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    environment: &receipt_ios_environment
+      flutter: 3.47.7
+      xcode: 26.6
+      cocoapods: default
+      vars:
+        RECEIPT_REQUIRE_APP_RECORD: 'false'
+      ios_signing:
+        certificates:
+          - KORLIX_APP_STORE_CERT
+    scripts:
+      - name: Prepare dedicated Receipt WIZ Apple identity
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.receipt-release-tools"
+          "$CM_BUILD_DIR/.receipt-release-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+          export PATH="$CM_BUILD_DIR/.receipt-release-tools/bin:$PATH"
+          printf 'PATH=%s\n' "$PATH" >> "$CM_ENV"
+          python3 "$CM_BUILD_DIR/scripts/prepare_receipt_ios.py"
+      - name: Validate shared scanner and Receipt WIZ
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/packages/korlix_receipt_core"
+          flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
+          flutter analyze --no-pub
+          flutter test --no-pub --reporter expanded
+          cd "$CM_BUILD_DIR/apps/receipt_wiz"
+          flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
+          flutter analyze --no-pub
+          flutter test --no-pub --reporter expanded
+      - name: Build and verify Receipt WIZ IPA
+        script: |
+          set -euo pipefail
+          flutter build ios --release --config-only --no-codesign --no-pub \
+            --build-name="$KORLIX_IOS_VERSION" --build-number="$KORLIX_IOS_BUILD_NUMBER"
+          xcode-project use-profiles --project ios/Runner.xcodeproj \
+            --export-options-plist "$CM_BUILD_DIR/receipt-ios-export.plist" \
+            --custom-export-options '{"manageAppVersionAndBuildNumber": false}'
+          flutter build ipa --release --no-pub \
+            --build-name="$KORLIX_IOS_VERSION" --build-number="$KORLIX_IOS_BUILD_NUMBER" \
+            --export-options-plist="$CM_BUILD_DIR/receipt-ios-export.plist"
+          IPA_FILES=(build/ios/ipa/*.ipa)
+          test "${#IPA_FILES[@]}" -eq 1
+          python3 "$CM_BUILD_DIR/scripts/verify_ios_ipa.py" "${IPA_FILES[0]}" \
+            --bundle-id com.korlixdeveloper.receiptwiz --version "$KORLIX_IOS_VERSION" \
+            --build "$KORLIX_IOS_BUILD_NUMBER" --output artifacts/ReceiptWiz-verification.json
+          cp "${IPA_FILES[0]}" artifacts/ReceiptWiz.ipa
+    artifacts:
+      - $CM_BUILD_DIR/apps/receipt_wiz/artifacts/*.ipa
+      - $CM_BUILD_DIR/apps/receipt_wiz/artifacts/*.json
+      - /tmp/xcodebuild_logs/*.log
+
+  receipt-wiz-ios-testflight:
+    <<: *receipt_ios_candidate
+    name: Receipt WIZ — TestFlight upload
+    environment:
+      <<: *receipt_ios_environment
+      vars:
+        RECEIPT_REQUIRE_APP_RECORD: 'true'
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: false
+        submit_to_app_store: false
+
   receipt-wiz-validation:
     name: Receipt Wiz — test builds
     instance_type: mac_mini_m2

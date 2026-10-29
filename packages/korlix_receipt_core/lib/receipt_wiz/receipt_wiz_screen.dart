@@ -1,12 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+
 import '../bookkeeping/bookkeeping_file_save.dart';
 import '../bookkeeping/bookkeeping_models.dart';
 import '../bookkeeping/bookkeeping_ui.dart';
 import '../bookkeeping/receipt_picker.dart';
 import 'receipt_wiz_capture.dart';
+import 'receipt_wiz_batch.dart';
 import 'receipt_wiz_client.dart';
 import 'receipt_wiz_review.dart';
 import 'receipt_wiz_style.dart';
@@ -22,6 +25,7 @@ class ReceiptWizScreen extends StatefulWidget {
     this.inboxOnly = false,
     this.picker,
     this.capture,
+    this.batchPicker,
     this.saveFile,
     this.onOpenAccount,
     this.onOpenSubscription,
@@ -32,6 +36,7 @@ class ReceiptWizScreen extends StatefulWidget {
   final String? businessId, taxWorkspaceId;
   final bool inboxOnly;
   final Future<BookkeepingPickedReceipt?> Function()? picker, capture;
+  final Future<List<BookkeepingPickedReceipt>?> Function()? batchPicker;
   final Future<void> Function(Uint8List, String, String, Rect)? saveFile;
   final VoidCallback? onOpenAccount;
   final Future<void> Function()? onOpenSubscription;
@@ -113,6 +118,12 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
     try {
       final data = await widget.client.request('GET', '', query: _query);
       if (!_alive || op != _loadOperation) return;
+      final total = (data['total'] as num?)?.toInt() ?? 0;
+      if (_offset > 0 && _offset >= total) {
+        _offset = total == 0 ? 0 : ((total - 1) ~/ 30) * 30;
+        await _load();
+        return;
+      }
       setState(() {
         _receipts = wizRows(data['receipts']);
         _integrations = wizMap(data['integrations']);
@@ -129,8 +140,44 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
   }
 
   void _filter() {
+    _debounce?.cancel();
     _offset = 0;
     unawaited(_load());
+  }
+
+  Future<void> _batchImport() async {
+    if (!_alive || _uploading) return;
+    setState(() {
+      _uploading = true;
+      _error = null;
+    });
+    try {
+      final files =
+          await (widget.batchPicker?.call() ?? pickBookkeepingReceiptBatch());
+      if (!mounted || !_alive || files == null || files.isEmpty) return;
+      validateReceiptBatch(files);
+      await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => ReceiptWizBatchImport(
+            client: widget.client,
+            files: files,
+            ensureConsent: widget.ensureConsent,
+            scanAvailable: _scanAvailable,
+          ),
+        ),
+      );
+      if (_alive) {
+        setState(() {
+          _inboxTab = true;
+          _offset = 0;
+        });
+        await _load();
+      }
+    } catch (e) {
+      if (_alive) setState(() => _error = e.toString());
+    } finally {
+      if (_alive) setState(() => _uploading = false);
+    }
   }
 
   Future<void> _choose(bool camera) async {
@@ -207,8 +254,7 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
       _integrations = wizMap(data['integrations']);
       if (receipt['state'] != 'ready') {
         setState(
-          () => _notice =
-              'This upload is still finishing. Keep this screen open, wait two minutes, then retry the same file.',
+          () => _notice = 'This upload is still finishing. Keep this screen open, wait two minutes, then retry the same file.',
         );
         await _load();
         return false;
@@ -238,8 +284,7 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
               'Your original is saved. ${e.toString()} You can add the details now or retry scanning.';
         }
       } else {
-        note =
-            'Original saved. Add the details below; automatic reading is optional.';
+        note = 'Original saved. Add the details below; automatic reading is optional.';
       }
       if (!mounted || !_alive) return false;
       _notice = null;
@@ -299,7 +344,12 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
     if (!_alive || _uploading) return;
     setState(() => _uploading = true);
     try {
-      final data = await widget.client.request('GET', '/export', query: _query);
+      final filters = {..._query}..remove('offset');
+      final data = await widget.client.request(
+        'GET',
+        '/export',
+        query: filters,
+      );
       if (!mounted || !_alive) return;
       await (widget.saveFile ?? saveBookkeepingFile)(
         Uint8List.fromList(utf8.encode(data['csv'] as String)),
@@ -541,7 +591,15 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
             padding: const EdgeInsets.symmetric(vertical: 15),
           ),
           icon: const Icon(Icons.add_photo_alternate_outlined),
-          label: const Text('Choose photo or PDF'),
+          label: const Text('Upload receipt files'),
+        ),
+        const SizedBox(height: 8),
+        TextButton.icon(
+          key: const Key('receipt-wiz-batch'),
+          onPressed: _uploading ? null : _batchImport,
+          style: TextButton.styleFrom(foregroundColor: Colors.white),
+          icon: const Icon(Icons.library_add_outlined),
+          label: const Text('Import multiple files'),
         ),
         const SizedBox(height: 14),
         const Text(
@@ -847,9 +905,8 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: wizCategoryColor(
-                    d['category']?.toString(),
-                  ).withValues(alpha: .10),
+                  color: wizCategoryColor(d['category']?.toString())
+                      .withValues(alpha: .10),
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(
@@ -1052,11 +1109,10 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
                                 child: const Text('Retry saving this receipt'),
                               ),
                               TextButton(
-                                onPressed: () => setState(() {
-                                  _pending = null;
-                                  _uploadKey = null;
-                                  _notice = null;
-                                }),
+                                onPressed: () async {
+                                  // Keep the previous retry available if selection is cancelled.
+                                  await _choose(false);
+                                },
                                 child: const Text('Choose a different receipt'),
                               ),
                             ],
@@ -1118,7 +1174,14 @@ class _ReceiptWizScreenState extends State<ReceiptWizScreen> {
                                         ? null
                                         : () => _choose(false),
                                     icon: const Icon(Icons.upload_file),
-                                    label: const Text('Choose photo or PDF'),
+                                    label: const Text('Upload receipt files'),
+                                  ),
+                                  TextButton.icon(
+                                    onPressed: _uploading ? null : _batchImport,
+                                    icon: const Icon(
+                                      Icons.library_add_outlined,
+                                    ),
+                                    label: const Text('Import multiple files'),
                                   ),
                                 ],
                               ),

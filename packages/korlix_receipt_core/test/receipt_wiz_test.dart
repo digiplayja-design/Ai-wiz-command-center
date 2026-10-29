@@ -44,6 +44,7 @@ class FakeVault {
   Map<String, dynamic> saved = receipt();
   final requests = <http.Request>[];
   int uploads = 0, scans = 0;
+  int total = 1;
   bool duplicate = false,
       failScan = false,
       failUpload = false,
@@ -92,20 +93,26 @@ class FakeVault {
       };
       data = {'receipt': saved, 'integrations': {}};
     } else if (r.method == 'DELETE') {
+      total--;
       data = {'deleted': true};
     } else if (path.endsWith(rid)) {
       data = {'receipt': saved, 'integrations': {}};
     } else {
       data = {
-        'receipts': [saved],
-        'total': 1,
+        'receipts': total == 0 ? [] : [saved],
+        'total': total,
         'offset': 0,
         'used_bytes': 4000,
         'scans_today': 1,
         'plan': {
-          'name': 'free', 'included': false, 'unlimited': false,
-          'monthly_scan_limit': 20, 'scans_this_month': 1,
-          'scans_remaining': 19, 'max_receipts': 100, 'max_bytes': 262144000,
+          'name': 'free',
+          'included': false,
+          'unlimited': false,
+          'monthly_scan_limit': 20,
+          'scans_this_month': 1,
+          'scans_remaining': 19,
+          'max_receipts': 100,
+          'max_bytes': 262144000,
           'resets_at': '2026-11-01T00:00:00Z',
         },
         'credit_cost': 0,
@@ -253,6 +260,99 @@ void main() {
       expect(captures, 1);
       expect(find.text('Your receipt inbox'), findsOneWidget);
       expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('delete closes the review and returns to a valid page', (
+    tester,
+  ) async {
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final f = FakeVault()..total = 31;
+    await mount(
+      tester,
+      ReceiptWizScreen(
+        client: f.client(),
+        ensureConsent: () async => true,
+        inboxOnly: true,
+      ),
+    );
+    await tapVisible(tester, find.byTooltip('Next receipts'));
+    expect(f.requests.last.url.queryParameters['offset'], '30');
+    await tapVisible(tester, find.text('The Paper Shop'));
+    await tapVisible(tester, find.text('Remove'));
+    await tester.tap(find.widgetWithText(TextButton, 'Remove receipt'));
+    await tester.pumpAndSettle();
+    expect(find.byType(ReceiptWizReview), findsNothing);
+    expect(find.text('Your receipt inbox'), findsOneWidget);
+    expect(f.requests.where((r) => r.method == 'DELETE').length, 1);
+    expect(f.requests.last.url.queryParameters['offset'], '0');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+    'discarding edits closes review without a repeated dialog or save',
+    (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final f = FakeVault();
+      await mount(
+        tester,
+        ReceiptWizScreen(
+          client: f.client(),
+          ensureConsent: () async => true,
+          inboxOnly: true,
+        ),
+      );
+      await tapVisible(tester, find.text('The Paper Shop'));
+      await tester.enterText(
+        find.byKey(const Key('receipt-merchant')),
+        'Unsaved name',
+      );
+      await tester.pumpAndSettle();
+      await tester.pageBack();
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Discard edits'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ReceiptWizReview), findsNothing);
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(f.requests.where((r) => r.method == 'PUT'), isEmpty);
+    },
+  );
+
+  testWidgets(
+    'choose a different receipt reopens picker and cancel keeps failed upload retryable',
+    (tester) async {
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final f = FakeVault()..failUpload = true;
+      var picks = 0;
+      await mount(
+        tester,
+        ReceiptWizScreen(
+          client: f.client(),
+          ensureConsent: () async => false,
+          picker: () async => ++picks == 1
+              ? BookkeepingPickedReceipt(
+                  'receipt.pdf',
+                  Uint8List.fromList([37, 80, 68, 70]),
+                )
+              : null,
+        ),
+      );
+      await tapVisible(tester, find.byKey(const Key('receipt-wiz-upload')));
+      await tapVisible(tester, find.text('Save receipt'));
+      await tapVisible(tester, find.text('Choose a different receipt'));
+      expect(picks, 2);
+      expect(find.text('Retry saving this receipt'), findsOneWidget);
+      f.failUpload = false;
+      await tapVisible(tester, find.text('Retry saving this receipt'));
+      expect(find.byType(ReceiptWizReview), findsOneWidget);
+      final uploads = f.requests.where((r) => r.method == 'POST').toList();
+      expect(
+        uploads[0].headers['x-receipt-request-key'],
+        uploads[1].headers['x-receipt-request-key'],
+      );
     },
   );
 
@@ -433,6 +533,10 @@ void main() {
       await tester.tap(export);
       await tester.pumpAndSettle();
       expect(exported, contains('The Paper Shop'));
+      expect(
+        f.requests.last.url.queryParameters.containsKey('offset'),
+        isFalse,
+      );
       expect(f.requests.last.url.queryParameters['tax_workspace_id'], 'tax');
       await tapVisible(tester, find.text('Reset filters'));
       expect(f.requests.last.url.queryParameters.containsKey('query'), isFalse);
