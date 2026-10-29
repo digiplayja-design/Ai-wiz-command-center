@@ -1,5 +1,11 @@
 {
-  "status": "Prepared; new App Store Connect record and TestFlight upload pending",
+  "status": "Signed IPA verified; Apple sign-in, new App Store Connect record, and TestFlight upload pending",
+  "candidateBuildId": "6ae38f0eefa74786046ed06d",
+  "candidateCommit": "6bc26c85c2dded612006c836224f04d4282fba9a",
+  "ipaSha256": "52ea9223cae432a01775a257ef5b2f4e23667eed70bb91ee8aac2dc173e5cd39",
+  "ipaBytes": 26321143,
+  "signatureVerified": true,
+  "testFlightUploaded": false,
   "name": "KORLIX Receipt Wiz",
   "bundleId": "com.korlixdeveloper.receiptwiz",
   "sku": "korlix-receipt-wiz-ios",

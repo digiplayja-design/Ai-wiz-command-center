@@ -1,8 +1,11 @@
 {
-  "status": "1.2.0 (3) upgrade prepared; submission pending live Play verification",
+  "status": "1.2.0 (3) listing saved in Play Console; signed AAB and review submission blocked on specific Codespace trust approval",
+  "verifiedProduction": "1.1.0 (2), available on Google Play with full rollout; highest uploaded version code 2",
+  "listingChangesSaved": ["fullDescription", "app-icon.png", "six phone screenshots"],
+  "reviewSubmitted": false,
   "aiAssetDeclaration": {
     "ownerApproved": true,
-    "submitted": false,
+    "submitted": true,
     "labeledAssets": [
       "feature-graphic.png",
       "app-icon.png"

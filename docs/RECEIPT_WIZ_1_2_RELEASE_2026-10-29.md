@@ -20,8 +20,19 @@ Scope: upgrade the existing Android app `com.korlixdeveloper.receiptwiz` and pre
 - iOS release verification helpers: 11 tests passed.
 - YAML parsed, release shell syntax checked, Python compiled, git whitespace check passed.
 
-## Release state
+## Native verification
 
-Native build and store submission status remain pending live verification. Source version 1.2.0+3 follows the recorded Android 1.1.0+2 release; confirm the live Play version code before upload. Apple needs its own new App Store Connect record, using the same bundle identifier, before TestFlight upload. Tester account: ricardo@korlixdeveloper.com.
+- GitHub Actions run [40928938174](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/40928938174) completed successfully: Android debug APK and iOS simulator builds, analyzer checks, and tests. Tested application source: `9b549934026c383ea21393335171a24349b6e91b`; subsequent candidate commits only changed signing configuration and release metadata.
+- Codemagic [6ae38f0eefa74786046ed06d](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae38f0eefa74786046ed06d) finished successfully in 8m 26s from `6bc26c85c2dded612006c836224f04d4282fba9a`.
+- Signed IPA: version 1.2.0, build 3, bundle `com.korlixdeveloper.receiptwiz`, 26,321,143 bytes. SHA-256: `52ea9223cae432a01775a257ef5b2f4e23667eed70bb91ee8aac2dc173e5cd39`.
+- IPA verification confirmed an App Store provisioning profile and valid signature. Dedicated profile: `KORLIX Receipt Wiz App Store`, UUID `7e5192d7-47c4-4253-9277-04fd69a3788f`.
+- Nonblocking build warning: iOS still uses Flutter's default launch-image placeholder. The app icon is the new red logo; the warning concerns the separate launch screen.
+
+## Store state verified 29 October 2026
+
+- **Google Play:** existing production 1.1.0 (2) is available with full rollout; uploaded version codes are 1 and 2. Version code 3 is unused. The updated full description, red icon, and six phone screenshots are saved as three changes ready to send for review. The icon and existing feature graphic are labeled as created or edited with AI. These changes have **not** been submitted independently of the new binary.
+- **Android signing blocker:** the existing signing key remains in the existing `super-bassoon-r74g97qg5v9wf5556` Codespace. Automatic approval review rejected its **Trust Folder & Continue** prompt because the persistent workspace trust change was not specifically authorized. No workaround was attempted and no key was moved. Specific user approval is required before enabling execution there and running `tool/prepare-receipt-wiz-play.sh` to produce the signed AAB. The existing checkout has unrelated changes; the helper uses an isolated temporary checkout.
+- **Apple:** dedicated bundle/profile and signed IPA are ready. Codemagic confirmed that an App Store Connect app record does not yet exist. The browser is stopped at two-factor authentication with an incorrect-code error; manual sign-in handoff is needed. Create the new record using `store/apple/testflight-preparation.json`, then run the dedicated TestFlight workflow and verify processing/testing availability. Tester account: `ricardo@korlixdeveloper.com`.
+- **No new TestFlight build or Google Play upgrade has been submitted yet.** Public Apple App Review remains a later step after TestFlight testing.
 
 The import queue is in memory while open. It does not provide offline/background persistence. Real-device camera/file-provider behavior and production account workflows still need TestFlight/internal testing; automated tests use local fixtures, never customer receipts.
