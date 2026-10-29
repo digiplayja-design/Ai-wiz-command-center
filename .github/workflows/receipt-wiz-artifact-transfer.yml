@@ -19,9 +19,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir artifacts
-          gh release download receipt-wiz-1.2.0-build3 \
-            --repo digiplayja-design/Ai-wiz-command-center \
-            --pattern KORLIX-Receipt-Wiz-3.aab --dir artifacts
+          gh api repos/digiplayja-design/Ai-wiz-command-center/releases/assets/689899422 \
+            -H 'Accept: application/octet-stream' > artifacts/KORLIX-Receipt-Wiz-3.aab
           cd artifacts
           printf '%s  %s\n' \
             ee8209b85387017dbe5a4efeab79b6728eb3af2f2c20295834d07e88335baabf \
