@@ -407,6 +407,12 @@ workflows:
       vars:
         RECEIPT_REQUIRE_APP_RECORD: 'false'
       ios_signing:
+        # Codemagic requires a profile to import the existing certificate.
+        # This bootstrap profile is never used to sign Receipt WIZ: the setup
+        # script creates/selects its exact bundle profile, and IPA validation
+        # rejects any identity mismatch before upload.
+        provisioning_profiles:
+          - KORLIX_APP_STORE_PROFILE
         certificates:
           - KORLIX_APP_STORE_CERT
     scripts:
