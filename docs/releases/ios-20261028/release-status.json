@@ -1,0 +1,176 @@
+{
+  "updated_at": "2026-10-29T00:44:15.664353+00:00",
+  "source_commit": "e65a6b548656766bbfdcbddab8e1d8f939f22fd0",
+  "source_branch": "release/ios-appstore-20261028",
+  "korlix_ai": {
+    "bundle_id": "com.korlixdeveloper.korlixai",
+    "apple_app_id": "6783100102",
+    "version": "12.0.3",
+    "build": "134",
+    "minimum_ios": "15.0",
+    "codemagic_build_id": "6ae27102206ce93970c70704",
+    "codemagic_url": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae27102206ce93970c70704",
+    "signed_ipa": {
+      "name": "KorlixAI.ipa",
+      "bytes": 84330208,
+      "sha256": "4d26e9857db915ceb0450003910b8e67d34cb025dbb86af13fb5028b68f6d4f5",
+      "profile_type": "app_store",
+      "signature_verified": true
+    },
+    "apple_upload_status": "success",
+    "apple_processing_status": "completed",
+    "app_store_review_status": "WAITING_FOR_REVIEW",
+    "apple_delivery_uuid": "86f4e8c1-54a8-4f91-a1f7-34c0ea82deeb",
+    "apple_upload_at": "2026-10-28T22:15:01.741Z",
+    "apple_build_id": "86f4e8c1-54a8-4f91-a1f7-34c0ea82deeb",
+    "app_store_version_id": "c1307383-13b9-4250-aaac-4e9241bf61ef",
+    "review_submission_id": "cae973b9-318e-4a12-af42-52dac837cd82",
+    "review_submitted_at": "2026-10-28T22:18:24.938Z",
+    "release_type": "AFTER_APPROVAL",
+    "codemagic_status": "finished",
+    "release_notes_saved": true,
+    "public_release_confirmed": false,
+    "app_store_review_status_web_confirmed": "WAITING_FOR_REVIEW"
+  },
+  "messenger": {
+    "bundle_id": "com.korlixdeveloper.messenger",
+    "version": "1.0.2",
+    "source_build_floor": "5",
+    "signed_ipa_created": true,
+    "apple_upload_performed": true,
+    "app_store_submission_performed": false,
+    "app_record_status": "Created in App Store Connect for KORLIX Messenger with Limited Access; owner retains access.",
+    "signing_status": "KORLIX_MESSENGER_APP_STORE_PROFILE created in Apple Developer and stored in Codemagic; existing KORLIX_APP_STORE_CERT reused.",
+    "apns_delivery_status": "not_verified_on_iPhone",
+    "listing_draft": "messenger-appstore-draft.json",
+    "identifier_registration_status": "Registered with Push Notifications.",
+    "testflight_workflow": "korlix-messenger-ios-testflight",
+    "testflight_status": "Testing",
+    "apple_app_id": "6828213082",
+    "apple_profile_id": "PGGJCCFT9T",
+    "apple_certificate_id": "4635LCY72R",
+    "profile_expires": "2027-06-22",
+    "security_setup": {
+      "description": "KORLIX Messenger",
+      "bundle_id": "com.korlixdeveloper.messenger",
+      "capabilities": [
+        "Push Notifications"
+      ],
+      "distribution_type": "App Store",
+      "reuse_certificate": "KORLIX_APP_STORE_CERT",
+      "profile_reference": "KORLIX_MESSENGER_APP_STORE_PROFILE",
+      "registered": true,
+      "profile_created": true,
+      "stored_in_codemagic": true,
+      "owner_approved": true
+    },
+    "source_commit": "089e7756074433c62400b72ddc24817451b74a2f",
+    "build": "5",
+    "minimum_ios": "15.0",
+    "codemagic_build_id": "6ae2932e206ce93970c710d7",
+    "codemagic_url": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae2932e206ce93970c710d7",
+    "prior_build_attempts": [
+      {
+        "codemagic_build_id": "6ae29159206ce93970c71068",
+        "source_commit": "7b6cbf9201fe071b0e34c647103de77fce95a574",
+        "version": "1.0.2",
+        "build": "5",
+        "signed_ipa_bytes": 45949538,
+        "signed_ipa_sha256": "b47002863824a2f8bf54a8d7032e4b430e7598738dd741a016165c3f893df592",
+        "signature_verified": true,
+        "production_push_required": true,
+        "result": "Archive and IPA verification passed; publishing reported No artifacts were found. No Apple upload. Corrected artifact paths to explicit CM_BUILD_DIR absolute paths and restarted."
+      }
+    ],
+    "internal_testflight_group": {
+      "name": "KORLIX Messenger Internal",
+      "id": "b1dfb03e-0029-4274-9402-c01ee7452eb6",
+      "automatic_distribution": false,
+      "tester_count": 1,
+      "tester_identity": "Authenticated Apple account holder; exact recipient verified against signed-in identity. No new App Store user roles granted.",
+      "build_count": 1,
+      "tester_status": "Invited",
+      "build": "1.0.2 (5)",
+      "build_status": "Testing",
+      "invitation_date": "2026-10-28",
+      "invitation_delivery_confirmed_by_user": false
+    },
+    "metadata_saved": [
+      "version",
+      "description",
+      "keywords",
+      "support_url",
+      "marketing_url",
+      "copyright",
+      "subtitle",
+      "primary_category_social_networking",
+      "privacy_policy_url",
+      "review_notes",
+      "beta_description",
+      "beta_feedback_email",
+      "beta_marketing_url",
+      "beta_privacy_url",
+      "app_store_build_1.0.2_5"
+    ],
+    "app_store_validation_remaining": [
+      "Content Rights Information",
+      "Age ratings questionnaire",
+      "App Privacy collection and use disclosures",
+      "Price tier",
+      "App review username/password and complete contact name, email and phone"
+    ],
+    "device_validation_pending": [
+      "Physical iPhone calls and call recovery",
+      "Foreground/background push delivery and notification taps",
+      "Messenger APNs provider readiness",
+      "Actual screenshots for supported iPhone/iPad families"
+    ],
+    "signed_ipa": {
+      "name": "KorlixMessenger.ipa",
+      "bytes": 45949523,
+      "sha256": "72e56a46ff2d063ef52e615ae8005e9213c03ed21ddeac1885e271090e17f1a1",
+      "profile_type": "app_store",
+      "signature_verified": true,
+      "production_push_required": true
+    },
+    "codemagic_validation": {
+      "messenger_tests": 27,
+      "shared_call_tests": 54,
+      "messenger_analysis": "passed",
+      "native_archive": "passed",
+      "ipa_identity_signature_and_push_entitlements": "passed",
+      "artifact_collection": "succeeded"
+    },
+    "apple_upload_status": "success",
+    "apple_delivery_uuid": "284c623c-61ee-46d9-a68f-06c3fe68a740",
+    "apple_upload_at": "2026-10-29T00:35:01.865Z",
+    "apple_processing_status": "completed",
+    "codemagic_status": "finished",
+    "apple_build_id": "284c623c-61ee-46d9-a68f-06c3fe68a740",
+    "beta_build_localization_id": "1be53227-ffaa-40db-9cef-676e64ae6506",
+    "release_notes_saved": true,
+    "testflight_installation_enabled": true,
+    "app_store_review_status": "PREPARE_FOR_SUBMISSION",
+    "public_release_confirmed": false,
+    "app_store_draft_build_selected": "284c623c-61ee-46d9-a68f-06c3fe68a740"
+  },
+  "validation": {
+    "korlix_ai_targeted_tests": 210,
+    "messenger_tests": 27,
+    "release_guard_tests": 9,
+    "analysis": "passed",
+    "native_runs": [
+      {
+        "id": 40772911905,
+        "conclusion": "success"
+      },
+      {
+        "id": 40775904152,
+        "conclusion": "success"
+      }
+    ],
+    "physical_ios_device_tests": "not_performed"
+  },
+  "apple_web_access": "Authenticated; App Store Connect app list and Apple Developer identifiers inspected successfully.",
+  "apple_team_id": "FJKJ9MUDZ4"
+}

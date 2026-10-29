@@ -1,4 +1,184 @@
 workflows:
+  korlix-ai-ios-appstore:
+    name: Korlix AI iOS App Store
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    environment:
+      flutter: 3.47.7
+      xcode: 26.6
+      cocoapods: default
+      ios_signing:
+        provisioning_profiles:
+          - KORLIX_APP_STORE_PROFILE
+        certificates:
+          - KORLIX_APP_STORE_CERT
+    scripts:
+      - name: Install pinned Apple release tools
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.ios-release-tools"
+          "$CM_BUILD_DIR/.ios-release-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+          printf 'PATH=%s/.ios-release-tools/bin:%s\n' "$CM_BUILD_DIR" "$PATH" >> "$CM_ENV"
+      - name: Verify existing Apple app and choose next build
+        script: |
+          set -euo pipefail
+          python3 scripts/prepare_ios_release.py \
+            --bundle-id com.korlixdeveloper.korlixai --app-id 6783100102 \
+            --require-existing-build --environment-file "$CM_ENV"
+          cp docs/releases/ios-20261028/korlix-ai-notes.txt release_notes_en-US.txt
+      - name: Validate current iOS app and shared calling code
+        script: |
+          set -euo pipefail
+          flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
+          flutter analyze --no-pub lib/auth/korlix_email_confirmation.dart lib/support test/support
+          flutter test --no-pub --reporter expanded \
+            test/auth/korlix_email_confirmation_test.dart test/auth_welcome_test.dart \
+            test/auth_remember_login_test.dart test/auth_october_integration_test.dart \
+            test/signup_eligibility_test.dart test/signup_accessibility_release_test.dart \
+            test/auth_device_session_test.dart test/auth/korlix_session_refresh_test.dart \
+            test/auth/korlix_http_test.dart test/registration_discovery_test.dart \
+            test/korlix_entry_intro_test.dart test/apple_billing_test.dart \
+            test/privacy/korlix_privacy_settings_test.dart \
+            test/privacy/korlix_third_party_ai_consent_test.dart \
+            test/privacy/korlix_third_party_ai_privacy_statement_test.dart \
+            test/support/ai_output_report_test.dart test/support/report_image_test.dart \
+            test/social_calls_test.dart test/social_call_audio_test.dart \
+            test/social_call_reliability_test.dart test/social_screen_sharing_test.dart \
+            test/social_communication_upgrade_test.dart
+      - name: Prepare native dependencies and apply existing app signing
+        script: |
+          set -euo pipefail
+          flutter build ios --release --config-only --no-codesign --no-pub \
+            --build-name="$KORLIX_IOS_VERSION" --build-number="$KORLIX_IOS_BUILD_NUMBER"
+          xcode-project use-profiles --project ios/Runner.xcodeproj \
+            --export-options-plist "$CM_BUILD_DIR/ios-release-export.plist" \
+            --custom-export-options '{"manageAppVersionAndBuildNumber": false}'
+      - name: Build and verify Korlix AI IPA
+        script: |
+          set -euo pipefail
+          flutter build ipa --release --no-pub \
+            --build-name="$KORLIX_IOS_VERSION" --build-number="$KORLIX_IOS_BUILD_NUMBER" \
+            --export-options-plist="$CM_BUILD_DIR/ios-release-export.plist"
+          mkdir -p artifacts
+          IPA_FILES=(build/ios/ipa/*.ipa)
+          test "${#IPA_FILES[@]}" -eq 1
+          python3 scripts/verify_ios_ipa.py "${IPA_FILES[0]}" \
+            --bundle-id com.korlixdeveloper.korlixai --version "$KORLIX_IOS_VERSION" \
+            --build "$KORLIX_IOS_BUILD_NUMBER" --output artifacts/KorlixAI-verification.json
+          cp "${IPA_FILES[0]}" artifacts/KorlixAI.ipa
+    artifacts:
+      - artifacts/*.ipa
+      - artifacts/*-verification.json
+      - build/ios/archive/Runner.xcarchive/dSYMs/*.dSYM
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: false
+        submit_to_app_store: true
+        cancel_previous_submissions: false
+        release_type: AFTER_APPROVAL
+
+  korlix-messenger-ios-appstore: &messenger_ios_release
+    name: KORLIX Messenger iOS App Store
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    working_directory: apps/korlix_messenger
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    environment:
+      flutter: 3.47.7
+      xcode: 26.6
+      cocoapods: default
+      # Messenger has its own App Store profile and reuses the existing
+      # distribution certificate. Never use Korlix AI's provisioning profile.
+      ios_signing:
+        provisioning_profiles:
+          - KORLIX_MESSENGER_APP_STORE_PROFILE
+        certificates:
+          - KORLIX_APP_STORE_CERT
+    scripts:
+      - name: Install pinned Apple release tools
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.ios-release-tools"
+          "$CM_BUILD_DIR/.ios-release-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+          printf 'PATH=%s/.ios-release-tools/bin:%s\n' "$CM_BUILD_DIR" "$PATH" >> "$CM_ENV"
+      - name: Verify Messenger Apple record and choose next build
+        script: |
+          set -euo pipefail
+          python3 "$CM_BUILD_DIR/scripts/prepare_ios_release.py" \
+            --bundle-id com.korlixdeveloper.messenger --app-id 6828213082 \
+            --environment-file "$CM_ENV"
+          cp "$CM_BUILD_DIR/docs/releases/ios-20261028/korlix-messenger-notes.txt" release_notes_en-US.txt
+      - name: Validate standalone Messenger
+        script: |
+          set -euo pipefail
+          flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
+          flutter analyze --no-pub
+          flutter test --no-pub --reporter expanded
+      - name: Validate shared call recovery
+        working_directory: .
+        script: |
+          set -euo pipefail
+          flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
+          flutter test --no-pub --reporter expanded \
+            test/social_calls_test.dart test/social_call_audio_test.dart \
+            test/social_call_reliability_test.dart test/social_screen_sharing_test.dart \
+            test/social_communication_upgrade_test.dart
+      - name: Prepare native dependencies and apply Messenger signing
+        script: |
+          set -euo pipefail
+          flutter build ios --release --config-only --no-codesign --no-pub \
+            --build-name="$KORLIX_IOS_VERSION" --build-number="$KORLIX_IOS_BUILD_NUMBER"
+          xcode-project use-profiles --project ios/Runner.xcodeproj \
+            --export-options-plist "$CM_BUILD_DIR/messenger-ios-release-export.plist" \
+            --custom-export-options '{"manageAppVersionAndBuildNumber": false}'
+      - name: Build and verify Messenger IPA
+        script: |
+          set -euo pipefail
+          flutter build ipa --release --no-pub \
+            --build-name="$KORLIX_IOS_VERSION" --build-number="$KORLIX_IOS_BUILD_NUMBER" \
+            --export-options-plist="$CM_BUILD_DIR/messenger-ios-release-export.plist"
+          mkdir -p artifacts
+          IPA_FILES=(build/ios/ipa/*.ipa)
+          test "${#IPA_FILES[@]}" -eq 1
+          python3 "$CM_BUILD_DIR/scripts/verify_ios_ipa.py" "${IPA_FILES[0]}" \
+            --bundle-id com.korlixdeveloper.messenger --version "$KORLIX_IOS_VERSION" \
+            --build "$KORLIX_IOS_BUILD_NUMBER" --require-push \
+            --output artifacts/KorlixMessenger-verification.json
+          cp "${IPA_FILES[0]}" artifacts/KorlixMessenger.ipa
+          test -s "$CM_BUILD_DIR/apps/korlix_messenger/artifacts/KorlixMessenger.ipa"
+          test -s "$CM_BUILD_DIR/apps/korlix_messenger/artifacts/KorlixMessenger-verification.json"
+    artifacts:
+      # Use absolute clone paths so artifact collection is independent of the
+      # workflow working_directory used by the standalone Messenger app.
+      - $CM_BUILD_DIR/apps/korlix_messenger/artifacts/*.ipa
+      - $CM_BUILD_DIR/apps/korlix_messenger/artifacts/*-verification.json
+      - $CM_BUILD_DIR/apps/korlix_messenger/build/ios/archive/Runner.xcarchive/dSYMs/*.dSYM
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: false
+        submit_to_app_store: true
+        # Replace the existing Messenger review with the corrected build.
+        cancel_previous_submissions: true
+        release_type: AFTER_APPROVAL
+
+  korlix-messenger-ios-testflight:
+    <<: *messenger_ios_release
+    name: KORLIX Messenger iOS TestFlight Upload
+    publishing:
+      app_store_connect:
+        auth: integration
+        # Upload for internal testing. Beta review and tester distribution are
+        # configured after Apple's processing and the first-app setup checks.
+        submit_to_testflight: false
+        submit_to_app_store: false
+
   korlix-ios-testflight:
     name: Korlix AI iOS TestFlight
     instance_type: mac_mini_m2
@@ -71,7 +251,7 @@ workflows:
 
       - name: Apply iOS code signing
         script: |
-          xcode-project use-profiles
+          xcode-project use-profiles --project ios/Runner.xcodeproj
 
       - name: Build iOS IPA
         script: |
@@ -252,3 +432,4 @@ workflows:
       - apps/receipt_wiz/build/app/outputs/flutter-apk/app-debug.apk
       - apps/receipt_wiz/build/ios/iphonesimulator/ReceiptWiz-Simulator.zip
       - /tmp/xcodebuild_logs/*.log
+

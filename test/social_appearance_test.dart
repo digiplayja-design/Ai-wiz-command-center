@@ -182,9 +182,9 @@ void main() {
       ),
     );
     final input = find.byType(TextField).last;
-    expect(korlixSkinOf(t.element(input)).id, 'pure_black');
-    expect(socialScreenSkinOf(t.element(input)), 'bubbles');
-    await shots.capture(t, 'messenger-black-yellow-chat');
+    expect(korlixSkinOf(t.element(input)).id, 'sunset_copper');
+    expect(socialScreenSkinOf(t.element(input)), 'contour');
+    await shots.capture(t, 'messenger-sunset-copper-chat');
     await t.enterText(input, 'Keep this draft exactly.');
     final chatState = t.state(find.byType(SocialChatScreen));
     final scroll = t.widget<ListView>(find.byType(ListView).first).controller!;
@@ -209,8 +209,8 @@ void main() {
     await shots.capture(t, 'social-chat-white-glass');
     await store.apply(null);
     await t.pumpAndSettle();
-    expect(socialScreenSkinOf(t.element(input)), 'bubbles');
-    expect(korlixSkinOf(t.element(input)).id, 'pure_black');
+    expect(socialScreenSkinOf(t.element(input)), 'contour');
+    expect(korlixSkinOf(t.element(input)).id, 'sunset_copper');
     expect(
       identical(t.state(find.byType(SocialChatScreen)), chatState),
       isTrue,
