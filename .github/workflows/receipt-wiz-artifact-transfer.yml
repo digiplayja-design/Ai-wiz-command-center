@@ -6,7 +6,9 @@ on:
     paths: [.github/workflows/receipt-wiz-artifact-transfer.yml]
 
 permissions:
-  contents: read
+  # GitHub requires push access to retrieve unpublished release assets.
+  # This one-time job uses an ephemeral repository token, never signing keys.
+  contents: write
 
 jobs:
   transfer:
