@@ -15,6 +15,12 @@ on:
       - ios/**
       - apps/korlix_messenger/ios/**
       - apps/korlix_messenger/pubspec.*
+      - apps/korlix_messenger/lib/**
+      - apps/korlix_messenger/test/**
+      - packages/korlix_social_core/lib/social/social_appearance.dart
+      - packages/korlix_social_core/lib/theme/**
+      - test/social_appearance_test.dart
+      - test/korlix_appearance_studio_test.dart
 
 permissions:
   contents: read
@@ -85,7 +91,9 @@ jobs:
             test/support/ai_output_report_test.dart test/support/report_image_test.dart \
             test/social_calls_test.dart test/social_call_audio_test.dart \
             test/social_call_reliability_test.dart test/social_screen_sharing_test.dart \
-            test/social_communication_upgrade_test.dart
+            test/social_communication_upgrade_test.dart \
+            test/korlix_theme_test.dart test/korlix_screen_skins_test.dart \
+            test/korlix_appearance_studio_test.dart test/social_appearance_test.dart
       - name: Validate Messenger update
         if: matrix.app == 'korlix-messenger'
         working-directory: apps/korlix_messenger
@@ -93,6 +101,14 @@ jobs:
           set -euo pipefail
           flutter analyze --no-pub
           flutter test --no-pub --reporter expanded
+      - name: Save Messenger template previews
+        if: matrix.app == 'korlix-messenger'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: messenger-theme-previews
+          path: apps/korlix_messenger/build/theme-previews/*.png
+          if-no-files-found: error
+          retention-days: 14
       - name: Prepare release native dependencies
         working-directory: ${{ matrix.directory }}
         run: flutter build ios --release --config-only --no-codesign --no-pub

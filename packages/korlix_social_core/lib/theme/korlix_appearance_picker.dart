@@ -248,7 +248,7 @@ class _KorlixAppearancePickerState extends State<KorlixAppearancePicker> {
                                   switch (_tab) {
                                     0 => 'Find your color',
                                     1 => 'Choose your finish',
-                                    _ => 'A complete look, in one tap',
+                                    _ => 'Preview a complete look',
                                   },
                                   style: TextStyle(
                                     color: palette.text,
@@ -264,7 +264,7 @@ class _KorlixAppearancePickerState extends State<KorlixAppearancePicker> {
                                     1 =>
                                       '${korlixScreenSkinIds.length} finishes · Keep your selected colors',
                                     _ =>
-                                      '${korlixLookTemplates.length} curated looks · Colors and skin together',
+                                      '${korlixLookTemplates.length} curated looks · Select one, then tap Apply look',
                                   },
                                   style: TextStyle(
                                     color: palette.mutedText,
@@ -750,17 +750,17 @@ class _LookCard extends StatelessWidget {
         width: selected ? 2 : 1,
       ),
     ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Semantics(
-          button: true,
-          selected: selected,
-          label: 'Preview $title',
-          child: InkWell(
-            key: ValueKey(keyId),
-            onTap: onTap,
-            child: Padding(
+    child: Semantics(
+      button: true,
+      selected: selected,
+      label: 'Preview $title',
+      child: InkWell(
+        key: ValueKey(keyId),
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
               padding: const EdgeInsets.all(10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -814,46 +814,47 @@ class _LookCard extends StatelessWidget {
                 ],
               ),
             ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 4, 4),
-          child: Row(
-            children: [
-              for (final color in [
-                palette.primary,
-                palette.secondary,
-                palette.backgroundMid,
-              ])
-                Container(
-                  width: 12,
-                  height: 12,
-                  margin: const EdgeInsets.only(right: 4),
-                  decoration: BoxDecoration(
-                    color: color,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: palette.border.withValues(alpha: .4),
+            Padding(
+              key: ValueKey('$keyId-swatches'),
+              padding: const EdgeInsets.fromLTRB(12, 0, 4, 4),
+              child: Row(
+                children: [
+                  for (final color in [
+                    palette.primary,
+                    palette.secondary,
+                    palette.backgroundMid,
+                  ])
+                    Container(
+                      width: 12,
+                      height: 12,
+                      margin: const EdgeInsets.only(right: 4),
+                      decoration: BoxDecoration(
+                        color: color,
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: palette.border.withValues(alpha: .4),
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-              const Spacer(),
-              if (onSave != null)
-                IconButton(
-                  tooltip: saved ? 'Unsave $title' : 'Save $title',
-                  onPressed: onSave,
-                  icon: Icon(
-                    saved ? Icons.bookmark : Icons.bookmark_border,
-                    size: 19,
-                    color: palette.primary,
-                  ),
-                )
-              else
-                const SizedBox(height: 28),
-            ],
-          ),
+                  const Spacer(),
+                  if (onSave != null)
+                    IconButton(
+                      tooltip: saved ? 'Unsave $title' : 'Save $title',
+                      onPressed: onSave,
+                      icon: Icon(
+                        saved ? Icons.bookmark : Icons.bookmark_border,
+                        size: 19,
+                        color: palette.primary,
+                      ),
+                    )
+                  else
+                    const SizedBox(height: 28),
+                ],
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     ),
   );
 }
