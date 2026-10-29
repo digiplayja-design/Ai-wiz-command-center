@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Read existing Apple release and TestFlight access without changing either."""
 
+import argparse
 import json
 import os
 from pathlib import Path
@@ -14,9 +15,20 @@ APPS = (
     ("6828213082", "com.korlixdeveloper.messenger", "1.0.2", "7"),
 )
 TESTER_EMAIL = "digiplayja@gmail.com"
+EXPECTED_GROUPS = {
+    "6783100102": ("d00681e0-53e5-47e7-a3a2-f97a95e17c8f", "Korlix internal testers"),
+    "6828213082": ("b1dfb03e-0029-4274-9402-c01ee7452eb6", "KORLIX Messenger Internal"),
+}
+EXPECTED_BUILDS = {
+    "6783100102": "86f4e8c1-54a8-4f91-a1f7-34c0ea82deeb",
+    "6828213082": "0b33ee4f-a15d-40b6-b490-ddda8f0cf694",
+}
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--assign-current-builds", action="store_true")
+    args = parser.parse_args()
     # Use only the existing Codemagic integration. Never log credentials or HTTP
     # headers, enable request logging, or export the key/token as an artifact.
     client = AppStoreConnectApiClient(
@@ -81,10 +93,51 @@ def main():
                            for b in group_builds],
             })
         report.append(item)
-        print(json.dumps(item, indent=2), flush=True)
+    if args.assign_current_builds:
+        assignments = []
+        # Validate both targets before adding either build. This changes only
+        # the two observed build/group relationships, never tester membership,
+        # roles, invitations, automatic distribution, or App Store submissions.
+        for item in report:
+            app_id = item["app_id"]
+            build_id = EXPECTED_BUILDS[app_id]
+            group_id, group_name = EXPECTED_GROUPS[app_id]
+            if item["build"]["id"] != build_id or item["build"].get("expired"):
+                raise ValueError(f"Unexpected or expired build for {app_id}")
+            versions = [v for v in item["app_store_versions"]
+                        if v["version"] == item["expected_version"]]
+            if len(versions) != 1 or versions[0]["build"]["id"] != build_id:
+                raise ValueError(f"Build is not attached to the expected App Store version for {app_id}")
+            groups = [g for g in item["groups"] if g["id"] == group_id]
+            if len(groups) != 1:
+                raise ValueError(f"Expected existing internal group for {app_id}")
+            group = groups[0]
+            if group["name"] != group_name or not group["internal"] or len(group["target_testers"]) != 1:
+                raise ValueError(f"Group or existing tester membership changed for {app_id}")
+            assignments.append((item, group, build_id))
+        for item, group, build_id in assignments:
+            if not any(b["id"] == build_id for b in group["builds"]):
+                client.beta_groups.add_build(group["id"], build_id)
+            linked = collection(f"betaGroups/{group['id']}/builds")
+            if not any(b["id"] == build_id for b in linked):
+                raise ValueError(f"Build assignment was not confirmed for {item['app_id']}")
+            group["builds"] = [{"id": b["id"], "number": b["attributes"].get("version")}
+                               for b in linked]
+            item["beta_detail"] = read(f"builds/{build_id}/buildBetaDetail")["data"]["attributes"]
+            item["assignment_verified"] = True
     output = Path("artifacts/testflight-access.json")
     output.parent.mkdir(exist_ok=True)
     output.write_text(json.dumps(report, indent=2) + "\n")
+    for item in report:
+        print(f"\n{item['app_name']} {item['expected_version']} ({item['expected_build']})")
+        current = next(v for v in item["app_store_versions"] if v["version"] == item["expected_version"])
+        print(f"App Store: {current['state']}")
+        print(f"TestFlight: {item['beta_detail']['internalBuildState']}")
+        for group in item["groups"]:
+            assigned = any(b["id"] == item["build"]["id"] for b in group["builds"])
+            print(f"Group: {group['name']}; current build assigned: {assigned}")
+            for tester in group["target_testers"]:
+                print(f"Tester: {tester['email']}; invitation: {tester['state']}")
 
 
 if __name__ == "__main__":

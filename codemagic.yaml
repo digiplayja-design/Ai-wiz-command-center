@@ -1,4 +1,20 @@
 workflows:
+  korlix-testflight-assign-current:
+    name: Enable current KORLIX releases in existing TestFlight groups
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    scripts:
+      - name: Assign and verify the two submitted builds in their existing internal groups
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.testflight-tools"
+          "$CM_BUILD_DIR/.testflight-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+          "$CM_BUILD_DIR/.testflight-tools/bin/python" scripts/check_testflight_access.py --assign-current-builds
+    artifacts:
+      - artifacts/testflight-access.json
+
   korlix-testflight-access-check:
     name: KORLIX TestFlight access check
     instance_type: mac_mini_m2
