@@ -85,6 +85,9 @@ test('image path validates actual pixels and renderer requests Sunburst max with
 });
 test('companion session cannot escape Magic Camera scope',()=>{
  assert(magicAppRouteAllowed({method:'POST',originalUrl:'/api/magic-camera'}));assert(!magicAppRouteAllowed({method:'POST',originalUrl:'/api/generate'}));assert(!magicAppRouteAllowed({method:'GET',originalUrl:'/api/receipt-wiz'}));
+ const recovery='/api/magic-camera/requests/'+randomUUID();
+ for(const method of ['GET','HEAD'])assert(magicAppRouteAllowed({method,originalUrl:recovery+'?retry=1'}));
+ for(const method of ['POST','PUT','PATCH','DELETE'])assert(!magicAppRouteAllowed({method,originalUrl:recovery}));
 });
 
 test('real report route attaches final image privately and never acknowledges a failed persistence',async t=>{
