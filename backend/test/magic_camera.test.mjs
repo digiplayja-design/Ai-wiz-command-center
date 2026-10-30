@@ -59,7 +59,7 @@ test('ownership, stale lease fencing and private serialization',async()=>{
  await assert.rejects(call(owner,'finish',j.id,{worker_token:randomUUID()}),/MAG409/);
  await db.query("update korlix_magic_jobs set lease_until=now()-interval '1 second' where id=$1",[j.id]);await call(null,'sweep');
  await assert.rejects(call(owner,'finish',j.id,{worker_token:j.worker_token}),/MAG409/);assert.equal((await plan()).remaining,2);
- const publicData=publicJob(j);for(const key of ['owner_id','worker_token','fingerprint','source_purged'])assert.equal(key in publicData,false);
+ const publicData=publicJob(j);for(const key of ['owner_id','worker_token','fingerprint','source_purged','cleanup_version'])assert.equal(key in publicData,false);
 });
 test('anonymous and signed-in browser roles cannot read captures, mutate quotas, or invoke worker',async()=>{
  for(const role of ['anon','authenticated']){await db.exec('set role '+role);await assert.rejects(db.query('select * from korlix_magic_jobs'),/permission denied/);await assert.rejects(call(owner,'reserve'),/permission denied/);await db.exec('reset role');}
@@ -142,4 +142,33 @@ test('private gallery pages keep older results reachable and exclude deleted rec
  const first=await call(owner,'list',null,{standalone:true});assert.equal(first.jobs.length,100);assert.equal(first.next_offset,100);
  const next=await call(owner,'list',null,{standalone:true,offset:100});assert.equal(next.jobs.length,50);assert.equal(next.next_offset,null);assert.equal(new Set([...first.jobs,...next.jobs].map(x=>x.id)).size,150);
  assert.equal((await call(other,'list',null,{standalone:true})).jobs.length,0);await assert.rejects(call(owner,'list',null,{offset:-1}),/Invalid gallery/);
+});
+
+
+test('late capture uploads rearm cleanup and stale cleanup cannot confirm a deleted result',async()=>{
+ const capture=await reserve();await db.query("update korlix_magic_jobs set lease_until=now()-interval '1 second' where id=$1",[capture.job.id]);
+ await call(null,'sweep');const expired=(await call(owner,'get',capture.job.id)).job;
+ await call(owner,'purged',expired.id,{cleanup_version:expired.cleanup_version});
+ await assert.rejects(call(owner,'uploaded',expired.id),/Upload expired/);
+ const late=await call(owner,'fail',expired.id);assert.equal(late.job.source_purged,false);assert(late.job.cleanup_version>expired.cleanup_version);
+ await assert.rejects(call(owner,'purged',expired.id,{cleanup_version:expired.cleanup_version}),/newer cleanup/);
+ const ready=await finish(await reserve());const deleted=await call(owner,'delete',ready.job.id);const removed=[];
+ const worker=createMagicWorker({call,storage:{remove:async keys=>removed.push(...keys)},render:null});
+ await assert.rejects(worker.cleanup(ready.job),/newer cleanup/);
+ assert.equal((await call(owner,'get',ready.job.id)).job.output_purged,false);
+ await worker.cleanup(deleted.job);assert.equal((await call(owner,'get',ready.job.id)).job.output_purged,true);assert(removed.some(x=>x.endsWith('/magic.png')));
+ assert.equal((await plan()).remaining,1);
+});
+
+test('late output storage after lease expiry is removed and never charged',async()=>{
+ const reserved=await reserve();await call(owner,'uploaded',reserved.job.id);const files=new Set();
+ const storage={download:async()=>Buffer.from('capture'),remove:async keys=>keys.forEach(k=>files.delete(k)),upload:async path=>{
+  await db.query("update korlix_magic_jobs set lease_until=now()-interval '1 second' where id=$1",[reserved.job.id]);
+  await call(null,'sweep');const expired=(await call(owner,'get',reserved.job.id)).job;
+  const cleaner=createMagicWorker({call,storage,render:null});await cleaner.cleanup(expired);
+  files.add(path); // The storage write finishes after the earlier cleanup.
+ }};
+ const worker=createMagicWorker({call,storage,render:async()=>({bytes:Buffer.from('final'),width:1024,height:1024})});
+ await worker.tick();assert.equal(files.size,0);assert.equal((await plan()).remaining,2);
+ const result=(await call(owner,'get',reserved.job.id)).job;assert.equal(result.state,'failed');assert.equal(result.output_purged,true);
 });

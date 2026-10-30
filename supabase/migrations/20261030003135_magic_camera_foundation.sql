@@ -4,7 +4,7 @@ create table public.korlix_magic_jobs (
  request_key uuid not null, fingerprint text not null, options jsonb not null,
  state text not null default 'uploading' check(state in ('uploading','queued','processing','ready','failed','deleted')),
  allowance text not null, created_at timestamptz not null default now(), finished_at timestamptz,
- source_purged boolean not null default false, output_purged boolean not null default false,
+ source_purged boolean not null default false, output_purged boolean not null default false, cleanup_version integer not null default 0,
  deleted_at timestamptz, worker_token uuid, lease_until timestamptz not null default now()+interval '3 minutes',
  width integer, height integer, render_ms integer, error text,
  unique(owner_id,request_key)
@@ -74,9 +74,9 @@ begin
   update public.korlix_magic_jobs set state='processing',worker_token=gen_random_uuid(),lease_until=now()+interval '10 minutes' where id=j.id returning * into j;
   return to_jsonb(j);
  elsif p_action='sweep' then
-  update public.korlix_magic_jobs set state='failed',finished_at=now(),error='This magic session expired. No credit was used.'
+  update public.korlix_magic_jobs set state='failed',finished_at=now(),cleanup_version=cleanup_version+1,source_purged=false,output_purged=false,error='This magic session expired. No credit was used.'
    where state in ('uploading','queued','processing') and lease_until<now();
-  return coalesce((select jsonb_agg(to_jsonb(x)) from (select id,owner_id,state,source_purged,output_purged from public.korlix_magic_jobs
+  return coalesce((select jsonb_agg(to_jsonb(x)) from (select id,owner_id,state,source_purged,output_purged,cleanup_version from public.korlix_magic_jobs
    where state in ('ready','failed','deleted') and (not source_purged or (state in ('failed','deleted') and not output_purged)) limit 40)x),'[]');
  end if;
  if p_actor is null then raise exception 'MAG401: Sign in required.';end if;
@@ -108,16 +108,20 @@ begin
    update public.korlix_magic_jobs set state='queued',lease_until=now()+interval '24 hours' where id=j.id returning * into j;
   elsif p_action in ('finish','fail') then
    if j.state='uploading' and p_action='fail' then
-    update public.korlix_magic_jobs set state='failed',finished_at=now(),error='Upload did not finish. No credit was used.' where id=j.id returning * into j;
+    update public.korlix_magic_jobs set state='failed',finished_at=now(),cleanup_version=cleanup_version+1,source_purged=false,output_purged=false,error='Upload did not finish. No credit was used.' where id=j.id returning * into j;
    elsif j.state='processing' and j.worker_token::text=p->>'worker_token' and j.lease_until>now() then
-    update public.korlix_magic_jobs set state=case when p_action='finish' then 'ready' else 'failed' end,finished_at=now(),
+    update public.korlix_magic_jobs set state=case when p_action='finish' then 'ready' else 'failed' end,finished_at=now(),cleanup_version=cleanup_version+1,source_purged=false,output_purged=false,
      width=(p->>'width')::integer,height=(p->>'height')::integer,render_ms=(p->>'render_ms')::integer,
      error=case when p_action='fail' then 'This photo could not be transformed. No credit was used. Try a different prompt or photo.' end where id=j.id returning * into j;
+   elsif p_action='fail' and j.state='failed' then
+    -- A storage operation can settle after the sweeper expired and cleaned its job.
+    update public.korlix_magic_jobs set cleanup_version=cleanup_version+1,source_purged=false,output_purged=false where id=j.id returning * into j;
    elsif j.state not in ('ready','deleted') then raise exception 'MAG409: This generation lease expired.';end if;
   elsif p_action='delete' then
    if j.state not in ('ready','failed','deleted') then raise exception 'MAG409: Wait for processing to finish before deleting.';end if;
-   update public.korlix_magic_jobs set state=case when state='ready' then 'deleted' else state end,deleted_at=now() where id=j.id returning * into j;
+   update public.korlix_magic_jobs set state=case when state='ready' then 'deleted' else state end,deleted_at=now(),cleanup_version=cleanup_version+1,source_purged=false,output_purged=false where id=j.id returning * into j;
   elsif p_action='purged' then
+   if (p->>'cleanup_version')::integer is distinct from j.cleanup_version then raise exception 'MAG409: A newer cleanup is pending.';end if;
    update public.korlix_magic_jobs set source_purged=true,output_purged=case when state in ('failed','deleted') then true else output_purged end where id=j.id returning * into j;
   elsif p_action<>'get' then raise exception 'MAG400: Unsupported magic action.';
   end if;
@@ -126,6 +130,7 @@ begin
 end $$;
 revoke all on function public.korlix_magic_plan(uuid,boolean),public.korlix_magic_command(uuid,text,uuid,jsonb) from public,anon,authenticated;
 grant execute on function public.korlix_magic_plan(uuid,boolean),public.korlix_magic_command(uuid,text,uuid,jsonb) to service_role;
+
 
 create function public.korlix_magic_billing_command(p_actor uuid,p_action text,p jsonb default '{}'::jsonb)
 returns jsonb language plpgsql security invoker set search_path=pg_catalog,public as $$
@@ -225,6 +230,7 @@ revoke all on function public.korlix_magic_billing_command(uuid,text,jsonb) from
 grant execute on function public.korlix_magic_billing_command(uuid,text,jsonb) to service_role;
 
 
+
 create function public.korlix_magic_apple_command(p_actor uuid,p_action text,p jsonb default '{}') returns jsonb
 language plpgsql security invoker set search_path=pg_catalog,public as $$
 declare pr jsonb;existing public.korlix_magic_purchases;
@@ -248,6 +254,7 @@ begin
 end $$;
 revoke all on function public.korlix_magic_apple_command(uuid,text,jsonb) from public,anon,authenticated;
 grant execute on function public.korlix_magic_apple_command(uuid,text,jsonb) to service_role;
+
 
 begin;
 -- Extend the verified companion session discriminator; existing rows and device allowances remain intact.

@@ -29,7 +29,7 @@ export function createMagicWorker({call,storage,render,now=Date.now,onEvent=()=>
  let running=false;
  async function cleanup(j){
   const p=paths(j);await storage.remove([p.source,...(['failed','deleted'].includes(j.state)?[p.output]:[])]);
-  await call(j.owner_id,'purged',j.id);
+  await call(j.owner_id,'purged',j.id,{cleanup_version:j.cleanup_version});
  }
  async function tick(){
   if(running||!storage)return;running=true;

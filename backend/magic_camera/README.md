@@ -6,7 +6,7 @@ The migration source is assembled, in order, from `schema.sql`, `billing_schema.
 
 Routes under `/api/magic-camera` require the existing authenticated Korlix session. The companion signs in under `/api/magic-account/auth/*`; a client header alone cannot obtain trial access. There is deliberately no original-file route or public storage policy. Responses never expose source paths, worker tokens, account IDs, or provider diagnostics.
 
-The bounded worker in the web process claims durable database jobs. Jobs survive client navigation and process restarts; a render interrupted by a server crash is expired without a charge instead of blindly retried. Multiple processes coordinate through `SKIP LOCKED` and fenced leases. The web service must remain running to drain the queue and retry private-file cleanup. A later dedicated worker can call the same `tick` function.
+The bounded worker in the web process claims durable database jobs. Jobs survive client navigation and process restarts; a render interrupted by a server crash is expired without a charge instead of blindly retried. Multiple processes coordinate through `SKIP LOCKED` and fenced leases. Cleanup versions prevent a stale removal from confirming a newer deletion; storage operations that settle after expiry re-arm cleanup. The web service must remain running to drain the queue and retry private-file cleanup. A later dedicated worker can call the same `tick` function.
 
 Reporting stores an actual sanitized copy of the generated image, generation ID and prompt in the existing `korlix_ai_output_reports` review queue. It acknowledges only after durable persistence. This module does not send email notifications; the team's existing private review workflow must be monitored.
 
