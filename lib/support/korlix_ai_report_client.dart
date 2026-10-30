@@ -26,6 +26,7 @@ Future<String> submitKorlixAiReport({
   String? imageDataUrl,
   bool Function()? isCurrent,
   String? videoId,
+  String? videoUrl,
   String? language,
   String? platform,
   String contentType = 'ai_output',
@@ -46,6 +47,7 @@ Future<String> submitKorlixAiReport({
       'outputSummary': _reportExcerpt(outputSummary, 12000),
       'imageUrl': ?imageUrl,
       'videoId': ?videoId,
+      'videoUrl': ?videoUrl,
       'language': ?language,
       'platform': ?platform,
     };

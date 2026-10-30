@@ -26,7 +26,10 @@ class _PresenceFixture {
           final action = request.url.path.split('/').last;
           if (action == 'presence') {
             if (presenceResponse != null) return presenceResponse!(request);
-            return http.Response('{}', presenceStatus);
+            return http.Response(
+              jsonEncode({'ok': true, 'show_online': true, 'online': true}),
+              presenceStatus,
+            );
           }
           return http.Response(
             jsonEncode(
@@ -69,6 +72,117 @@ SocialMap _peer(int unread) => {
 };
 
 void main() {
+  test(
+    'visibility is confirmed by server and failures do not invent offline',
+    () async {
+      final f = _PresenceFixture();
+      addTearDown(f.dispose);
+      await f.notifications.refreshPresence();
+      expect(f.notifications.showOnline, true);
+      expect(f.notifications.presenceOnline, true);
+      f.presenceStatus = 503;
+      await f.notifications.refreshPresence();
+      expect(f.notifications.showOnline, true);
+      expect(f.notifications.presenceOnline, isNull);
+      expect(f.notifications.presenceFailed, true);
+      await expectLater(
+        f.notifications.setPresenceVisibility(false),
+        throwsA(isA<SocialException>()),
+      );
+      expect(f.notifications.showOnline, true);
+      expect(f.notifications.presenceChanging, false);
+      f.presenceResponse = (request) async => http.Response(
+        jsonEncode({'ok': true, 'show_online': false, 'online': false}),
+        200,
+      );
+      await f.notifications.setPresenceVisibility(false);
+      expect(f.notifications.showOnline, false);
+      expect(f.notifications.presenceOnline, false);
+      expect(f.notifications.presenceFailed, false);
+      expect(jsonDecode(f.presenceRequests.last.body), {
+        'active': true,
+        'show_online': false,
+      });
+    },
+  );
+
+  test(
+    'toggle waits for heartbeat and blocks overlap until server acknowledgement',
+    () async {
+      final f = _PresenceFixture();
+      addTearDown(f.dispose);
+      final heartbeat = Completer<http.Response>();
+      final toggle = Completer<http.Response>();
+      f.presenceResponse = (request) =>
+          jsonDecode(request.body).containsKey('show_online')
+          ? toggle.future
+          : heartbeat.future;
+      final pending = f.notifications.refreshPresence();
+      final changing = f.notifications.setPresenceVisibility(false);
+      await Future<void>.delayed(Duration.zero);
+      expect(f.presenceRequests, hasLength(1));
+      expect(f.notifications.presenceChanging, true);
+      heartbeat.complete(
+        http.Response('{"ok":true,"show_online":true,"online":true}', 200),
+      );
+      await pending;
+      await Future<void>.delayed(Duration.zero);
+      await f.notifications.refreshPresence();
+      expect(f.presenceRequests, hasLength(2));
+      toggle.complete(
+        http.Response('{"ok":true,"show_online":false,"online":false}', 200),
+      );
+      await changing;
+      expect(f.notifications.showOnline, false);
+      expect(f.notifications.presenceChanging, false);
+    },
+  );
+
+  test(
+    'old-server success without status acknowledgement cannot confirm a toggle',
+    () async {
+      final f = _PresenceFixture();
+      addTearDown(f.dispose);
+      f.presenceResponse = (_) async => http.Response('{"ok":true}', 200);
+      await expectLater(
+        f.notifications.setPresenceVisibility(true),
+        throwsStateError,
+      );
+      expect(f.notifications.showOnline, isNull);
+      expect(f.notifications.presenceFailed, true);
+    },
+  );
+
+  test(
+    'late visibility response cannot change the replacement account',
+    () async {
+      final f = _PresenceFixture();
+      addTearDown(f.dispose);
+      final response = Completer<http.Response>();
+      f.presenceResponse = (request) =>
+          request.headers['authorization'] == 'Bearer first-account'
+          ? response.future
+          : Future.value(
+              http.Response(
+                '{"ok":true,"show_online":true,"online":true}',
+                200,
+              ),
+            );
+      final change = f.notifications.setPresenceVisibility(false);
+      final rejected = expectLater(change, throwsA(anything));
+      await Future<void>.delayed(Duration.zero);
+      f.token = 'Bearer replacement';
+      f.revision.value++;
+      await f.notifications.refreshPresence();
+      response.complete(
+        http.Response('{"ok":true,"show_online":false,"online":false}', 200),
+      );
+      await rejected;
+      expect(f.notifications.showOnline, true);
+      expect(f.notifications.presenceChanging, false);
+    },
+  );
+
   testWidgets('foreground presence refreshes every thirty seconds', (
     tester,
   ) async {

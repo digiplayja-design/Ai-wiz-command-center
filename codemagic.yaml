@@ -46,7 +46,8 @@ workflows:
             test/support/ai_output_report_test.dart test/support/report_image_test.dart \
             test/social_calls_test.dart test/social_call_audio_test.dart \
             test/social_call_reliability_test.dart test/social_screen_sharing_test.dart \
-            test/social_communication_upgrade_test.dart
+            test/social_communication_upgrade_test.dart \
+            test/social_presence_model_test.dart test/social_presence_toggle_test.dart
       - name: Prepare native dependencies and apply existing app signing
         script: |
           set -euo pipefail
@@ -127,7 +128,8 @@ workflows:
           flutter test --no-pub --reporter expanded \
             test/social_calls_test.dart test/social_call_audio_test.dart \
             test/social_call_reliability_test.dart test/social_screen_sharing_test.dart \
-            test/social_communication_upgrade_test.dart
+            test/social_communication_upgrade_test.dart \
+            test/social_presence_model_test.dart test/social_presence_toggle_test.dart
       - name: Prepare native dependencies and apply Messenger signing
         script: |
           set -euo pipefail

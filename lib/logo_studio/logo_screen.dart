@@ -6,6 +6,7 @@ import '../theme/korlix_action_button.dart';
 import '../theme/korlix_theme.dart';
 import '../input_tools/voice_composer.dart';
 import '../imagine_studio/imagine_client.dart';
+import '../support/korlix_saved_output_report_dialog.dart';
 import 'logo_client.dart';
 import 'logo_model.dart';
 import 'logo_render.dart';
@@ -57,6 +58,7 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
   int exportPreset = 0;
   String? error, notice;
   bool ready = false, exporting = false, consenting = false, importing = false;
+  bool _reporting = false;
   LogoSurface surface = LogoSurface.light;
   LogoClient get c => widget.client;
   KorlixSkinPalette get skin => korlixSkinOf(context);
@@ -1545,6 +1547,51 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
     ];
   }
 
+  Future<void> _reportAi(ImagineResult result) async {
+    if (_reporting || !mounted || !c.available) return;
+    setState(() => _reporting = true);
+    try {
+      final reportId = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => KorlixSavedOutputReportDialog(
+          title: 'Report AI content',
+          description:
+              'An image preview, its prompt, and your report will be '
+              'shared with KORLIX support for review.',
+          sessionChanges: c,
+          isSessionCurrent: () => mounted && c.available,
+          submitReport: (reason, details) => c.images.report(
+            result,
+            reason: reason,
+            details: details,
+            language: widget.language,
+            appArea: 'logo_studio',
+          ),
+        ),
+      );
+      if (reportId == null || !mounted || !c.available) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          scrollable: true,
+          title: const Text('Report received'),
+          content: Text(
+            'Your report was saved for review. Reference: $reportId',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _reporting = false);
+    }
+  }
+
   Widget _aiPanel() {
     final selected = _selectedAi;
     return _panel(
@@ -1701,6 +1748,15 @@ class _LogoStudioScreenState extends State<LogoStudioScreen> {
               ),
             ),
             const SizedBox(height: 12),
+            TextButton.icon(
+              key: const Key('logo-ai-report'),
+              onPressed: _reporting || !c.available
+                  ? null
+                  : () => _reportAi(selected),
+              icon: const Icon(Icons.flag_outlined),
+              label: const Text('Report AI content'),
+            ),
+            const SizedBox(height: 8),
             _download(
               'Download AI concept',
               Icons.download_rounded,

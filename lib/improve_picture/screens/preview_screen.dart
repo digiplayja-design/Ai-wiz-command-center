@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart' as fp;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
 
@@ -11,6 +11,10 @@ import '../models/portrait_studio_callback.dart';
 import '../models/template_model.dart';
 import 'processing_screen.dart';
 import '../../privacy/korlix_third_party_ai_consent.dart';
+import '../../live_convo/agent_studio_client.dart'
+    show agentAccountScope, agentStudioKey;
+import '../../support/korlix_ai_report_client.dart';
+import '../../support/korlix_saved_output_report_dialog.dart';
 
 const bool _kKorlixPortraitBackendOverrideDeclared = bool.hasEnvironment(
   'AI_WIZARD_BACKEND_URL',
@@ -22,7 +26,7 @@ const String _kKorlixPortraitBackendOverrideUrl = String.fromEnvironment(
 
 const String _kKorlixPortraitPreviewEndpoint =
     _kKorlixPortraitBackendOverrideDeclared
-    ? '${_kKorlixPortraitBackendOverrideUrl}/api/image/improve'
+    ? '$_kKorlixPortraitBackendOverrideUrl/api/image/improve'
     : 'https://chee-chai-chee-backend.onrender.com/api/image/improve';
 
 class PreviewScreen extends StatefulWidget {
@@ -62,6 +66,10 @@ class _PreviewScreenState extends State<PreviewScreen> {
   bool _previewLoading = false;
   String? _previewError;
   Uint8List? _generatedPreviewBytes;
+  String? _generatedPreviewPrompt;
+  String? _generatedPreviewScope;
+  String? _generatedPreviewId;
+  bool _reporting = false;
   bool _hasAttemptedPreview = false;
 
   Uint8List? get _uploadedBytes => widget.uploadedFile?.bytes;
@@ -154,6 +162,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
       }
 
       request.headers.addAll(previewHeaders);
+      final previewScope = agentAccountScope(previewHeaders);
       request.headers['Accept'] = 'application/json';
       request.headers['X-Korlix-Portrait-Preview'] = 'true';
       request.headers['X-Korlix-Preview-Mode'] = 'portrait_studio';
@@ -181,9 +190,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
         ),
       );
 
-      final streamed = await http.sendMultipart(request).timeout(
-        const Duration(seconds: 90),
-      );
+      final streamed = await http
+          .sendMultipart(request)
+          .timeout(const Duration(seconds: 90));
       final response = await http.Response.fromStream(streamed);
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -206,7 +215,10 @@ class _PreviewScreenState extends State<PreviewScreen> {
       }
 
       setState(() {
-        _generatedPreviewBytes = previewBytes;
+        _generatedPreviewBytes = Uint8List.fromList(previewBytes);
+        _generatedPreviewPrompt = prompt;
+        _generatedPreviewScope = previewScope;
+        _generatedPreviewId = 'portrait-preview-${agentStudioKey()}';
         _previewError = null;
       });
     } catch (error) {
@@ -223,6 +235,119 @@ class _PreviewScreenState extends State<PreviewScreen> {
     } finally {
       if (mounted) {
         setState(() => _previewLoading = false);
+      }
+    }
+  }
+
+  Future<void> _reportPreview() async {
+    final bytes = _generatedPreviewBytes;
+    final prompt = _generatedPreviewPrompt;
+    final scope = _generatedPreviewScope;
+    final id = _generatedPreviewId;
+    if (_reporting || bytes == null || prompt == null || scope == null) {
+      return;
+    }
+    final imageDataUrl = 'data:image/png;base64,${base64Encode(bytes)}';
+    final sessionCurrent = ValueNotifier(true);
+    bool current() => mounted && sessionCurrent.value;
+    Future<Map<String, String>> checkedHeaders() async {
+      final Map<String, String> headers;
+      try {
+        headers = Map<String, String>.from(
+          await widget.previewHeadersBuilder?.call() ??
+              const <String, String>{},
+        );
+      } catch (_) {
+        throw const KorlixAiReportException(
+          'We could not verify your sign-in. Reopen the preview after signing in.',
+        );
+      }
+      if (!current() || scope.isEmpty || agentAccountScope(headers) != scope) {
+        sessionCurrent.value = false;
+        throw const KorlixAiReportException(
+          'Your sign-in changed. Reopen the preview before reporting it.',
+        );
+      }
+      return headers;
+    }
+
+    setState(() => _reporting = true);
+    try {
+      final headers = await checkedHeaders();
+      if (!mounted) {
+        return;
+      }
+      final reportId = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => KorlixSavedOutputReportDialog(
+          title: 'Report AI content',
+          description:
+              'The generated after preview and its prompt will be '
+              'shared with KORLIX support for review.',
+          sessionChanges: sessionCurrent,
+          isSessionCurrent: current,
+          submitReport: (reason, details) async {
+            final transport = _PortraitReportClient(
+              http.createClient(),
+              checkedHeaders,
+            );
+            try {
+              return await submitKorlixAiReport(
+                endpoint: Uri.parse(
+                  _kKorlixPortraitPreviewEndpoint,
+                ).replace(path: '/api/report-output'),
+                headers: headers,
+                client: transport,
+                contentType: 'image',
+                appArea: 'portrait_studio_preview',
+                contentId: id,
+                prompt: prompt,
+                outputSummary: 'Generated portrait template after preview',
+                imageDataUrl: imageDataUrl,
+                reason: reason,
+                details: details,
+                platform: kIsWeb ? 'web' : defaultTargetPlatform.name,
+                isCurrent: current,
+              );
+            } finally {
+              transport.close();
+            }
+          },
+        ),
+      );
+      if (reportId == null || !current()) {
+        return;
+      }
+      await checkedHeaders();
+      if (!mounted) {
+        return;
+      }
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Report received'),
+          content: Text(
+            'Your report was saved for review. Reference: $reportId',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      );
+    } on KorlixAiReportException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error.message)));
+      }
+    } finally {
+      sessionCurrent.dispose();
+      if (mounted) {
+        setState(() => _reporting = false);
       }
     }
   }
@@ -434,7 +559,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                 color: const Color(0xFF0B0E17),
                 borderRadius: BorderRadius.circular(28),
                 border: Border.all(
-                  color: const Color(0xFF7B3CFF).withOpacity(0.30),
+                  color: const Color(0xFF7B3CFF).withValues(alpha: 0.30),
                 ),
               ),
               child: Row(
@@ -461,6 +586,17 @@ class _PreviewScreenState extends State<PreviewScreen> {
                 ],
               ),
             ),
+            if (_generatedPreviewBytes != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  key: const Key('portrait-preview-report'),
+                  onPressed: _reporting ? null : _reportPreview,
+                  icon: const Icon(Icons.flag_outlined),
+                  label: const Text('Report AI content'),
+                  style: TextButton.styleFrom(foregroundColor: Colors.white),
+                ),
+              ),
             const SizedBox(height: 12),
             Text(
               _generatedPreviewBytes != null
@@ -468,7 +604,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                   : 'After preview is loading. If the server preview is unavailable, the styled fallback still shows the selected template direction.',
               textAlign: TextAlign.center,
               style: TextStyle(
-                color: Colors.white.withOpacity(0.66),
+                color: Colors.white.withValues(alpha: 0.66),
                 height: 1.35,
               ),
             ),
@@ -501,7 +637,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
               ),
               style: OutlinedButton.styleFrom(
                 foregroundColor: Colors.white,
-                side: BorderSide(color: Colors.white.withOpacity(0.18)),
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.18)),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(999),
                 ),
@@ -549,7 +685,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
                           border: Border.all(
                             color: active
                                 ? const Color(0xFFB266FF)
-                                : Colors.white.withOpacity(0.10),
+                                : Colors.white.withValues(alpha: 0.10),
                           ),
                         ),
                         child: Text(
@@ -591,6 +727,26 @@ class _PreviewScreenState extends State<PreviewScreen> {
   }
 }
 
+// Recheck the async account callback after image preparation and immediately
+// before transport, so a preview cannot be reported under another account.
+class _PortraitReportClient extends http.BaseClient {
+  _PortraitReportClient(this._inner, this._headers);
+
+  final http.Client _inner;
+  final Future<Map<String, String>> Function() _headers;
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final headers = await _headers();
+    headers.removeWhere((key, _) => key.toLowerCase() == 'content-type');
+    request.headers.addAll(headers);
+    return _inner.send(request);
+  }
+
+  @override
+  void close() => _inner.close();
+}
+
 class _BeforePreview extends StatelessWidget {
   const _BeforePreview({
     required this.imageBytes,
@@ -613,7 +769,7 @@ class _BeforePreview extends StatelessWidget {
             Center(
               child: Icon(
                 Icons.person_rounded,
-                color: Colors.white.withOpacity(0.18),
+                color: Colors.white.withValues(alpha: 0.18),
                 size: 120,
               ),
             )
@@ -683,7 +839,7 @@ class _AfterTemplatePreview extends StatelessWidget {
           ),
           if (previewLoading)
             Container(
-              color: Colors.black.withOpacity(0.24),
+              color: Colors.black.withValues(alpha: 0.24),
               child: const Center(
                 child: CircularProgressIndicator(color: Color(0xFFC07CFF)),
               ),
@@ -696,7 +852,7 @@ class _AfterTemplatePreview extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.42),
+                  color: Colors.black.withValues(alpha: 0.42),
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: const Text(
@@ -763,7 +919,10 @@ class _StyledAfterFallback extends StatelessWidget {
           Container(
             decoration: BoxDecoration(
               gradient: LinearGradient(
-                colors: [overlay.withOpacity(0.52), const Color(0xFF05070D)],
+                colors: [
+                  overlay.withValues(alpha: 0.52),
+                  const Color(0xFF05070D),
+                ],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
@@ -772,7 +931,7 @@ class _StyledAfterFallback extends StatelessWidget {
         else
           ColorFiltered(
             colorFilter: ColorFilter.mode(
-              overlay.withOpacity(0.42),
+              overlay.withValues(alpha: 0.42),
               BlendMode.overlay,
             ),
             child: Image.memory(bytes, fit: BoxFit.cover),
@@ -781,9 +940,9 @@ class _StyledAfterFallback extends StatelessWidget {
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
-                Colors.black.withOpacity(0.10),
-                overlay.withOpacity(0.34),
-                Colors.black.withOpacity(0.62),
+                Colors.black.withValues(alpha: 0.10),
+                overlay.withValues(alpha: 0.34),
+                Colors.black.withValues(alpha: 0.62),
               ],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
@@ -791,7 +950,7 @@ class _StyledAfterFallback extends StatelessWidget {
           ),
         ),
         Center(
-          child: Padding(
+          child: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -832,7 +991,7 @@ class _StyledAfterFallback extends StatelessWidget {
                   '${bestResults ? 'Best Results' : 'Natural'} • ${identityLock ? 'Identity Lock' : 'Creative Identity'}',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.78),
+                    color: Colors.white.withValues(alpha: 0.78),
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                   ),
@@ -875,7 +1034,7 @@ class _Tag extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
       decoration: BoxDecoration(
-        color: Colors.black.withOpacity(0.45),
+        color: Colors.black.withValues(alpha: 0.45),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(

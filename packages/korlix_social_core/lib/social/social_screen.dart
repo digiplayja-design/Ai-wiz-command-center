@@ -9,6 +9,7 @@ import '../theme/korlix_action_button.dart';
 import 'social_client.dart';
 import 'social_alert_scope.dart';
 import 'social_notifications.dart';
+import 'social_presence_button.dart';
 import 'social_design.dart';
 import 'social_messenger_inbox.dart';
 import 'social_forms.dart';
@@ -69,6 +70,10 @@ class _SocialScreenState extends State<SocialScreen>
   Timer? _poll, _heartbeat, _debounce;
   Timer? _calls;
   SocialNotifications? _notifications;
+  bool _changingPresence = false;
+  bool? _fallbackOnline;
+  bool _fallbackPresenceFailed = false;
+  Future<void>? _pendingFallbackPresence;
   int _missedCallCount = 0;
   bool _checkingCalls = false, _callOpen = false;
   bool _initialConversationOpened = false;
@@ -164,11 +169,76 @@ class _SocialScreenState extends State<SocialScreen>
       if (refreshHosted) unawaited(notifications.refreshPresence());
       return;
     }
-    unawaited(
-      client
-          .post('presence', {'active': true})
-          .catchError((_) => <String, dynamic>{}),
-    );
+    if (!_changingPresence) {
+      _pendingFallbackPresence ??= _refreshFallbackPresence();
+    }
+  }
+
+  Future<void> _refreshFallbackPresence() async {
+    try {
+      final response = await client.post('presence', {'active': true});
+      if (mounted && client.available && _profile != null) {
+        setState(() {
+          _fallbackOnline = response['online'] as bool?;
+          _fallbackPresenceFailed = response['online'] is! bool;
+          if (response['show_online'] is bool) {
+            _profile!['show_online'] = response['show_online'];
+          }
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _fallbackOnline = null;
+          _fallbackPresenceFailed = true;
+        });
+      }
+    } finally {
+      _pendingFallbackPresence = null;
+    }
+  }
+
+  Future<void> _changePresence(bool visible) async {
+    if (_changingPresence || _profile == null || !client.available) return;
+    setState(() => _changingPresence = true);
+    try {
+      if (_notifications != null) {
+        await _notifications!.setPresenceVisibility(visible);
+      } else {
+        await _pendingFallbackPresence;
+        if (!mounted || !client.available) return;
+        final response = await client.post('presence', {
+          'active': _foreground,
+          'show_online': visible,
+        });
+        if (response['ok'] != true ||
+            response['show_online'] != visible ||
+            response['online'] is! bool) {
+          throw StateError('Status change was not confirmed.');
+        }
+        _fallbackOnline = response['online'] as bool;
+        _fallbackPresenceFailed = false;
+      }
+      if (!mounted || !client.available || _profile == null) return;
+      setState(() => _profile!['show_online'] = visible);
+      unawaited(_load(quiet: true));
+    } catch (_) {
+      if (mounted && client.available) {
+        setState(() {
+          _fallbackOnline = null;
+          _fallbackPresenceFailed = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'We could not confirm your status change. Check your connection and retry.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _changingPresence = false);
+    }
   }
 
   @override
@@ -1271,6 +1341,29 @@ class _SocialScreenState extends State<SocialScreen>
 
   Widget _buildSocialScreen(BuildContext context) => SocialScaffold(
     appBar: AppBar(
+      bottom: _profile == null || _denied
+          ? null
+          : PreferredSize(
+              preferredSize: const Size.fromHeight(60),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: SocialPresenceButton(
+                  visible:
+                      _notifications?.showOnline ??
+                      (_profile!['show_online'] == true),
+                  online: _notifications != null
+                      ? _notifications!.presenceOnline
+                      : _fallbackOnline,
+                  failed:
+                      _notifications?.presenceFailed ?? _fallbackPresenceFailed,
+                  busy:
+                      _changingPresence ||
+                      (_notifications?.presenceChanging ?? false),
+                  onSelected: _changePresence,
+                  onRetry: () => _presence(refreshHosted: true),
+                ),
+              ),
+            ),
       title: Text(
         widget.messengerMode
             ? (MediaQuery.sizeOf(context).width < 400

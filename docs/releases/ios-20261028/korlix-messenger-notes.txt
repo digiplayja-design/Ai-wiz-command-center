@@ -1,3 +1,1 @@
-KORLIX Messenger brings your KORLIX conversations into a dedicated app with its own sign-in session. Send private messages, photos, videos, voice notes, GIFs, and stickers. React to messages, format selected text, and connect through voice and video calls. This release includes improved call recovery, profile setup, appearance options, and accessibility improvements.
-
-Sunset Copper is now the default appearance, with copper and espresso chat bubbles. Theme and template selection is more reliable, previews fit properly, and saved looks stay consistent across screens. This update also includes the required iOS location-purpose description for the media picker.
+Choose Online or Appear offline from the visible status button at the top of Messenger. Your status is confirmed by the server, with a retry option when the connection is unavailable. This update also retains the latest call recovery and appearance improvements.

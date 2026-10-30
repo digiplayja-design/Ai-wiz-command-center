@@ -83,6 +83,20 @@ class SocialNotifications extends ChangeNotifier {
   Timer? _timer, _callTimer, _callExpiry, _presenceTimer;
   Future<void>? _pending, _pendingCalls, _pendingPresence;
   int _presenceGeneration = 0;
+  bool? _showOnline, _presenceOnline;
+  bool _presenceFailed = false, _presenceChanging = false;
+  DateTime? _presenceConfirmedAt;
+  bool? get showOnline => _showOnline;
+  bool get presenceFailed => _presenceFailed;
+  bool get presenceChanging => _presenceChanging;
+  bool? get presenceOnline =>
+      _presenceFailed ||
+          !_foreground ||
+          _presenceConfirmedAt == null ||
+          DateTime.now().difference(_presenceConfirmedAt!) >=
+              const Duration(seconds: 90)
+      ? null
+      : _presenceOnline;
   String _scope = '';
   int _generation = 0;
   int _callGeneration = 0;
@@ -154,6 +168,11 @@ class SocialNotifications extends ChangeNotifier {
   }
 
   void _clear() {
+    _showOnline = null;
+    _presenceOnline = null;
+    _presenceConfirmedAt = null;
+    _presenceFailed = false;
+    _presenceChanging = false;
     _conversations = const [];
     _onlineQueue.clear();
     _seenOnline.clear();
@@ -251,21 +270,85 @@ class SocialNotifications extends ChangeNotifier {
   Future<void> refreshPresence() {
     if (_closed || !enablePresence) return Future.value();
     _syncAccount();
-    if (!_foreground || !shouldPoll() || !available) return Future.value();
+    if (!_foreground || !shouldPoll() || !available || _presenceChanging) {
+      return Future.value();
+    }
     return _pendingPresence ??= _renewPresence(_client!, _presenceGeneration);
   }
 
   Future<void> _renewPresence(SocialClient client, int generation) async {
     try {
-      await client.post('presence', {'active': true});
+      final response = await client.post('presence', {'active': true});
+      if (_presenceCurrent(client, generation)) _confirmPresence(response);
     } catch (_) {
       // No Social profile, hidden status, and transient network errors must
       // never interrupt another tool or erase confirmed message/call state.
+      if (_presenceCurrent(client, generation)) {
+        _presenceFailed = true;
+        notifyListeners();
+      }
     } finally {
       if (!_closed &&
           generation == _presenceGeneration &&
           identical(client, _client)) {
         _pendingPresence = null;
+      }
+    }
+  }
+
+  bool _presenceCurrent(SocialClient client, int generation) =>
+      !_closed &&
+      generation == _presenceGeneration &&
+      identical(client, _client) &&
+      client.available;
+
+  void _confirmPresence(SocialMap response) {
+    if (response['ok'] != true ||
+        response['show_online'] is! bool ||
+        response['online'] is! bool) {
+      throw StateError('The server did not confirm your status. Please retry.');
+    }
+    _showOnline = response['show_online'] as bool;
+    _presenceOnline = response['online'] as bool;
+    _presenceConfirmedAt = DateTime.now();
+    _presenceFailed = false;
+    notifyListeners();
+  }
+
+  /// Only a deliberate user action writes visibility. Serialize it after any
+  /// heartbeat so an older acknowledgement cannot overwrite the chosen state.
+  Future<void> setPresenceVisibility(bool visible) async {
+    _syncAccount();
+    if (!enablePresence || !available || _presenceChanging) {
+      throw StateError('Your status is unavailable. Please retry.');
+    }
+    final client = _client!;
+    final generation = _presenceGeneration;
+    _presenceChanging = true;
+    notifyListeners();
+    try {
+      await _pendingPresence;
+      if (!_presenceCurrent(client, generation)) {
+        throw StateError('Your account changed.');
+      }
+      final response = await client.post('presence', {
+        'active': _foreground && shouldPoll(),
+        'show_online': visible,
+      });
+      if (!_presenceCurrent(client, generation)) {
+        throw StateError('Your account changed.');
+      }
+      _confirmPresence(response);
+      if (_showOnline != visible) {
+        throw StateError('Your status change was not confirmed.');
+      }
+    } catch (_) {
+      if (_presenceCurrent(client, generation)) _presenceFailed = true;
+      rethrow;
+    } finally {
+      if (_presenceCurrent(client, generation)) {
+        _presenceChanging = false;
+        notifyListeners();
       }
     }
   }

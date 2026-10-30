@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart' as ip;
 
 import '../korlix_image_saver.dart';
+import '../support/korlix_saved_output_report_dialog.dart';
 import '../theme/korlix_theme.dart';
 import 'picture_studio_client.dart';
 import 'picture_template_gallery.dart';
@@ -88,6 +89,7 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
   int _nextVersion = 1;
   String? _error;
   bool _preserve = true, _busy = false, _picking = false, _saving = false;
+  bool _reporting = false;
   int _elapsed = 0;
   Timer? _timer;
 
@@ -338,6 +340,49 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
       }
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _report(_PictureVersion version) async {
+    final result = version.result;
+    final submit = result.submitReport;
+    if (_reporting || submit == null) return;
+    bool current() => mounted && result.isReportCurrent?.call() != false;
+    if (!current()) return;
+    setState(() => _reporting = true);
+    try {
+      final reportId = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => KorlixSavedOutputReportDialog(
+          title: 'Report AI content',
+          description:
+              'A preview of this edited image, its instructions, and '
+              'your report will be shared with KORLIX support for review.',
+          sessionChanges:
+              result.reportChanges ?? const AlwaysStoppedAnimation(0),
+          isSessionCurrent: current,
+          submitReport: submit,
+        ),
+      );
+      if (reportId == null || !mounted || !current()) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Report received'),
+          content: Text(
+            'Your report was saved for review. Reference: $reportId',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _reporting = false);
     }
   }
 
@@ -720,6 +765,14 @@ class _PictureStudioScreenState extends State<PictureStudioScreen> {
                   icon: const Icon(Icons.tune),
                   label: const Text('Refine this image'),
                 ),
+                if (version.result.submitReport != null &&
+                    (_previewMode == 'after' || _previewMode == 'side'))
+                  TextButton.icon(
+                    key: const Key('picture-report-result'),
+                    onPressed: _reporting ? null : () => _report(version),
+                    icon: const Icon(Icons.flag_outlined),
+                    label: const Text('Report AI content'),
+                  ),
               ],
             ),
           ],

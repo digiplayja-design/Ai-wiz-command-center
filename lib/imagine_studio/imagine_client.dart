@@ -7,6 +7,7 @@ import '../live_convo/agent_studio_client.dart'
     show agentAccountScope, agentStudioKey;
 import '../chat/chat_memory_client.dart' show chatAccountStorageKey;
 import 'imagine_catalog.dart';
+import '../support/korlix_ai_report_client.dart';
 
 class ImagineException implements Exception {
   const ImagineException(this.message);
@@ -130,6 +131,7 @@ class ImagineClient extends ChangeNotifier {
   int elapsed = 0;
   Timer? _clock;
   final List<ImagineResult> results = [];
+  final _reportableResults = Expando<bool>();
   List<Map<String, dynamic>> recipes = [];
   ImagineBrief draft = const ImagineBrief();
   String? error;
@@ -379,6 +381,7 @@ class ImagineClient extends ChangeNotifier {
         logoDirection: LogoCreativeDirection.read(data['logoDirection']),
       );
       if (logoBrief != null) _pendingLogo = null;
+      _reportableResults[result] = true;
       results.insert(0, result);
       while (results.length > 6 ||
           (results.length > 1 &&
@@ -536,6 +539,41 @@ class ImagineClient extends ChangeNotifier {
     }
     throw const ImagineException(
       'Your logo is taking longer than expected. Tap Check pending logo to check the same job again.',
+    );
+  }
+
+  Future<String> report(
+    ImagineResult result, {
+    required String reason,
+    required String details,
+    String language = 'en',
+    String appArea = 'imagine_studio',
+  }) async {
+    _guard();
+    if (_reportableResults[result] != true) {
+      throw const KorlixAiReportException(
+        'This picture is no longer available. Reopen its preview to report it.',
+      );
+    }
+    final headers = Map<String, String>.from(headersBuilder());
+    return submitKorlixAiReport(
+      endpoint: Uri.parse(
+        '${baseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/report-output',
+      ),
+      headers: headers,
+      client: _http,
+      contentType: 'image',
+      appArea: appArea,
+      contentId: result.id,
+      prompt: result.brief.compiledPrompt,
+      outputSummary: 'Generated image: ${result.width} x ${result.height}',
+      imageDataUrl: 'data:image/png;base64,${base64Encode(result.bytes)}',
+      reason: reason,
+      details: details,
+      language: language,
+      platform: kIsWeb ? 'web' : defaultTargetPlatform.name,
+      isCurrent: () =>
+          available && _scope == agentAccountScope(headersBuilder()),
     );
   }
 

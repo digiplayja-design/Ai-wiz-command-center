@@ -13,19 +13,23 @@ import '../korlix_video_preview_source.dart';
 import '../privacy/korlix_third_party_ai_consent.dart';
 import '../sharing/korlix_share.dart';
 import 'image_to_video_media.dart';
+import '../improve_picture/picture_studio_session.dart';
+import '../support/korlix_ai_report_client.dart';
+import '../support/korlix_saved_output_report_dialog.dart';
 
-typedef KorlixImageToVideoHeadersBuilder =
-    Future<Map<String, String>> Function();
+typedef KorlixImageToVideoHeadersBuilder = Map<String, String> Function();
 
 class KorlixImageToVideoScreen extends StatefulWidget {
   const KorlixImageToVideoScreen({
     super.key,
     required this.backendBaseUrl,
     required this.headersBuilder,
+    required this.sessionChanges,
   });
 
   final String backendBaseUrl;
   final KorlixImageToVideoHeadersBuilder headersBuilder;
+  final Listenable sessionChanges;
 
   @override
   State<KorlixImageToVideoScreen> createState() =>
@@ -49,6 +53,35 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
   String? _jobId;
   String? _resultVideoUrl;
   String? _rawResponseText;
+  String _generatedPrompt = '';
+  bool _reportOpen = false;
+  late final PictureStudioSession _session;
+
+  @override
+  void initState() {
+    super.initState();
+    _session = PictureStudioSession(
+      headersBuilder: widget.headersBuilder,
+      sessionChanges: widget.sessionChanges,
+    )..addListener(_sessionChanged);
+  }
+
+  void _sessionChanged() {
+    if (!mounted || _session.isCurrent) return;
+    setState(() {
+      _imageFile = null;
+      _resultVideoUrl = null;
+      _jobId = null;
+      _rawResponseText = null;
+      _generatedPrompt = '';
+      _loading = false;
+      _statusText = 'Session changed.';
+      _errorText = 'Close this screen and reopen it after signing in.';
+      _promptController.clear();
+      _negativePromptController.clear();
+    });
+    unawaited(_resetVideoController());
+  }
 
   String _duration = '5';
   String _aspectRatio = '9:16';
@@ -73,6 +106,8 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
 
   @override
   void dispose() {
+    _session.removeListener(_sessionChanged);
+    _session.dispose();
     _videoRevision++;
     _promptController.dispose();
     _negativePromptController.dispose();
@@ -82,7 +117,8 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
   }
 
   Future<Map<String, String>> _headers() async {
-    final supplied = await widget.headersBuilder();
+    if (!_session.isCurrent) throw StateError('Your account changed.');
+    final supplied = widget.headersBuilder();
     final headers = Map<String, String>.from(supplied);
     headers.removeWhere((key, _) => key.toLowerCase() == 'content-type');
     headers['Accept'] = 'application/json';
@@ -96,13 +132,14 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
       allowMultiple: false,
     );
 
+    if (!mounted || !_session.isCurrent) return;
     final file = result?.files.single;
     if (file == null) {
       return;
     }
 
     if (file.bytes == null || file.bytes!.isEmpty) {
-      if (!mounted) {
+      if (!mounted || !_session.isCurrent) {
         return;
       }
 
@@ -178,7 +215,7 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
 
   Future<void> _setVideoUrl(String? url) async {
     final revision = await _resetVideoController();
-    if (!mounted || revision != _videoRevision) return;
+    if (!mounted || !_session.isCurrent || revision != _videoRevision) return;
 
     if (url == null || url.trim().isEmpty) {
       return;
@@ -192,7 +229,7 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
       backendBaseUrl: _endpointBase,
     );
     final source = await media.preparePreview(_headers);
-    if (!mounted || revision != _videoRevision) {
+    if (!mounted || !_session.isCurrent || revision != _videoRevision) {
       await releaseKorlixVideoPreviewSource(source);
       return;
     }
@@ -204,17 +241,18 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
     );
     _videoController = controller;
     _videoInitFuture = controller.initialize().then((_) {
-      if (!mounted || revision != _videoRevision) return;
+      if (!mounted || !_session.isCurrent || revision != _videoRevision) return;
       controller.setLooping(true);
       controller.play();
 
-      if (mounted) {
+      if (mounted && _session.isCurrent) {
         setState(() {});
       }
     });
   }
 
   Future<void> _generateVideo() async {
+    if (_loading || !_session.isCurrent) return;
     // KORLIX_AI_CONSENT_GATE_BUILD131_V1_IMAGE_TO_VIDEO_BEGIN
     final korlixThirdPartyAiConsentGranted =
         await ensureKorlixThirdPartyAiConsent(
@@ -229,7 +267,7 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
           },
         );
 
-    if (!korlixThirdPartyAiConsentGranted) {
+    if (!mounted || !_session.isCurrent || !korlixThirdPartyAiConsentGranted) {
       return;
     }
     // KORLIX_AI_CONSENT_GATE_BUILD131_V1_IMAGE_TO_VIDEO_END
@@ -255,9 +293,11 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
     }
 
     await _resetVideoController();
+    if (!mounted || !_session.isCurrent) return;
 
     setState(() {
       _loading = true;
+      _generatedPrompt = prompt;
       _errorText = null;
       _jobId = null;
       _resultVideoUrl = null;
@@ -293,6 +333,7 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
 
       final streamed = await http.sendMultipart(request);
       final response = await http.Response.fromStream(streamed);
+      if (!mounted || !_session.isCurrent) return;
       final body = response.body;
       Map<String, dynamic> data = const <String, dynamic>{};
 
@@ -354,7 +395,7 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
       if (videoUrl != null) {
         await _setVideoUrl(videoUrl);
 
-        if (mounted) {
+        if (mounted && _session.isCurrent) {
           setState(() {
             _loading = false;
             _statusText = 'Video ready.';
@@ -375,7 +416,7 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
         _statusText = 'Generation incomplete.';
       });
     } catch (error) {
-      if (!mounted) {
+      if (!mounted || !_session.isCurrent) {
         return;
       }
 
@@ -387,9 +428,57 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
     }
   }
 
+  Future<void> _reportVideo() async {
+    final videoUrl = _resultVideoUrl;
+    if (_reportOpen || videoUrl == null || !_session.isCurrent) return;
+    final jobId = _jobId;
+    final prompt = _generatedPrompt;
+    bool current() => mounted && _session.isCurrent;
+    setState(() => _reportOpen = true);
+    try {
+      final receipt = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => KorlixSavedOutputReportDialog(
+          title: 'Report video',
+          description:
+              'Tell us what needs review. This generated video and its '
+              'motion prompt will be included with your report.',
+          sessionChanges: _session,
+          isSessionCurrent: current,
+          submitReport: (reason, details) async => submitKorlixAiReport(
+            endpoint: Uri.parse('$_endpointBase/api/report-output'),
+            headers: await _headers(),
+            reason: reason,
+            details: details,
+            prompt: prompt,
+            outputSummary: 'Generated Image to Video output',
+            contentType: 'video',
+            appArea: 'image_to_video',
+            contentId: jobId,
+            videoId: jobId,
+            videoUrl: videoUrl,
+            isCurrent: current,
+          ),
+        ),
+      );
+      if (receipt != null && mounted && _session.isCurrent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Report received. Thank you for helping us review this video.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _reportOpen = false);
+    }
+  }
+
   Future<void> _pollJob(String jobId) async {
     for (var attempt = 1; attempt <= 75; attempt++) {
-      if (!mounted) {
+      if (!mounted || !_session.isCurrent) {
         return;
       }
 
@@ -398,16 +487,18 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
       });
 
       await Future<void>.delayed(const Duration(seconds: 4));
+      if (!mounted || !_session.isCurrent) return;
 
       try {
         final response = await http.get(
           Uri.parse('$_endpointBase/api/video/image-to-video/status/$jobId'),
           headers: await _headers(),
         );
+        if (!mounted || !_session.isCurrent) return;
         if (response.statusCode == 401 ||
             response.statusCode == 403 ||
             response.statusCode == 404) {
-          if (mounted) {
+          if (mounted && _session.isCurrent) {
             setState(() {
               _loading = false;
               _errorText =
@@ -449,7 +540,7 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
         if (videoUrl != null) {
           await _setVideoUrl(videoUrl);
 
-          if (mounted) {
+          if (mounted && _session.isCurrent) {
             setState(() {
               _loading = false;
               _statusText = 'Video ready.';
@@ -469,7 +560,7 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
               _deepString(data, const ['error', 'message', 'details']) ??
               'Image to Video job failed.';
 
-          if (mounted) {
+          if (mounted && _session.isCurrent) {
             setState(() {
               _loading = false;
               _errorText = message;
@@ -482,13 +573,13 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
           return;
         }
 
-        if (mounted) {
+        if (mounted && _session.isCurrent) {
           setState(() {
             _rawResponseText = const JsonEncoder.withIndent('  ').convert(data);
           });
         }
       } catch (error) {
-        if (mounted) {
+        if (mounted && _session.isCurrent) {
           setState(() {
             _rawResponseText = 'Polling error: $error';
           });
@@ -496,7 +587,7 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
       }
     }
 
-    if (!mounted) {
+    if (!mounted || !_session.isCurrent) {
       return;
     }
 
@@ -516,7 +607,7 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
       ),
     );
 
-    if (!mounted) {
+    if (!mounted || !_session.isCurrent) {
       return;
     }
 
@@ -527,13 +618,13 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
 
   Future<void> _copyVideoUrl() async {
     final url = _resultVideoUrl;
-    if (url == null || url.isEmpty) {
+    if (!_session.isCurrent || url == null || url.isEmpty) {
       return;
     }
 
     await Clipboard.setData(ClipboardData(text: url));
 
-    if (!mounted) {
+    if (!mounted || !_session.isCurrent) {
       return;
     }
 
@@ -544,7 +635,7 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
 
   Future<void> _openVideoUrl() async {
     final url = _resultVideoUrl;
-    if (url == null || url.isEmpty) {
+    if (!_session.isCurrent || url == null || url.isEmpty) {
       return;
     }
 
@@ -566,7 +657,7 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
 
   Future<void> _shareVideoUrl() async {
     final url = _resultVideoUrl;
-    if (url == null || url.isEmpty) {
+    if (!_session.isCurrent || url == null || url.isEmpty) {
       return;
     }
 
@@ -742,6 +833,7 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
           ),
           const SizedBox(height: 8),
           TextField(
+            key: const Key('image-to-video-motion-prompt'),
             controller: _promptController,
             minLines: 4,
             maxLines: 8,
@@ -1057,31 +1149,40 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
                   icon: const Icon(Icons.ios_share_rounded),
                   label: const Text('Share'),
                 ),
+                OutlinedButton.icon(
+                  key: const Key('image-to-video-report'),
+                  onPressed: _reportOpen ? null : _reportVideo,
+                  icon: const Icon(Icons.flag_outlined),
+                  label: const Text('Report video'),
+                ),
               ],
             ),
           ],
           if (_rawResponseText != null) ...[
             const SizedBox(height: 12),
-            ExpansionTile(
-              tilePadding: EdgeInsets.zero,
-              iconColor: const Color(0xFF69D9E8),
-              collapsedIconColor: const Color(0xFFA9C6CF),
-              title: const Text(
-                'Provider response',
-                style: TextStyle(
-                  color: Color(0xFFA9C6CF),
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              children: [
-                SelectableText(
-                  _rawResponseText!,
-                  style: const TextStyle(
-                    color: Color(0xFFB9C7D9),
-                    fontSize: 12,
+            Material(
+              type: MaterialType.transparency,
+              child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                iconColor: const Color(0xFF69D9E8),
+                collapsedIconColor: const Color(0xFFA9C6CF),
+                title: const Text(
+                  'Provider response',
+                  style: TextStyle(
+                    color: Color(0xFFA9C6CF),
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-              ],
+                children: [
+                  SelectableText(
+                    _rawResponseText!,
+                    style: const TextStyle(
+                      color: Color(0xFFB9C7D9),
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ],
@@ -1093,6 +1194,7 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
   Widget build(BuildContext context) {
     final canGenerate =
         !_loading &&
+        _session.isCurrent &&
         _imageBytes != null &&
         _promptController.text.trim().isNotEmpty;
 
