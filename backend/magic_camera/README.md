@@ -1,6 +1,6 @@
 # Magic Camera backend
 
-Production migration `20261030031457_magic_camera_foundation` is applied to the Korlix AI database (`uxtjzjbwtppjvnsoiijv`). Do not apply it again. The checked-in `supabase/migrations/20261030031457_magic_camera_foundation.sql` matches the recorded migration contents (SHA-256 `7a9b0be59314bcbef9991b76da538275aa1ae6d9efc43c34efb90b1160970016`); its earlier draft filename was `20261030003135_magic_camera_foundation.sql`. This is an additive private gallery/queue/allowance schema plus extension of the existing verified companion session discriminator. It does not change hub billing tiers or Improve My Picture access.
+Migration `supabase/migrations/20261030031457_magic_camera_foundation.sql` was applied to the current production database on 2026-10-30. Its version matches the database migration history; do not apply it again. This is an additive private gallery/queue/allowance schema plus extension of the existing verified companion session discriminator. It does not change hub billing tiers or Improve My Picture access.
 
 The migration source is assembled, in order, from `schema.sql`, `billing_schema.sql`, `apple_schema.sql`, and `session_schema.sql`. Keep these fixtures and the migration identical; tests execute the fixtures in PGlite with service-role and browser-role checks.
 
@@ -17,6 +17,8 @@ Store products: `magic_camera_starter` (15/month) and `magic_camera_plus` (40/mo
 Sunburst max is fixed in `core.mjs`; keys remain server-side. This implementation validates output image decoding, dimensions and storage, not facial identity with a biometric system. Identity preservation is a prompt instruction, not a zero-distortion guarantee. Test real diverse portraits before production release.
 
 Run `node --test test/magic_camera.test.mjs` and the relevant shared auth/report/billing regression tests. No real provider generation, store transaction, email, or production mutation is used by the tests.
+
+The applied SQL contents were verified against production: SHA-256 `7a9b0be59314bcbef9991b76da538275aa1ae6d9efc43c34efb90b1160970016`.
 
 ## Verified release checkpoint
 
