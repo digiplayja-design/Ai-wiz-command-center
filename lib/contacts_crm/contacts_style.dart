@@ -160,12 +160,14 @@ class CrmBadge extends StatelessWidget {
           ),
           const SizedBox(width: 6),
         ],
-        Text(
-          label,
-          style: TextStyle(
-            color: color,
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
+        Flexible(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],

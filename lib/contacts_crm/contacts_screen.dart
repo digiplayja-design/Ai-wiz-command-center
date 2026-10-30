@@ -17,7 +17,12 @@ import 'contacts_style.dart';
 import 'contact_profile.dart';
 
 class ContactsScreen extends StatefulWidget {
-  const ContactsScreen({super.key, required this.client, this.characterId = 'jj', this.language = 'English'});
+  const ContactsScreen({
+    super.key,
+    required this.client,
+    this.characterId = 'jj',
+    this.language = 'English',
+  });
   final ContactsClient client;
   final String characterId, language;
   @override
@@ -170,36 +175,96 @@ class _ContactsScreenState extends State<ContactsScreen> {
 
   Future<void> _openDirectorySync() async {
     if (_locked || widget.client.sessionChanged) return;
-    final showImported=await Navigator.of(context).push<bool>(MaterialPageRoute<bool>(builder:(_)=>Theme(data:CrmStyle.theme,child:CrmDirectoryScreen(client:widget.client))));
-    if(!mounted||_locked)return;
-    if(showImported==true)setState((){_source='directory';_offset=0;_segment='';_category='';_search.clear();});
+    final showImported = await Navigator.of(context).push<bool>(
+      MaterialPageRoute<bool>(
+        builder: (_) => Theme(
+          data: CrmStyle.theme,
+          child: CrmDirectoryScreen(client: widget.client),
+        ),
+      ),
+    );
+    if (!mounted || _locked) return;
+    if (showImported == true) {
+      setState(() {
+        _source = 'directory';
+        _offset = 0;
+        _segment = '';
+        _category = '';
+        _search.clear();
+      });
+    }
     await _load();
   }
 
   Future<void> _openEmail({CrmJson? contact, CrmJson? draft}) async {
     if (_locked || widget.client.sessionChanged) return;
-    await Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>Theme(data:CrmStyle.theme,child:CrmEmailScreen(client:widget.client,contact:contact,draft:draft))));
-    if(mounted&&!_locked)await _load();
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => Theme(
+          data: CrmStyle.theme,
+          child: CrmEmailScreen(
+            client: widget.client,
+            contact: contact,
+            draft: draft,
+          ),
+        ),
+      ),
+    );
+    if (mounted && !_locked) await _load();
   }
 
   Future<void> _openCrmVoice() async {
-    if(_locked||widget.client.sessionChanged)return;
-    final consent=await ensureKorlixThirdPartyAiConsent(context:context,featureName:'CRM and Rici',providers:const {KorlixThirdPartyAiProvider.openAi},dataCategories:const {KorlixThirdPartyAiDataCategory.typedTextAndPrompts,KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts,KorlixThirdPartyAiDataCategory.crmRecords});
-    if(!consent||!mounted||_locked||widget.client.sessionChanged)return;
-    final voice=CrmVoiceController(client:widget.client);
+    if (_locked || widget.client.sessionChanged) return;
+    final consent = await ensureKorlixThirdPartyAiConsent(
+      context: context,
+      featureName: 'CRM and Rici',
+      providers: const {KorlixThirdPartyAiProvider.openAi},
+      dataCategories: const {
+        KorlixThirdPartyAiDataCategory.typedTextAndPrompts,
+        KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts,
+        KorlixThirdPartyAiDataCategory.crmRecords,
+      },
+    );
+    if (!consent || !mounted || _locked || widget.client.sessionChanged) return;
+    final voice = CrmVoiceController(client: widget.client);
     CrmJson? result;
     try {
-      final route=MaterialPageRoute<CrmJson>(builder:(_)=>KorlixLiveConvoTestScreen(crmVoice:voice,sessionChanges:widget.client.sessionChanges,backendBaseUrl:widget.client.backendBaseUrl,headersBuilder:widget.client.headersBuilder,characterId:widget.characterId,language:widget.language));
-      result=await Navigator.of(context).push<CrmJson>(route);await route.completed;
-    } finally { voice.dispose(); }
-    if(!mounted||_locked||widget.client.sessionChanged||result==null)return;
-    final contact=crmMap((await widget.client.request('GET','/${result['contact_id']}'))['contact']);
-    if(!mounted||_locked)return;
-    if(contact['version']!=result['contact_version'])throw const ContactsException('This contact changed while voice was open. Ask Rici again using the latest contact.');
-    final draft=crmMap(result['draft']);
-    if(result['action']=='email') {
-      await _openEmail(contact:contact,draft:draft);
-    } else if(result['action']=='note')await _edit({...contact,...draft},1);
+      final route = MaterialPageRoute<CrmJson>(
+        builder: (_) => KorlixLiveConvoTestScreen(
+          crmVoice: voice,
+          sessionChanges: widget.client.sessionChanges,
+          backendBaseUrl: widget.client.backendBaseUrl,
+          headersBuilder: widget.client.headersBuilder,
+          characterId: widget.characterId,
+          language: widget.language,
+        ),
+      );
+      result = await Navigator.of(context).push<CrmJson>(route);
+      await route.completed;
+    } finally {
+      voice.dispose();
+    }
+    if (!mounted || _locked || widget.client.sessionChanged || result == null) {
+      return;
+    }
+    final contact = crmMap(
+      (await widget.client.request(
+        'GET',
+        '/${result['contact_id']}',
+      ))['contact'],
+    );
+    if (!mounted || _locked) return;
+    if (contact['version'] != result['contact_version']) {
+      throw const ContactsException(
+        'This contact changed while voice was open. Ask Rici again using the latest contact.',
+      );
+    }
+    final draft = crmMap(result['draft']);
+    if (result['action'] == 'email') {
+      await _openEmail(contact: contact, draft: draft);
+    } else if (result['action'] == 'note') {
+      await _edit({...contact, ...draft}, 1);
+    }
   }
 
   Future<void> _import([String source = 'spreadsheet']) async {
@@ -210,6 +275,14 @@ class _ContactsScreenState extends State<ContactsScreen> {
           ContactImport(client: widget.client, initialSource: source),
     );
     if (result != null && mounted) {
+      _debounce?.cancel();
+      setState(() {
+        _search.clear();
+        _category = _source = _segment = '';
+        _sort = 'updated_at';
+        _offset = 0;
+        _selected.clear();
+      });
       _notify(
         '${result['imported']} contacts imported. ${result['duplicates']} existing contacts skipped.',
       );
@@ -543,27 +616,33 @@ class _ContactsScreenState extends State<ContactsScreen> {
                 children: [
                   _brandMark(38),
                   const SizedBox(width: 10),
-                  const Expanded(child: FittedBox(fit:BoxFit.scaleDown,alignment:Alignment.centerLeft,child:Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'KORLIX',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 2,
-                        ),
+                  const Expanded(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'KORLIX',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 2,
+                            ),
+                          ),
+                          Text(
+                            'CONTACTS',
+                            style: TextStyle(
+                              fontSize: 8,
+                              color: CrmStyle.muted,
+                              letterSpacing: 3,
+                            ),
+                          ),
+                        ],
                       ),
-                      Text(
-                        'CONTACTS',
-                        style: TextStyle(
-                          fontSize: 8,
-                          color: CrmStyle.muted,
-                          letterSpacing: 3,
-                        ),
-                      ),
-                    ],
-                  ))),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -1613,15 +1692,6 @@ class _ContactsScreenState extends State<ContactsScreen> {
                 ),
               ),
               Tooltip(
-                message: 'Import contacts',
-                child: OutlinedButton(
-                  key: const Key('import-contacts'),
-                  onPressed: _import,
-                  child: const Icon(Icons.file_upload_outlined, size: 19),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Tooltip(
                 message: 'New contact',
                 child: FilledButton(
                   key: const Key('new-contact'),
@@ -1659,7 +1729,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
                 key: const Key('import-contacts'),
                 onPressed: _import,
                 icon: const Icon(Icons.file_upload_outlined, size: 16),
-                label: const Text('Import contacts'),
+                label: const Text('Upload spreadsheet'),
               ),
               const SizedBox(width: 10),
               FilledButton.icon(
@@ -1671,12 +1741,47 @@ class _ContactsScreenState extends State<ContactsScreen> {
             ],
           ),
         const SizedBox(height: 22),
-        Wrap(spacing:10,runSpacing:8,children:[
-          FilledButton.icon(key:const Key('crm-autonomous-email'),onPressed:_operation||_locked?null:()=>_action(()=>_openEmail()),icon:const Icon(Icons.mark_email_read_outlined),label:const Text('Autonomous email')),
-          OutlinedButton.icon(key:const Key('crm-k-nova'),onPressed:_operation||_locked?null:()=>_action(_openCrmVoice),icon:const Icon(Icons.graphic_eq_rounded,color:CrmStyle.violet),label:const Text('Rici')),
-          OutlinedButton.icon(key:const Key('crm-directory-sync'),onPressed:_operation||_locked?null:()=>_action(_openDirectorySync),icon:const Icon(Icons.storefront_outlined,color:CrmStyle.gold),label:const Text('Auto-pull listings')),
-        ]),
-        const SizedBox(height:16),
+        Wrap(
+          spacing: 10,
+          runSpacing: 8,
+          children: [
+            if (mobile)
+              OutlinedButton.icon(
+                key: const Key('import-contacts'),
+                onPressed: _operation || _locked ? null : _import,
+                icon: const Icon(Icons.upload_file_outlined),
+                label: const Text('Upload spreadsheet'),
+              ),
+            FilledButton.icon(
+              key: const Key('crm-autonomous-email'),
+              onPressed: _operation || _locked
+                  ? null
+                  : () => _action(() => _openEmail()),
+              icon: const Icon(Icons.mark_email_read_outlined),
+              label: const Text('Autonomous email'),
+            ),
+            OutlinedButton.icon(
+              key: const Key('crm-k-nova'),
+              onPressed: _operation || _locked
+                  ? null
+                  : () => _action(_openCrmVoice),
+              icon: const Icon(
+                Icons.graphic_eq_rounded,
+                color: CrmStyle.violet,
+              ),
+              label: const Text('Rici'),
+            ),
+            OutlinedButton.icon(
+              key: const Key('crm-directory-sync'),
+              onPressed: _operation || _locked
+                  ? null
+                  : () => _action(_openDirectorySync),
+              icon: const Icon(Icons.storefront_outlined, color: CrmStyle.gold),
+              label: const Text('Auto-pull listings'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
         _summary(mobile),
         const SizedBox(height: 22),
         Expanded(
@@ -1856,7 +1961,15 @@ class _ContactsScreenState extends State<ContactsScreen> {
                                 Expanded(
                                   child: LayoutBuilder(
                                     builder: (context, box) {
-                                      const minimum = 804.0;
+                                      // Preserve a usable contact list below wrapped
+                                      // actions and filters on phones and large text.
+                                      final scale =
+                                          MediaQuery.textScalerOf(
+                                            context,
+                                          ).scale(14) /
+                                          14;
+                                      final minimum =
+                                          (mobile ? 1000.0 : 804.0) * scale;
                                       final extra = _filtersOpen ? 150.0 : 0.0;
                                       final height =
                                           box.maxHeight < minimum + extra

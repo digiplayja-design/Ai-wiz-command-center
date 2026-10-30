@@ -45,8 +45,11 @@ class ContactsClient {
        _ownsClient = client == null {
     _scope = _readScope();
     sessionChanges?.addListener(_checkSession);
-    if(sessionChanges == null && _scope != null) {
-      _sessionTimer = Timer.periodic(const Duration(seconds:1), (_) => _checkSession());
+    if (sessionChanges == null && _scope != null) {
+      _sessionTimer = Timer.periodic(
+        const Duration(seconds: 1),
+        (_) => _checkSession(),
+      );
     }
   }
   final String backendBaseUrl;
@@ -168,7 +171,7 @@ class ContactsClient {
     } on http.ClientException {
       _guard();
       throw const ContactsException(
-        'Check your connection, then refresh your shift.',
+        'Check your connection, then refresh your contacts.',
       );
     }
   }
