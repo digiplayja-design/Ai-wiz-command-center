@@ -360,6 +360,91 @@ void main() {
     },
   );
   testWidgets(
+    'AI reporting cancels without sending and reports the selected older concept',
+    (t) async {
+      final f = LogoFixture();
+      addTearDown(f.c.dispose);
+      final older = (await t.runAsync(
+        () => f.c.images.create(sample.aiBrief),
+      ))!;
+      await t.runAsync(
+        () => f.c.images.create(sample.copy(name: 'NEWER BRAND').aiBrief),
+      );
+      await social.mount(t, f.screen());
+      await begin(t, f);
+      await actions.tap(t, find.byKey(const ValueKey('logo-ai-result-1')));
+      await actions.tap(t, find.byKey(const Key('logo-ai-report')));
+      expect(find.textContaining('shared with KORLIX support'), findsOneWidget);
+      await actions.tap(t, find.text('Cancel'));
+      expect(f.studio.reports, isEmpty);
+      await actions.tap(t, find.byKey(const Key('logo-ai-report')));
+      await actions.tap(t, find.byKey(const Key('saved-report-reason')));
+      await actions.tap(t, find.text('Privacy concern').last);
+      await t.enterText(
+        find.byKey(const Key('saved-report-details')),
+        'Please review the older logo concept.',
+      );
+      FocusManager.instance.primaryFocus?.unfocus();
+      await t.pumpAndSettle();
+      final submit = find.byKey(const Key('saved-report-submit'));
+      await t.ensureVisible(submit);
+      // Image preparation uses native callbacks outside the widget-test clock.
+      await t.runAsync(() async {
+        f.studio.reportSent = Completer<void>();
+        await t.tap(submit);
+        await f.studio.reportSent!.future.timeout(const Duration(seconds: 5));
+        await Future<void>.delayed(Duration.zero);
+      });
+      await t.pumpAndSettle();
+      final report = f.studio.reports.single;
+      expect(report['contentId'], older.id);
+      expect(report['prompt'], older.brief.compiledPrompt);
+      expect(report['contentType'], 'image');
+      expect(report['appArea'], 'logo_studio');
+      expect(report['reason'], 'Privacy concern');
+      expect(report['details'], 'Please review the older logo concept.');
+      expect(report['imageDataUrl'], startsWith('data:image/png;base64,'));
+      expect(find.text('Report received'), findsOneWidget);
+      expect(
+        find.textContaining(
+          'korlix_report_20000000-0000-4000-8000-000000000001',
+        ),
+        findsOneWidget,
+      );
+      await actions.tap(t, find.text('Done'));
+      expect(
+        find.byKey(ValueKey('logo-ai-preview-${older.id}')),
+        findsOneWidget,
+      );
+      expect(f.studio.reports, hasLength(1));
+      expect(t.takeException(), isNull);
+    },
+  );
+  testWidgets(
+    'AI reporting blocks submission when the account changes with its dialog open',
+    (t) async {
+      final f = LogoFixture();
+      addTearDown(f.c.dispose);
+      await t.runAsync(() => f.c.images.create(sample.aiBrief));
+      await social.mount(t, f.screen(), width: 320, scale: 1.4);
+      await begin(t, f);
+      await actions.tap(t, find.byKey(const Key('logo-ai-report')));
+      f.studio.change();
+      await t.pumpAndSettle();
+      expect(find.textContaining('Your sign-in changed.'), findsOneWidget);
+      expect(
+        t
+            .widget<FilledButton>(find.byKey(const Key('saved-report-submit')))
+            .onPressed,
+        isNull,
+      );
+      expect(f.studio.reports, isEmpty);
+      await actions.tap(t, find.text('Close'));
+      expect(find.byKey(const Key('logo-ai-report')), findsNothing);
+      expect(t.takeException(), isNull);
+    },
+  );
+  testWidgets(
     'imported project opens editor; account switch clears it and disables exports',
     (t) async {
       final f = LogoFixture();

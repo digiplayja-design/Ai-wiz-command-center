@@ -7,6 +7,7 @@ on:
       - feature/korlix-messenger-20261024
       - fix/messenger-calls-profile-20261028
       - fix/messenger-call-recovery-20261028
+      - fix/messenger-presence-and-video-reporting-20261030
     paths:
       - .github/workflows/korlix-messenger-validation.yml
       - apps/korlix_messenger/lib/**
@@ -21,6 +22,10 @@ on:
       - test/social_call*test.dart
       - test/social_communication_upgrade_test.dart
       - test/social_screen_sharing_test.dart
+      - test/social_presence*
+      - lib/image_to_video/**
+      - test/image_to_video_reporting_test.dart
+      - lib/support/**
 
 permissions:
   contents: read
@@ -100,6 +105,10 @@ jobs:
           path: ${{ runner.temp }}/messenger-previews
           if-no-files-found: error
           retention-days: 14
+      - name: Validate presence and AI reporting regressions
+        run: |
+          flutter analyze --no-pub lib/image_to_video lib/imagine_studio lib/improve_picture/picture_studio_client.dart lib/improve_picture/picture_studio_screen.dart lib/improve_picture/screens/preview_screen.dart lib/logo_studio lib/support packages/korlix_social_core/lib/social/social_notifications.dart packages/korlix_social_core/lib/social/social_presence_button.dart packages/korlix_social_core/lib/social/social_screen.dart
+          flutter test --no-pub --reporter expanded test/social_presence_model_test.dart test/social_presence_toggle_test.dart test/social_presence_ui_test.dart test/image_to_video_reporting_test.dart test/image_to_video_media_security_test.dart test/support/ai_output_report_test.dart test/support/report_image_test.dart test/imagine_studio_test.dart test/logo_studio_test.dart test/picture_studio_report_test.dart test/portrait_preview_report_test.dart
       - name: Build Android test APK
         working-directory: apps/korlix_messenger
         run: flutter build apk --debug --no-pub
