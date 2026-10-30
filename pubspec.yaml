@@ -29,6 +29,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  korlix_magic_core:
+    path: packages/korlix_magic_core
   korlix_receipt_core:
     path: packages/korlix_receipt_core
   korlix_social_core:
@@ -173,5 +175,7 @@ flutter_native_splash:
     image: assets/branding/korlix_splash_logo.png
 
 dependency_overrides:
+  camera_avfoundation:
+    path: third_party/camera_avfoundation
   passkeys_web:
     path: third_party/passkeys_web_noop

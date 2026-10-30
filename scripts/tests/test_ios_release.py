@@ -118,6 +118,20 @@ class ReleaseIdentityTests(unittest.TestCase):
             with self.subTest(signed=bad_signed, profile=bad_profile, info=bad_info), self.assertRaises(ValueError):
                 verify.verify_signed_entitlements(bad_signed, bad_profile, bad_info, True)
 
+    def test_magic_camera_export_requires_camera_dictation_and_picker_purposes(self):
+        bundle = "com.korlixdeveloper.magiccamera"
+        info = {"CFBundleIdentifier": bundle, "CFBundleShortVersionString": "1.0.0",
+                "CFBundleVersion": "2", "CFBundleSupportedPlatforms": ["iPhoneOS"]}
+        purposes = ["NSCameraUsageDescription", "NSMicrophoneUsageDescription",
+                    "NSSpeechRecognitionUsageDescription", "NSLocationWhenInUseUsageDescription",
+                    "NSPhotoLibraryUsageDescription", "NSPhotoLibraryAddUsageDescription"]
+        complete = {**info, **{key: "Purpose for the feature." for key in purposes}}
+        verify.verify_info(complete, bundle, "1.0.0", "2")
+        for key in purposes:
+            for value in [None, "", "   ", True]:
+                with self.subTest(key=key, value=value), self.assertRaisesRegex(ValueError, key):
+                    verify.verify_info({**complete, key: value}, bundle, "1.0.0", "2")
+
 
 if __name__ == "__main__":
     unittest.main()
