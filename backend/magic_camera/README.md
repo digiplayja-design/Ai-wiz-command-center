@@ -1,6 +1,6 @@
 # Magic Camera backend
 
-Apply `supabase/migrations/20261030003135_magic_camera_foundation.sql` to the current production backend database only after review. This is an additive private gallery/queue/allowance schema plus extension of the existing verified companion session discriminator. It does not change hub billing tiers or Improve My Picture access.
+Production migration `20261030031457_magic_camera_foundation` is applied to the Korlix AI database (`uxtjzjbwtppjvnsoiijv`). Do not apply it again. The checked-in `supabase/migrations/20261030031457_magic_camera_foundation.sql` matches the recorded migration contents (SHA-256 `7a9b0be59314bcbef9991b76da538275aa1ae6d9efc43c34efb90b1160970016`); its earlier draft filename was `20261030003135_magic_camera_foundation.sql`. This is an additive private gallery/queue/allowance schema plus extension of the existing verified companion session discriminator. It does not change hub billing tiers or Improve My Picture access.
 
 The migration source is assembled, in order, from `schema.sql`, `billing_schema.sql`, `apple_schema.sql`, and `session_schema.sql`. Keep these fixtures and the migration identical; tests execute the fixtures in PGlite with service-role and browser-role checks.
 
@@ -17,3 +17,13 @@ Store products: `magic_camera_starter` (15/month) and `magic_camera_plus` (40/mo
 Sunburst max is fixed in `core.mjs`; keys remain server-side. This implementation validates output image decoding, dimensions and storage, not facial identity with a biometric system. Identity preservation is a prompt instruction, not a zero-distortion guarantee. Test real diverse portraits before production release.
 
 Run `node --test test/magic_camera.test.mjs` and the relevant shared auth/report/billing regression tests. No real provider generation, store transaction, email, or production mutation is used by the tests.
+
+## Verified release checkpoint
+
+Backend commit `b3715eaeb167779d3ca278554507ac323336f14b` became live on the existing Render service in deployment `dep-dbi0nmlg1s2s73dkoil0`. The service uses `release/signup-plan-intent-20261021`, with automatic deploys disabled. The live `/api/health` check returned 200; gallery, upload recovery, and both billing status routes returned 401 without credentials. Live database checks confirmed RLS, service-only functions, a private bucket and all four restrictive storage policies. These checks do not establish a completed real generation or store transaction.
+
+App commit `d17ef65e52c7c26785b28ce65171a02431d7b3d2` passed [GitHub Actions run 40994493237](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/40994493237): standalone Android/web, shared camera tests, hub Android integration, iOS simulator, release identity checks and rejection of unsigned Android release builds. Its artifacts are review builds; the iOS simulator archive cannot be installed through TestFlight.
+
+Remaining release work: dedicated store records, signing/provisioning, approved store products and signed purchase/restore tests, plus physical-device camera and real-provider quality/latency acceptance. Keep paid sales disabled until those checks pass.
+
+`test/magic_camera_migration.test.mjs` applies the complete release migration after the existing companion migrations, using the production profile-function signature. It verifies preservation of existing app sessions, independent Magic Camera access and private storage even in the presence of unrelated permissive policies. It uses an isolated local database only.

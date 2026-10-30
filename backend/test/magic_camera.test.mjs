@@ -202,7 +202,7 @@ test('lost upload response recovery is read-only, owner-bound and cannot recover
 });
 
 test('release migration contains every tested Magic Camera schema fixture unchanged',async()=>{
- const migration=await readFile(new URL('../../supabase/migrations/20261030003135_magic_camera_foundation.sql',import.meta.url),'utf8');
+ const migration=await readFile(new URL('../../supabase/migrations/20261030031457_magic_camera_foundation.sql',import.meta.url),'utf8');
  for(const name of ['schema.sql','billing_schema.sql','apple_schema.sql','session_schema.sql']){
   assert(migration.includes(await readFile(new URL('../magic_camera/'+name,import.meta.url),'utf8')),name+' differs from release migration');
  }
