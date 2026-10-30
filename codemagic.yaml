@@ -1,5 +1,5 @@
 workflows:
-  korlix-ai-ios-appstore:
+  korlix-ai-ios-appstore: &korlix_ai_ios_release
     name: Korlix AI iOS App Store
     instance_type: mac_mini_m2
     max_build_duration: 60
@@ -27,7 +27,7 @@ workflows:
           python3 scripts/prepare_ios_release.py \
             --bundle-id com.korlixdeveloper.korlixai --app-id 6783100102 \
             --require-existing-build --environment-file "$CM_ENV"
-          cp docs/releases/ios-20261028/korlix-ai-notes.txt release_notes_en-US.txt
+          cp docs/releases/crm-spreadsheet-20261030/korlix-ai-notes.txt release_notes_en-US.txt
       - name: Validate current iOS app and shared calling code
         script: |
           set -euo pipefail
@@ -48,6 +48,15 @@ workflows:
             test/social_call_reliability_test.dart test/social_screen_sharing_test.dart \
             test/social_communication_upgrade_test.dart \
             test/social_presence_model_test.dart test/social_presence_toggle_test.dart
+      - name: Validate CRM spreadsheet import and Rici lifecycle
+        script: |
+          set -euo pipefail
+          flutter analyze --no-pub lib/contacts_crm/contact_import.dart \
+            lib/contacts_crm/contacts_client.dart lib/contacts_crm/contacts_screen.dart \
+            lib/contacts_crm/contacts_style.dart test/contacts_crm/spreadsheet_import_test.dart \
+            test/live_convo/crm_voice_lifecycle_test.dart
+          flutter test --no-pub --reporter expanded \
+            test/contacts_crm test/live_convo/crm_voice_lifecycle_test.dart
       - name: Prepare native dependencies and apply existing app signing
         script: |
           set -euo pipefail
@@ -81,6 +90,17 @@ workflows:
         submit_to_app_store: true
         cancel_previous_submissions: false
         release_type: AFTER_APPROVAL
+
+  korlix-ai-ios-testflight:
+    <<: *korlix_ai_ios_release
+    name: Korlix AI CRM iOS TestFlight Upload
+    publishing:
+      app_store_connect:
+        auth: integration
+        # Upload the verified IPA for internal testing; assign the existing
+        # internal group only after Apple finishes processing this build.
+        submit_to_testflight: false
+        submit_to_app_store: false
 
   korlix-messenger-ios-appstore: &messenger_ios_release
     name: KORLIX Messenger iOS App Store

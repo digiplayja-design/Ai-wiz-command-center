@@ -1,0 +1,69 @@
+{
+  "recorded_at": "2026-10-30T14:02:26.002Z",
+  "app_source": "4d7cbc127e8dc7da1565aac73c8069f3454a9c92",
+  "crm_pull_request": "https://github.com/digiplayja-design/Ai-wiz-command-center/pull/38",
+  "validation": {
+    "crm_tests": 41,
+    "analyzer": "passed",
+    "web_release": "passed",
+    "android_debug_apk": "passed",
+    "ci_source": "1c9be5d298a9fa1291c8f383a457464ae21ac0cb",
+    "run": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41060989932",
+    "artifact_id": 12979388418,
+    "artifact_name": "korlix-crm-validation-builds",
+    "artifact_sha256": "20e99942fefa04b45d41f15ee30548b74896ba1aad43a3e3617db46709811120"
+  },
+  "backend": {
+    "source": "321322cfee3b2858bd135ae97384315f9a7ad2fc",
+    "deploy_id": "dep-dbi9n86tlv9c7398ipag",
+    "live_at": "2026-10-30T13:29:43.338237Z",
+    "service_id": "srv-d8csvkkp3tds73emfikg",
+    "url": "https://chee-chai-chee-backend.onrender.com",
+    "combined_regression_tests": 114,
+    "tested_tree_matches_deployed_tree": true,
+    "health_http": 200,
+    "unauthenticated_contacts_http": 401,
+    "unauthenticated_magic_camera_http": 401,
+    "initial_post_deploy_app_errors": 0,
+    "includes": [
+      "CRM spreadsheet persistence",
+      "Messenger presence",
+      "Magic Camera grooming, shine control and EXIF normalization"
+    ]
+  },
+  "ios": {
+    "version": "12.0.4",
+    "build": 136,
+    "bundle": "com.korlixdeveloper.korlixai",
+    "apple_app_id": "6783100102",
+    "codemagic_build": "6ae49cd3efa74786046f1d9c",
+    "codemagic_url": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae49cd3efa74786046f1d9c",
+    "status": "testing",
+    "group": "Korlix internal testers",
+    "group_id": "d00681e0-53e5-47e7-a3a2-f97a95e17c8f",
+    "failed_attempt": {
+      "version": "12.0.3",
+      "build": 135,
+      "codemagic_build": "6ae49918efa74786046f1c1d",
+      "reason": "Apple error 90062/90186: approved version 12.0.3 is closed to new builds"
+    },
+    "ipa_sha256": "ca24985267981605f7a9ce1e6bc3ff9c7e968860dd915de5481c576c45b13590",
+    "ipa_bytes": 84390104,
+    "signature_verified": true,
+    "uploaded_at": "2026-10-30T13:47:35Z",
+    "delivery_uuid": "c326c8af-7774-4ab9-80b6-a91cbcffa7d0",
+    "processing": "complete",
+    "build_id": "c326c8af-7774-4ab9-80b6-a91cbcffa7d0",
+    "group_url": "https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6783100102/testflight/groups/d00681e0-53e5-47e7-a3a2-f97a95e17c8f/builds",
+    "internal_testing_verified": true,
+    "group_tester_count": 5,
+    "group_build_count": 3
+  },
+  "remaining": [
+    "Authenticated production CRM import acceptance on a real account",
+    "Affected-device Magic Camera orientation and actual provider image-quality acceptance",
+    "Website frontend deployment",
+    "Google Play signed release and submission",
+    "Public App Store submission"
+  ]
+}

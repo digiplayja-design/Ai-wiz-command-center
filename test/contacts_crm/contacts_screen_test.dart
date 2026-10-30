@@ -311,6 +311,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       await capture(tester, 'phone-preview');
+      await tester.ensureVisible(find.text('Jordan Lee'));
       await tester.tap(find.text('Jordan Lee'));
       await tester.pumpAndSettle();
       expect(find.text('CONTACT STUDIO'), findsOneWidget);
@@ -383,6 +384,7 @@ void main() {
           .hasFocus,
       isTrue,
     );
+    await tester.ensureVisible(find.byTooltip('Compact spacing'));
     await tester.tap(find.byTooltip('Compact spacing'));
     await tester.pumpAndSettle();
     expect(find.byTooltip('Comfortable spacing'), findsOneWidget);

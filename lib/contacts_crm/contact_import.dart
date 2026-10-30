@@ -23,6 +23,12 @@ class ContactImport extends StatefulWidget {
 class _ContactImportState extends State<ContactImport> {
   String _source = 'spreadsheet';
   String? _filename;
+  Map<String, dynamic>? _fileBody;
+  Map<String, dynamic> _mapping = {};
+  String _defaultCategory = 'unknown';
+  int? _headerRow;
+  int _previewRevision = 0;
+  bool _mappingDirty = false;
   @override
   void initState() {
     super.initState();
@@ -47,6 +53,12 @@ class _ContactImportState extends State<ContactImport> {
       if (mounted) {
         setState(() {
           _preview = p;
+          final sheet = crmMap(p['spreadsheet']);
+          _mapping = crmMap(sheet['mapping']);
+          _defaultCategory = sheet['defaultCategory'] as String? ?? 'unknown';
+          _headerRow = sheet['headerRow'] as int?;
+          _mappingDirty = false;
+          _previewRevision++;
           _selected
             ..clear()
             ..addAll(List.generate((p['contacts'] as List).length, (i) => i));
@@ -61,7 +73,11 @@ class _ContactImportState extends State<ContactImport> {
 
   Future<void> _file() async {
     // File selection stays in the user's explicit tap; no background address-book reads.
-    setState(() => _error = null);
+    if (_busy) return;
+    setState(() {
+      _error = null;
+      _busy = true;
+    });
     try {
       final picked = await FilePicker.platform.pickFiles(
         type: FileType.custom,
@@ -70,7 +86,6 @@ class _ContactImportState extends State<ContactImport> {
       );
       if (picked == null || !mounted) return;
       final f = picked.files.single;
-      _filename = f.name;
       if (f.size > 2 * 1024 * 1024) {
         throw const ContactsException('Choose a file smaller than 2 MB.');
       }
@@ -79,19 +94,71 @@ class _ContactImportState extends State<ContactImport> {
           'This file could not be read. Please choose it again.',
         );
       }
+      setState(() {
+        _filename = f.name;
+        _preview = null;
+        _selected.clear();
+        _fileBody = {
+          'source': _source,
+          'filename': f.name,
+          'content': base64Encode(f.bytes!),
+        };
+      });
       await _run(
-        () => widget.client.request(
-          'POST',
-          '/imports/preview',
-          body: {
-            'source': _source,
-            'filename': f.name,
-            'content': base64Encode(f.bytes!),
-          },
-        ),
+        () =>
+            widget.client.request('POST', '/imports/preview', body: _fileBody),
       );
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _refreshSpreadsheet({String? worksheet}) async {
+    if (_busy || _fileBody == null) return;
+    final sheet = crmMap(_preview?['spreadsheet']);
+    final body = <String, dynamic>{
+      ..._fileBody!,
+      if (worksheet != null || sheet['worksheet'] != null)
+        'worksheet': worksheet ?? sheet['worksheet'],
+      if (worksheet == null) ...{
+        'mapping': _mapping,
+        'headerRow': _headerRow,
+        'defaultCategory': _defaultCategory,
+      },
+    };
+    // An unsuccessful re-preview must never leave the old rows importable.
+    setState(() {
+      _mappingDirty = true;
+    });
+    await _run(
+      () => widget.client.request('POST', '/imports/preview', body: body),
+    );
+  }
+
+  Future<void> _downloadCsv(String name, String content) async {
+    if (_busy) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await FilePicker.platform.saveFile(
+        dialogTitle: 'Save $name',
+        fileName: name,
+        type: FileType.custom,
+        allowedExtensions: const ['csv'],
+        bytes: Uint8List.fromList(utf8.encode('\uFEFF$content')),
+      );
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _error = 'The file could not be saved. Please try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -107,7 +174,11 @@ class _ContactImportState extends State<ContactImport> {
     );
   });
   Future<void> _save() async {
-    setState(() => _busy = true);
+    if (_busy || _mappingDirty || _selected.isEmpty) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     try {
       final rows = _rows;
       final result = await widget.client.request(
@@ -118,7 +189,16 @@ class _ContactImportState extends State<ContactImport> {
           'contacts': _selected.map((i) => rows[i]).toList(),
         },
       );
-      if (mounted) Navigator.pop(context, result);
+      if (result['imported'] is! int ||
+          result['duplicates'] is! int ||
+          (result['imported'] as int) < 0 ||
+          (result['duplicates'] as int) < 0 ||
+          result['imported'] + result['duplicates'] != _selected.length) {
+        throw const ContactsException(
+          'CRM did not confirm the import result. Refresh your contacts before trying again.',
+        );
+      }
+      if (mounted) Navigator.pop(context, {...result, 'source': _source});
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     } finally {
@@ -130,6 +210,8 @@ class _ContactImportState extends State<ContactImport> {
     _source = value;
     _preview = null;
     _filename = null;
+    _fileBody = null;
+    _mappingDirty = false;
     _selected.clear();
     _error = null;
   });
@@ -224,7 +306,7 @@ class _ContactImportState extends State<ContactImport> {
         'facebook' =>
           'Choose friends.json from your Facebook information export, or a contacts CSV. Names are imported; emails and phone numbers are included only if present in the file.',
         _ =>
-          'Use a CSV or Excel workbook with Name, Phone, Email, Status, Company, Notes and Tags columns. We’ll read the first worksheet and show you a preview.',
+          'Upload Excel (.xlsx), CSV or TSV contacts. Common columns are matched automatically. Choose a worksheet, adjust column matches, then import your contacts together.',
       }, style: const TextStyle(color: CrmStyle.muted, fontSize: 13, height: 1.7)),
       const SizedBox(height: 22),
       Container(
@@ -293,13 +375,25 @@ class _ContactImportState extends State<ContactImport> {
               label: const Text('Use KORLIX Email contacts'),
             ),
           if (_source == 'spreadsheet')
+            OutlinedButton.icon(
+              onPressed: _busy
+                  ? null
+                  : () => _downloadCsv(
+                      'Korlix-CRM-contacts-template.csv',
+                      'Name,Phone,Email,Status,Company,Notes,Tags,Follow Up On\r\n',
+                    ),
+              icon: const Icon(Icons.download_outlined, size: 16),
+              label: const Text('Download CSV template'),
+            ),
+          if (_source == 'spreadsheet')
             TextButton.icon(
               onPressed: _busy
                   ? null
                   : () async {
                       await Clipboard.setData(
                         const ClipboardData(
-                          text: 'Name,Phone,Email,Status,Company,Notes,Tags\n',
+                          text:
+                              'Name,Phone,Email,Status,Company,Notes,Tags,Follow Up On\n',
                         ),
                       );
                       if (mounted) {
@@ -317,6 +411,184 @@ class _ContactImportState extends State<ContactImport> {
       ),
     ],
   );
+  Widget _spreadsheetOptions() {
+    final sheet = crmMap(_preview?['spreadsheet']);
+    if (sheet.isEmpty) return const SizedBox.shrink();
+    final columns = crmRows(sheet['columns']);
+    final sheets = (sheet['sheets'] as List? ?? []).cast<String>();
+    const fields = {
+      'name': 'Full name',
+      'first_name': 'First name',
+      'last_name': 'Last name',
+      'email': 'Email',
+      'phone': 'Phone',
+      'category': 'Status',
+      'company': 'Company',
+      'notes': 'Notes',
+      'tags': 'Tags',
+      'follow_up_on': 'Follow-up date',
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (sheets.length > 1) ...[
+          DropdownButtonFormField<String>(
+            key: ValueKey('worksheet-$_previewRevision'),
+            initialValue: sheet['worksheet'] as String?,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Excel worksheet'),
+            items: [
+              for (final name in sheets)
+                DropdownMenuItem(
+                  value: name,
+                  child: Text(name, overflow: TextOverflow.ellipsis),
+                ),
+            ],
+            onChanged: _busy
+                ? null
+                : (name) {
+                    if (name != null) _refreshSpreadsheet(worksheet: name);
+                  },
+          ),
+          const SizedBox(height: 12),
+        ],
+        Material(
+          color: Colors.transparent,
+          child: ExpansionTile(
+            key: ValueKey('column-options-${sheet['needsMapping']}'),
+            initiallyExpanded: sheet['needsMapping'] == true,
+            tilePadding: EdgeInsets.zero,
+            title: const Text(
+              'Match spreadsheet columns',
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+            ),
+            subtitle: Text(
+              sheet['needsMapping'] == true
+                  ? 'Choose a name, email or phone column to continue.'
+                  : 'Columns matched automatically. Adjust them here.',
+              style: const TextStyle(fontSize: 12, color: CrmStyle.muted),
+            ),
+            children: [
+              DropdownButtonFormField<int>(
+                key: ValueKey('header-row-$_previewRevision'),
+                initialValue: _headerRow,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Row containing column names',
+                ),
+                items: [
+                  for (final row in crmRows(sheet['headerRows']))
+                    DropdownMenuItem<int>(
+                      value: row['row'] as int,
+                      child: Text(
+                        'Row ${row['row']}: ${row['label']}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
+                onChanged: _busy
+                    ? null
+                    : (row) => setState(() {
+                        _headerRow = row;
+                        _mapping = {};
+                        _mappingDirty = true;
+                      }),
+              ),
+              const SizedBox(height: 14),
+              LayoutBuilder(
+                builder: (context, constraints) => Wrap(
+                  spacing: 12,
+                  runSpacing: 14,
+                  children: [
+                    for (final field in fields.entries)
+                      SizedBox(
+                        width: constraints.maxWidth < 500
+                            ? constraints.maxWidth
+                            : (constraints.maxWidth - 12) / 2,
+                        child: DropdownButtonFormField<int>(
+                          key: ValueKey(
+                            'column-${field.key}-$_previewRevision-$_headerRow',
+                          ),
+                          initialValue: _mapping[field.key] as int? ?? -1,
+                          isExpanded: true,
+                          decoration: InputDecoration(labelText: field.value),
+                          items: [
+                            const DropdownMenuItem(
+                              value: -1,
+                              child: Text('Do not import'),
+                            ),
+                            for (final column in columns)
+                              DropdownMenuItem<int>(
+                                value: column['index'] as int,
+                                child: Text(
+                                  '${column['label']} (${(column['index'] as int) + 1})',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                          ],
+                          onChanged: _busy
+                              ? null
+                              : (index) => setState(() {
+                                  _mapping[field.key] = index == -1
+                                      ? null
+                                      : index;
+                                  _mappingDirty = true;
+                                }),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              DropdownButtonFormField<String>(
+                key: ValueKey('default-category-$_previewRevision'),
+                initialValue: _defaultCategory,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Status when the spreadsheet leaves it blank',
+                ),
+                items: [
+                  for (final category in contactCategories)
+                    DropdownMenuItem(
+                      value: category,
+                      child: Text(contactLabel(category)),
+                    ),
+                ],
+                onChanged: _busy
+                    ? null
+                    : (category) => setState(() {
+                        _defaultCategory = category!;
+                        _mappingDirty = true;
+                      }),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Use YYYY-MM-DD for follow-up dates. Keep phone numbers as text to preserve country codes and leading zeros.',
+                style: TextStyle(fontSize: 12, color: CrmStyle.muted),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _busy ? null : () => _refreshSpreadsheet(),
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('Update preview'),
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+        if (_mappingDirty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 10),
+            child: Text(
+              'Update the preview to apply your column changes before importing.',
+              style: TextStyle(color: CrmStyle.gold, fontSize: 12),
+            ),
+          ),
+        const SizedBox(height: 12),
+      ],
+    );
+  }
+
   Widget _reviewStep() => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
@@ -345,6 +617,7 @@ class _ContactImportState extends State<ContactImport> {
         ],
       ),
       const SizedBox(height: 20),
+      _spreadsheetOptions(),
       Wrap(
         spacing: 8,
         runSpacing: 8,
@@ -362,7 +635,7 @@ class _ContactImportState extends State<ContactImport> {
       ),
       const SizedBox(height: 15),
       const Text(
-        'Select the people to add. Existing contacts are kept; matching email addresses or phone numbers are skipped.',
+        'All valid contacts are selected. Existing CRM contacts are kept; matching email addresses or phone numbers are skipped when you import.',
         style: TextStyle(color: CrmStyle.muted, fontSize: 12, height: 1.7),
       ),
       const SizedBox(height: 14),
@@ -437,21 +710,34 @@ class _ContactImportState extends State<ContactImport> {
         ),
       ),
       if ((_preview!['errors'] as List? ?? []).isNotEmpty)
-        ExpansionTile(
-          title: const Text(
-            'Rows to fix',
-            style: TextStyle(fontSize: 12, color: CrmStyle.gold),
-          ),
-          children: [
-            for (final e in (_preview!['errors'] as List).take(30))
-              ListTile(
-                dense: true,
-                title: Text(
-                  'Row ${e['row']}: ${e['message']}',
-                  style: const TextStyle(fontSize: 12),
-                ),
+        Material(
+          color: Colors.transparent,
+          child: ExpansionTile(
+            title: const Text(
+              'Rows to fix',
+              style: TextStyle(fontSize: 12, color: CrmStyle.gold),
+            ),
+            children: [
+              TextButton.icon(
+                onPressed: _busy
+                    ? null
+                    : () => _downloadCsv(
+                        'Korlix-CRM-rows-to-fix.csv',
+                        'Row,Issue\r\n${crmRows(_preview!['errors']).map((e) => '${e['row']},"${e['message'].toString().replaceAll('"', '""')}"').join('\r\n')}\r\n',
+                      ),
+                icon: const Icon(Icons.download_outlined, size: 16),
+                label: const Text('Download all row issues'),
               ),
-          ],
+              for (final e in (_preview!['errors'] as List).take(30))
+                ListTile(
+                  dense: true,
+                  title: Text(
+                    'Row ${e['row']}: ${e['message']}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                ),
+            ],
+          ),
         ),
       TextButton.icon(
         onPressed: _busy
@@ -568,24 +854,26 @@ class _ContactImportState extends State<ContactImport> {
                 decoration: const BoxDecoration(
                   border: Border(top: BorderSide(color: CrmStyle.line)),
                 ),
-                child: Row(
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 10,
+                  runSpacing: 8,
                   children: [
                     if (!small)
-                      const Expanded(
-                        child: Text(
-                          'Importing does not start outreach.',
-                          style: TextStyle(color: CrmStyle.muted, fontSize: 11),
-                        ),
+                      const Text(
+                        'Importing does not start outreach.',
+                        style: TextStyle(color: CrmStyle.muted, fontSize: 11),
                       ),
-                    if (small) const Spacer(),
                     TextButton(
                       onPressed: _busy ? null : () => Navigator.pop(context),
                       child: const Text('Cancel'),
                     ),
                     if (review) ...[
-                      const SizedBox(width: 10),
                       FilledButton(
-                        onPressed: _busy || _selected.isEmpty ? null : _save,
+                        onPressed: _busy || _mappingDirty || _selected.isEmpty
+                            ? null
+                            : _save,
                         child: Text(
                           _busy
                               ? 'Importing…'
