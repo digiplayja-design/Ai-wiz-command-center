@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart' as fp;
 import 'package:flutter/foundation.dart';
@@ -27,7 +26,7 @@ const String _kKorlixPortraitBackendOverrideUrl = String.fromEnvironment(
 
 const String _kKorlixPortraitPreviewEndpoint =
     _kKorlixPortraitBackendOverrideDeclared
-    ? '${_kKorlixPortraitBackendOverrideUrl}/api/image/improve'
+    ? '$_kKorlixPortraitBackendOverrideUrl/api/image/improve'
     : 'https://chee-chai-chee-backend.onrender.com/api/image/improve';
 
 class PreviewScreen extends StatefulWidget {
