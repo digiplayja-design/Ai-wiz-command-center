@@ -11,6 +11,7 @@ import 'package:ai_wiz_command_center/live_convo/korlix_live_convo_test_screen.d
 import 'package:ai_wiz_command_center/contacts_crm/contacts_client.dart';
 import 'package:ai_wiz_command_center/contacts_crm/crm_voice.dart';
 import 'package:ai_wiz_command_center/contacts_crm/crm_voice_panel.dart';
+import 'package:ai_wiz_command_center/social/social_call_background.dart';
 
 class _VoiceObservedFake extends Fake {
   @override
@@ -159,7 +160,36 @@ class _VoicePeer extends _VoiceObservedFake implements rtc.RTCPeerConnection {
   }
 }
 
+// Widget tests have no native background-audio service. Keep that device I/O
+// deterministic while exercising the real connection and cleanup lifecycle.
+class _VoiceBackground extends SocialCallBackground {
+  _VoiceBackground() : super(kind: 'rici');
+  int starts = 0, stops = 0;
+
+  @override
+  Future<bool> start(String id) async {
+    starts++;
+    ready = true;
+    return true;
+  }
+
+  @override
+  Future<void> stop() async {
+    stops++;
+    ready = false;
+  }
+}
+
 class _VoiceIo extends K136sLiveConvoIo {
+  final backgrounds = <_VoiceBackground>[];
+
+  @override
+  SocialCallBackground createBackgroundSession() {
+    final background = _VoiceBackground();
+    backgrounds.add(background);
+    return background;
+  }
+
   final callbackFailures = <String>[];
   void expectCallback(Object? actual, Object? matcher) {
     try {
@@ -407,6 +437,8 @@ Future<void> _screen(
                       f.io.streams.single.audio.stops > 0 &&
                       !f.io.streams.single.audio.enabled &&
                       f.io.peers.single.closes > 0 &&
+                      f.io.backgrounds.single.stops > 0 &&
+                      !f.io.backgrounds.single.ready &&
                       f.usageReports.any((x) => x['ended'] == true);
                 },
                 child: const Text('Open voice'),
@@ -421,6 +453,8 @@ Future<void> _screen(
         await _finish(t, _stage(t).onStart!());
         await _pump(t);
         expect(_stage(t).connected, isTrue);
+        expect(f.io.backgrounds.single.starts, 1);
+        expect(f.io.backgrounds.single.ready, isTrue);
         f.spokenDone();
         await body(f);
       } finally {
@@ -437,6 +471,7 @@ Future<void> _screen(
   );
   expect(t.takeException(), isNull);
   expect(f.io.callbackFailures, isEmpty);
+  expect(f.io.backgrounds.every((b) => b.stops > 0 && !b.ready), isTrue);
 }
 
 void main() {

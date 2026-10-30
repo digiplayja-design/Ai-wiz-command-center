@@ -6,6 +6,7 @@ on:
     paths:
       - lib/contacts_crm/**
       - test/contacts_crm/**
+      - test/live_convo/crm_voice_lifecycle_test.dart
       - .github/workflows/crm-spreadsheet-validation.yml
 permissions:
   contents: read
@@ -45,7 +46,7 @@ jobs:
       - name: Install pinned dependencies
         run: flutter pub get --enforce-lockfile
       - name: Analyze CRM changes
-        run: flutter analyze --no-pub lib/contacts_crm/contact_import.dart lib/contacts_crm/contacts_client.dart lib/contacts_crm/contacts_screen.dart lib/contacts_crm/contacts_style.dart test/contacts_crm/spreadsheet_import_test.dart
+        run: flutter analyze --no-pub lib/contacts_crm/contact_import.dart lib/contacts_crm/contacts_client.dart lib/contacts_crm/contacts_screen.dart lib/contacts_crm/contacts_style.dart test/contacts_crm/spreadsheet_import_test.dart test/live_convo/crm_voice_lifecycle_test.dart
       - name: Validate imports and existing CRM flows
         run: flutter test --no-pub --reporter expanded test/contacts_crm test/live_convo/crm_voice_lifecycle_test.dart
       - name: Build web application
