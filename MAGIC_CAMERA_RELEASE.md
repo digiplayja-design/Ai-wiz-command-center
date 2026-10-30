@@ -92,10 +92,34 @@ All three Flutter package roots resolve the same patched plugin. See
 Seven native iOS regressions exercise the production helper for different front
 sensor/output baselines, all orientations, repeated updates, lens switching,
 mirroring and unsupported connections. The iOS validation job runs these tests
-on a simulator in addition to building the app. Build/upload evidence will be
-recorded after validation. Physical front-camera preview and final photo
-orientation still need confirmation on the affected device. Backend PR #35
-remains separate and undeployed as described above.
+on a simulator in addition to building the app. All seven native tests passed
+with zero failures in [GitHub Actions run 41008061582](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41008061582)
+at source `ae144786f0cabcb6d232974e3afa2e61ba13c9ff`. Both iOS and Android jobs
+passed, including Android/web/hub builds, 14 shared-camera tests, standalone
+and hub tests, all 12 release-verification checks and rejection of an unsigned
+Android release. Shared and standalone local analysis are clean.
+
+Signed `1.0.0 (6)` passed IPA verification and Apple upload in
+[Codemagic build 6ae429e2efa74786046ef904](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae429e2efa74786046ef904),
+using that exact source. Apple reported `UPLOAD SUCCEEDED with no errors` at
+2026-10-30 05:30:16 UTC, delivery UUID `d1e67275-9ff2-4f54-ae28-e8833075bf52`.
+The 32,862,558-byte IPA has SHA-256
+`4307dccdb3881affd483d170fd06bf078aa73a6a03fc676eaff6721788478057`.
+Apple processing is **Complete**, and build 6 is assigned to the existing
+[Magic Camera Internal group](https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6828697639/testflight/groups/55161f65-8fac-43c4-b3d9-0d56c3efbf9c/builds)
+with status **Testing**. The group contains the same one approved tester and
+three builds (4, 5 and 6). Automatic distribution remains disabled. No new testers
+were added and no public App Store submission was made.
+
+Review artifacts: [iOS simulator](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41008061582/artifacts/12957025798),
+[native XCTest results](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41008061582/artifacts/12956881498),
+[standalone Android/web](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41008061582/artifacts/12956108361)
+and [hub Android](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41008061582/artifacts/12956752666).
+Android APKs are debug test builds. Artifacts expire on 2027-01-28.
+
+Physical front-camera preview and final photo orientation still need confirmation
+on the affected device. Backend PR #35 remains separate and undeployed as
+described above.
 
 ## Deliberately not advertised as complete
 
