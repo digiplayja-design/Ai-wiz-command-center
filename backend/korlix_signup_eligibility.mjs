@@ -92,7 +92,7 @@ export function createKorlixSignupHandler({
       if (password.length < 6) {
         return res.status(400).json({error: 'Password must be at least 6 characters.'});
       }
-      if (['receipt_wiz', 'korlix_messenger'].includes(body.client_app)) consumeReceiptSignup(email);
+      if (['receipt_wiz', 'korlix_messenger', 'magic_camera'].includes(body.client_app)) consumeReceiptSignup(email);
 
       // Only new mobile clients opt in. Older app builds and web signup keep
       // their current redirect until they support receiving app links.
@@ -112,7 +112,7 @@ export function createKorlixSignupHandler({
           } : {}),
         },
       });
-      if (['receipt_wiz', 'korlix_messenger'].includes(body.client_app) && receiptWizExistingAccount(data, error)) {
+      if (['receipt_wiz', 'korlix_messenger', 'magic_camera'].includes(body.client_app) && receiptWizExistingAccount(data, error)) {
         return existingKorlixAccount(res);
       }
       if (error) {
