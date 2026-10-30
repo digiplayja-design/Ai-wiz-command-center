@@ -3,104 +3,8 @@ import { zipDirectory } from "../archive_security.mjs";
 import { ContactError, fail, normalizeContact, SOURCES } from "./core.mjs";
 const MAX_ROWS = 1000,
   MAX_BYTES = 2 * 1024 * 1024;
-const key = (v) =>
-  String(v ?? "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "");
-export function parseCsv(text) {
-  const rows = [];
-  let row = [],
-    cell = "",
-    quoted = false,
-    closed = false;
-  text = String(text).replace(/^\uFEFF/, "");
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (quoted) {
-      if (c === '"') {
-        if (text[i + 1] === '"') {
-          cell += '"';
-          i++;
-        } else {
-          quoted = false;
-          closed = true;
-        }
-      } else cell += c;
-    } else if (c === '"' && !cell && !closed) quoted = true;
-    else if (c === "," || c === "\t") {
-      row.push(cell);
-      cell = "";
-      closed = false;
-    } else if (c === "\r" || c === "\n") {
-      if (c === "\r" && text[i + 1] === "\n") i++;
-      row.push(cell);
-      if (row.some((x) => x.trim())) rows.push(row);
-      row = [];
-      cell = "";
-      closed = false;
-      if (rows.length > MAX_ROWS + 1)
-        fail("Import up to 1,000 contacts at a time.");
-    } else {
-      if (closed && c.trim()) fail("The CSV contains an invalid quoted field.");
-      cell += c;
-    }
-  }
-  if (quoted) fail("The CSV has an unfinished quoted field.");
-  row.push(cell);
-  if (row.some((x) => x.trim())) rows.push(row);
-  return rows;
-}
-function records(rows) {
-  const header = rows.shift()?.map(key) || [];
-  const field = (row, names) => {
-    for (const name of names) {
-      const i = header.indexOf(name);
-      if (i >= 0 && row[i]) return String(row[i]);
-    }
-    return "";
-  };
-  if (
-    !header.some((x) =>
-      [
-        "name",
-        "fullname",
-        "displayname",
-        "firstname",
-        "givenname",
-        "email",
-        "emailaddress",
-        "email1value",
-      ].includes(x),
-    )
-  )
-    fail("Use a header row with Name, Phone, Email and Status columns.");
-  return rows.map((r) => ({
-    name:
-      field(r, ["name", "fullname", "displayname"]) ||
-      [
-        field(r, ["firstname", "givenname"]),
-        field(r, ["lastname", "familyname"]),
-      ]
-        .filter(Boolean)
-        .join(" ") ||
-      field(r, ["email", "emailaddress", "email1value"]),
-    phone: field(r, [
-      "phone",
-      "telephone",
-      "telephonenumber",
-      "phonenumber",
-      "mobilephone",
-      "mobile",
-      "phone1value",
-      "businessphone",
-    ]),
-    email: field(r, ["email", "emailaddress", "email1value", "email1address"]),
-    category: field(r, ["status", "category"]) || "unknown",
-    company: field(r, ["company", "organization", "organization1name"]),
-    notes: field(r, ["notes"]),
-    tags: field(r, ["tags"]).split(";").filter(Boolean),
-  }));
-}
+import { parseCsv, decodeSpreadsheetText, workbookTable, spreadsheetRecords } from './spreadsheet.mjs';
+export { parseCsv } from './spreadsheet.mjs';
 function vcards(text) {
   const unescape = (s) =>
     s.replace(/\\[nN]/g, "\n").replace(/\\([,;\\])/g, "$1");
@@ -201,7 +105,7 @@ function checkXlsxZip(b) {
 export async function previewImport(body, { loadWorkbook } = {}) {
   if (!SOURCES.includes(body.source) || body.source === "manual")
     fail("Choose an import source.");
-  let rows = [];
+  let rows = [], rowNumbers = [], spreadsheet;
   if (Array.isArray(body.contacts)) {
     rows = body.contacts;
   } else {
@@ -226,22 +130,15 @@ export async function previewImport(body, { loadWorkbook } = {}) {
             await w.xlsx.load(b);
             return w;
           })();
-      const sheet = workbook.worksheets[0];
-      if (!sheet) fail("This workbook has no worksheets.");
-      if (sheet.rowCount > MAX_ROWS + 1 || sheet.columnCount > 100)
-        fail("Use at most 1,000 rows and 100 columns.");
-      const values = [];
-      sheet.eachRow((r) =>
-        values.push(
-          Array.from(
-            { length: sheet.columnCount },
-            (_, i) => r.getCell(i + 1).text,
-          ),
-        ),
-      );
-      rows = records(values);
-    } else if (["csv", "tsv"].includes(ext))
-      rows = records(parseCsv(b.toString("utf8")));
+      const { values, sheets, worksheet } = workbookTable(workbook, body.worksheet);
+      const parsed = spreadsheetRecords(values, body, { sheets, worksheet });
+      ({ rows, rowNumbers } = parsed);
+      spreadsheet = parsed.metadata;
+    } else if (["csv", "tsv"].includes(ext)) {
+      const parsed = spreadsheetRecords(parseCsv(decodeSpreadsheetText(b), ext === 'tsv' ? '\t' : undefined), body);
+      ({ rows, rowNumbers } = parsed);
+      spreadsheet = parsed.metadata;
+    }
     else if (["vcf", "vcard"].includes(ext)) rows = vcards(b.toString("utf8"));
     else if (ext === "json") {
       try {
@@ -252,7 +149,7 @@ export async function previewImport(body, { loadWorkbook } = {}) {
       }
     } else fail("Choose CSV, Excel (.xlsx), vCard (.vcf) or contacts JSON.");
   }
-  if (!rows.length) fail("No contacts were found in this file.");
+  if (!rows.length && !spreadsheet) fail("No contacts were found in this file.");
   if (rows.length > MAX_ROWS) fail("Import up to 1,000 contacts at a time.");
   const contacts = [],
     errors = [];
@@ -284,8 +181,8 @@ export async function previewImport(body, { loadWorkbook } = {}) {
       if (!c.email && !c.phone_key) names.add(nameKey);
       contacts.push(c);
     } catch (e) {
-      errors.push({ row: i + 1, message: e.message });
+      errors.push({ row: rowNumbers[i] ?? i + 1, message: e.message });
     }
   });
-  return { contacts, errors, duplicates, total: rows.length };
+  return { contacts, errors, duplicates, total: rows.length, ...(spreadsheet ? { spreadsheet } : {}) };
 }

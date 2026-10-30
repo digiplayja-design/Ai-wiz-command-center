@@ -100,7 +100,8 @@ export function registerContactsCrm(
         emailAgentId:
           binding.configured && binding.ownerUid === u ? binding.agentId : null,
         outboundCallingEnabled: false,
-        imports: ["csv", "xlsx", "vcf", "json", "phone_picker"],
+        imports: ["csv", "tsv", "xlsx", "vcf", "json", "phone_picker"],
+        spreadsheetMapping: true,
       }),
     ),
   );
