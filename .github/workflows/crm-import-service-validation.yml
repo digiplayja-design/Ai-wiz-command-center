@@ -1,0 +1,29 @@
+name: CRM spreadsheet service validation
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/crm-import-service-20261030]
+    paths:
+      - backend/contacts_crm/**
+      - backend/test/crm_spreadsheet_import.test.mjs
+      - .github/workflows/crm-import-service-validation.yml
+permissions:
+  contents: read
+jobs:
+  import-regressions:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci --ignore-scripts
+        working-directory: backend
+      - name: Verify import parsing, actual persistence and document limits
+        working-directory: backend
+        run: node --test test/crm_spreadsheet_import.test.mjs test/contacts_crm.test.mjs test/document_security.test.mjs
