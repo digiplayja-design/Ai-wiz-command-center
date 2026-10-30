@@ -29,7 +29,9 @@ def verify_info(info, bundle_id, version, build):
         if not isinstance(purpose, str) or not purpose.strip():
             raise ValueError("IPA is missing NSLocationWhenInUseUsageDescription for the native media picker")
     if bundle_id == "com.korlixdeveloper.magiccamera":
-        for key in ["NSCameraUsageDescription", "NSMicrophoneUsageDescription", "NSSpeechRecognitionUsageDescription"]:
+        for key in ["NSCameraUsageDescription", "NSMicrophoneUsageDescription",
+                    "NSSpeechRecognitionUsageDescription", "NSPhotoLibraryUsageDescription",
+                    "NSPhotoLibraryAddUsageDescription"]:
             purpose = info.get(key)
             if not isinstance(purpose, str) or not purpose.strip():
                 raise ValueError(f"Magic Camera IPA is missing {key}")

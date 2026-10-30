@@ -4,6 +4,8 @@
 <dict>
 	<key>ITSAppUsesNonExemptEncryption</key><false/>
 	<key>NSCameraUsageDescription</key><string>Take a private photo to transform with your chosen magic look.</string>
+	<key>NSPhotoLibraryUsageDescription</key><string>Access Photos when you choose a photo-library action to save or share your finished Magic Camera image.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key><string>Save your finished Magic Camera images to Photos when you choose Save Image.</string>
 	<key>NSMicrophoneUsageDescription</key><string>Dictate your creative idea when you choose the microphone.</string>
 	<key>NSSpeechRecognitionUsageDescription</key><string>Turn your spoken idea into a Magic Camera prompt.</string>
 	<key>NSLocationWhenInUseUsageDescription</key><string>Some photo pickers include location metadata. Magic Camera removes it before processing.</string>

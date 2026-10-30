@@ -1,7 +1,7 @@
 name: magic_camera
 description: KORLIX Magic Camera — imagine, capture, reveal.
 publish_to: none
-version: 1.0.0+3
+version: 1.0.0+4
 environment:
   sdk: ^3.13.5
 dependencies:

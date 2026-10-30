@@ -123,7 +123,8 @@ class ReleaseIdentityTests(unittest.TestCase):
         info = {"CFBundleIdentifier": bundle, "CFBundleShortVersionString": "1.0.0",
                 "CFBundleVersion": "2", "CFBundleSupportedPlatforms": ["iPhoneOS"]}
         purposes = ["NSCameraUsageDescription", "NSMicrophoneUsageDescription",
-                    "NSSpeechRecognitionUsageDescription", "NSLocationWhenInUseUsageDescription"]
+                    "NSSpeechRecognitionUsageDescription", "NSLocationWhenInUseUsageDescription",
+                    "NSPhotoLibraryUsageDescription", "NSPhotoLibraryAddUsageDescription"]
         complete = {**info, **{key: "Purpose for the feature." for key in purposes}}
         verify.verify_info(complete, bundle, "1.0.0", "2")
         for key in purposes:
