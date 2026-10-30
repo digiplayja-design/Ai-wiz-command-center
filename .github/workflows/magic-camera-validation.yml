@@ -22,6 +22,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
       - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
         with:
           flutter-version: '3.47.7'
@@ -57,6 +58,12 @@ jobs:
             apps/magic_camera/build/app/outputs/flutter-apk/app-debug.apk
             apps/magic_camera/build/web
             /tmp/korlix-magic-home.png
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: korlix-ai-hub-magic-camera-review
+          path: build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: warn
   ios:
     runs-on: macos-26

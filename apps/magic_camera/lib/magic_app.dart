@@ -106,10 +106,13 @@ class _HomeState extends State<_Home> {
     super.dispose();
   }
 
-  void _plan() => Navigator.push(
-    context,
-    MaterialPageRoute<void>(builder: (_) => MagicPlan(billing: _billing)),
-  );
+  Future<void> _plan() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(builder: (_) => MagicPlan(billing: _billing)),
+    );
+  }
+
   void _account() => Navigator.push(
     context,
     MaterialPageRoute<void>(

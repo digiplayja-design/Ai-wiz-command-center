@@ -48,13 +48,8 @@ class MagicClient extends ChangeNotifier {
 
   String get accountScope {
     try {
-      final h = headers()['Authorization'] ?? headers()['authorization'];
-      final claims = jsonDecode(
-        utf8.decode(
-          base64Url.decode(base64Url.normalize(h!.substring(7).split('.')[1])),
-        ),
-      ) as Map;
-      return jsonEncode([claims['iss'], claims['sub']]);
+      final identity = jsonDecode(_scope!) as List;
+      return jsonEncode(identity.take(2).toList());
     } catch (_) {
       return 'signed-out';
     }
@@ -115,7 +110,8 @@ class MagicClient extends ChangeNotifier {
     return Map<String, dynamic>.from(jsonDecode((await _send(q)).body) as Map);
   }
 
-  Future<Map<String, dynamic>> snapshot() => request('');
+  Future<Map<String, dynamic>> snapshot({int offset = 0}) =>
+      request(offset == 0 ? '' : '?offset=$offset');
   Future<Map<String, dynamic>> job(String id) async =>
       (await request('/$id'))['job'] as Map<String, dynamic>;
   Future<Map<String, dynamic>> generate(
@@ -133,8 +129,10 @@ class MagicClient extends ChangeNotifier {
         as Map<String, dynamic>;
   }
 
-  Future<Uint8List> image(String id) async =>
-      (await _send(http.Request('GET', uri('/$id/image')))).bodyBytes;
+  Future<Uint8List> image(String id, {bool preview = false}) async =>
+      (await _send(
+        http.Request('GET', uri('/$id/image${preview ? '?preview=1' : ''}')),
+      )).bodyBytes;
   Future<void> report(String id, String reason, String details) async {
     await request(
       '/$id/report',

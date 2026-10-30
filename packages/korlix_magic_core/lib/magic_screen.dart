@@ -23,7 +23,8 @@ class MagicScreen extends StatefulWidget {
   });
   final MagicClient client;
   final Future<bool> Function() ensureConsent;
-  final VoidCallback? onAccount, onUpgrade;
+  final VoidCallback? onAccount;
+  final FutureOr<void> Function()? onUpgrade;
   final bool standalone;
   @override
   State<MagicScreen> createState() => _MagicScreenState();
@@ -46,7 +47,9 @@ class _MagicScreenState extends State<MagicScreen> with WidgetsBindingObserver {
       _listening = false,
       _starting = false,
       _haptics = true;
-  int _tab = 0, _timer = 0;
+  int _tab = 0, _timer = 0, _galleryVersion = 0;
+  int? _nextOffset;
+  bool _loadingMore = false;
   String get _prefsKey => 'magic_camera_${widget.client.accountScope}';
   Map<String, dynamic> get _options => {
     'preset': _preset,
@@ -96,12 +99,14 @@ class _MagicScreenState extends State<MagicScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _refresh() async {
+    final version = ++_galleryVersion;
     try {
       final data = await widget.client.snapshot();
-      if (mounted && widget.client.valid) {
+      if (mounted && widget.client.valid && version == _galleryVersion) {
         setState(() {
           _plan = Map<String, dynamic>.from(data['plan'] as Map);
           _jobs = (data['jobs'] as List).cast<Map<String, dynamic>>();
+          _nextOffset = data['next_offset'] as int?;
           _available = data['available'] == true;
           _error = null;
         });
@@ -114,6 +119,32 @@ class _MagicScreenState extends State<MagicScreen> with WidgetsBindingObserver {
       }
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _loadMore() async {
+    final offset = _nextOffset, version = _galleryVersion;
+    if (offset == null || _loadingMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      final data = await widget.client.snapshot(offset: offset);
+      if (!mounted || !widget.client.valid || version != _galleryVersion) {
+        return;
+      }
+      setState(() {
+        final known = _jobs.map((j) => j['id']).toSet();
+        _jobs = [
+          ..._jobs,
+          ...(data['jobs'] as List).cast<Map<String, dynamic>>().where(
+            (j) => known.add(j['id']),
+          ),
+        ];
+        _nextOffset = data['next_offset'] as int?;
+      });
+    } catch (_) {
+      _notice('Older photos could not be loaded. Please try again.');
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
     }
   }
 
@@ -181,7 +212,9 @@ class _MagicScreenState extends State<MagicScreen> with WidgetsBindingObserver {
         ],
       ),
     );
-    if (name == null || name.isEmpty) return;
+    if (name == null || name.isEmpty || !mounted || !widget.client.valid) {
+      return;
+    }
     final next = [
       {'name': name, ..._options},
       ..._saved,
@@ -645,66 +678,72 @@ class _MagicScreenState extends State<MagicScreen> with WidgetsBindingObserver {
         ),
     ],
   );
-  Widget _gallery() => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      _section('ONLY THE MAGIC', 'Your private gallery'),
-      const Text(
-        'Your completed photos stay here even when your allowance is used.',
-        style: TextStyle(color: magicMuted),
+  List<Widget> _gallery() => [
+    _section('ONLY THE MAGIC', 'Your private gallery'),
+    const Text(
+      'Your completed photos stay here even when your allowance is used.',
+      style: TextStyle(color: magicMuted),
+    ),
+    const SizedBox(height: 20),
+    if (_jobs.isEmpty)
+      const Padding(
+        padding: EdgeInsets.symmetric(vertical: 45),
+        child: Text('Your first magic moment is waiting to happen.'),
       ),
-      const SizedBox(height: 20),
-      if (_jobs.isEmpty)
-        const Padding(
-          padding: EdgeInsets.symmetric(vertical: 45),
-          child: Text('Your first magic moment is waiting to happen.'),
-        ),
-      for (final job in _jobs)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 15),
-          child: Card(
-            color: magicPanel,
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                if (job['state'] == 'ready')
-                  _GalleryImage(
-                    client: widget.client,
-                    id: job['id'] as String,
-                    onTap: () => _openResult(job),
-                  ),
-                ListTile(
-                  leading: Icon(
-                    job['state'] == 'ready'
-                        ? Icons.auto_awesome
-                        : job['state'] == 'failed'
-                        ? Icons.info_outline
-                        : Icons.blur_circular,
-                    color: magicOrange,
-                  ),
-                  title: Text(_name(job)),
-                  subtitle: Text(
-                    job['state'] == 'ready'
-                        ? 'Saved privately'
-                        : job['state'] == 'failed'
-                        ? 'Could not complete · no credit used'
-                        : 'Magic in progress · tap to check',
-                  ),
+    for (final job in _jobs)
+      Padding(
+        key: ValueKey<String>(job['id'] as String),
+        padding: const EdgeInsets.only(bottom: 15),
+        child: Card(
+          color: magicPanel,
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              if (job['state'] == 'ready')
+                _GalleryImage(
+                  client: widget.client,
+                  id: job['id'] as String,
                   onTap: () => _openResult(job),
-                  trailing: job['state'] == 'ready'
-                      ? TextButton.icon(
-                          onPressed: () => _openResult(job, report: true),
-                          icon: const Icon(Icons.flag_outlined, size: 18),
-                          label: const Text('Report'),
-                        )
-                      : const Icon(Icons.chevron_right),
                 ),
-              ],
-            ),
+              ListTile(
+                leading: Icon(
+                  job['state'] == 'ready'
+                      ? Icons.auto_awesome
+                      : job['state'] == 'failed'
+                      ? Icons.info_outline
+                      : Icons.blur_circular,
+                  color: magicOrange,
+                ),
+                title: Text(_name(job)),
+                subtitle: Text(
+                  job['state'] == 'ready'
+                      ? 'Saved privately'
+                      : job['state'] == 'failed'
+                      ? 'Could not complete · no credit used'
+                      : 'Magic in progress · tap to check',
+                ),
+                onTap: () => _openResult(job),
+                trailing: job['state'] == 'ready'
+                    ? TextButton.icon(
+                        onPressed: () => _openResult(job, report: true),
+                        icon: const Icon(Icons.flag_outlined, size: 18),
+                        label: const Text('Report'),
+                      )
+                    : const Icon(Icons.chevron_right),
+              ),
+            ],
           ),
         ),
-    ],
-  );
+      ),
+    if (_nextOffset != null)
+      OutlinedButton.icon(
+        onPressed: _loadingMore ? null : _loadMore,
+        icon: const Icon(Icons.expand_more),
+        label: Text(
+          _loadingMore ? 'Loading older photos…' : 'Load older photos',
+        ),
+      ),
+  ];
   String _name(Map<String, dynamic> job) {
     final id = (job['options'] as Map?)?['preset'];
     for (final p in _presets) {
@@ -825,7 +864,10 @@ class _MagicScreenState extends State<MagicScreen> with WidgetsBindingObserver {
                         ),
                         if (widget.onUpgrade != null)
                           TextButton(
-                            onPressed: widget.onUpgrade,
+                            onPressed: () async {
+                              await widget.onUpgrade?.call();
+                              await _refresh();
+                            },
                             child: Text(
                               _plan['included'] == true ? 'Plan' : 'Upgrade',
                             ),
@@ -846,7 +888,7 @@ class _MagicScreenState extends State<MagicScreen> with WidgetsBindingObserver {
                 else if (_tab == 1)
                   _savedLooks()
                 else
-                  _gallery(),
+                  ..._gallery(),
               ],
             ),
           ),
@@ -892,7 +934,10 @@ class _GalleryImage extends StatefulWidget {
 }
 
 class _GalleryImageState extends State<_GalleryImage> {
-  late final Future<Uint8List> _bytes = widget.client.image(widget.id);
+  late final Future<Uint8List> _bytes = widget.client.image(
+    widget.id,
+    preview: true,
+  );
   @override
   Widget build(BuildContext context) => FutureBuilder<Uint8List>(
     future: _bytes,
@@ -905,6 +950,7 @@ class _GalleryImageState extends State<_GalleryImage> {
               width: double.infinity,
               fit: BoxFit.cover,
               semanticLabel: 'Saved magic photo',
+              cacheWidth: 640,
             ),
           )
         : SizedBox(

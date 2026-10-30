@@ -10,6 +10,8 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
+import 'package:image/image.dart' as img;
+import 'package:korlix_magic_core/reveal_clip.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:korlix_magic_core/magic_client.dart';
 import 'package:korlix_magic_core/magic_capture.dart';
@@ -50,6 +52,8 @@ class FakeClient extends MagicClient {
   int calls = 0;
   bool reportFails = false;
   int reports = 0;
+  bool paged = false;
+  final offsets = <int>[];
   @override
   Future<Map<String, dynamic>> generate(
     Uint8List bytes,
@@ -68,11 +72,20 @@ class FakeClient extends MagicClient {
     'options': opts,
   };
   @override
-  Future<Map<String, dynamic>> snapshot() async => {
-    'plan': {'name': 'free', 'remaining': 0, 'can_generate': false},
-    'jobs': [],
-    'available': true,
-  };
+  Future<Map<String, dynamic>> snapshot({int offset = 0}) async {
+    offsets.add(offset);
+    return {
+      'plan': {'name': 'free', 'remaining': 0, 'can_generate': false},
+      'jobs': paged
+          ? [
+              {'state': 'queued', 'options': opts, 'id': '$jobId-$offset'},
+            ]
+          : [],
+      'next_offset': paged && offset == 0 ? 100 : null,
+      'available': true,
+    };
+  }
+
   @override
   Future<void> report(String id, String reason, String details) async {
     reports++;
@@ -160,7 +173,10 @@ void main() {
       }
     }
   });
-  setUp(() => SharedPreferences.setMockInitialValues({}));
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+    rootBundle.evict('packages/korlix_magic_core/assets/presets.json');
+  });
   test('client binds multipart key, never puts capture bytes in a URL, and clears results after account switch', () async {
     var user = 'owner';
     final changed = ValueNotifier(0);
@@ -186,6 +202,8 @@ void main() {
     user = 'other';
     changed.value++;
     expect(c.valid, false);
+    expect(c.accountScope, contains('owner'));
+    expect(c.accountScope, isNot(contains('other')));
     expect(() => c.check(), throwsA(isA<MagicApiException>()));
     c.dispose();
     changed.dispose();
@@ -280,9 +298,70 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Resume animation'), findsOneWidget);
   });
+  test(
+    'shareable reveal is an animated GIF ending with the final artwork',
+    () async {
+      final source = img.Image(width: 36, height: 48);
+      img.fill(source, color: img.ColorRgb8(240, 90, 20));
+      final bytes = await makeRevealClip(
+        Uint8List.fromList(img.encodePng(source)),
+      );
+      final decoded = img.decodeGif(bytes)!;
+      expect(decoded.frames.length, 24);
+      expect(decoded.frames.first.getPixel(0, 0).r, lessThan(30));
+      final last = decoded.frames.last;
+      expect(
+        last.getPixel(last.width ~/ 2, last.height ~/ 2).r,
+        greaterThan(200),
+      );
+      expect(last.frameDuration, 2000);
+    },
+  );
+  testWidgets('gallery loads older results without duplicating current cards', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      await rootBundle.loadString(
+        'packages/korlix_magic_core/assets/presets.json',
+      );
+      await SharedPreferences.getInstance();
+    });
+    final client = FakeClient()..paged = true;
+    addTearDown(client.dispose);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: magicTheme(),
+        home: MagicScreen(
+          client: client,
+          ensureConsent: () async => true,
+          standalone: true,
+        ),
+      ),
+    );
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Gallery'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Load older photos'));
+    await tester.tap(find.text('Load older photos'));
+    await tester.pumpAndSettle();
+    expect(client.offsets, contains(100));
+    expect(find.text('Load older photos'), findsNothing);
+    expect(find.byKey(ValueKey('$jobId-0')), findsOneWidget);
+    expect(find.byKey(ValueKey('$jobId-100')), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+  });
   testWidgets(
     'phone layout renders real preset screen with no overflow or source image',
     (tester) async {
+      await tester.runAsync(() async {
+        await rootBundle.loadString(
+          'packages/korlix_magic_core/assets/presets.json',
+        );
+        await SharedPreferences.getInstance();
+      });
       tester.view.physicalSize = const Size(430, 932);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
