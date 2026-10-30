@@ -1,7 +1,7 @@
 name: magic_camera
 description: KORLIX Magic Camera — imagine, capture, reveal.
 publish_to: none
-version: 1.0.0+5
+version: 1.0.0+6
 environment:
   sdk: ^3.13.5
 dependencies:
@@ -36,3 +36,7 @@ flutter_launcher_icons:
     image_path: assets/korlix_logo.png
     background_color: '#07111F'
     theme_color: '#07111F'
+
+dependency_overrides:
+  camera_avfoundation:
+    path: ../../third_party/camera_avfoundation

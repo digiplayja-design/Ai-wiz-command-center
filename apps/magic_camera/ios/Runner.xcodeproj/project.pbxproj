@@ -16,6 +16,8 @@
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
+		B3C006000000000000000001 /* CameraConnectionOrientation.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C006000000000000000011 /* CameraConnectionOrientation.swift */; };
+		B3C006000000000000000002 /* CaptureConnection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3C006000000000000000012 /* CaptureConnection.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -59,6 +61,8 @@
 		97C146FD1CF9000F007C117D /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		97C147001CF9000F007C117D /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B3C006000000000000000011 /* CameraConnectionOrientation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CameraConnectionOrientation.swift; path = ../../../third_party/camera_avfoundation/darwin/camera_avfoundation/Sources/camera_avfoundation/CameraConnectionOrientation.swift; sourceTree = SOURCE_ROOT; };
+		B3C006000000000000000012 /* CaptureConnection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = CaptureConnection.swift; path = ../../../third_party/camera_avfoundation/darwin/camera_avfoundation/Sources/camera_avfoundation/CaptureConnection.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -77,6 +81,8 @@
 			isa = PBXGroup;
 			children = (
 				331C807B294A618700263BE5 /* RunnerTests.swift */,
+				B3C006000000000000000012 /* CaptureConnection.swift */,
+				B3C006000000000000000011 /* CameraConnectionOrientation.swift */,
 			);
 			path = RunnerTests;
 			sourceTree = "<group>";
@@ -274,6 +280,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */,
+				B3C006000000000000000002 /* CaptureConnection.swift in Sources */,
+				B3C006000000000000000001 /* CameraConnectionOrientation.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

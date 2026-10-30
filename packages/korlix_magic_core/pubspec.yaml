@@ -26,3 +26,7 @@ flutter:
   assets:
     - assets/presets.json
     - assets/korlix_magic.png
+
+dependency_overrides:
+  camera_avfoundation:
+    path: ../../third_party/camera_avfoundation

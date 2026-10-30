@@ -75,6 +75,28 @@ Backend PR #35 is **not merged or deployed**. The Render connection has no selec
 
 Physical-device follow-up: take new portrait and landscape photos with both lenses, reopen after backgrounding, rotate during a countdown, then check final display/save/share orientation. After the backend update is live, test hair needing grooming versus already groomed hair and shiny versus balanced skin. The finish instructions are model guidance; device behavior and real-image quality still need this visual check. Existing saved photos are not regenerated.
 
+## Build 6: sensor-aware front-camera orientation
+
+The build-5 physical-device follow-up found a sideways front-camera live preview
+on an iPhone 17 Pro Max, while the rear camera remained upright. The Dart view
+orientation was already synchronized; the native camera plugin still translated
+portrait into a fixed 90-degree rotation for every camera.
+
+Build 6 vendors `camera_avfoundation` 0.11.1 with a focused front-camera patch.
+AVFoundation's semantic orientation setter now resolves portrait/landscape for
+both the front video and photo connections, including their different sensor
+compensation. Rear-camera behavior and selfie mirroring retain upstream behavior.
+All three Flutter package roots resolve the same patched plugin. See
+`third_party/camera_avfoundation/KORLIX_PATCH.md` for provenance and removal criteria.
+
+Seven native iOS regressions exercise the production helper for different front
+sensor/output baselines, all orientations, repeated updates, lens switching,
+mirroring and unsupported connections. The iOS validation job runs these tests
+on a simulator in addition to building the app. Build/upload evidence will be
+recorded after validation. Physical front-camera preview and final photo
+orientation still need confirmation on the affected device. Backend PR #35
+remains separate and undeployed as described above.
+
 ## Deliberately not advertised as complete
 
 The proposed 10-photo $6.99 top-up needs consumable purchase verification and refund accounting before it can be offered. Rici's voiced countdown, portable style links, Astra-assisted complex planning, and segmentation/compositing to preserve original face pixels are future extensions. The current Preserve my face option supplies explicit generation constraints; it cannot guarantee identical facial pixels or zero distortion. There is no custom identity recognition or gender inference.

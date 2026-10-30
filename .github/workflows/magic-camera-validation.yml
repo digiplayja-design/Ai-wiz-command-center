@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [feature/korlix-magic-camera-20261030]
-    paths: ['packages/korlix_magic_core/**', 'apps/magic_camera/**', 'lib/**', 'pubspec.*', 'codemagic.yaml', 'scripts/*ios*.py', 'scripts/tests/test_ios_release.py', '.github/workflows/magic-camera*']
+    paths: ['packages/korlix_magic_core/**', 'third_party/camera_avfoundation/**', 'apps/magic_camera/**', 'lib/**', 'pubspec.*', 'codemagic.yaml', 'scripts/*ios*.py', 'scripts/tests/test_ios_release.py', '.github/workflows/magic-camera*']
 permissions:
   contents: read
 concurrency:
@@ -94,6 +94,23 @@ jobs:
           flutter build ios --simulator --debug --no-pub
           cd build/ios/iphonesimulator
           ditto -c -k --sequesterRsrc --keepParent Runner.app MagicCamera-Simulator.zip
+      - name: Test native camera orientation
+        working-directory: apps/magic_camera
+        shell: bash
+        run: |
+          set -euo pipefail
+          camera_simulator_id=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for k,v in d["devices"].items() if "iOS" in k for x in v if x["name"].startswith("iPhone")))')
+          xcodebuild test -workspace ios/Runner.xcworkspace -scheme Runner \
+            -sdk iphonesimulator -destination "id=$camera_simulator_id" \
+            -parallel-testing-enabled NO \
+            -resultBundlePath build/ios/CameraOrientation.xcresult \
+            CODE_SIGNING_ALLOWED=NO
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: korlix-magic-camera-native-tests
+          path: apps/magic_camera/build/ios/CameraOrientation.xcresult
+          if-no-files-found: warn
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: korlix-magic-camera-ios
