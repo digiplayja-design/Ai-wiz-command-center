@@ -2,6 +2,7 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>ITSAppUsesNonExemptEncryption</key><false/>
 	<key>NSCameraUsageDescription</key><string>Take a private photo to transform with your chosen magic look.</string>
 	<key>NSMicrophoneUsageDescription</key><string>Dictate your creative idea when you choose the microphone.</string>
 	<key>NSSpeechRecognitionUsageDescription</key><string>Turn your spoken idea into a Magic Camera prompt.</string>
