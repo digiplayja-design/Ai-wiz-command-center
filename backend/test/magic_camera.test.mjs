@@ -5,7 +5,7 @@ import {randomUUID} from 'node:crypto';
 import {PGlite} from '@electric-sql/pglite';
 import sharp from 'sharp';
 import {PRESETS,options,instructions,prepareSource,validateOutput,renderer} from '../magic_camera/core.mjs';
-import {createMagicWorker,publicJob} from '../magic_camera/routes.mjs';
+import {createMagicWorker,publicJob,magicStore} from '../magic_camera/routes.mjs';
 import {magicAppRouteAllowed} from '../magic_camera/auth.mjs';
 let db,owner,other;
 const call=async(actor,action,id=null,p={})=>(await db.query('select korlix_magic_command($1,$2,$3,$4) r',[actor,action,id,p])).rows[0].r;
@@ -171,4 +171,36 @@ test('late output storage after lease expiry is removed and never charged',async
  const worker=createMagicWorker({call,storage,render:async()=>({bytes:Buffer.from('final'),width:1024,height:1024})});
  await worker.tick();assert.equal(files.size,0);assert.equal((await plan()).remaining,2);
  const result=(await call(owner,'get',reserved.job.id)).job;assert.equal(result.state,'failed');assert.equal(result.output_purged,true);
+});
+
+test('lost upload response recovery is read-only, owner-bound and cannot recover deleted photos',async t=>{
+ const key=randomUUID(),reserved=await reserve(key);
+ assert.equal((await call(owner,'request',key)).job.id,reserved.job.id);
+ assert.equal((await plan()).remaining,1);
+ await assert.rejects(call(other,'request',key),/MAG404/);
+ await assert.rejects(call(owner,'request',randomUUID()),/MAG404/);
+ const {default:express}=await import('express');const {registerMagicCamera}=await import('../magic_camera/routes.mjs');
+ const recoveredStore=magicStore({rpc:async(_name,a)=>{
+  try{return {data:await call(a.p_actor,a.p_action,a.p_id,a.p)};}catch(error){return {error};}
+ }});
+ let actor=owner;const app=express();registerMagicCamera(app,{call:recoveredStore,storage:null,autoStart:false,requireUser:async()=>({id:actor})});
+ const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));t.after(()=>new Promise(r=>server.close(r)));
+ const url=`http://127.0.0.1:${server.address().port}/api/magic-camera/requests/`;
+ let r=await fetch(url+key);assert.equal(r.status,200);assert.equal(r.headers.get('cache-control'),'no-store');
+ const body=await r.json();assert.equal(body.job.id,reserved.job.id);assert.equal(body.job.state,'uploading');
+ for(const field of ['request_key','owner_id','fingerprint','worker_token'])assert.equal(field in body.job,false);
+ actor=other;r=await fetch(url+key);assert.equal(r.status,404);
+ actor=owner;r=await fetch(url+'invalid');assert.equal(r.status,400);
+ const ready=await finish(reserved);await finish(await reserve());assert.equal((await plan()).remaining,0);
+ assert.equal((await call(owner,'request',key)).job.state,'ready');
+ assert.equal((await db.query('select count(*) n from korlix_magic_jobs where owner_id=$1',[owner])).rows[0].n,2);
+ await call(owner,'delete',ready.job.id);await assert.rejects(call(owner,'request',key),/MAG404/);
+ assert.equal((await plan()).remaining,0);
+});
+
+test('release migration contains every tested Magic Camera schema fixture unchanged',async()=>{
+ const migration=await readFile(new URL('../../supabase/migrations/20261030003135_magic_camera_foundation.sql',import.meta.url),'utf8');
+ for(const name of ['schema.sql','billing_schema.sql','apple_schema.sql','session_schema.sql']){
+  assert(migration.includes(await readFile(new URL('../magic_camera/'+name,import.meta.url),'utf8')),name+' differs from release migration');
+ }
 });

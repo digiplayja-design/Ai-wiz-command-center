@@ -88,6 +88,10 @@ begin
   return jsonb_build_object('next_offset',case when total>off+100 then off+100 else null end,'plan',public.korlix_magic_plan(p_actor,coalesce((p->>'standalone')::boolean,false)),
    'jobs',coalesce((select jsonb_agg(to_jsonb(x)) from(select id,state,options,created_at,finished_at,width,height,render_ms,error from public.korlix_magic_jobs
      where owner_id=p_actor and state<>'deleted' and deleted_at is null order by created_at desc,id limit 100 offset off)x),'[]'));
+ elsif p_action='request' then
+  -- Read-only recovery after a lost upload response. Never reserve or render.
+  select * into j from public.korlix_magic_jobs where owner_id=p_actor and request_key=p_id and deleted_at is null;
+  if not found then raise exception 'MAG404: This upload has not reached your gallery yet. Check again shortly.';end if;
  elsif p_action='reserve' then
   select * into j from public.korlix_magic_jobs where owner_id=p_actor and request_key=(p->>'request_key')::uuid;
   if found then

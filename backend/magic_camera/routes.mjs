@@ -94,6 +94,7 @@ export function registerMagicCamera(app,{database,storage=magicStorage(database)
    throw e;
   }finally{q.file?.buffer?.fill(0);q.file=undefined;source?.fill(0);uploads--;}
  }));
+ app.get(base+'/requests/:key',route(async(q,r,u)=>r.json({job:publicJob((await call(u.id,'request',id(q.params.key))).job)})));
  app.get(base+'/:id',route(async(q,r,u)=>r.json({job:publicJob((await call(u.id,'get',id(q.params.id))).job)})));
  app.get(base+'/:id/image',route(async(q,r,u)=>{
   const {job}=await call(u.id,'get',id(q.params.id));if(job.state!=='ready'||job.deleted_at)fail('This magic photo is not available.',404);
