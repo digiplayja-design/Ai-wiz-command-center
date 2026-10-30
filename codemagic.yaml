@@ -510,3 +510,64 @@ workflows:
       - apps/receipt_wiz/build/ios/iphonesimulator/ReceiptWiz-Simulator.zip
       - /tmp/xcodebuild_logs/*.log
 
+
+  magic-camera-ios-candidate:
+    name: Korlix Magic Camera — signed iOS candidate
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    working_directory: apps/magic_camera
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    environment:
+      flutter: 3.47.7
+      xcode: 26.6
+      cocoapods: default
+      ios_signing:
+        provisioning_profiles:
+          - KORLIX_MAGIC_CAMERA_APP_STORE_PROFILE
+        certificates:
+          - KORLIX_APP_STORE_CERT
+    scripts:
+      - name: Verify the dedicated Magic Camera Apple record
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.magic-release-tools"
+          "$CM_BUILD_DIR/.magic-release-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+          export PATH="$CM_BUILD_DIR/.magic-release-tools/bin:$PATH"
+          printf 'PATH=%s\n' "$PATH" >> "$CM_ENV"
+          python3 "$CM_BUILD_DIR/scripts/prepare_ios_release.py" \
+            --bundle-id com.korlixdeveloper.magiccamera --environment-file "$CM_ENV"
+      - name: Validate the shared camera and standalone app
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/packages/korlix_magic_core"
+          flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
+          flutter analyze --no-pub
+          flutter test --no-pub --reporter expanded
+          cd "$CM_BUILD_DIR/apps/magic_camera"
+          flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
+          flutter analyze --no-pub
+          flutter test --no-pub --reporter expanded
+      - name: Build and verify the Magic Camera IPA
+        script: |
+          set -euo pipefail
+          flutter build ios --release --config-only --no-codesign --no-pub \
+            --build-name="$KORLIX_IOS_VERSION" --build-number="$KORLIX_IOS_BUILD_NUMBER"
+          xcode-project use-profiles --project ios/Runner.xcodeproj \
+            --export-options-plist "$CM_BUILD_DIR/magic-ios-export.plist" \
+            --custom-export-options '{"manageAppVersionAndBuildNumber": false}'
+          flutter build ipa --release --no-pub \
+            --build-name="$KORLIX_IOS_VERSION" --build-number="$KORLIX_IOS_BUILD_NUMBER" \
+            --export-options-plist="$CM_BUILD_DIR/magic-ios-export.plist"
+          mkdir -p artifacts
+          IPA_FILES=(build/ios/ipa/*.ipa)
+          test "${#IPA_FILES[@]}" -eq 1
+          python3 "$CM_BUILD_DIR/scripts/verify_ios_ipa.py" "${IPA_FILES[0]}" \
+            --bundle-id com.korlixdeveloper.magiccamera --version "$KORLIX_IOS_VERSION" \
+            --build "$KORLIX_IOS_BUILD_NUMBER" --output artifacts/MagicCamera-verification.json
+          cp "${IPA_FILES[0]}" artifacts/KorlixMagicCamera.ipa
+    artifacts:
+      - $CM_BUILD_DIR/apps/magic_camera/artifacts/*.ipa
+      - $CM_BUILD_DIR/apps/magic_camera/artifacts/*.json
+      - /tmp/xcodebuild_logs/*.log
+    # Candidate only: no automatic TestFlight or App Store publishing.

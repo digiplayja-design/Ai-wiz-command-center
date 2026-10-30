@@ -52,6 +52,10 @@ class FakeClient extends MagicClient {
   int calls = 0;
   bool reportFails = false;
   int reports = 0;
+  bool readyResult = false, imageFails = false;
+  int polls = 0;
+  String? uploadKey;
+  final recoveries = <String>[];
   bool paged = false;
   final offsets = <int>[];
   @override
@@ -61,16 +65,33 @@ class FakeClient extends MagicClient {
     String key,
   ) {
     submitted = bytes;
+    uploadKey = key;
     calls++;
     return generated.future;
   }
 
   @override
-  Future<Map<String, dynamic>> job(String id) async => {
-    'id': id,
-    'state': 'queued',
-    'options': opts,
-  };
+  Future<Map<String, dynamic>> job(String id) async {
+    polls++;
+    return {
+      'id': id,
+      'state': readyResult ? 'ready' : 'queued',
+      'options': opts,
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>> recover(String key) async {
+    recoveries.add(key);
+    return {'id': jobId, 'state': 'queued', 'options': opts};
+  }
+
+  @override
+  Future<Uint8List> image(String id, {bool preview = false}) async {
+    if (imageFails) throw const MagicApiException('Download interrupted.', 503);
+    return pixel;
+  }
+
   @override
   Future<Map<String, dynamic>> snapshot({int offset = 0}) async {
     offsets.add(offset);
@@ -96,11 +117,15 @@ class FakeClient extends MagicClient {
 class MemoryCapture extends XFile {
   MemoryCapture() : super('/tmp/korlix-test-no-original-file.jpg');
   @override
-  Future<Uint8List> readAsBytes() async => Uint8List.fromList([11, 22, 33, 44]);
+  Future<Uint8List> readAsBytes() async {
+    // Exercise real temporary-file removal before the upload can complete.
+    File(path).writeAsBytesSync([11, 22, 33, 44]);
+    return Uint8List.fromList([11, 22, 33, 44]);
+  }
 }
 
 class FakeCamera extends CameraPlatform {
-  int captures = 0;
+  int captures = 0, disposals = 0, opened = 0;
   @override
   Future<List<CameraDescription>> availableCameras() async => [
     const CameraDescription(
@@ -113,7 +138,7 @@ class FakeCamera extends CameraPlatform {
   Future<int> createCameraWithSettings(
     CameraDescription c,
     MediaSettings? settings,
-  ) async => 1;
+  ) async => ++opened;
   @override
   Future<void> initializeCamera(
     int id, {
@@ -149,7 +174,9 @@ class FakeCamera extends CameraPlatform {
   }
 
   @override
-  Future<void> dispose(int id) async {}
+  Future<void> dispose(int id) async {
+    disposals++;
+  }
 }
 
 void main() {
@@ -226,12 +253,19 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('live-viewfinder')), findsOneWidget);
       await tester.tap(find.byKey(const Key('magic-shutter')));
+      for (var i = 0; i < 8 && client.calls == 0; i++) {
+        await tester.pump();
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+      }
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 50));
       expect(find.byKey(const Key('live-viewfinder')), findsNothing);
       expect(find.byType(MagicOrbits), findsOneWidget);
       expect(fake.captures, 1);
       expect(client.calls, 1);
+      expect(fake.disposals, 1);
+      expect(File('/tmp/korlix-test-no-original-file.jpg').existsSync(), false);
       expect(
         tester
             .widgetList<Image>(find.byType(Image))
@@ -245,6 +279,128 @@ void main() {
       await tester.pump();
       expect(client.submitted, everyElement(0));
       expect(find.byKey(const Key('magic-final-image')), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'lost upload response recovers the same job without another capture or upload',
+    (tester) async {
+      final previous = CameraPlatform.instance,
+          camera = FakeCamera(),
+          client = FakeClient();
+      CameraPlatform.instance = camera;
+      addTearDown(() => CameraPlatform.instance = previous);
+      addTearDown(client.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MagicCapture(client: client, options: opts),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('magic-shutter')));
+      for (var i = 0; i < 8 && client.calls == 0; i++) {
+        await tester.pump();
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+      }
+      await tester.pump();
+      expect(client.calls, 1);
+      client.generated.completeError(TimeoutException('Lost response'));
+      await tester.pump();
+      await tester.pump();
+      expect(client.recoveries, [client.uploadKey]);
+      expect(find.byType(MagicResult), findsOneWidget);
+      expect(client.calls, 1);
+      expect(camera.captures, 1);
+      expect(client.submitted, everyElement(0));
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'backgrounding cancels the countdown and reopens one camera on resume',
+    (tester) async {
+      final previous = CameraPlatform.instance,
+          camera = FakeCamera(),
+          client = FakeClient();
+      CameraPlatform.instance = camera;
+      addTearDown(() => CameraPlatform.instance = previous);
+      addTearDown(client.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MagicCapture(
+            client: client,
+            options: opts,
+            timer: 3,
+            haptics: false,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('magic-shutter')));
+      await tester.pump();
+      expect(find.text('3'), findsOneWidget);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump(const Duration(seconds: 4));
+      expect(camera.captures, 0);
+      expect(client.calls, 0);
+      expect(camera.disposals, 1);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(camera.opened, 2);
+      expect(find.byKey(const Key('live-viewfinder')), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'finished photos keep reporting available when image download fails and reload without rendering',
+    (tester) async {
+      final client = FakeClient()
+        ..readyResult = true
+        ..imageFails = true;
+      addTearDown(client.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MagicResult(client: client, initialJob: job('queued')),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Your magic photo is ready'), findsOneWidget);
+      expect(find.byType(MagicOrbits), findsNothing);
+      expect(find.byKey(const Key('magic-report')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('magic-report')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Send report'));
+      await tester.pumpAndSettle();
+      expect(client.reports, 1);
+      client.imageFails = false;
+      await tester.tap(find.text('Load photo'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('magic-final-image')), findsOneWidget);
+      expect(client.calls, 0);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'result polling pauses in background and resumes the existing generation',
+    (tester) async {
+      final client = FakeClient();
+      addTearDown(client.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MagicResult(client: client, initialJob: job('queued')),
+        ),
+      );
+      await tester.pump();
+      expect(client.polls, 1);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pump(const Duration(seconds: 20));
+      expect(client.polls, 1);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pump();
+      expect(client.polls, 2);
+      expect(client.calls, 0);
       await tester.pumpWidget(const SizedBox());
     },
   );

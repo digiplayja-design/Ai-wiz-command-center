@@ -30,6 +30,17 @@ Native camera 0.12.2 raises the hub's Android minimum from API 23 to API 24 (And
 4. Confirm original-image retention against the service configuration and include this data flow in the published app privacy disclosures. Confirm the team monitors the existing report review queue.
 5. Register signing/provisioning and publish the standalone app through the stores; release the new hub build separately.
 
+## Build 2 continuation
+
+- Native camera controllers close and temporary captures are removed before upload. Countdown cancels when backgrounded; overlapping resume/lens changes initialize one controller at a time.
+- A lost upload response can be recovered by its original request key. `GET /api/magic-camera/requests/:key` is owner-bound and read-only: it cannot upload, render or spend a second credit. The ordinary private gallery remains the recovery path after closing or restarting the app.
+- Finished-image download failure now shows a saved-result state with Refresh and Report. Refresh reloads the stored image; it never renders a replacement. Polling pauses in the background and resumes the existing job. Failed attempts can be removed from the gallery.
+- Subscription screens include privacy/terms links and handle a failed subscription-management link explicitly.
+- Android releases require all dedicated signing values and no longer fall back to a debug certificate. The manual `magic-camera-android-release.yml` workflow builds a verified AAB candidate using the `magic-camera-android-release` environment. Configure `KORLIX_MAGIC_ANDROID_KEYSTORE_BASE64`, `KORLIX_MAGIC_ANDROID_STORE_PASSWORD`, `KORLIX_MAGIC_ANDROID_KEY_ALIAS`, and `KORLIX_MAGIC_ANDROID_KEY_PASSWORD` there. A local build can use `android/key.properties` instead.
+- Codemagic workflow `magic-camera-ios-candidate` uses `KORLIX_MAGIC_CAMERA_APP_STORE_PROFILE` with the existing distribution certificate. It requires the exact Magic Camera Apple app record, picks an unused build number and validates the IPA identity, permissions and signature. It produces a candidate without automatically uploading to TestFlight or publishing.
+
+Local validation: 11 shared camera tests, standalone authentication test, 12 Apple release verification tests and 72 backend/regression checks pass; shared and standalone analysis are clean. Physical-device and live provider/purchase tests remain release gates. The new signing workflows are configured in source, not provisioned or executed with live signing credentials.
+
 ## Deliberately not advertised as complete
 
 The proposed 10-photo $6.99 top-up needs consumable purchase verification and refund accounting before it can be offered. Rici's voiced countdown, portable style links, Astra-assisted complex planning, and segmentation/compositing to preserve original face pixels are future extensions. The current Preserve my face option supplies explicit generation constraints; it cannot guarantee identical facial pixels or zero distortion. There is no custom identity recognition or gender inference.

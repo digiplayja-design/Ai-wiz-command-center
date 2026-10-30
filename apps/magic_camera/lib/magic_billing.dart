@@ -148,7 +148,7 @@ class MagicBillingService extends ChangeNotifier {
         onError: (Object _) {
           if (_alive) {
             busy = false;
-            error = 'the app store could not respond. Please retry.';
+            error = 'The app store could not respond. Please retry.';
             _notify();
           }
         },
@@ -255,7 +255,7 @@ class MagicBillingService extends ChangeNotifier {
               ),
       )) {
         throw StateError(
-          'the app store did not open the purchase. Please retry.',
+          'The app store did not open the purchase. Please retry.',
         );
       }
     } catch (e) {
@@ -272,13 +272,13 @@ class MagicBillingService extends ChangeNotifier {
     if (!_alive || !supported || busy) return;
     busy = true;
     error = null;
-    message = 'Checking your the app store purchases…';
+    message = 'Checking your app store purchases…';
     _notify();
     _restoreTimer?.cancel();
     _restoreTimer = Timer(const Duration(seconds: 20), () {
       if (_alive && busy) {
         busy = false;
-        message = 'No confirmed purchase was returned yet. Check your the app store account, then try again.';
+        message = 'No confirmed purchase was returned yet. Check your app store account, then try again.';
         _notify();
       }
     });
@@ -313,7 +313,7 @@ class MagicBillingService extends ChangeNotifier {
             ? 'Purchase canceled.'
             : null;
         error = purchase.status == PurchaseStatus.error
-            ? 'the app store could not complete the purchase. Please retry.'
+            ? 'The app store could not complete the purchase. Please retry.'
             : null;
         _notify();
         continue;

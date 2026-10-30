@@ -31,7 +31,7 @@ class _MagicResultState extends State<MagicResult> with WidgetsBindingObserver {
   Uint8List? _image;
   String? _error;
   Timer? _poll;
-  bool _checking = false, _exporting = false;
+  bool _checking = false, _exporting = false, _foreground = true;
   @override
   void initState() {
     super.initState();
@@ -54,22 +54,33 @@ class _MagicResultState extends State<MagicResult> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) unawaited(_refresh());
+    _foreground = state == AppLifecycleState.resumed;
+    if (_foreground) {
+      unawaited(_refresh());
+    } else {
+      _poll?.cancel();
+    }
   }
 
   Future<void> _refresh() async {
-    if (_checking || !widget.client.valid) return;
-    _checking = true;
+    if (_checking || !mounted || !widget.client.valid || !_foreground) return;
+    setState(() => _checking = true);
     _poll?.cancel();
     try {
       final next = await widget.client.job(_job['id'] as String);
+      if (!mounted || !widget.client.valid) return;
+      // The render is complete even if downloading its saved image fails.
+      setState(() {
+        _job = next;
+        _error = null;
+        if (next['state'] != 'ready') _image = null;
+      });
       Uint8List? finalImage = _image;
       if (next['state'] == 'ready' && finalImage == null) {
         finalImage = await widget.client.image(next['id'] as String);
       }
       if (mounted && widget.client.valid) {
         setState(() {
-          _job = next;
           _image = finalImage;
           _error = null;
         });
@@ -77,12 +88,15 @@ class _MagicResultState extends State<MagicResult> with WidgetsBindingObserver {
     } catch (_) {
       if (mounted) {
         setState(
-          () => _error = 'Connection interrupted. Your job is saved. Tap Refresh to check it.',
+          () => _error = _job['state'] == 'ready'
+              ? 'Your magic photo is finished and saved. Its download was interrupted. Refresh to load it; no new generation is needed.'
+              : 'Connection interrupted. Your job is saved. Tap Refresh to check it.',
         );
       }
     } finally {
-      _checking = false;
+      if (mounted) setState(() => _checking = false);
       if (mounted &&
+          _foreground &&
           widget.client.valid &&
           !['ready', 'failed', 'deleted'].contains(_job['state'])) {
         _poll = Timer(const Duration(seconds: 4), () => unawaited(_refresh()));
@@ -231,9 +245,15 @@ class _MagicResultState extends State<MagicResult> with WidgetsBindingObserver {
     final yes = await showDialog<bool>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Delete this magic photo?'),
-        content: const Text(
-          'This removes it from your private gallery. Deleting a completed result does not restore a generation.',
+        title: Text(
+          _job['state'] == 'failed'
+              ? 'Remove this failed attempt?'
+              : 'Delete this magic photo?',
+        ),
+        content: Text(
+          _job['state'] == 'failed'
+              ? 'This removes the failed attempt from your gallery. No credit was used.'
+              : 'This removes it from your private gallery. Deleting a completed result does not restore a generation.',
         ),
         actions: [
           TextButton(
@@ -280,7 +300,7 @@ class _MagicResultState extends State<MagicResult> with WidgetsBindingObserver {
       appBar: AppBar(
         title: Text(ready ? 'Your magic moment' : 'A little magic in motion'),
         actions: [
-          if (ready)
+          if (ready || _job['state'] == 'failed')
             IconButton(
               tooltip: 'Delete photo',
               onPressed: _delete,
@@ -381,6 +401,51 @@ class _MagicResultState extends State<MagicResult> with WidgetsBindingObserver {
                           ),
                         ),
                       ],
+                    ),
+                  )
+                : ready
+                ? Center(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(28),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (_checking)
+                            const CircularProgressIndicator()
+                          else
+                            const Icon(
+                              Icons.cloud_done_outlined,
+                              color: magicBlue,
+                              size: 48,
+                            ),
+                          const SizedBox(height: 20),
+                          const Text(
+                            'Your magic photo is ready',
+                            style: TextStyle(
+                              fontSize: 22,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            _checking ? 'Loading your finished photo…' : 'Your finished photo is saved in your private gallery.',
+                            textAlign: TextAlign.center,
+                          ),
+                          const SizedBox(height: 20),
+                          OutlinedButton.icon(
+                            onPressed: _checking ? null : _refresh,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Load photo'),
+                          ),
+                          TextButton.icon(
+                            key: const Key('magic-report'),
+                            onPressed: _report,
+                            icon: const Icon(Icons.flag_outlined),
+                            label: const Text('Report'),
+                          ),
+                        ],
+                      ),
                     ),
                   )
                 : failed

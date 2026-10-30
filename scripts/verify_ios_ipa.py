@@ -22,12 +22,17 @@ def verify_info(info, bundle_id, version, build):
             raise ValueError(f"Exported IPA {key} does not match the requested release")
     if "iPhoneOS" not in info.get("CFBundleSupportedPlatforms", []):
         raise ValueError("The artifact is not an iPhoneOS device build")
-    if bundle_id in {"com.korlixdeveloper.messenger", "com.korlixdeveloper.receiptwiz"}:
+    if bundle_id in {"com.korlixdeveloper.messenger", "com.korlixdeveloper.receiptwiz", "com.korlixdeveloper.magiccamera"}:
         # file_picker's native camera dependency references location APIs even
         # though Messenger does not enable its optional photo geotagging.
         purpose = info.get("NSLocationWhenInUseUsageDescription")
         if not isinstance(purpose, str) or not purpose.strip():
             raise ValueError("IPA is missing NSLocationWhenInUseUsageDescription for the native media picker")
+    if bundle_id == "com.korlixdeveloper.magiccamera":
+        for key in ["NSCameraUsageDescription", "NSMicrophoneUsageDescription", "NSSpeechRecognitionUsageDescription"]:
+            purpose = info.get(key)
+            if not isinstance(purpose, str) or not purpose.strip():
+                raise ValueError(f"Magic Camera IPA is missing {key}")
     return expected
 
 

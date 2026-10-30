@@ -7,6 +7,16 @@ import 'magic_billing.dart';
 class MagicPlan extends StatelessWidget {
   const MagicPlan({super.key, required this.billing});
   final MagicBillingService billing;
+  Future<void> _openLink(BuildContext context, Uri uri) async {
+    try {
+      if (await launchUrl(uri, mode: LaunchMode.externalApplication)) return;
+    } catch (_) {}
+    if (context.mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Open $uri in your browser.')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: billing,
@@ -114,20 +124,18 @@ class MagicPlan extends StatelessWidget {
               ),
             if (b.supported)
               TextButton(
-                onPressed: () async {
-                  await launchUrl(
-                    b.apple
-                        ? Uri.parse(
-                            'https://apps.apple.com/account/subscriptions',
-                          )
-                        : Uri.https(
-                            'play.google.com',
-                            '/store/account/subscriptions',
-                            {'package': magicPlayPackage},
-                          ),
-                    mode: LaunchMode.externalApplication,
-                  );
-                },
+                onPressed: () => _openLink(
+                  context,
+                  b.apple
+                      ? Uri.parse(
+                          'https://apps.apple.com/account/subscriptions',
+                        )
+                      : Uri.https(
+                          'play.google.com',
+                          '/store/account/subscriptions',
+                          {'package': magicPlayPackage},
+                        ),
+                ),
                 child: const Text('Manage or cancel subscription'),
               ),
             const Padding(
@@ -136,6 +144,26 @@ class MagicPlan extends StatelessWidget {
                 'Subscriptions renew monthly until canceled. The store confirmation shows your local price and tax. Included generations reset on the first day of each month (UTC) and do not roll over. Saving, sharing and reporting existing images remain available after your allowance runs out.',
                 style: TextStyle(color: magicMuted, height: 1.5, fontSize: 12),
               ),
+            ),
+            Wrap(
+              alignment: WrapAlignment.center,
+              spacing: 16,
+              children: [
+                TextButton(
+                  onPressed: () => _openLink(
+                    context,
+                    Uri.https('www.korlixdeveloper.com', '/privacy-policy'),
+                  ),
+                  child: const Text('Privacy policy'),
+                ),
+                TextButton(
+                  onPressed: () => _openLink(
+                    context,
+                    Uri.https('www.korlixdeveloper.com', '/terms-of-use'),
+                  ),
+                  child: const Text('Terms of use'),
+                ),
+              ],
             ),
           ],
         ),

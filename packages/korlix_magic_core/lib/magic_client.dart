@@ -114,6 +114,8 @@ class MagicClient extends ChangeNotifier {
       request(offset == 0 ? '' : '?offset=$offset');
   Future<Map<String, dynamic>> job(String id) async =>
       (await request('/$id'))['job'] as Map<String, dynamic>;
+  Future<Map<String, dynamic>> recover(String requestKey) async =>
+      (await request('/requests/$requestKey'))['job'] as Map<String, dynamic>;
   Future<Map<String, dynamic>> generate(
     Uint8List bytes,
     Map<String, dynamic> options,

@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [feature/korlix-magic-camera-20261030]
-    paths: ['packages/korlix_magic_core/**', 'apps/magic_camera/**', 'lib/**', 'pubspec.*', '.github/workflows/magic-camera-validation.yml']
+    paths: ['packages/korlix_magic_core/**', 'apps/magic_camera/**', 'lib/**', 'pubspec.*', 'codemagic.yaml', 'scripts/*ios*.py', 'scripts/tests/test_ios_release.py', '.github/workflows/magic-camera*']
 permissions:
   contents: read
 concurrency:
@@ -28,6 +28,8 @@ jobs:
           flutter-version: '3.47.7'
           channel: stable
           cache: true
+      - name: Verify release identity and artifact checks
+        run: python3 -m unittest discover -s scripts/tests -p test_ios_release.py -v
       - name: Test shared Magic Camera
         working-directory: packages/korlix_magic_core
         env:
@@ -44,6 +46,16 @@ jobs:
           flutter test --no-pub --reporter expanded
           flutter build apk --debug --no-pub
           flutter build web --release --no-pub
+      - name: Reject Android release without dedicated signing
+        working-directory: apps/magic_camera
+        shell: bash
+        run: |
+          set -euo pipefail
+          if flutter build appbundle --release --no-pub > build/unsigned-release.log 2>&1; then
+            echo 'Release unexpectedly succeeded without Magic Camera signing.'
+            exit 1
+          fi
+          grep -Fq 'Configure all four Magic Camera release signing values' build/unsigned-release.log
       - name: Validate hub integration
         run: |
           flutter pub get --enforce-lockfile

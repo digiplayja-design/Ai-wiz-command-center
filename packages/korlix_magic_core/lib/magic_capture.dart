@@ -33,8 +33,13 @@ class _MagicCaptureState extends State<MagicCapture>
   CameraController? _camera;
   List<CameraDescription> _cameras = [];
   int _index = 0, _count = 0, _epoch = 0;
-  String? _error;
-  bool _busy = false, _captured = false;
+  String? _error, _requestKey;
+  bool _busy = false,
+      _captured = false,
+      _recovering = false,
+      _foreground = true;
+  Future<void> _opening = Future.value();
+  Future<void> _closing = Future.value();
   Map<String, dynamic>? _job;
   @override
   void initState() {
@@ -47,33 +52,59 @@ class _MagicCaptureState extends State<MagicCapture>
   void _account() {
     if (!widget.client.valid) {
       _epoch++;
-      unawaited(_camera?.dispose());
-      _camera = null;
+      unawaited(_releaseCamera(_camera));
       if (mounted) {
         setState(() => _error = 'Your account changed. Reopen Magic Camera.');
       }
     }
   }
 
-  Future<void> _open() async {
+  Future<void> _releaseCamera(CameraController? camera) {
+    if (camera == null) return _closing;
+    if (identical(_camera, camera)) _camera = null;
+    _closing = _closing.then((_) async {
+      try {
+        await camera.dispose();
+      } catch (_) {
+        // A device may already have released the camera while backgrounding.
+      }
+    });
+    return _closing;
+  }
+
+  bool _canOpen(int epoch) =>
+      mounted &&
+      epoch == _epoch &&
+      !_captured &&
+      _foreground &&
+      widget.client.valid;
+
+  Future<void> _open() {
     final epoch = ++_epoch;
+    // Resume and lens switches can overlap. Initialize one controller at a time.
+    _opening = _opening.then((_) => _initializeCamera(epoch));
+    return _opening;
+  }
+
+  Future<void> _initializeCamera(int epoch) async {
+    CameraController? camera;
     try {
+      await _releaseCamera(_camera);
+      if (!_canOpen(epoch)) return;
       if (_cameras.isEmpty) _cameras = await availableCameras();
+      if (!_canOpen(epoch)) return;
       if (_cameras.isEmpty) {
         throw const MagicApiException('No camera found on this device.');
       }
-      final camera = CameraController(
+      camera = CameraController(
         _cameras[_index % _cameras.length],
         ResolutionPreset.max,
         enableAudio: false,
       );
+      _camera = camera;
       await camera.initialize();
-      if (!mounted || epoch != _epoch || _captured) {
-        await camera.dispose();
-        return;
-      }
+      if (!_canOpen(epoch)) return;
       setState(() {
-        _camera = camera;
         _error = null;
       });
     } catch (_) {
@@ -83,23 +114,50 @@ class _MagicCaptureState extends State<MagicCapture>
               'Allow camera access in your device settings, then try again.',
         );
       }
+    } finally {
+      if (camera != null && (!_canOpen(epoch) || !camera.value.isInitialized)) {
+        await _releaseCamera(camera);
+      }
     }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.paused) {
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
+      _foreground = false;
       _epoch++;
-      final old = _camera;
-      _camera = null;
-      unawaited(old?.dispose());
+      unawaited(_releaseCamera(_camera));
       if (mounted) setState(() => _count = 0);
     }
-    if (state == AppLifecycleState.resumed &&
-        !_captured &&
-        widget.client.valid) {
-      unawaited(_open());
+    if (state == AppLifecycleState.resumed) {
+      _foreground = true;
+      if (!_captured && widget.client.valid) unawaited(_open());
+      if (_captured && !_busy && _job == null) unawaited(_recover());
+    }
+  }
+
+  Future<void> _recover() async {
+    final key = _requestKey;
+    if (key == null || _recovering || !mounted || !widget.client.valid) return;
+    setState(() => _recovering = true);
+    try {
+      final job = await widget.client.recover(key);
+      if (mounted && widget.client.valid) {
+        setState(() {
+          _job = job;
+          _error = null;
+        });
+      }
+    } catch (_) {
+      if (mounted && widget.client.valid) {
+        setState(
+          () => _error = 'We could not confirm this upload yet. Check its status again or return to your gallery. This check never starts another generation.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _recovering = false);
     }
   }
 
@@ -107,6 +165,7 @@ class _MagicCaptureState extends State<MagicCapture>
     if (_busy || _camera?.value.isInitialized != true) return;
     final epoch = _epoch;
     setState(() => _busy = true);
+    Uint8List? bytes;
     try {
       for (var n = widget.timer; n > 0; n--) {
         if (!mounted || epoch != _epoch) return;
@@ -122,35 +181,48 @@ class _MagicCaptureState extends State<MagicCapture>
         _count = 0;
       });
       await WidgetsBinding.instance.endOfFrame;
-      final file = await camera.takePicture();
       try {
-        final bytes = await file.readAsBytes();
+        if (!mounted || !widget.client.valid) return;
+        if (epoch != _epoch) {
+          throw const MagicApiException(
+            'The camera was interrupted before capture. Return to Magic Camera and try again.',
+          );
+        }
+        final file = await camera.takePicture();
         try {
-          if (widget.client.valid) {
-            _job = await widget.client.generate(
-              bytes,
-              widget.options,
-              magicRequestKey(),
-            );
-          }
+          bytes = await file.readAsBytes();
         } finally {
-          bytes.fillRange(0, bytes.length, 0);
+          await eraseCapture(file.path);
         }
       } finally {
-        await eraseCapture(file.path);
-        await camera.dispose();
-        _camera = null;
+        // Release the native camera and remove its temporary file before upload.
+        await _releaseCamera(camera);
       }
-      if (mounted && widget.client.valid) setState(() {});
-    } catch (_) {
-      if (mounted) {
+      if (!mounted || !widget.client.valid) return;
+      _requestKey = magicRequestKey();
+      final job = await widget.client.generate(
+        bytes,
+        widget.options,
+        _requestKey!,
+      );
+      if (mounted && widget.client.valid) setState(() => _job = job);
+    } catch (e) {
+      if (mounted && widget.client.valid) {
         setState(
-          () => _error = _captured
-              ? 'The connection was interrupted. Check your gallery before taking another photo. Only completed results use your allowance.'
-              : 'The camera could not take this photo. Please try again.',
+          () => _error =
+              e is MagicApiException && e.status >= 400 && e.status < 500
+              ? e.message
+              : _requestKey != null
+              ? 'The upload response was interrupted. Check this photo’s status before taking another. Only completed results use your allowance.'
+              : 'The camera could not take this photo. Return to Magic Camera and try again.',
         );
+        if (_requestKey != null &&
+            (e is! MagicApiException || e.status == 0 || e.status >= 500)) {
+          unawaited(_recover());
+        }
       }
     } finally {
+      bytes?.fillRange(0, bytes.length, 0);
       if (mounted) setState(() => _busy = false);
     }
   }
@@ -160,7 +232,7 @@ class _MagicCaptureState extends State<MagicCapture>
     _epoch++;
     WidgetsBinding.instance.removeObserver(this);
     widget.client.removeListener(_account);
-    unawaited(_camera?.dispose());
+    unawaited(_releaseCamera(_camera));
     super.dispose();
   }
 
@@ -198,6 +270,19 @@ class _MagicCaptureState extends State<MagicCapture>
                     const SizedBox(height: 18),
                     Text(_error!, textAlign: TextAlign.center),
                     const SizedBox(height: 24),
+                    if (_requestKey != null) ...[
+                      FilledButton.icon(
+                        key: const Key('magic-recover-upload'),
+                        onPressed: _recovering ? null : _recover,
+                        icon: const Icon(Icons.refresh),
+                        label: Text(
+                          _recovering
+                              ? 'Checking this photo…'
+                              : 'Check upload status',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     FilledButton(
                       onPressed: () => Navigator.pop(context),
                       child: const Text('Back to Magic Camera'),
@@ -215,7 +300,7 @@ class _MagicCaptureState extends State<MagicCapture>
           : Column(
               children: [
                 Expanded(
-                  child: _camera == null
+                  child: _camera?.value.isInitialized != true
                       ? const Center(child: CircularProgressIndicator())
                       : Stack(
                           alignment: Alignment.center,
@@ -262,7 +347,9 @@ class _MagicCaptureState extends State<MagicCapture>
                               : () async {
                                   final old = _camera;
                                   setState(() => _camera = null);
-                                  await old?.dispose();
+                                  _epoch++;
+                                  await _releaseCamera(old);
+                                  if (!mounted || !widget.client.valid) return;
                                   _index++;
                                   await _open();
                                 },
@@ -275,7 +362,8 @@ class _MagicCaptureState extends State<MagicCapture>
                           width: 200,
                           child: FilledButton.icon(
                             key: const Key('magic-shutter'),
-                            onPressed: _busy || _camera == null
+                            onPressed:
+                                _busy || _camera?.value.isInitialized != true
                                 ? null
                                 : _shutter,
                             icon: const Icon(Icons.auto_awesome),
