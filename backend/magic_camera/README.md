@@ -1,6 +1,6 @@
 # Magic Camera backend
 
-Apply `supabase/migrations/20261030003135_magic_camera_foundation.sql` to the current production backend database only after review. This is an additive private gallery/queue/allowance schema plus extension of the existing verified companion session discriminator. It does not change hub billing tiers or Improve My Picture access.
+Migration `supabase/migrations/20261030031457_magic_camera_foundation.sql` was applied to the current production database on 2026-10-30. Its version matches the database migration history; do not apply it again. This is an additive private gallery/queue/allowance schema plus extension of the existing verified companion session discriminator. It does not change hub billing tiers or Improve My Picture access.
 
 The migration source is assembled, in order, from `schema.sql`, `billing_schema.sql`, `apple_schema.sql`, and `session_schema.sql`. Keep these fixtures and the migration identical; tests execute the fixtures in PGlite with service-role and browser-role checks.
 
