@@ -70,6 +70,7 @@ test.before(async () => {
   await db.exec(migration);
   await db.exec(readFileSync(new URL('../../supabase/migrations/20261025014426_korlix_messenger_app_sessions.sql', import.meta.url), 'utf8'));
   await db.exec(readFileSync(new URL('../../supabase/migrations/20261027224536_korlix_auto_email_app_sessions.sql', import.meta.url), 'utf8'));
+  await db.exec(readFileSync(new URL('../magic_camera/session_schema.sql', import.meta.url), 'utf8'));
 });
 test.after(async () => {await db?.close();});
 test.beforeEach(async () => {
@@ -85,7 +86,7 @@ test.beforeEach(async () => {
       admin: {signOut: async token => {revoked.add(tokens.get(token)?.sid); return {error: null};}},
     },
     async rpc(name, args) {
-      assert(['korlix_register_receipt_app_session','korlix_register_messenger_app_session','korlix_register_auto_email_app_session'].includes(name));
+      assert(['korlix_register_receipt_app_session','korlix_register_messenger_app_session','korlix_register_auto_email_app_session','korlix_register_magic_camera_app_session'].includes(name));
       if (unavailable) return {error: new Error('private database details')};
       try {
         const result = await db.query(`select public.${name}($1,$2,$3,$4,$5) result`,
@@ -337,6 +338,7 @@ test('Companion registration RPCs remain unavailable to anonymous and authentica
     await db.exec('set role '+role);
     await assert.rejects(db.query('select public.korlix_register_messenger_app_session($1,$2,$3)',[userId,crypto.randomUUID(),'device']),/permission denied/);
     await assert.rejects(db.query('select public.korlix_register_auto_email_app_session($1,$2,$3)',[userId,crypto.randomUUID(),'device']),/permission denied/);
+    await assert.rejects(db.query('select public.korlix_register_magic_camera_app_session($1,$2,$3)',[userId,crypto.randomUUID(),'device']),/permission denied/);
     await assert.rejects(db.query('select * from public.korlix_receipt_app_sessions'),/permission denied/);
     await db.exec('reset role');
   }
@@ -378,4 +380,36 @@ test('Auto-Email binding rejects other users and mismatched installation IDs', a
   const stolen=issue(otherId,sid);
   await assert.rejects(context.getAuthenticatedUser(request({session:stolen,app:'auto_email',device:'email-browser',path:'/api/auto-email/session'})),e=>e.statusCode===403);
   await assert.rejects(context.getAuthenticatedUser(request({session:email,app:'auto_email',device:'wrong-device',path:'/api/auto-email/session'})),e=>e.statusCode===403);
+});
+
+test('Magic Camera sign-in binds an independent device and permits read-only recovery', async () => {
+  const hub=await login({app:'korlix_ai',device:'hub-phone'});
+  const magic=await login({app:'magic_camera',device:'magic-phone'});
+  assert.equal(hub.statusCode,200);assert.equal(magic.statusCode,200);
+  assert.equal(magic.body.user.id,hub.body.user.id);
+  assert.equal((await rows('korlix_receipt_app_sessions'))[0].client_app,'magic_camera');
+  assert.equal((await login({app:'magic_camera',device:'second-magic'})).statusCode,403);
+  const session=magic.body.session,recovery='/api/magic-camera/requests/'+crypto.randomUUID();
+  for(const path of ['/api/magic-camera',recovery]) {
+    const req=request({session,app:'magic_camera',device:'magic-phone',path});
+    assert.equal((await context.getAuthenticatedUser(req)).id,userId);
+    assert.equal(req.korlixReceiptAppSession.client_app,'magic_camera');
+  }
+  for(const app of [null,'korlix_ai','receipt_wiz','magic_camera']) {
+    for(const path of ['/api/generate','/api/receipt-wiz','/api/social/messages',recovery]) {
+      await assert.rejects(context.getAuthenticatedUser(request({session,app,device:'magic-phone',path,method:'POST'})),e=>e.statusCode===403);
+    }
+  }
+  await assert.rejects(context.getAuthenticatedUser(request({session,app:'magic_camera',device:'wrong-phone',path:recovery})),e=>e.statusCode===403);
+});
+
+test('Magic Camera refresh and sign-out preserve the independent hub login', async () => {
+  const hub=(await login({app:'korlix_ai',device:'hub-phone'})).body.session;
+  const magic=(await login({app:'magic_camera',device:'magic-phone'})).body.session;
+  const rotated=await refresh(magic,{app:'magic_camera',device:'magic-phone',path:'/api/magic-account/auth/refresh'});
+  assert.equal(rotated.statusCode,200);
+  const ended=await signout(rotated.body.session,{app:'magic_camera',device:'magic-phone',path:'/api/magic-account/auth/signout'});
+  assert.equal(ended.statusCode,200);
+  await assert.rejects(context.getAuthenticatedUser(request({session:rotated.body.session,app:null,device:'magic-phone',path:'/api/magic-camera'})),e=>e.statusCode===403);
+  assert.equal((await context.getAuthenticatedUser(request({session:hub,app:'korlix_ai',device:'hub-phone',path:'/api/generate',method:'POST'}))).id,userId);
 });

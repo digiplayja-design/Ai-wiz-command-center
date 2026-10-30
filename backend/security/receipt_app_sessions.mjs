@@ -1,3 +1,4 @@
+import {magicAppRouteAllowed} from '../magic_camera/auth.mjs';
 import {autoEmailAppRouteAllowed} from './auto_email_app.mjs';
 // Receipt Wiz and Messenger companion allowances are tied to the provider's verified login, not to a
 // client-controlled header. Keep revoked bindings: deleting one would let an
@@ -11,8 +12,8 @@ const unavailable = () => fail('Account access could not be verified. Please ret
 
 // Legacy export name retained for existing hub/Receipt Wiz integrations.
 export function requestsReceiptApp(req) {
-  return ['receipt_wiz', 'korlix_messenger', 'auto_email'].includes(req?.body?.client_app)
-    || ['receipt_wiz', 'korlix_messenger', 'auto_email'].includes(req?.headers?.['x-korlix-app']);
+  return ['receipt_wiz', 'korlix_messenger', 'auto_email', 'magic_camera'].includes(req?.body?.client_app)
+    || ['receipt_wiz', 'korlix_messenger', 'auto_email', 'magic_camera'].includes(req?.headers?.['x-korlix-app']);
 }
 
 export function messengerAppRouteAllowed(req) {
@@ -57,14 +58,14 @@ export function receiptAppRouteAllowed(req) {
 export function createReceiptAppSessions({database}) {
   async function register({userId, session, deviceInfo}) {
     const sessionId = verifiedLoginId(session?.access_token, userId);
-    const app = ['korlix_messenger', 'auto_email'].includes(deviceInfo?.clientApp) ? deviceInfo.clientApp : 'receipt_wiz';
-    const label = {korlix_messenger:'Messenger', auto_email:'Auto-Email', receipt_wiz:'Receipt Wiz'}[app];
+    const app = ['korlix_messenger', 'auto_email', 'magic_camera'].includes(deviceInfo?.clientApp) ? deviceInfo.clientApp : 'receipt_wiz';
+    const label = {magic_camera:'Magic Camera', korlix_messenger:'Messenger', auto_email:'Auto-Email', receipt_wiz:'Receipt Wiz'}[app];
     if (!sessionId) fail(`Please sign in again to start a ${label} session.`);
     if (!deviceInfo?.explicitDeviceId || !deviceInfo.deviceId || deviceInfo.deviceId.length > 200) {
       fail(`A valid installation ID is required for ${label}.`, 400, app === 'auto_email' ? 'auto_email_device_required' : app === 'korlix_messenger' ? 'messenger_device_required' : 'receipt_device_required');
     }
     if (!database) unavailable();
-    const {data, error} = await database.rpc(app === 'auto_email' ? 'korlix_register_auto_email_app_session' : app === 'korlix_messenger' ? 'korlix_register_messenger_app_session' : 'korlix_register_receipt_app_session', {
+    const {data, error} = await database.rpc(app === 'magic_camera' ? 'korlix_register_magic_camera_app_session' : app === 'auto_email' ? 'korlix_register_auto_email_app_session' : app === 'korlix_messenger' ? 'korlix_register_messenger_app_session' : 'korlix_register_receipt_app_session', {
       p_user_id: userId, p_session_id: sessionId, p_device_id: deviceInfo.deviceId,
       p_device_label: String(deviceInfo.deviceLabel || '').slice(0, 160),
       p_platform: String(deviceInfo.platform || 'unknown').slice(0, 40),
@@ -95,7 +96,7 @@ export function createReceiptAppSessions({database}) {
         || !deviceInfo?.explicitDeviceId || row.device_id !== deviceInfo.deviceId) {
       fail('This device is not authorized for this account. Please sign in again.', 403);
     }
-    const allowed = row.client_app === 'auto_email' ? autoEmailAppRouteAllowed(req) : (row.client_app ?? 'receipt_wiz') === 'korlix_messenger'
+    const allowed = row.client_app === 'magic_camera' ? magicAppRouteAllowed(req) : row.client_app === 'auto_email' ? autoEmailAppRouteAllowed(req) : (row.client_app ?? 'receipt_wiz') === 'korlix_messenger'
       ? messengerAppRouteAllowed(req) : receiptAppRouteAllowed(req);
     if (!allowed) {
       fail('Open KORLIX AI and sign in there to use this feature.', 403, row.client_app === 'auto_email' ? 'auto_email_app_scope' : (row.client_app ?? 'receipt_wiz') === 'korlix_messenger' ? 'messenger_app_scope' : 'receipt_app_scope');

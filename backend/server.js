@@ -1,3 +1,8 @@
+import {registerMagicApple} from './magic_camera/apple.mjs';
+import {registerMagicBilling, MAGIC_PACKAGE} from './magic_camera/billing.mjs';
+import {magicAuthAlias} from './magic_camera/auth.mjs';
+import {registerMagicCamera} from './magic_camera/routes.mjs';
+import {renderer as magicRenderer} from './magic_camera/core.mjs';
 import {registerAutoEmailOutboxRoutes} from './auto_email/outbox.mjs';
 import {registerAutoEmailMailboxRoutes} from './auto_email/mailboxes.mjs';
 import {createAutoEmailVoiceBridge, autoEmailVoiceInstructions, autoEmailVoiceTools} from './auto_email/voice.mjs';
@@ -281,6 +286,7 @@ app.use(express.json({
 
 // Separate namespace fails closed on servers without Messenger support.
 app.use(messengerAuthAlias);
+app.use(magicAuthAlias);
 app.use(autoEmailAuthAlias);
 const autoEmailVoiceBridge=createAutoEmailVoiceBridge({requireUser});
 app.use(autoEmailVoiceBridge.alias);
@@ -877,7 +883,7 @@ function getRequestDeviceInfo(req) {
     platform,
     explicitDeviceId: Boolean(rawDeviceId),
     clientApp: requestsReceiptApp(req)
-      ? (['auto_email', 'korlix_messenger'].find(app => req.body?.client_app === app || req.headers?.['x-korlix-app'] === app) || 'receipt_wiz') : 'korlix_ai',
+      ? (['auto_email', 'korlix_messenger', 'magic_camera'].find(app => req.body?.client_app === app || req.headers?.['x-korlix-app'] === app) || 'receipt_wiz') : 'korlix_ai',
   };
 }
 
@@ -921,7 +927,7 @@ async function registerDeviceSession({
   session,
 }) {
   assertAccountEnabled(profile);
-  if (['receipt_wiz', 'korlix_messenger', 'auto_email'].includes(deviceInfo.clientApp)) {
+  if (['receipt_wiz', 'korlix_messenger', 'auto_email', 'magic_camera'].includes(deviceInfo.clientApp)) {
     return receiptAppSessions.register({userId, session, deviceInfo});
   }
   if (!supabaseAdmin) {
@@ -12677,6 +12683,11 @@ const schedulingRegistration = registerScheduling(app, {
       })
     : undefined,
 });
+const magicApple = registerMagicApple(app,{database:supabaseAdmin,requireUser});
+const magicBilling = registerMagicBilling(app, {database:supabaseAdmin,requireUser,loadProfile:getOrCreateProfile});
+registerMagicCamera(app, {database:supabaseAdmin, requireUser,
+  render:process.env.OPENAI_API_KEY ? magicRenderer({client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0,timeout:300000}),toFile}) : undefined,
+});
 registerReceiptWiz(app, {database: supabaseAdmin, storageDatabase: bookkeepingStorage, requireUser,
   scanReceipt: process.env.OPENAI_API_KEY ? async ({receipt,bytes}) => scanReceiptWiz({receipt,bytes,
     client:new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0,timeout:180000}),
@@ -12741,10 +12752,10 @@ process.once('SIGINT',()=>receptionistRegistration.stop());
 registerWebBilling(app, {database: supabaseAdmin, requireUser, loadProfile: getOrCreateProfile});
 const receiptBilling = registerReceiptBilling(app, {database: supabaseAdmin, requireUser, loadProfile: getOrCreateProfile});
 const mainGoogleBilling = registerGooglePlay(app, {database: supabaseAdmin, requireUser, loadProfile: getOrCreateProfile,
-  provider: googlePlay(process.env, {notificationPackages: [KORLIX_PLAY_PACKAGE, RECEIPT_PACKAGE]}),
-  notificationHandlers: {[RECEIPT_PACKAGE]: receiptBilling.handleNotification}});
-process.once('SIGTERM', () => { receiptBilling.stop(); mainGoogleBilling.stop(); });
-process.once('SIGINT', () => { receiptBilling.stop(); mainGoogleBilling.stop(); });
+  provider: googlePlay(process.env, {notificationPackages: [KORLIX_PLAY_PACKAGE, RECEIPT_PACKAGE, MAGIC_PACKAGE]}),
+  notificationHandlers: {[RECEIPT_PACKAGE]: receiptBilling.handleNotification, [MAGIC_PACKAGE]: magicBilling.handleNotification}});
+process.once('SIGTERM', () => { receiptBilling.stop(); mainGoogleBilling.stop(); magicBilling.stop(); magicApple.stop(); });
+process.once('SIGINT', () => { receiptBilling.stop(); mainGoogleBilling.stop(); magicBilling.stop(); magicApple.stop(); });
 registerWorkforce(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1, workspaceEmail: workforceEmails }); // K138_WORKFORCE
 registerFunnels(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1, autoStartScheduler: true }); // K141_FUNNEL_SCHEDULING
 
