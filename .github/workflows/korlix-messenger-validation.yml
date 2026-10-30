@@ -26,6 +26,13 @@ on:
       - lib/image_to_video/**
       - test/image_to_video_reporting_test.dart
       - lib/support/**
+      - lib/imagine_studio/**
+      - lib/improve_picture/**
+      - lib/logo_studio/**
+      - test/*report*test.dart
+      - test/imagine_studio_test.dart
+      - test/logo_studio_test.dart
+      - test/support/**
 
 permissions:
   contents: read
