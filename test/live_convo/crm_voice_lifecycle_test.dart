@@ -287,7 +287,6 @@ class _FieldFixture {
   }
   final io = _VoiceIo();
   static const id = '11111111-1111-4111-8111-111111111111';
-  static const memberId = '22222222-2222-4222-8222-222222222222';
   late final client = ContactsClient(
     backendBaseUrl: 'https://k136s.invalid',
     headersBuilder: () => {'Authorization': io.principal},
