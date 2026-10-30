@@ -1,0 +1,28 @@
+name: korlix_magic_core
+description: Shared prompt-first KORLIX Magic Camera and private result gallery.
+publish_to: none
+version: 1.0.0
+environment:
+  sdk: ^3.13.5
+dependencies:
+  flutter:
+    sdk: flutter
+  korlix_receipt_core:
+    path: ../korlix_receipt_core
+  camera: 0.12.2
+  http: 1.6.0
+  shared_preferences: 2.5.5
+  share_plus: 12.0.2
+  speech_to_text: 7.4.0
+  image: 4.5.4
+  file_picker: 10.3.8
+dev_dependencies:
+  camera_platform_interface: 2.15.0
+  flutter_test:
+    sdk: flutter
+  flutter_lints: 6.0.0
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/presets.json
+    - assets/korlix_magic.png

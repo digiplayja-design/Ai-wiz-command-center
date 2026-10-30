@@ -20,6 +20,7 @@ const homeEnterpriseTools = <String>[
   'Payroll',
 ];
 const homePersonalTools = <String>[
+  'Magic Camera',
   'BabyBlend',
   'Virtual Closet',
   'The Pod and You',
@@ -70,6 +71,7 @@ const _homeBusinessPriority = <String>[
   'Business Directory',
 ];
 const _homePersonalPriority = <String>[
+  'Magic Camera',
   'Improve my picture',
   'BabyBlend',
   'Create a video',
@@ -163,6 +165,7 @@ class HomeToolEntry {
 }
 
 const _toolDetails = <String, String>{
+  'Magic Camera': 'Prompt-first portraits, 30 looks and a private magic gallery · Pro / Ultra',
   'Contacts CRM': 'Contacts, leads, follow-ups and autonomous email',
   'Workforce': 'Team tasks, work updates and email reminders',
   'Business Passport':

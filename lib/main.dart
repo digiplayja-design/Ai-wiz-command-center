@@ -1,3 +1,4 @@
+import 'package:korlix_magic_core/magic_entry.dart';
 import 'social/social_appearance.dart';
 import 'analytics/korlix_onboarding.dart';
 import 'analytics/korlix_onboarding_report.dart';
@@ -10427,6 +10428,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
   }
 
   void _selectUtilityTool(String tool) {
+    if (tool == 'Magic Camera') { unawaited(openMagicCamera(context,backendBaseUrl:kKorlixBackendBaseUrl,headersBuilder:_authHeaders,sessionChanges:kKorlixAuthRevision)); return; }
     if (tool == 'THE RECEIPT WIZ') { unawaited(_openReceiptWiz()); return; }
     if (tool == 'Inventory Studio') { unawaited(_openInventoryStudio()); return; }
     if (tool == 'Logo Studio') { unawaited(_openLogoStudio()); return; }

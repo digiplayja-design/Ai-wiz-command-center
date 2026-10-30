@@ -29,6 +29,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  korlix_magic_core:
+    path: packages/korlix_magic_core
   korlix_receipt_core:
     path: packages/korlix_receipt_core
   korlix_social_core:
