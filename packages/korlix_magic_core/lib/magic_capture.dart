@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:camera/camera.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -40,6 +41,8 @@ class _MagicCaptureState extends State<MagicCapture>
       _foreground = true;
   Future<void> _opening = Future.value();
   Future<void> _closing = Future.value();
+  Future<void> _orienting = Future.value();
+  Orientation _viewOrientation = Orientation.portrait;
   Map<String, dynamic>? _job;
   @override
   void initState() {
@@ -59,11 +62,73 @@ class _MagicCaptureState extends State<MagicCapture>
     }
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _viewOrientation = MediaQuery.orientationOf(context);
+    _cameraOrientationChanged();
+  }
+
+  DeviceOrientation _captureOrientation(CameraController camera) {
+    final device = camera.value.deviceOrientation;
+    final locked = camera.value.lockedCaptureOrientation;
+    bool matchesView(DeviceOrientation? value) =>
+        _viewOrientation == Orientation.portrait
+        ? value == DeviceOrientation.portraitUp ||
+              value == DeviceOrientation.portraitDown
+        : value == DeviceOrientation.landscapeLeft ||
+              value == DeviceOrientation.landscapeRight;
+    // Sensor events can lag behind the visible interface on open/resume, or
+    // report landscape while the OS keeps the interface in portrait.
+    if (matchesView(device)) return device;
+    if (matchesView(locked)) return locked!;
+    return _viewOrientation == Orientation.portrait
+        ? DeviceOrientation.portraitUp
+        : DeviceOrientation.landscapeLeft;
+  }
+
+  Future<void> _syncOrientation() {
+    final camera = _camera, epoch = _epoch;
+    final pending = _orienting.then((_) async {
+      if (kIsWeb ||
+          camera == null ||
+          !identical(camera, _camera) ||
+          !_canOpen(epoch) ||
+          !camera.value.isInitialized) {
+        return;
+      }
+      final orientation = _captureOrientation(camera);
+      if (camera.value.lockedCaptureOrientation != orientation) {
+        // The camera plugin applies this to both the native preview and photo.
+        await camera.lockCaptureOrientation(orientation);
+      }
+    });
+    // A failed native operation must not poison future orientation requests.
+    _orienting = pending.catchError((Object _) {});
+    return pending;
+  }
+
+  void _cameraOrientationChanged() {
+    if (_busy || _captured || !_foreground) return;
+    unawaited(
+      _syncOrientation().catchError((Object _) {
+        if (mounted && !_captured && _foreground) {
+          setState(
+            () => _error = 'The camera could not adjust to your screen. Reopen Magic Camera and try again.',
+          );
+        }
+      }),
+    );
+  }
+
   Future<void> _releaseCamera(CameraController? camera) {
     if (camera == null) return _closing;
+    camera.removeListener(_cameraOrientationChanged);
     if (identical(_camera, camera)) _camera = null;
+    final orienting = _orienting;
     _closing = _closing.then((_) async {
       try {
+        await orienting;
         await camera.dispose();
       } catch (_) {
         // A device may already have released the camera while backgrounding.
@@ -103,6 +168,9 @@ class _MagicCaptureState extends State<MagicCapture>
       );
       _camera = camera;
       await camera.initialize();
+      if (!_canOpen(epoch)) return;
+      camera.addListener(_cameraOrientationChanged);
+      await _syncOrientation();
       if (!_canOpen(epoch)) return;
       setState(() {
         _error = null;
@@ -175,6 +243,10 @@ class _MagicCaptureState extends State<MagicCapture>
       }
       if (!mounted || epoch != _epoch || !widget.client.valid) return;
       final camera = _camera!;
+      // A countdown, screen rotation or delayed sensor event may have changed
+      // the orientation. Finish the native update before taking the photo.
+      await _syncOrientation();
+      if (!_canOpen(epoch)) return;
       // Hide the live texture BEFORE the shutter; no captured image widget exists.
       setState(() {
         _captured = true;
@@ -300,7 +372,10 @@ class _MagicCaptureState extends State<MagicCapture>
           : Column(
               children: [
                 Expanded(
-                  child: _camera?.value.isInitialized != true
+                  child:
+                      _camera?.value.isInitialized != true ||
+                          (!kIsWeb &&
+                              _camera?.value.lockedCaptureOrientation == null)
                       ? const Center(child: CircularProgressIndicator())
                       : Stack(
                           alignment: Alignment.center,

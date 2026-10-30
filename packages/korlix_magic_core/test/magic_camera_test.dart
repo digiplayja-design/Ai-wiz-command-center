@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:camera/camera.dart' show CameraPreview;
 import 'package:camera_platform_interface/camera_platform_interface.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -125,6 +126,14 @@ class MemoryCapture extends XFile {
 }
 
 class FakeCamera extends CameraPlatform {
+  FakeCamera({this.initialOrientation = DeviceOrientation.portraitUp});
+  final DeviceOrientation initialOrientation;
+  final orientations =
+      StreamController<DeviceOrientationChangedEvent>.broadcast();
+  final locks = <(int, DeviceOrientation)>[];
+  final locked = <int, DeviceOrientation>{};
+  final capturedOrientations = <DeviceOrientation?>[];
+  Completer<void>? lockBarrier;
   int captures = 0, disposals = 0, opened = 0;
   @override
   Future<List<CameraDescription>> availableCameras() async => [
@@ -132,6 +141,11 @@ class FakeCamera extends CameraPlatform {
       name: 'fake',
       lensDirection: CameraLensDirection.front,
       sensorOrientation: 0,
+    ),
+    const CameraDescription(
+      name: 'rear',
+      lensDirection: CameraLensDirection.back,
+      sensorOrientation: 90,
     ),
   ];
   @override
@@ -160,16 +174,28 @@ class FakeCamera extends CameraPlatform {
   Stream<CameraErrorEvent> onCameraError(int id) =>
       StreamController<CameraErrorEvent>().stream;
   @override
-  Stream<DeviceOrientationChangedEvent> onDeviceOrientationChanged() =>
-      Stream.value(
-        const DeviceOrientationChangedEvent(DeviceOrientation.portraitUp),
-      );
+  Stream<DeviceOrientationChangedEvent> onDeviceOrientationChanged() async* {
+    yield DeviceOrientationChangedEvent(initialOrientation);
+    yield* orientations.stream;
+  }
+
+  @override
+  Future<void> lockCaptureOrientation(
+    int id,
+    DeviceOrientation orientation,
+  ) async {
+    locks.add((id, orientation));
+    await lockBarrier?.future;
+    locked[id] = orientation;
+  }
+
   @override
   Widget buildPreview(int id) =>
       const ColoredBox(key: Key('live-viewfinder'), color: Colors.green);
   @override
   Future<XFile> takePicture(int id) async {
     captures++;
+    capturedOrientations.add(locked[id]);
     return MemoryCapture();
   }
 
@@ -235,6 +261,152 @@ void main() {
     c.dispose();
     changed.dispose();
   });
+  testWidgets(
+    'portrait preview and shutter override a stale landscape sensor on either lens and resume',
+    (tester) async {
+      tester.view.physicalSize = const Size(600, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final previous = CameraPlatform.instance;
+      final camera = FakeCamera(
+        initialOrientation: DeviceOrientation.landscapeLeft,
+      );
+      final client = FakeClient();
+      CameraPlatform.instance = camera;
+      addTearDown(() => CameraPlatform.instance = previous);
+      addTearDown(camera.orientations.close);
+      addTearDown(client.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MagicCapture(client: client, options: opts),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(camera.locked[1], DeviceOrientation.portraitUp);
+      // Android's CameraPreview rotates its texture using this same lock.
+      expect(
+        tester
+            .widget<RotatedBox>(
+              find.descendant(
+                of: find.byType(CameraPreview),
+                matching: find.byType(RotatedBox),
+              ),
+            )
+            .quarterTurns,
+        0,
+      );
+      await tester.tap(find.byTooltip('Switch camera'));
+      await tester.pumpAndSettle();
+      expect(camera.locked[2], DeviceOrientation.portraitUp);
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await tester.pumpAndSettle();
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+      await tester.pumpAndSettle();
+      expect(camera.locked[3], DeviceOrientation.portraitUp);
+      await tester.tap(find.byKey(const Key('magic-shutter')));
+      for (var i = 0; i < 8 && client.calls == 0; i++) {
+        await tester.pump();
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+      }
+      expect(camera.capturedOrientations, [DeviceOrientation.portraitUp]);
+      client.generated.complete(job('queued'));
+      await tester.pump();
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'rotation during countdown waits for the native orientation before landscape capture',
+    (tester) async {
+      tester.view.physicalSize = const Size(600, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final previous = CameraPlatform.instance;
+      final camera = FakeCamera();
+      final client = FakeClient();
+      CameraPlatform.instance = camera;
+      addTearDown(() => CameraPlatform.instance = previous);
+      addTearDown(camera.orientations.close);
+      addTearDown(client.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MagicCapture(
+            client: client,
+            options: opts,
+            timer: 1,
+            haptics: false,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(camera.locked[1], DeviceOrientation.portraitUp);
+      await tester.tap(find.byKey(const Key('magic-shutter')));
+      tester.view.physicalSize = const Size(900, 600);
+      camera.orientations.add(
+        const DeviceOrientationChangedEvent(DeviceOrientation.landscapeRight),
+      );
+      camera.lockBarrier = Completer<void>();
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(camera.locks.last.$2, DeviceOrientation.landscapeRight);
+      expect(camera.captures, 0);
+      camera.lockBarrier!.complete();
+      for (var i = 0; i < 8 && client.calls == 0; i++) {
+        await tester.pump();
+        await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)),
+        );
+      }
+      expect(camera.capturedOrientations, [DeviceOrientation.landscapeRight]);
+      client.generated.complete(job('queued'));
+      await tester.pump();
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+  testWidgets(
+    'live orientation follows both landscape directions and returns to portrait',
+    (tester) async {
+      tester.view.physicalSize = const Size(900, 600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final previous = CameraPlatform.instance;
+      final camera = FakeCamera(
+        initialOrientation: DeviceOrientation.landscapeLeft,
+      );
+      final client = FakeClient();
+      CameraPlatform.instance = camera;
+      addTearDown(() => CameraPlatform.instance = previous);
+      addTearDown(camera.orientations.close);
+      addTearDown(client.dispose);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MagicCapture(client: client, options: opts),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(camera.locked[1], DeviceOrientation.landscapeLeft);
+      camera.orientations.add(
+        const DeviceOrientationChangedEvent(DeviceOrientation.landscapeRight),
+      );
+      await tester.pumpAndSettle();
+      expect(camera.locked[1], DeviceOrientation.landscapeRight);
+      tester.view.physicalSize = const Size(600, 900);
+      // Correct the visible portrait frame even before the sensor catches up.
+      await tester.pumpAndSettle();
+      expect(camera.locked[1], DeviceOrientation.portraitUp);
+      camera.orientations.add(
+        const DeviceOrientationChangedEvent(DeviceOrientation.portraitDown),
+      );
+      await tester.pumpAndSettle();
+      expect(camera.locked[1], DeviceOrientation.portraitDown);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
   testWidgets(
     'shutter hides the viewfinder before capture; no original preview appears during upload',
     (tester) async {
