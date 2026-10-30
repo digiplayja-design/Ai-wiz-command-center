@@ -101,6 +101,7 @@ test('real report route attaches final image privately and never acknowledges a 
  assert.equal(persisted.report.contentId,ready.job.id);assert.match(persisted.report.prompt,/facial structure/);assert.equal(persisted.evidence.mimeType,'image/jpeg');assert(persisted.evidence.base64);assert.equal(persisted.report.imageUrl,'');
  failPersist=true;r=await fetch(url+'/report',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({reason:'Other'})});assert.equal(r.status,503);assert.equal((await r.json()).accepted,undefined);
  r=await fetch(url+'/image');assert.equal(r.status,200);assert.equal(r.headers.get('cache-control'),'no-store');assert.equal((await fetch(url+'/original')).status,404);
+ r=await fetch(url+'/image?preview=1');assert.equal(r.status,200);assert.equal(r.headers.get('content-type'),'image/jpeg');const thumb=await sharp(Buffer.from(await r.arrayBuffer())).metadata();assert(thumb.width<=640&&thumb.height<=640);
 });
 
 test('Apple receipts bind to app, account, expiry and verified sandbox access',async()=>{
@@ -134,4 +135,11 @@ test('verified Google Starter purchase, duplicate prevention and expiry use dedi
  await command('prepare',{account_id:magicAccountId(owner)});const lease=await command('claim');await command('apply',{...facts,sync_token:lease.sync_token});await command('release',{sync_token:lease.sync_token,success:true});
  assert.equal((await plan()).name,'starter');assert.equal((await plan()).limit,15);assert.equal((await plan(false)).can_generate,false);await assert.rejects(command('prepare',{account_id:magicAccountId(owner)}),/already included/);
  const next=await command('claim');await command('apply',{...facts,active:false,state:'SUBSCRIPTION_STATE_EXPIRED',sync_token:next.sync_token});assert.equal((await plan()).name,'free');
+});
+
+test('private gallery pages keep older results reachable and exclude deleted records',async()=>{
+ await db.query("insert into korlix_magic_jobs(owner_id,request_key,fingerprint,options,state,allowance) select $1,gen_random_uuid(),repeat('a',64),'{}','ready','pro' from generate_series(1,150)",[owner]);
+ const first=await call(owner,'list',null,{standalone:true});assert.equal(first.jobs.length,100);assert.equal(first.next_offset,100);
+ const next=await call(owner,'list',null,{standalone:true,offset:100});assert.equal(next.jobs.length,50);assert.equal(next.next_offset,null);assert.equal(new Set([...first.jobs,...next.jobs].map(x=>x.id)).size,150);
+ assert.equal((await call(other,'list',null,{standalone:true})).jobs.length,0);await assert.rejects(call(owner,'list',null,{offset:-1}),/Invalid gallery/);
 });

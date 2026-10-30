@@ -68,7 +68,10 @@ export function registerMagicCamera(app,{database,storage=magicStorage(database)
   catch(e){r.status(e.statusCode||503).json({error:e.statusCode?e.message:'Magic Camera is temporarily unavailable. Please retry.'});}
  };
  const id=value=>{if(!UUID.test(value||''))fail('Invalid generation ID.');return value;};
- app.get(base,route(async(q,r,u)=>r.json({...await call(u.id,'list',null,{standalone:standalone(q)}),presets:PRESETS,available:!!render&&!!storage})));
+ app.get(base,route(async(q,r,u)=>{
+  if(q.query.offset!==undefined&&(typeof q.query.offset!=='string'||!/^\d{1,7}$/.test(q.query.offset)))fail('Invalid gallery page.');
+  r.json({...await call(u.id,'list',null,{standalone:standalone(q),offset:Number(q.query.offset||0)}),presets:PRESETS,available:!!render&&!!storage});
+ }));
  app.post(base,route(async(q,r,u)=>{
   if(!render||!storage)fail('Magic rendering is being connected. Your allowance has not changed.',503);
   const key=id(q.get('X-Magic-Request-Key'));
@@ -95,7 +98,9 @@ export function registerMagicCamera(app,{database,storage=magicStorage(database)
  app.get(base+'/:id/image',route(async(q,r,u)=>{
   const {job}=await call(u.id,'get',id(q.params.id));if(job.state!=='ready'||job.deleted_at)fail('This magic photo is not available.',404);
   const bytes=await storage.download(paths(job).output);
-  r.set({'Content-Type':'image/png','X-Content-Type-Options':'nosniff','Content-Disposition':'inline; filename="korlix-magic.png"','Content-Security-Policy':"sandbox; default-src 'none'"});r.send(bytes);
+  const preview=q.query.preview==='1';
+  const image=preview?await sharp(bytes).resize({width:640,height:640,fit:'inside',withoutEnlargement:true}).jpeg({quality:80}).toBuffer():bytes;
+  r.set({'Content-Type':preview?'image/jpeg':'image/png','X-Content-Type-Options':'nosniff','Content-Disposition':`inline; filename="korlix-magic.${preview?'jpg':'png'}"`,'Content-Security-Policy':"sandbox; default-src 'none'"});r.send(image);
  }));
  app.post(base+'/:id/report',route(async(q,r,u)=>{
   const {job}=await call(u.id,'get',id(q.params.id));if(job.state!=='ready'||job.deleted_at)fail('This magic photo is not available.',404);
@@ -103,7 +108,7 @@ export function registerMagicCamera(app,{database,storage=magicStorage(database)
   if(!allowed.includes(q.body?.reason)||typeof (q.body?.details??'')!=='string'||(q.body?.details??'').length>2000)fail('Choose a report reason and keep comments under 2,000 characters.');
   const report=guard({req:{...q,headers:q.headers,body:{reason:q.body.reason,details:q.body.details||'',contentType:'image',generationId:job.id,prompt:instructions(job.options),appArea:'magic_camera',outputSummary:'Magic Camera generated result'}},user:u});
   const bytes=await storage.download(paths(job).output);
-  const small=await sharp(bytes).resize({width:1280,height:1280,fit:'inside',withoutEnlargement:true}).jpeg({quality:80}).toBuffer();
+  const small=await sharp(bytes).resize({width:960,height:960,fit:'inside',withoutEnlargement:true}).jpeg({quality:80}).toBuffer();
   const evidence=await prepareReportImageEvidence('data:image/jpeg;base64,'+small.toString('base64'));
   report.imageEvidence=reportImageMetadata(evidence);
   // Existing private support review queue; no email is sent by this module.

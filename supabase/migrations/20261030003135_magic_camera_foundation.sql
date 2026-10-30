@@ -66,7 +66,7 @@ end $$;
 
 create function public.korlix_magic_command(p_actor uuid,p_action text,p_id uuid default null,p jsonb default '{}') returns jsonb
 language plpgsql security invoker set search_path=pg_catalog,public as $$
-declare j public.korlix_magic_jobs;pl jsonb;result jsonb;dispatch boolean:=false;
+declare j public.korlix_magic_jobs;pl jsonb;result jsonb;dispatch boolean:=false;off integer;total integer;
 begin
  if p_action='claim' then
   select * into j from public.korlix_magic_jobs where state='queued' and lease_until>now() order by created_at for update skip locked limit 1;
@@ -83,9 +83,11 @@ begin
  if p is null or jsonb_typeof(p)<>'object' or octet_length(p::text)>16000 then raise exception 'MAG400: Invalid request.';end if;
  perform pg_advisory_xact_lock(hashtextextended('magic-camera:'||p_actor::text,0));
  if p_action='list' then
-  return jsonb_build_object('plan',public.korlix_magic_plan(p_actor,coalesce((p->>'standalone')::boolean,false)),
+  off:=coalesce((p->>'offset')::integer,0);if off<0 or off>1000000 then raise exception 'MAG400: Invalid gallery page.';end if;
+  select count(*) into total from public.korlix_magic_jobs where owner_id=p_actor and state<>'deleted' and deleted_at is null;
+  return jsonb_build_object('next_offset',case when total>off+100 then off+100 else null end,'plan',public.korlix_magic_plan(p_actor,coalesce((p->>'standalone')::boolean,false)),
    'jobs',coalesce((select jsonb_agg(to_jsonb(x)) from(select id,state,options,created_at,finished_at,width,height,render_ms,error from public.korlix_magic_jobs
-     where owner_id=p_actor and state<>'deleted' and deleted_at is null order by created_at desc limit 100)x),'[]'));
+     where owner_id=p_actor and state<>'deleted' and deleted_at is null order by created_at desc,id limit 100 offset off)x),'[]'));
  elsif p_action='reserve' then
   select * into j from public.korlix_magic_jobs where owner_id=p_actor and request_key=(p->>'request_key')::uuid;
   if found then
