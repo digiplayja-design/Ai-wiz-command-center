@@ -1,0 +1,59 @@
+{
+  "updatedAt": "2026-10-31T21:23:08.124363+00:00",
+  "app": "KORLIX Brain+Voice",
+  "bundleId": "com.korlix.brain",
+  "version": "1.0.1",
+  "minimumSourceBuild": 2,
+  "appCodeCommit": "5a504a2ef7a7937ce89e533a713ed8ba3501b83c",
+  "releasePipelineCommit": "cba3d1607f96c9b6daac7d691e235b2f8c6158d5",
+  "signedIosCandidate": {
+    "status": "success",
+    "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae65911a74da3772d1da5c1",
+    "verifiedBy": "Codemagic IPA identity, App Store profile and codesign checks",
+    "artifactLocation": "Codemagic; not downloaded in this session"
+  },
+  "mobileValidation": {
+    "status": "success",
+    "url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41242264204",
+    "android": "pass",
+    "iosSimulator": "pass",
+    "iosDeviceArm64Release": "pass",
+    "flutterTests": 22,
+    "releaseIdentityTests": 20
+  },
+  "testflight": {
+    "status": "blocked_before_upload",
+    "reason": "Apple query succeeded and returned no com.korlix.brain app record to the release integration",
+    "proofBuildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae65ba8a74da3772d1db0de",
+    "uploadBranch": "release/korlix-brain-testflight-20261031",
+    "workflow": "korlix-brain-ios-testflight"
+  },
+  "requiredAppleRecord": {
+    "name": "KORLIX Brain+Voice",
+    "platform": "iOS",
+    "bundleId": "com.korlix.brain",
+    "sku": "KORLIX-BRAIN-VOICE-IOS",
+    "primaryLanguage": "English (U.S.)",
+    "console": "https://appstoreconnect.apple.com/apps"
+  },
+  "storeSubmission": "not performed",
+  "authenticatedDeviceVoiceTest": "not yet performed",
+  "androidStoreSigning": "not configured",
+  "listingText": "prepared draft",
+  "iconColors": [
+    "purple",
+    "red",
+    "green",
+    "gold"
+  ],
+  "reasoning": {
+    "model": "gpt-6-astra",
+    "effort": "max",
+    "liveProviderInference": "not yet tested in an authenticated account"
+  },
+  "voiceMemory": {
+    "command": "Rici, remember this: ...",
+    "additionalPassword": false,
+    "requiresSignedInAccount": true
+  }
+}

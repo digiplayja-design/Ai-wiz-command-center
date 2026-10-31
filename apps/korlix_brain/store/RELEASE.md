@@ -13,15 +13,17 @@
 | Platforms | iPhone and iPad |
 | Store icon | Purple, red, green and gold KORLIX emblem |
 
-Apple app ID and Google Play listing ID are not yet verified. Never reuse another KORLIX app's store record or bundle identity.
+The [Apple record check](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae65ba8a74da3772d1db0de) successfully authenticated and queried App Store Connect on October 31, 2026. Apple returned no app record for `com.korlix.brain`, so upload stopped at the explicit missing-record step. No Brain+Voice build was uploaded to TestFlight. Create the new iOS app record using the table above; if an administrator already created it with restricted access, make it visible to the existing Codemagic integration instead. Apple record creation is a console step not exposed by the connected tools in this session. Google Play listing ID is also unverified. Never reuse another KORLIX app's store record or bundle identity.
 
 ## iOS build route
 
-Codemagic application: `6a32198d2d0806059c3df062`. Source branch: `feature/korlix-brain-voice-20261031`.
+Codemagic application: `6a32198d2d0806059c3df062`. Development/candidate branch: `feature/korlix-brain-voice-20261031`. Explicit upload branch: `release/korlix-brain-testflight-20261031`.
+
+The [signed candidate build](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae65911a74da3772d1da5c1) succeeded on October 31, 2026, including dedicated provisioning, app tests, IPA export and signature verification. [GitHub validation](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41242264204) passed Android, simulator and iPhoneOS arm64 release builds. The candidate IPA remains in Codemagic; it has not been downloaded into this source archive. The build service's authenticated artifact API is not available in this session.
 
 1. Run `korlix-brain-ios-candidate`. A push trigger is configured for this branch; it requires the repository's Codemagic webhook to be active. The workflow imports the existing managed KORLIX distribution certificate, registers/selects `com.korlix.brain`, and installs its dedicated App Store profile. The original KORLIX profile is only used to import the certificate and cannot pass Brain+Voice artifact verification. No store upload occurs in this workflow.
 2. In [App Store Connect](https://appstoreconnect.apple.com/apps), create the new iOS app record using the identity above, if it does not already exist. Select the dedicated `com.korlix.brain` bundle. Keep the existing account access policy. Apple assigns the numeric app ID; do not invent one.
-3. Run `korlix-brain-ios-testflight` on the same source branch. It requires the exact Apple app record, chooses a build number above existing builds, verifies the signed IPA, and uploads to App Store Connect. It does not submit for external beta or App Store review, assign testers, or send invitations.
+3. Run `korlix-brain-ios-testflight`, or push the reviewed source to `release/korlix-brain-testflight-20261031`. That release branch alone triggers upload. It first queries Apple for the exact app record; a successful empty response produces a distinct “App Store Connect record is missing for com.korlix.brain” failed step. Authentication/API errors stop at the query step instead. With the app record present, it chooses a build number above existing builds, verifies the signed IPA, and uploads to App Store Connect. It does not submit for external beta or App Store review, assign testers, or send invitations.
 4. After Apple processes the build, complete the app's TestFlight information and add the build to the intended internal testing group. Verify an authenticated physical-device session before App Store submission.
 
 The signing tools use the existing `Codemagic Korlix AI` integration and `KORLIX_APP_STORE_CERT` reference. No credentials are embedded in source. No certificate is created or revoked. Failed Apple lookups stop the build rather than resetting numbering.
