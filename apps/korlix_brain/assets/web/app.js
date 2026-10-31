@@ -802,11 +802,12 @@
       get(event.kind==='training'?'kb-training':'kb-memory').value=(dictationBase?dictationBase+'\n':'')+event.text;
       if(event.kind==='training')trainingSource='voice';else memorySource='voice';
       if(event.final){dictating=null;root.querySelectorAll('[data-stop-dictation]').forEach(b=>b.hidden=true);announce('Words captured. Edit and review before saving.');}
-    }else if(event.type==='dictationStatus'&&event.status==='notListening'){
-      dictating=null;root.querySelectorAll('[data-stop-dictation]').forEach(b=>b.hidden=true);
+    }else if(event.type==='dictationStatus'){
+      if(event.status==='notListening'){dictating=null;root.querySelectorAll('[data-stop-dictation]').forEach(b=>b.hidden=true);}
+      if(event.message)announce(event.message);
     }else if(event.type==='notice')announce(event.text);
-    else if(event.type==='back'){if(currentScreen!=='home')show('home');}
-    else if(event.type==='background'){voiceRequest++;dictating=null;voiceActive=false;silenceMusicInBackground();}
+    else if(event.type==='back'){if(currentScreen!=='home')show('home');else bridge.call('closeApp').catch(e=>announce(e.message));}
+    else if(event.type==='background'){voiceRequest++;dictating=null;voiceActive=false;root.querySelectorAll('[data-stop-dictation]').forEach(b=>b.hidden=true);silenceMusicInBackground();}
   });
   const resize=new ResizeObserver(measure);menus.forEach(menu=>resize.observe(menu.element));scenes.forEach(scene=>resize.observe(scene.canvas));resize.observe(transferStage);resize.observe(app);
   window.lucide?.createIcons();mountMusic();readPalette();measure();syncMotion();mountCinema();

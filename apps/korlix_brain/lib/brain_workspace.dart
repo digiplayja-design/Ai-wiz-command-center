@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:korlix_receipt_core/privacy/korlix_third_party_ai_consent.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -213,6 +214,14 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
         return null;
       case 'pickFile':
         return _pickFile(_kind(data));
+      case 'closeApp':
+        if (Theme.of(context).platform == TargetPlatform.android) {
+          _voiceIntent++;
+          await _voice.stop();
+          await _stopDictation();
+          await SystemNavigator.pop();
+        }
+        return null;
       case 'account':
         await _account();
         return null;

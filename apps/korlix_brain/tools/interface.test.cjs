@@ -95,6 +95,8 @@ test('voice leaves microphone control with native events, and text is never exec
     await app.go('talk');assert.equal(app.get('kb-replay-demo').textContent,'Connect to Rici');
     app.w.KorlixBrainReceive({type:'transcript',role:'rici',text:'<img src=x onerror=alert(1)>'});
     assert.equal(app.d.querySelector('#brain-transcript img'),null);
+    app.w.KorlixBrainReceive({type:'dictationStatus',status:'notListening',message:'Speech permission is unavailable.'});
+    assert.equal(app.get('kb-status').textContent,'Speech permission is unavailable.');
     await app.go('home');assert(app.calls.some(r=>r.action==='stopVoice'));
   }finally{app.dom.window.close();}
 });
@@ -118,5 +120,14 @@ test('a late canceled start cannot overwrite a newer voice attempt',async()=>{
     assert.equal(app.get('kb-voice-phase').textContent,'Rici is listening');
     assert.equal(app.get('kb-replay-demo').textContent,'End conversation');
     app.reply(app.pending[1],null);await tick();
+  }finally{app.dom.window.close();}
+});
+
+test('Android back returns to Home before requesting app exit',async()=>{
+  const app=await setup();try{
+    await app.go('memory');app.w.KorlixBrainReceive({type:'back'});await tick();
+    assert.equal(app.screen(),'home');assert(!app.calls.some(r=>r.action==='closeApp'));
+    app.w.KorlixBrainReceive({type:'back'});await tick();
+    assert.equal(app.calls.filter(r=>r.action==='closeApp').length,1);
   }finally{app.dom.window.close();}
 });
