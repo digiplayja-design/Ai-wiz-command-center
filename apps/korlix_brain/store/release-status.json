@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-31T21:23:08.124363+00:00",
+  "updatedAt": "2026-10-31T21:50:37.378890+00:00",
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "version": "1.0.1",
@@ -22,24 +22,25 @@
     "releaseIdentityTests": 20
   },
   "testflight": {
-    "status": "blocked_before_upload",
-    "reason": "Apple query succeeded and returned no com.korlix.brain app record to the release integration",
-    "proofBuildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae65ba8a74da3772d1db0de",
+    "status": "uploaded_processing_not_yet_verified",
+    "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6612f6a1999f83b5c5925",
+    "sourceCommit": "13692038da1db765afd4860f8dc62f514a46cc8e",
     "uploadBranch": "release/korlix-brain-testflight-20261031",
-    "workflow": "korlix-brain-ios-testflight"
-  },
-  "requiredAppleRecord": {
-    "name": "KORLIX Brain+Voice",
-    "platform": "iOS",
-    "bundleId": "com.korlix.brain",
-    "sku": "KORLIX-BRAIN-VOICE-IOS",
-    "primaryLanguage": "English (U.S.)",
-    "console": "https://appstoreconnect.apple.com/apps"
+    "workflow": "korlix-brain-ios-testflight",
+    "betaInformation": "saved in App Store Connect",
+    "uploadResult": "success",
+    "internalGroup": {
+      "name": "KORLIX Brain Internal",
+      "id": "ae86d9a2-5bdf-4f3d-910b-aa532675951f",
+      "automaticDistribution": false,
+      "testerCount": 0,
+      "invitationStatus": "blocked by automatic approval review; explicit recipient and testing-access approval required"
+    }
   },
   "storeSubmission": "not performed",
   "authenticatedDeviceVoiceTest": "not yet performed",
   "androidStoreSigning": "not configured",
-  "listingText": "prepared draft",
+  "listingText": "Apple name, subtitle, category, description, keywords and support URL saved; Google draft only",
   "iconColors": [
     "purple",
     "red",
@@ -55,5 +56,18 @@
     "command": "Rici, remember this: ...",
     "additionalPassword": false,
     "requiresSignedInAccount": true
+  },
+  "appleRecord": {
+    "name": "KORLIX Brain+Voice",
+    "platform": "iOS",
+    "bundleId": "com.korlix.brain",
+    "sku": "KORLIX-BRAIN-VOICE-IOS",
+    "primaryLanguage": "English (U.S.)",
+    "console": "https://appstoreconnect.apple.com/apps/6829319523/distribution/info",
+    "status": "created",
+    "appleAppId": "6829319523",
+    "versionDraft": "1.0.1",
+    "category": "PRODUCTIVITY",
+    "userAccess": "Limited Access"
   }
 }

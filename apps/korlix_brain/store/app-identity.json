@@ -10,6 +10,8 @@
     "green",
     "gold"
   ],
-  "status": "release preparation - not submitted",
-  "sharedAccount": true
+  "status": "Apple app record created; signed build uploaded; Apple processing not yet verified; not submitted for App Store review",
+  "sharedAccount": true,
+  "appleAppId": "6829319523",
+  "appleSku": "KORLIX-BRAIN-VOICE-IOS"
 }
