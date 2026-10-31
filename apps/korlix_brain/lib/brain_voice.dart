@@ -293,19 +293,11 @@ class BrainVoice {
             await channel.send(RTCDataChannelMessage(jsonEncode(event)));
           }
         },
-        request: (id, text) async {
-          final result = await api.send(
-            'POST',
-            '/api/brain-voice/turn',
-            body: {
-              'sessionId': usage.sessionId,
-              'turnId': id,
-              'transcript': text,
-            },
-            timeout: const Duration(seconds: 155),
-          );
-          return Map<String, dynamic>.from(jsonDecode(result.body) as Map);
-        },
+        request: (id, text, onDelta) => api.voiceTurn({
+          'sessionId': usage.sessionId,
+          'turnId': id,
+          'transcript': text,
+        }, onDelta),
       );
       if (!response.body.trimLeft().startsWith('v=')) {
         throw const BrainApiException(

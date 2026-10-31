@@ -1,3 +1,11 @@
+## Voice latency update — build 4
+
+Three production requests on 2026-10-31 took 6,995 / 7,930 / 10,951 ms on the backend, excluding transcription and speech startup. Build 4 streams complete phrases to the existing speech-only Realtime session as Astra produces them. It preserves gpt-6-astra / max, direct memory-save authorization and interruption behavior. Speech chunks count as one turn while every audio token remains metered.
+
+The paired backend retains the JSON route for build 3, enables semantic VAD high for Brain only, overlaps fresh memory reads with allowance checks, and logs timing fields without transcripts or account identifiers. No model or paid service-tier change is made. Max reasoning time remains; measured on-device improvement is pending.
+
+Validation: 30 Flutter tests, including incremental UTF-8, truncation, account changes, ordering, early speech, late response cancellation, and save acknowledgement. Signed upload status is recorded in release-status.json.
+
 # Brain+Voice release handoff
 
 ## Dedicated identity

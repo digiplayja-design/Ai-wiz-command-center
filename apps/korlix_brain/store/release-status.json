@@ -3,7 +3,7 @@
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "version": "1.0.1",
-  "minimumSourceBuild": 3,
+  "minimumSourceBuild": 4,
   "appCodeCommit": "f2366bfe8976513ed4d2dbdb409db656f38082e5",
   "releasePipelineCommit": "2a4d2737b14222fde1d407d0da6d3fc043d9119e",
   "signedIosCandidate": {
@@ -109,5 +109,24 @@
   "releaseIdentityChecks": {
     "tests": 23,
     "result": "pass"
+  },
+  "latencyUpdate": {
+    "sourceBuild": 4,
+    "status": "validated locally; upload pending",
+    "reasoningModel": "gpt-6-astra",
+    "reasoningEffort": "max",
+    "baselineBackendMs": [
+      6995,
+      7930,
+      10951
+    ],
+    "changes": [
+      "stream complete spoken phrases before full answer",
+      "semantic VAD high for Brain",
+      "overlap fresh runtime reads with allowance check",
+      "speak save acknowledgement without waiting for UI refresh"
+    ],
+    "flutterTests": 30,
+    "deviceLatencyVerification": "pending"
   }
 }

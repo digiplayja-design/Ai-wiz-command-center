@@ -16,12 +16,12 @@ void main() {
     () async {
       final calls = <String>[], sent = <Map<String, dynamic>>[];
       final turns = BrainVoiceTurns(
-        request: (id, text) async {
+        request: (id, text, onDelta) async {
           calls.add(id);
           return answer;
         },
         send: (e) async {
-          sent.add(e);
+          if (e['type'] == 'response.create') sent.add(e);
         },
         emit: (_) {},
         isCurrent: () => true,
@@ -44,12 +44,12 @@ void main() {
   test('out of order ASR completes in spoken order; interrupted answer stays silent', () async {
     final calls = <String>[], sent = <Map<String, dynamic>>[];
     final turns = BrainVoiceTurns(
-      request: (id, text) async {
+      request: (id, text, onDelta) async {
         calls.add(id);
         return answer;
       },
       send: (e) async {
-        sent.add(e);
+        if (e['type'] == 'response.create') sent.add(e);
       },
       emit: (_) {},
       isCurrent: () => true,
@@ -72,9 +72,9 @@ void main() {
         sent = <Map<String, dynamic>>[],
         saved = <Map<String, dynamic>>[];
     final turns = BrainVoiceTurns(
-      request: (_, _) => pending.future,
+      request: (_, _, onDelta) => pending.future,
       send: (e) async {
-        sent.add(e);
+        if (e['type'] == 'response.create') sent.add(e);
       },
       emit: (_) {},
       isCurrent: () => true,
@@ -101,7 +101,7 @@ void main() {
     final pending = Completer<Map<String, dynamic>>(), effects = <String>[];
     var current = true;
     final turns = BrainVoiceTurns(
-      request: (_, _) => pending.future,
+      request: (_, _, onDelta) => pending.future,
       send: (_) async {
         effects.add('speech');
       },
@@ -128,9 +128,9 @@ void main() {
         saved = <Object>[],
         sent = <Object>[];
     final turns = BrainVoiceTurns(
-      request: (_, _) async => throw StateError('offline'),
+      request: (_, _, onDelta) async => throw StateError('offline'),
       send: (e) async {
-        sent.add(e);
+        if (e['type'] == 'response.create') sent.add(e);
       },
       emit: emitted.add,
       isCurrent: () => true,
@@ -152,9 +152,9 @@ void main() {
     () async {
       final sent = <Object>[];
       final turns = BrainVoiceTurns(
-        request: (_, _) async => {...answer, 'model': 'gpt-6-luna'},
+        request: (_, _, onDelta) async => {...answer, 'model': 'gpt-6-luna'},
         send: (value) async {
-          sent.add(value);
+          if (value['type'] == 'response.create') sent.add(value);
         },
         emit: (_) {},
         isCurrent: () => true,

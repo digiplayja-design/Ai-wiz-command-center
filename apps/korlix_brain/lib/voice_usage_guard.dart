@@ -16,6 +16,8 @@ class KorlixLiveConvoUsageGuard {
   int _maxSessionSeconds = 0;
   int _maxResponses = 0;
   int _responseCount = 0;
+  final _brainTurns = <String>{};
+  final _responseIds = <String>{};
   int _totalTokens = 0;
   int _inputTokens = 0;
   int _outputTokens = 0;
@@ -112,6 +114,8 @@ class KorlixLiveConvoUsageGuard {
       _header(response, 'x-korlix-live-convo-max-responses'),
     );
     _responseCount = 0;
+    _brainTurns.clear();
+    _responseIds.clear();
     _totalTokens = 0;
     _inputTokens = 0;
     _outputTokens = 0;
@@ -169,9 +173,12 @@ class KorlixLiveConvoUsageGuard {
     final type = event['type']?.toString() ?? '';
 
     if (type == 'response.done') {
-      _responseCount += 1;
-
       final response = _map(event['response']);
+      final responseId = response['id']?.toString();
+      if (responseId != null && !_responseIds.add(responseId)) return;
+      final brainTurn = _map(response['metadata'])['brain_turn']?.toString();
+      // Speech chunks belong to one reasoning turn; meter every audio token.
+      if (brainTurn == null || _brainTurns.add(brainTurn)) _responseCount += 1;
       final responseUsage = _map(response['usage']);
       final usage = responseUsage.isNotEmpty
           ? responseUsage
