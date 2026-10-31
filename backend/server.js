@@ -1,4 +1,5 @@
 import {createBrainVoice, brainSpeechConfig, isBrainVoice, BRAIN_MODEL, BRAIN_EFFORT, BRAIN_PROTOCOL} from './brain_voice/core.mjs';
+import {streamBrainTurn} from './brain_voice/stream.mjs';
 import {registerMagicApple} from './magic_camera/apple.mjs';
 import {registerMagicBilling, MAGIC_PACKAGE} from './magic_camera/billing.mjs';
 import {magicAuthAlias} from './magic_camera/auth.mjs';
@@ -9488,6 +9489,7 @@ app.use("/api/live-convo/session", async (req, res, next) => {
 // Brain+Voice uses Realtime only for listening and speaking. Reasoning and
 // direct, user-authorized memory saves are account-bound server operations.
 const brainVoice = createBrainVoice({
+  onTiming: timing => console.log('BRAIN_VOICE_TIMING', JSON.stringify(timing)),
   apiKey: () => korlixLiveConvoEnvStringV1('OPENAI_API_KEY'),
   loadRuntime: userId => korlixLiveConvoBuildAgentRuntimeV1({req: {headers: {}}, user: {id: userId}, agentId: 'general', characterName: 'Rici', language: 'English', memoryOptions: {maximumItems: 100, maximumCharacters: 48000}}),
   saveMemory: ({userId, body}) => korlixAgentSaveMemoryV1({client: korlixLiveConvoAgentPersistenceClientV1(), userId, agentId: 'general', body}),
@@ -9498,6 +9500,7 @@ app.get('/api/brain-voice/health', (_req, res) => res.json({ok: true,
   model: BRAIN_MODEL, reasoningEffort: BRAIN_EFFORT,
   speechModel: korlixLiveConvoModelV1(), voice: korlixLiveConvoVoiceV1(),
   directVoiceMemory: true, requiresAuthentication: true, additionalMemoryPassword: false,
+  streamingAnswers: true, turnDetection: 'semantic_vad_high',
   apiKeyConfigured: Boolean(korlixLiveConvoEnvStringV1('OPENAI_API_KEY')),
 }));
 app.post('/api/brain-voice/turn', korlixLiveConvoAgentRouteV1(
@@ -9505,6 +9508,9 @@ app.post('/api/brain-voice/turn', korlixLiveConvoAgentRouteV1(
   async ({req, res, user}) => {
     if (!korlixLiveConvoEnabledV1()) return res.status(503).json({ok: false, error: 'Voice is temporarily unavailable.'});
     const {sessionId, turnId, transcript} = req.body || {};
+    if (req.headers.accept?.includes('application/x-ndjson')) {
+      return streamBrainTurn({res, run: onEvent => brainVoice.turn({userId: user.id, sessionId, turnId, transcript, onEvent})});
+    }
     return res.json(await brainVoice.turn({userId: user.id, sessionId, turnId, transcript}));
   },
 ));

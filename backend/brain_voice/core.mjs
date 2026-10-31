@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {readAnswerStream} from './stream.mjs';
 
 export const BRAIN_MODEL = 'gpt-6-astra';
 export const BRAIN_EFFORT = 'max';
@@ -9,7 +10,7 @@ export function brainSpeechConfig(config) {
   return {...config, instructions: speechInstructions, tools: [], tool_choice: 'none',
     audio: {...config.audio, input: {...config.audio.input,
       transcription: {model: 'gpt-transcribe', keywords: ['Rici', 'KORLIX', 'Rici remember this']},
-      turn_detection: {...config.audio.input.turn_detection, create_response: false, interrupt_response: true}}}};
+      turn_detection: {type: 'semantic_vad', eagerness: 'high', create_response: false, interrupt_response: true}}}};
 }
 const fail = (message, code, statusCode = 400) => Object.assign(new Error(message), {code, statusCode});
 const count = value => Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0;
@@ -26,7 +27,7 @@ export function rememberCommand(text) {
 }
 
 export function createBrainVoice({loadRuntime, saveMemory, reportUsage, fetchImpl = fetch, apiKey,
-  now = () => Date.now()}) {
+  now = () => Date.now(), onTiming = () => {}}) {
   const sessions = new Map();
   function register({userId, sessionId, limits}) {
     for (const [id, s] of sessions) if (s.expires < now()) sessions.delete(id);
@@ -62,7 +63,7 @@ export function createBrainVoice({loadRuntime, saveMemory, reportUsage, fetchImp
     const result = await reportUsage({userId: s.userId, body: combined(s), limits: s.limits});
     if (result?.allowed === false || result?.limitReached === true) s.closed = true;
   }
-  async function turn({userId, sessionId, turnId, transcript}) {
+  async function turn({userId, sessionId, turnId, transcript, onEvent}) {
     const s = get(userId, sessionId);
     if (typeof turnId !== 'string' || !/^[a-zA-Z0-9_-]{1,160}$/.test(turnId) ||
         typeof transcript !== 'string' || !transcript.trim() || transcript.length > 8000)
@@ -79,9 +80,15 @@ export function createBrainVoice({loadRuntime, saveMemory, reportUsage, fetchImp
     const entry = {text};
     s.turns.set(turnId, entry);
     entry.promise = (async () => {
+      const started = now();
+      const timing = {streaming: Boolean(onEvent)};
       try {
         // Check persisted allowance before starting a billable response or save.
-        await meter(s);
+        // Read current memory concurrently with the allowance check. Never cache
+        // account instructions, or call the provider until allowance is verified.
+        const direct = rememberCommand(text) || (s.awaiting && s.awaiting.until > now());
+        const [, runtime] = await Promise.all([meter(s), direct ? null : loadRuntime(userId)]);
+        timing.preparationMs = now() - started;
         if (s.closed) throw fail('This conversation has reached its allowance.', 'brain_allowance', 429);
         let command = rememberCommand(text);
         if (s.awaiting && s.awaiting.until > now() && !command) {
@@ -116,20 +123,26 @@ export function createBrainVoice({loadRuntime, saveMemory, reportUsage, fetchImp
           s.history.push({role: 'user', content: text}, {role: 'assistant', content: answer});
           return {ok: true, saved: true, memory, answer, kind: command.instruction ? 'instruction' : 'memory'};
         }
-        const runtime = await loadRuntime(userId);
         const key = apiKey();
         if (!key) throw fail('Astra Max is not configured. Please try again later.', 'brain_provider_not_configured', 503);
+        const activeRuntime = runtime ?? await loadRuntime(userId);
         const response = await fetchImpl('https://api.openai.com/v1/responses', {
           method: 'POST', signal: AbortSignal.timeout(140000),
           headers: {Authorization: `Bearer ${key}`, 'Content-Type': 'application/json'},
           body: JSON.stringify({model: BRAIN_MODEL, reasoning: {effort: BRAIN_EFFORT}, store: false,
+            ...(onEvent ? {stream: true} : {}),
             max_output_tokens: 24000,
-            instructions: `${runtime.instructions}\n\nYou are Rici (Ree-see), the user's KORLIX Brain+Voice assistant. Give the complete useful answer in natural spoken language, usually a few sentences; be thorough when the user asks. Apply relevant saved preferences and instructions. The explicit voice command 'Rici remember this' is handled by the application and authorizes a direct save without a second password or approval. You cannot write records yourself. Do not claim any new save happened. If the user wants a save but has not used the command, tell them how to say it. Do not claim access to unavailable tools or live sources.`,
+            instructions: `${activeRuntime.instructions}\n\nYou are Rici (Ree-see), the user's KORLIX Brain+Voice assistant. Give the complete useful answer in natural spoken language, usually a few sentences; be thorough when the user asks. Apply relevant saved preferences and instructions. The explicit voice command 'Rici remember this' is handled by the application and authorizes a direct save without a second password or approval. You cannot write records yourself. Do not claim any new save happened. If the user wants a save but has not used the command, tell them how to say it. Do not claim access to unavailable tools or live sources.`,
             input: [...s.history.slice(-16), {role: 'user', content: text}],
           }),
         });
         if (!response.ok) throw fail('GPT-6 Astra Max is unavailable right now. Please try again. Your model has not been changed.', 'brain_astra_unavailable', 503);
-        const result = await response.json();
+        const result = onEvent ? await readAnswerStream(response, (text, model) => {
+          timing.firstTextMs ??= now() - started;
+          // A disconnected listener must not cancel an authorized save or usage.
+          try { onEvent({type: 'answer.delta', text, model, reasoningEffort: BRAIN_EFFORT}); } catch {}
+        }) : await response.json();
+        timing.providerDoneMs = now() - started;
         for (const [field, provider] of [['totalTokens','total_tokens'],['inputTokens','input_tokens'],['outputTokens','output_tokens']])
           s.reasonUsage[field] += count(result.usage?.[provider]);
         s.completedTurns += 1;
@@ -144,6 +157,7 @@ export function createBrainVoice({loadRuntime, saveMemory, reportUsage, fetchImp
         if (error?.statusCode) throw error;
         throw fail('Rici could not complete that turn. Check My Brain before repeating a save, or try your question again.', 'brain_turn_failed', 503);
       } finally {
+        try { onTiming({...timing, totalMs: now() - started}); } catch {}
         s.busy = false;
         // Keep short session history only; durable memories stay in the database.
         s.history = s.history.slice(-16);
