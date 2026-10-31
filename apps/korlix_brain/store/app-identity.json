@@ -3,14 +3,14 @@
   "androidApplicationId": "com.korlix.brain",
   "iosBundleId": "com.korlix.brain",
   "version": "1.0.1",
-  "build": 4,
+  "build": 5,
   "iconColors": [
     "purple",
     "red",
     "green",
     "gold"
   ],
-  "status": "Version 1.0.1 (4) streaming voice update prepared; TestFlight upload pending",
+  "status": "Version 1.0.1 (5) streaming voice update prepared; TestFlight upload pending",
   "sharedAccount": true,
   "appleAppId": "6829319523",
   "appleSku": "KORLIX-BRAIN-VOICE-IOS"

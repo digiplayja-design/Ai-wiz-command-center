@@ -30,6 +30,24 @@ void main() {
     'reasoningEffort': 'max',
   };
 
+  test(
+    'first utterance never sends playback controls before any speech exists',
+    () async {
+      final sent = <Map<String, dynamic>>[];
+      final queue = BrainSpeechQueue(
+        (e) async {
+          sent.add(e);
+        },
+        () => true,
+        () {},
+      );
+      queue.interrupt(1);
+      await flush();
+      expect(sent, isEmpty);
+      queue.dispose();
+    },
+  );
+
   test('speaks first sentence before full response, queues remaining audio in order', () async {
     final pending = Completer<Map<String, dynamic>>(),
         sent = <Map<String, dynamic>>[];
@@ -139,7 +157,10 @@ void main() {
       'metadata': {'brain_epoch': '0'},
     });
     await flush();
-    expect(sent.last['type'], 'response.cancel');
+    expect(sent.reversed.take(2).map((e) => e['type']).toList(), [
+      'output_audio_buffer.clear',
+      'response.cancel',
+    ]);
     turns.dispose();
   });
 
