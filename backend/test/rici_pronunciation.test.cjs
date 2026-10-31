@@ -33,9 +33,10 @@ test('the exact production realtime config covers normal voice and every isolate
  const source=await readFile(new URL('../server.js','file://'+__filename),'utf8');
  const start=source.indexOf('function korlixLiveConvoSessionConfigV1(req) {');
  const end=source.indexOf('// KORLIX_LIVE_CONVO_BUILD129_LIMITS_BEGIN',start);
- const make=new Function('riciRealtimeInstructions','workforceVoiceInstructions','crmVoiceInstructions','fieldProofVoiceInstructions','bookkeepingVoiceInstructions','musicVoiceInstructions','korlixLiveConvoAgentInstructionsV1','korlixLiveConvoEnvStringV1','korlixLiveConvoModelV1','korlixLiveConvoAccentInstructionV1','korlixLiveConvoReasoningEffortV1','korlixLiveConvoVoiceV1',source.slice(start,end)+'; return korlixLiveConvoSessionConfigV1;');
+ const {isBrainVoice,brainSpeechConfig}=await import('../brain_voice/core.mjs');
+ const make=new Function('isBrainVoice','brainSpeechConfig','riciRealtimeInstructions','workforceVoiceInstructions','crmVoiceInstructions','fieldProofVoiceInstructions','bookkeepingVoiceInstructions','musicVoiceInstructions','korlixLiveConvoAgentInstructionsV1','korlixLiveConvoEnvStringV1','korlixLiveConvoModelV1','korlixLiveConvoAccentInstructionV1','korlixLiveConvoReasoningEffortV1','korlixLiveConvoVoiceV1',source.slice(start,end)+'; return korlixLiveConvoSessionConfigV1;');
  const prompt=()=> 'Agent Rici. Preserve the selected workspace and ask before saving.';
- const config=make(riciRealtimeInstructions,prompt,prompt,prompt,prompt,prompt,prompt,(_k,f)=>f,()=> 'test-model',()=> 'Selected accent',()=> 'low',()=> 'marin');
+ const config=make(isBrainVoice,brainSpeechConfig,riciRealtimeInstructions,prompt,prompt,prompt,prompt,prompt,prompt,(_k,f)=>f,()=> 'test-model',()=> 'Selected accent',()=> 'low',()=> 'marin');
  for(const mode of ['normal','korlixWorkforceVoice','korlixCrmVoice','korlixFieldProofVoice','korlixBookkeepingVoice','korlixMusicVoice','inventory','scheduling']) {
   const req={headers:{},query:{},[mode]:true};
   if(mode==='inventory'||mode==='scheduling')req.query[mode]='1';

@@ -1,3 +1,4 @@
+import {createBrainVoice, brainSpeechConfig, isBrainVoice, BRAIN_MODEL, BRAIN_EFFORT, BRAIN_PROTOCOL} from './brain_voice/core.mjs';
 import {registerMagicApple} from './magic_camera/apple.mjs';
 import {registerMagicBilling, MAGIC_PACKAGE} from './magic_camera/billing.mjs';
 import {magicAuthAlias} from './magic_camera/auth.mjs';
@@ -8490,6 +8491,7 @@ function korlixLiveConvoSessionConfigV1(req) {
     },
   };
   if(req.korlixAutoEmailVoice){config.tools=autoEmailVoiceTools;config.tool_choice="auto";config.max_output_tokens=1500;}
+  if (isBrainVoice(req)) return brainSpeechConfig(config);
   config.instructions = riciRealtimeInstructions(config.instructions);
   return config;
 }
@@ -9270,40 +9272,8 @@ app.get("/api/live-convo/usage", async (req, res) => {
   }
 });
 
-app.post("/api/live-convo/usage", async (req, res) => {
-  try {
-    if (!supabaseAdmin) {
-      return res.status(503).json({
-        ok: false,
-        code: "live_convo_usage_not_configured",
-        error: "Supabase is not configured for LIVE CONVO usage controls.",
-      });
-    }
-
-    const user = await requireUser(req);
-    const entitlement = korlixLiveConvoBuild131EntitlementForUser(user);
-    const profile = await getOrCreateProfile(user);
-    const limits = korlixLiveConvoBuild131LimitsForEntitlement(
-      profile,
-      entitlement
-    );
-    const body = req.body && typeof req.body === "object" ? req.body : {};
-    const sessionId = String(body.sessionId || body.session_id || "").trim();
-
-    if (!sessionId) {
-      return res.status(400).json({
-        ok: false,
-        code: "live_convo_session_id_required",
-        error: "LIVE CONVO session ID is required.",
-        ...korlixLiveConvoBuild131EntitlementFields(entitlement),
-      });
-    }
-
-    // Pod allowances are metered by the server; client cumulative reports cannot alter them.
-    if (await podRegistration.store.isQuotaSession(user.id, sessionId)) {
-      return res.status(403).json({ok:false,code:'pod_server_metered',error:'Pod usage is managed by the server.'});
-    }
-
+async function korlixRecordVoiceUsage({user, body, limits, entitlement}) {
+  const sessionId = body.sessionId;
     let usage;
     if (entitlement.unlimited) {
       usage = await korlixLiveConvoBuild131ReportUnlimitedUsage({
@@ -9343,6 +9313,46 @@ app.post("/api/live-convo/usage", async (req, res) => {
       usage = korlixLiveConvoBuild129RpcValue(data) || {};
     }
 
+  return usage;
+}
+
+app.post("/api/live-convo/usage", async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(503).json({
+        ok: false,
+        code: "live_convo_usage_not_configured",
+        error: "Supabase is not configured for LIVE CONVO usage controls.",
+      });
+    }
+
+    const user = await requireUser(req);
+    const entitlement = korlixLiveConvoBuild131EntitlementForUser(user);
+    const profile = await getOrCreateProfile(user);
+    const limits = korlixLiveConvoBuild131LimitsForEntitlement(
+      profile,
+      entitlement
+    );
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const sessionId = String(body.sessionId || body.session_id || "").trim();
+
+    if (!sessionId) {
+      return res.status(400).json({
+        ok: false,
+        code: "live_convo_session_id_required",
+        error: "LIVE CONVO session ID is required.",
+        ...korlixLiveConvoBuild131EntitlementFields(entitlement),
+      });
+    }
+
+    // Pod allowances are metered by the server; client cumulative reports cannot alter them.
+    if (await podRegistration.store.isQuotaSession(user.id, sessionId)) {
+      return res.status(403).json({ok:false,code:'pod_server_metered',error:'Pod usage is managed by the server.'});
+    }
+
+    let usage = await korlixRecordVoiceUsage({user, limits, entitlement,
+      body: brainVoice.mergeUsage(user.id, {...body, sessionId})});
+
     usage = korlixLiveConvoBuild131Decorate(usage, entitlement);
     const limited = usage.allowed === false || usage.limitReached === true;
 
@@ -9371,6 +9381,16 @@ app.post("/api/live-convo/usage", async (req, res) => {
   }
 });
 
+app.use('/api/live-convo/session', (req, res, next) => {
+  const protocol = req.headers?.['x-korlix-brain-voice'];
+  if (!protocol) return next();
+  if (!isBrainVoice(req)) return res.status(426).json({ok: false, error: 'Update KORLIX Brain+Voice to continue.'});
+  if (Object.keys(req.query || {}).length || req.korlixAutoEmailVoice ||
+      (req.headers?.['x-korlix-live-convo-agent'] || 'general') !== 'general') {
+    return res.status(400).json({ok: false, error: 'Reconnect from KORLIX Brain+Voice.'});
+  }
+  return next();
+});
 app.use("/api/live-convo/session", crmVoiceSessionGuard({requireUser,database:supabaseAdmin}));
 app.use("/api/live-convo/session", workforceVoiceSessionGuard({ requireUser, database: supabaseAdmin }));
 app.use("/api/live-convo/session", fieldProofVoiceSessionGuard({ requireUser, database: supabaseAdmin }));
@@ -9464,6 +9484,30 @@ app.use("/api/live-convo/session", async (req, res, next) => {
 });
 // KORLIX_LIVE_CONVO_BUILD129_LIMITS_END
 
+
+// Brain+Voice uses Realtime only for listening and speaking. Reasoning and
+// direct, user-authorized memory saves are account-bound server operations.
+const brainVoice = createBrainVoice({
+  apiKey: () => korlixLiveConvoEnvStringV1('OPENAI_API_KEY'),
+  loadRuntime: userId => korlixLiveConvoBuildAgentRuntimeV1({req: {headers: {}}, user: {id: userId}, agentId: 'general', characterName: 'Rici', language: 'English', memoryOptions: {maximumItems: 100, maximumCharacters: 48000}}),
+  saveMemory: ({userId, body}) => korlixAgentSaveMemoryV1({client: korlixLiveConvoAgentPersistenceClientV1(), userId, agentId: 'general', body}),
+  reportUsage: ({userId, body, limits}) => korlixRecordVoiceUsage({user: {id: userId}, body, limits, entitlement: korlixLiveConvoBuild131EntitlementForUser({id: userId})}),
+});
+app.get('/api/brain-voice/health', (_req, res) => res.json({ok: true,
+  enabled: korlixLiveConvoEnabledV1(), protocol: BRAIN_PROTOCOL,
+  model: BRAIN_MODEL, reasoningEffort: BRAIN_EFFORT,
+  speechModel: korlixLiveConvoModelV1(), voice: korlixLiveConvoVoiceV1(),
+  directVoiceMemory: true, requiresAuthentication: true, additionalMemoryPassword: false,
+  apiKeyConfigured: Boolean(korlixLiveConvoEnvStringV1('OPENAI_API_KEY')),
+}));
+app.post('/api/brain-voice/turn', korlixLiveConvoAgentRouteV1(
+  'Rici could not complete that turn. Please try again.',
+  async ({req, res, user}) => {
+    if (!korlixLiveConvoEnabledV1()) return res.status(503).json({ok: false, error: 'Voice is temporarily unavailable.'});
+    const {sessionId, turnId, transcript} = req.body || {};
+    return res.json(await brainVoice.turn({userId: user.id, sessionId, turnId, transcript}));
+  },
+));
 
 app.get("/api/live-convo/health", (req, res) => {
   return res.json({
@@ -9625,6 +9669,12 @@ app.post(
           });
       }
 
+      if (isBrainVoice(req)) {
+        brainVoice.register(req.korlixLiveConvoBuild129);
+        res.set('X-Korlix-Brain-Voice', BRAIN_PROTOCOL);
+        res.set('X-Korlix-Brain-Model', BRAIN_MODEL);
+        res.set('X-Korlix-Brain-Reasoning', BRAIN_EFFORT);
+      }
       autoEmailVoiceBridge.started(req,res,providerResponse);
       res.status(200);
       res.set("Content-Type", "application/sdp");
