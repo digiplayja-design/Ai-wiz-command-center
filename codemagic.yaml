@@ -604,9 +604,14 @@ workflows:
   korlix-brain-ios-testflight:
     <<: *brain_ios_candidate
     name: KORLIX Brain+Voice — TestFlight upload
-    # Upload is a separate explicitly selected workflow, never an inherited push.
+    # Only this explicit release branch can trigger upload; feature pushes build candidates.
     triggering:
-      events: []
+      events: [push]
+      branch_patterns:
+        - pattern: release/korlix-brain-testflight-20261031
+          include: true
+          source: true
+      cancel_previous_builds: false
     environment:
       <<: *brain_ios_environment
       vars:
