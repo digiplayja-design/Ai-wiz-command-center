@@ -1,0 +1,14 @@
+{
+  "status": "prepared draft; not uploaded to either store",
+  "name": "KORLIX Brain+Voice",
+  "appleSubtitle": "Talk, remember, make it yours",
+  "googleShortDescription": "Talk with Rici and save memories and instructions to your KORLIX brain.",
+  "appleKeywords": "voice,memory,assistant,notes,ideas,personal,brain,Rici,KORLIX",
+  "description": "Meet Rici, your voice companion in KORLIX Brain+Voice. Talk through ideas, save useful details, and shape how your assistant responds.\n\nSAY IT AND SAVE IT\nWhile a voice session is active, say \"Rici, remember this\" followed by a memory or instruction. Rici saves it to your signed-in KORLIX brain without asking for another password. You receive confirmation after the save succeeds. Ordinary conversation is not automatically saved.\n\nMAKE YOUR BRAIN YOURS\nOpen My Brain to review saved memories and remove items you no longer want. Add typed notes or select a document to create a draft you can review before saving.\n\nYOUR KORLIX ACCOUNT\nUse your existing KORLIX account. Memories and instructions connect to your shared general Rici agent. Existing account allowances apply.\n\nYOU STAY IN CONTROL\nStart and stop voice from the app, review your memories, and report a response when something is wrong. Voice requires microphone permission and an internet connection. AI responses may be inaccurate; check important information.\n\nRici is pronounced Ree-see.",
+  "supportEmail": "support@korlixdeveloper.com",
+  "supportUrl": "https://www.korlixdeveloper.com",
+  "privacyPolicyUrl": "https://www.korlixdeveloper.com/privacy-policy.html",
+  "termsUrl": "https://www.korlixdeveloper.com/terms.html",
+  "appleCategory": "PRODUCTIVITY",
+  "googleCategory": "PRODUCTIVITY"
+}

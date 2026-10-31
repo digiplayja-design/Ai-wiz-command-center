@@ -2,14 +2,14 @@
   "displayName": "KORLIX Brain+Voice",
   "androidApplicationId": "com.korlix.brain",
   "iosBundleId": "com.korlix.brain",
-  "version": "1.0.0",
-  "build": 1,
+  "version": "1.0.1",
+  "build": 2,
   "iconColors": [
     "purple",
     "red",
     "green",
     "gold"
   ],
-  "status": "development - not submitted",
+  "status": "release preparation - not submitted",
   "sharedAccount": true
 }

@@ -7,6 +7,11 @@ on:
       - apps/korlix_brain/**
       - packages/korlix_receipt_core/**
       - .github/workflows/korlix-brain-validation.yml
+      - scripts/prepare_brain_ios.py
+      - scripts/prepare_ios_release.py
+      - scripts/verify_ios_ipa.py
+      - scripts/tests/test_*ios_release.py
+      - codemagic.yaml
 permissions:
   contents: read
 concurrency:
@@ -19,6 +24,15 @@ env:
   DART_SUPPRESS_ANALYTICS: 'true'
   COCOAPODS_DISABLE_STATS: 'true'
 jobs:
+  release-identity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify Apple identity and build numbering safeguards
+        run: python3 -m unittest discover -s scripts/tests -p 'test_*ios_release.py' -v
   android:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
@@ -50,7 +64,7 @@ jobs:
           path: apps/korlix_brain/build/app/outputs/flutter-apk/app-debug.apk
           if-no-files-found: error
           retention-days: 14
-  ios-simulator:
+  ios:
     runs-on: macos-26
     timeout-minutes: 35
     steps:
@@ -75,3 +89,18 @@ jobs:
           path: apps/korlix_brain/build/ios/iphonesimulator/BrainVoice-Simulator.zip
           if-no-files-found: error
           retention-days: 14
+      - name: Compile iPhone release binary
+        working-directory: apps/korlix_brain
+        run: |
+          flutter build ios --release --no-codesign --no-pub
+          python3 - <<'PY'
+          import plistlib, subprocess
+          from pathlib import Path
+          app = Path('build/ios/iphoneos/Runner.app')
+          info = plistlib.loads((app / 'Info.plist').read_bytes())
+          assert info['CFBundleIdentifier'] == 'com.korlix.brain'
+          assert info['CFBundleSupportedPlatforms'] == ['iPhoneOS']
+          binary = app / info['CFBundleExecutable']
+          assert 'arm64' in subprocess.check_output(['lipo', '-archs', str(binary)], text=True).split()
+          print('Verified com.korlix.brain iPhoneOS arm64 release compilation. Signing is handled in Codemagic.')
+          PY

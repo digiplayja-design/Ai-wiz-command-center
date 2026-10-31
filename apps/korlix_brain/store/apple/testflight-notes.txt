@@ -1,0 +1,7 @@
+KORLIX Brain+Voice 1.0.1
+
+Talk with Rici and save a memory by saying "Rici, remember this: ...". After signing in, no additional memory password is required. Say "Rici, remember this instruction: ..." to save an instruction. Check My Brain to view or remove it.
+
+Please test microphone permission, a spoken conversation, interruption, Bluetooth/speaker output, background audio, and Stop. Try the command alone, then supply the memory; also try "cancel". Confirm that a saved item remains after signing out and back in.
+
+Conversational reasoning is configured for GPT-6 Astra with maximum effort. The speech service handles transcription and spoken playback. Normal conversation is not automatically saved. Existing KORLIX account allowances apply.
