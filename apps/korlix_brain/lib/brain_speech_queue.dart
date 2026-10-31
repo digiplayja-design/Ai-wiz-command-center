@@ -10,6 +10,7 @@ class BrainSpeechQueue {
   final _queue = <Map<String, dynamic>>[];
   int _epoch = 0;
   bool _pending = false, _disposed = false, _cancelPending = false;
+  bool _hasSpeech = false;
   String? _responseId;
   bool get current => !_disposed && isCurrent();
 
@@ -17,10 +18,6 @@ class BrainSpeechQueue {
     _epoch = epoch;
     _queue.clear();
     _cancelPending = _pending;
-    // Even a fully generated response may still be playing on the phone.
-    unawaited(
-      send({'type': 'output_audio_buffer.clear'}).catchError((Object _) {}),
-    );
     _cancel();
   }
 
@@ -28,7 +25,14 @@ class BrainSpeechQueue {
     if (_pending && _responseId != null) {
       unawaited(
         send({'type': 'response.cancel', 'response_id': _responseId})
+            .then((_) => send({'type': 'output_audio_buffer.clear'}))
             .catchError((Object _) {}),
+      );
+    } else if (_hasSpeech) {
+      // Generation can be complete while audio is still playing. Do not send
+      // playback commands on the user's first utterance, before any response.
+      unawaited(
+        send({'type': 'output_audio_buffer.clear'}).catchError((Object _) {}),
       );
     }
   }
@@ -59,6 +63,7 @@ class BrainSpeechQueue {
     if (_pending || !current || _queue.isEmpty) return;
     final part = _queue.removeAt(0);
     _pending = true; // reserve before sending, including response.created delay
+    _hasSpeech = true;
     _cancelPending = false;
     try {
       await send({

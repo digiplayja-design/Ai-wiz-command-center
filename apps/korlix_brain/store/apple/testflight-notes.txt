@@ -1,4 +1,4 @@
-KORLIX Brain+Voice 1.0.1 (4)
+KORLIX Brain+Voice 1.0.1 (5)
 
 Faster voice replies: Rici starts speaking complete phrases while GPT-6 Astra Max continues producing the answer. Faster end-of-turn detection, overlapping memory/allowance reads, and immediate spoken acknowledgement after a confirmed memory save.
 
