@@ -97,6 +97,91 @@ class BrainApi {
     }
   }
 
+  /// Stream only the user's authenticated voice turn. Retry solely a rejected
+  /// token, never a partial stream or ambiguous mutation.
+  Future<Map<String, dynamic>> voiceTurn(
+    Map<String, dynamic> body,
+    void Function(Map<String, dynamic>) onDelta,
+  ) async {
+    final revision = auth.revision;
+    void check() {
+      if (revision != auth.revision || auth.session == null) {
+        throw const BrainApiException('Your account changed. Reconnect Rici.');
+      }
+    }
+
+    var session = await auth.sessions.ensureFresh();
+    check();
+    if (session == null) throw const BrainApiException('Please sign in again.');
+    Future<http.StreamedResponse> attempt(String token) {
+      final request =
+          http.Request(
+              'POST',
+              Uri.parse('${auth.backendUrl}/api/brain-voice/turn'),
+            )
+            ..headers.addAll({
+              ...auth.deviceHeaders,
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+              'Accept': 'application/x-ndjson',
+            })
+            ..body = jsonEncode(body);
+      return client.send(request).timeout(const Duration(seconds: 40));
+    }
+
+    var response = await attempt(session.accessToken);
+    if (response.statusCode == 401 && revision == auth.revision) {
+      await response.stream.drain<void>();
+      session = await auth.sessions.ensureFresh(
+        force: true,
+        rejectedAccessToken: session.accessToken,
+      );
+      check();
+      if (session == null) {
+        throw const BrainApiException('Please sign in again.');
+      }
+      response = await attempt(session.accessToken);
+    }
+    check();
+    if (response.statusCode != 200) {
+      await response.stream.drain<void>();
+      throw BrainApiException(
+        'Rici could not complete that turn (${response.statusCode}).',
+        status: response.statusCode,
+      );
+    }
+    if (!(response.headers['content-type'] ?? '').contains(
+      'application/x-ndjson',
+    )) {
+      // Backwards-compatible response from a server still draining a rollout.
+      final result = await http.Response.fromStream(response)
+          .timeout(const Duration(seconds: 155));
+      check();
+      return Map<String, dynamic>.from(jsonDecode(result.body) as Map);
+    }
+    await for (final line
+        in response.stream
+            .transform(utf8.decoder)
+            .transform(const LineSplitter())
+            .timeout(const Duration(seconds: 155))) {
+      check();
+      if (line.isEmpty) continue;
+      final event = Map<String, dynamic>.from(jsonDecode(line) as Map);
+      if (event['type'] == 'answer.delta') {
+        onDelta(event);
+      } else if (event['type'] == 'turn.completed') {
+        return event;
+      } else if (event['type'] == 'turn.error') {
+        throw BrainApiException(
+          event['error']?.toString() ?? 'Rici could not finish that turn.',
+        );
+      }
+    }
+    throw const BrainApiException(
+      'The voice reply was interrupted. Please try again.',
+    );
+  }
+
   Future<Map<String, dynamic>> analyze(
     String kind,
     String filename,

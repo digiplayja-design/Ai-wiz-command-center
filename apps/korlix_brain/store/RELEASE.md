@@ -1,3 +1,11 @@
+## Voice latency update — build 4
+
+Three production requests on 2026-10-31 took 6,995 / 7,930 / 10,951 ms on the backend, excluding transcription and speech startup. Build 4 streams complete phrases to the existing speech-only Realtime session as Astra produces them. It preserves gpt-6-astra / max, direct memory-save authorization and interruption behavior. Speech chunks count as one turn while every audio token remains metered.
+
+The paired backend retains the JSON route for build 3, enables semantic VAD high for Brain only, overlaps fresh memory reads with allowance checks, and logs timing fields without transcripts or account identifiers. No model or paid service-tier change is made. Max reasoning time remains; measured on-device improvement is pending.
+
+Validation: 30 Flutter tests, including incremental UTF-8, truncation, account changes, ordering, early speech, late response cancellation, and save acknowledgement. Signed upload status is recorded in release-status.json.
+
 # Brain+Voice release handoff
 
 ## Dedicated identity
@@ -14,7 +22,9 @@
 | Platforms | iPhone and iPad |
 | Store icon | Purple, red, green and gold KORLIX emblem |
 
-The dedicated [Apple app record](https://appstoreconnect.apple.com/apps/6829319523/distribution/info) was created on October 31, 2026. Its name, subtitle, Productivity category, version 1.0.1 draft, description, keywords and support URL are saved. Access is limited to the existing authorized account users. The earlier missing-record blocker is resolved; the [new TestFlight upload](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6612f6a1999f83b5c5925) succeeded from commit `13692038da1db765afd4860f8dc62f514a46cc8e`; Apple subsequently rejected build 2 during processing (ITMS-90683) for missing camera and photo-library usage descriptions, with a location-description warning. Build 3 adds all three descriptions and verifies them in the exported IPA before upload. Google Play listing ID remains unverified. Never reuse another KORLIX app's store record or bundle identity.
+The dedicated [Apple app record](https://appstoreconnect.apple.com/apps/6829319523/distribution/info) is created. **Version 1.0.1 (3) has completed Apple processing and is Testing in [KORLIX Brain Internal](https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6829319523/testflight/groups/ae86d9a2-5bdf-4f3d-910b-aa532675951f/builds).** The group has one approved existing tester, whose status is Invited. Automatic distribution is disabled. App Store review has not been submitted, and an authenticated physical-device voice test is still pending.
+
+Apple rejected build 2 during processing (ITMS-90683) for missing camera and photo-library descriptions and warned about a missing location description. Build 3 includes all three and checks the exported IPA before upload. Its four-color icon is visible in Apple's processed build. Apple listing text is saved in the version 1.0.1 draft. Google Play listing ID remains unverified. Never reuse another KORLIX app's store record or bundle identity.
 
 ## iOS build route
 
@@ -25,7 +35,9 @@ The [signed candidate build](https://codemagic.io/app/6a32198d2d0806059c3df062/b
 1. Run `korlix-brain-ios-candidate`. A push trigger is configured for this branch; it requires the repository's Codemagic webhook to be active. The workflow imports the existing managed KORLIX distribution certificate, registers/selects `com.korlix.brain`, and installs its dedicated App Store profile. The original KORLIX profile is only used to import the certificate and cannot pass Brain+Voice artifact verification. No store upload occurs in this workflow.
 2. Use the existing Apple app record `6829319523` with bundle `com.korlix.brain`. Keep its account access policy; do not create a duplicate record.
 3. Run `korlix-brain-ios-testflight`, or push the reviewed source to `release/korlix-brain-testflight-20261031`. That release branch alone triggers upload. It first queries Apple for the exact app record; a successful empty response produces a distinct “App Store Connect record is missing for com.korlix.brain” failed step. Authentication/API errors stop at the query step instead. With the app record present, it chooses a build number above existing builds, verifies the signed IPA, and uploads to App Store Connect. It does not submit for external beta or App Store review, assign testers, or send invitations.
-4. TestFlight beta information is saved, and the `KORLIX Brain Internal` group exists with automatic distribution disabled. After Apple processes the build, add it to this group. The owner explicitly approved the testing invitation and the chosen existing account was added; the group has one tester. Verify an authenticated physical-device session before App Store submission.
+4. TestFlight beta information is saved. Build 3 has been assigned to `KORLIX Brain Internal`; Apple shows Testing and the approved existing account shows Invited. For future processed builds, add them to this group explicitly because automatic distribution is disabled. Verify an authenticated physical-device session before App Store submission.
+
+The corrected build was signed, verified and uploaded successfully by [Codemagic](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae664bb6a1999f83b5c67a2) from release commit `2a4d2737b14222fde1d407d0da6d3fc043d9119e`. All 23 release identity, purpose-description and rejected-build-number regression checks passed, as did Flutter analysis, 22 app tests, signed IPA verification and Apple processing. The iOS flow still imports documents and requests audio for voice; adding purpose strings does not itself request camera, photos or location.
 
 The signing tools use the existing `Codemagic Korlix AI` integration and `KORLIX_APP_STORE_CERT` reference. No credentials are embedded in source. No certificate is created or revoked. Failed Apple lookups stop the build rather than resetting numbering.
 
