@@ -1,0 +1,41 @@
+# KORLIX Brain+Voice
+
+Standalone iOS/Android app for the existing KORLIX account and `general` Rici agent. This app has its own `com.korlix.brain` identity and does not replace KORLIX AI. Version 1.0.0, build 1. Store submissions are not part of this source checkpoint.
+
+The approved Violet Eclipse / Champagne Precision interface is bundled offline in `assets/web`. It retains the Halo Capsule Talk button, Add Memory chip, Magnetic Key controls, Electric Cyan Precision Dial orbits, silent 3.1–3.6 second lightning and crystal twinkle ambience at 1%. Animation pause and reduced-motion support are preserved. The official KORLIX emblem now uses purple, red, green and gold. Apple, Google Play and device icon sizes are checked in.
+
+## Connected behavior
+
+- Native secure sign-in, refresh, password recovery, duplicate-account guidance, sign-out and shared-account deletion request.
+- Native authenticated memory and behavior loading, explicit review before saving, selected-item deletion, session undo and stale-training checks.
+- Typed, OS dictation and selected-document inputs. A file produces a draft, never an automatic memory. Suggested memories are individually selected for review. Analysis uses the existing account allowance.
+- Native WebRTC voice, usage limits, stop/reconnect, ephemeral transcript and response reporting. Credentials never cross the WebView bridge; remote navigation and network requests from the bundled page are blocked.
+- Voice keeps running while navigating within the app. Android includes a microphone foreground service with a Stop notification; iOS declares background audio with a play-and-record session. Physical-device verification is required before claiming screen-lock reliability.
+- Existing service limits apply. No new prices, unlimited access or purchase flow are introduced in this first standalone build.
+
+Memory and behavior changes affect the shared general KORLIX agent. A running voice session keeps its initial instructions; reconnect Rici to use newly approved changes. The backend limits memory listing to 250 entries. Training performs a fresh-content check before writing, but the existing API does not offer an atomic compare-and-swap operation.
+
+## Build and validate
+
+Use Flutter 3.47.9 / Dart 3.13.7, a Java 17 JDK (including `javac`) and Android SDK platforms 35 and 36 for Android, or macOS/Xcode for iOS. The app compiles against SDK 36; a native dependency also requires SDK 35. Keep `BOT=true` and `FLUTTER_SUPPRESS_ANALYTICS=true` set in automated builds to avoid cloud-instance detection and analytics.
+
+```sh
+cd apps/korlix_brain
+flutter pub get --enforce-lockfile
+flutter analyze --no-pub
+flutter test --no-pub
+flutter build apk --debug --no-pub
+flutter build ios --simulator --debug --no-pub
+```
+
+`.github/workflows/korlix-brain-validation.yml` builds both test artifacts without deployment or store submission. Release signing is unconfigured; add this app's own signing identities before producing a store build.
+
+For browser view checks, install Playwright separately and run `node tools/check_ui.cjs`; `PLAYWRIGHT_MODULE` and `BROWSER_EXECUTABLE_PATH` can point to an existing installation. `UI_SCREENSHOTS` optionally saves local QA screenshots. The harness injects a fake bridge only in the test process and verifies approval, failure, deletion, transcript safety and four viewport layouts. Production has no mock accounts or fallback saves.
+
+## Remaining release verification
+
+This checkpoint passes Flutter analysis, all 16 Dart tests and browser interaction checks at 320, 390, 768 and 1024px. The Android ARM64 debug APK built successfully; its signature, app identity, native activity/service and bundled icon were verified. This is a test build, not a store release. The iOS build has not yet run.
+
+Test real shared-account sign-in, permission denial/recovery, two-way Rici audio, Bluetooth/speaker output, quota exhaustion, app switching, screen lock, Stop notification and file analysis on Android and iPhone. Confirm deletion-request and report receipts with the deployed backend. Configure dedicated signing and store records, then complete store privacy/foreground-service declarations and device screenshots. No live account data was written by local automated tests.
+
+Native platform references: [Android microphone services](https://developer.android.com/develop/background-work/services/fgs/service-types#microphone), [Apple play-and-record background audio](https://developer.apple.com/documentation/avfaudio/avaudiosession/category-swift.struct/playandrecord).

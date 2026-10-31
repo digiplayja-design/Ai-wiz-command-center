@@ -1,0 +1,15 @@
+{
+  "displayName": "KORLIX Brain+Voice",
+  "androidApplicationId": "com.korlix.brain",
+  "iosBundleId": "com.korlix.brain",
+  "version": "1.0.0",
+  "build": 1,
+  "iconColors": [
+    "purple",
+    "red",
+    "green",
+    "gold"
+  ],
+  "status": "development - not submitted",
+  "sharedAccount": true
+}
