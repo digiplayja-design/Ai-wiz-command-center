@@ -34,7 +34,7 @@ For browser view checks, install Playwright separately and run `node tools/check
 
 ## Remaining release verification
 
-This checkpoint passes Flutter analysis, all 16 Dart tests and browser interaction checks at 320, 390, 768 and 1024px. The Android ARM64 debug APK built successfully; its signature, app identity, native activity/service and bundled icon were verified. This is a test build, not a store release. The iOS build has not yet run.
+This checkpoint passes Flutter analysis, all 16 Dart tests and browser interaction checks at 320, 390, 768 and 1024px. The local Android ARM64 debug APK and the cloud Android and iOS simulator builds succeeded. [GitHub validation run 41238096034](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41238096034) built code commit `d67aa4580457695c205a49976761a062a275b840`. Android signatures, app identities and bundled icons were verified. These are test builds; the iOS simulator ZIP is for a Mac simulator and cannot be installed on an iPhone or iPad through TestFlight.
 
 Test real shared-account sign-in, permission denial/recovery, two-way Rici audio, Bluetooth/speaker output, quota exhaustion, app switching, screen lock, Stop notification and file analysis on Android and iPhone. Confirm deletion-request and report receipts with the deployed backend. Configure dedicated signing and store records, then complete store privacy/foreground-service declarations and device screenshots. No live account data was written by local automated tests.
 
