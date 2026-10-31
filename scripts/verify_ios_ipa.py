@@ -22,12 +22,20 @@ def verify_info(info, bundle_id, version, build):
             raise ValueError(f"Exported IPA {key} does not match the requested release")
     if "iPhoneOS" not in info.get("CFBundleSupportedPlatforms", []):
         raise ValueError("The artifact is not an iPhoneOS device build")
-    if bundle_id in {"com.korlixdeveloper.messenger", "com.korlixdeveloper.receiptwiz"}:
-        # file_picker's native camera dependency references location APIs even
-        # though Messenger does not enable its optional photo geotagging.
-        purpose = info.get("NSLocationWhenInUseUsageDescription")
+    purpose_keys = []
+    if bundle_id in {"com.korlixdeveloper.messenger", "com.korlixdeveloper.receiptwiz", "com.korlix.brain"}:
+        # Native file/media dependencies reference location APIs even when an
+        # app does not enable the picker's optional photo geotagging.
+        purpose_keys.append("NSLocationWhenInUseUsageDescription")
+    if bundle_id == "com.korlix.brain":
+        # Apple rejected Brain build 2 (ITMS-90683) for the media dependency's
+        # camera/photo references. Check the exported artifact before upload.
+        purpose_keys.extend(("NSCameraUsageDescription", "NSPhotoLibraryUsageDescription",
+                             "NSMicrophoneUsageDescription", "NSSpeechRecognitionUsageDescription"))
+    for key in purpose_keys:
+        purpose = info.get(key)
         if not isinstance(purpose, str) or not purpose.strip():
-            raise ValueError("IPA is missing NSLocationWhenInUseUsageDescription for the native media picker")
+            raise ValueError(f"IPA is missing {key} for its native dependencies")
     return expected
 
 

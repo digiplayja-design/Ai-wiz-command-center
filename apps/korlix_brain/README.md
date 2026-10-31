@@ -1,6 +1,6 @@
 # KORLIX Brain+Voice
 
-Standalone iOS/Android app for the existing KORLIX account and `general` Rici agent. This app has its own `com.korlix.brain` identity and does not replace KORLIX AI. Version 1.0.1, build 2. Store release workflows and draft listing material are prepared; no Brain+Voice store submission is confirmed.
+Standalone iOS/Android app for the existing KORLIX account and `general` Rici agent. This app has its own `com.korlix.brain` identity and does not replace KORLIX AI. Version 1.0.1, build 3. Store release workflows and draft listing material are prepared; no Brain+Voice store submission is confirmed.
 
 The approved Violet Eclipse / Champagne Precision interface is bundled offline in `assets/web`. It retains the Halo Capsule Talk button, Add Memory chip, Magnetic Key controls, Electric Cyan Precision Dial orbits, silent 3.1–3.6 second lightning and crystal twinkle ambience at 1%. Animation pause and reduced-motion support are preserved. The official KORLIX emblem now uses purple, red, green and gold. Apple, Google Play and device icon sizes are checked in.
 
@@ -33,6 +33,8 @@ flutter build ios --simulator --debug --no-pub
 For browser view checks, install Playwright separately and run `node tools/check_ui.cjs`; `PLAYWRIGHT_MODULE` and `BROWSER_EXECUTABLE_PATH` can point to an existing installation. `UI_SCREENSHOTS` optionally saves local QA screenshots. The harness injects a fake bridge only in the test process and verifies approval, failure, deletion, transcript safety and four viewport layouts. Production has no mock accounts or fallback saves.
 
 ## Remaining release verification
+
+The [signed iOS candidate](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae65911a74da3772d1da5c1) successfully completed dedicated Apple identity setup, Flutter analysis/tests, IPA export and distribution-signature verification. [GitHub validation run 41242264204](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41242264204) also passed Android, iOS simulator and iPhoneOS arm64 release compilation. The release helpers pass 20 identity, expiry and numbering tests. The subsequent Apple query succeeded but returned no `com.korlix.brain` app record to the release integration. TestFlight upload therefore stopped before building/uploading; create the dedicated app record as described in [the release handoff](store/RELEASE.md).
 
 Version 1.0.1 passes Flutter analysis, all 22 Dart tests and browser interaction checks at 320, 390, 768 and 1024px. The production backend passes 30 checks. [GitHub validation run 41240702620](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41240702620) successfully built Android and iOS simulator artifacts from code commit `5a504a2ef7a7937ce89e533a713ed8ba3501b83c`. The Android 1.0.1 test APK has a different debug signing certificate from 1.0.0. Android therefore requires removing the earlier debug app before installation; unsaved local drafts are lost, while server-saved account memory remains. These are test builds; the iOS simulator ZIP requires a Mac simulator and cannot be installed on an iPhone or iPad through TestFlight.
 
