@@ -1,6 +1,6 @@
 # KORLIX Brain+Voice
 
-Standalone iOS/Android app for the existing KORLIX account and `general` Rici agent. This app has its own `com.korlix.brain` identity and does not replace KORLIX AI. Version 1.0.1, build 3. Store release workflows and draft listing material are prepared; no Brain+Voice store submission is confirmed.
+Standalone iOS/Android app for the existing KORLIX account and `general` Rici agent. This app has its own `com.korlix.brain` identity and does not replace KORLIX AI. Version 1.0.1, build 3. Apple has processed build 3 and it is Testing in the KORLIX Brain Internal TestFlight group. App Store review submission has not been performed.
 
 The approved Violet Eclipse / Champagne Precision interface is bundled offline in `assets/web`. It retains the Halo Capsule Talk button, Add Memory chip, Magnetic Key controls, Electric Cyan Precision Dial orbits, silent 3.1–3.6 second lightning and crystal twinkle ambience at 1%. Animation pause and reduced-motion support are preserved. The official KORLIX emblem now uses purple, red, green and gold. Apple, Google Play and device icon sizes are checked in.
 
