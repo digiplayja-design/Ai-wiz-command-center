@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import 'brain_api.dart';
+import 'brain_voice_session.dart';
 import 'brain_voice_turns.dart';
 import 'voice_lifecycle.dart';
 
@@ -148,6 +149,7 @@ class BrainVoice {
         check();
       }
       _channel = channel;
+      final sessionGate = BrainVoiceSessionGate();
       channel.onMessage = (message) {
         if (!current() || message.isBinary) return;
         try {
@@ -156,27 +158,55 @@ class BrainVoice {
           );
           unawaited(_usage?.observeServerEvent(event));
           final type = event['type'];
-          if (type == 'session.created') {
-            final session = event['session'] as Map?;
-            final vad =
-                ((session?['audio'] as Map?)?['input']
-                        as Map?)?['turn_detection']
-                    as Map?;
-            if (vad?['create_response'] != false) {
-              unawaited(
-                stop(
-                  message: 'The server needs the Astra Max voice update. Please reconnect later.',
-                ),
-              );
-              return;
+          if (type == 'session.created' || type == 'session.updated') {
+            switch (sessionGate.observe(event)) {
+              case BrainSessionAction.configure:
+                _deadline?.cancel();
+                _deadline = Timer(const Duration(seconds: 15), () {
+                  if (current()) {
+                    unawaited(
+                      stop(message: 'Voice setup timed out. Please reconnect.'),
+                    );
+                  }
+                });
+                unawaited(
+                  channel
+                      .send(
+                        RTCDataChannelMessage(
+                          jsonEncode(BrainVoiceSessionGate.update),
+                        ),
+                      )
+                      .catchError((Object _) async {
+                        if (current()) {
+                          await stop(
+                            message: 'Voice setup failed. Please reconnect.',
+                          );
+                        }
+                      }),
+                );
+              case BrainSessionAction.ready:
+                if (!_ready) {
+                  _ready = true;
+                  _deadline?.cancel();
+                  for (final track in microphone.getAudioTracks()) {
+                    track.enabled = true;
+                  }
+                  _state('listening', 'Rici is listening · Astra Max');
+                }
+              case BrainSessionAction.reject:
+                unawaited(
+                  stop(
+                    message:
+                        'Voice setup could not be confirmed. Please reconnect.',
+                  ),
+                );
+              case BrainSessionAction.none:
+                break;
             }
-            _ready = true;
-            _deadline?.cancel();
-            for (final track in microphone.getAudioTracks()) {
-              track.enabled = true;
-            }
-            _state('listening', 'Rici is listening · Astra Max');
-          } else if (type == 'input_audio_buffer.speech_started') {
+            return;
+          }
+          if (!_ready && type != 'error') return;
+          if (type == 'input_audio_buffer.speech_started') {
             _turns?.speechStarted(event['item_id']?.toString() ?? '');
             _state('listening', 'Listening…');
           } else if (type == 'input_audio_buffer.speech_stopped' ||

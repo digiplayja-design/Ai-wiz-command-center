@@ -1,6 +1,6 @@
 # KORLIX Brain+Voice
 
-Standalone iOS/Android app for the existing KORLIX account and `general` Rici agent. This app has its own `com.korlix.brain` identity and does not replace KORLIX AI. Version 1.0.1, build 5. The streaming voice update has been signed, uploaded and processed by Apple. Assignment of build 5 to the existing KORLIX Brain Internal TestFlight group is awaiting approval after automatic review blocked that distribution step; build 3 remains available. App Store review submission has not been performed.
+Standalone iOS/Android app for the existing KORLIX account and `general` Rici agent. This app has its own `com.korlix.brain` identity and does not replace KORLIX AI. Version 1.0.1, build 6. Streaming build 5 is Testing in the existing KORLIX Brain Internal group. Build 6 corrects voice setup: the initial session event can contain default settings, so the microphone stays muted until session.updated confirms the requested speech-only settings. App Store review submission has not been performed.
 
 The approved Violet Eclipse / Champagne Precision interface is bundled offline in `assets/web`. It retains the Halo Capsule Talk button, Add Memory chip, Magnetic Key controls, Electric Cyan Precision Dial orbits, silent 3.1–3.6 second lightning and crystal twinkle ambience at 1%. Animation pause and reduced-motion support are preserved. The official KORLIX emblem now uses purple, red, green and gold. Apple, Google Play and device icon sizes are checked in.
 

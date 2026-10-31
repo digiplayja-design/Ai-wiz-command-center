@@ -3,7 +3,7 @@
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "version": "1.0.1",
-  "minimumSourceBuild": 5,
+  "minimumSourceBuild": 6,
   "appCodeCommit": "816eee71abfecd2ebe4989fb8ce901af16bec83a",
   "releasePipelineCommit": "afb7eed81fd032e914f28d208801cff12aa5816a",
   "signedIosCandidate": {
@@ -28,7 +28,7 @@
     "note": "Cross-platform compilation before the final cancellation-order fix. Final build 5 passed all 31 tests and the signed iPhone build; no updated Android artifact was delivered."
   },
   "testflight": {
-    "status": "processed; group assignment awaiting user approval",
+    "status": "testing",
     "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae66ba86a1999f83b5c8371",
     "sourceCommit": "afb7eed81fd032e914f28d208801cff12aa5816a",
     "uploadBranch": "release/korlix-brain-testflight-20261031",
@@ -40,13 +40,14 @@
       "id": "ae86d9a2-5bdf-4f3d-910b-aa532675951f",
       "automaticDistribution": false,
       "testerCount": 1,
-      "invitationStatus": "Invited, confirmed in App Store Connect on 2026-10-31",
-      "buildCount": 1,
+      "invitationStatus": "Installed 1.0.1 (5), observed in App Store Connect",
+      "buildCount": 2,
       "builds": [
+        "1.0.1 (5)",
         "1.0.1 (3)"
       ],
       "buildState": "Testing",
-      "build5Assigned": false
+      "build5Assigned": true
     },
     "processingRejection": {
       "version": "1.0.1",
@@ -77,7 +78,7 @@
     "completedAt": "2026-10-31T22:37:09Z",
     "processingResult": "complete",
     "appleBuildId": "3a95a0e0-40ba-41f3-bffc-34cbdcb57d89",
-    "console": "https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6829319523/testflight/ios",
+    "console": "https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6829319523/testflight/groups/ae86d9a2-5bdf-4f3d-910b-aa532675951f/builds",
     "processingVerifiedAt": "2026-10-31T22:41:39.126647+00:00",
     "previousReadyBuild": {
       "build": 3,
@@ -87,7 +88,7 @@
       "processingResult": "complete",
       "groupState": "Testing"
     },
-    "distributionBlock": "Automatic approval review rejected assigning build 5 to the existing KORLIX Brain Internal group, saying the exact release was not clearly authorized. No assignment was made; user approval requested."
+    "distributionApprovedByUser": true
   },
   "storeSubmission": "not performed",
   "authenticatedDeviceVoiceTest": "User tested build 3 and reported latency; build 5 device measurement pending",
@@ -128,7 +129,7 @@
   },
   "latencyUpdate": {
     "sourceBuild": 5,
-    "status": "backend live; signed build 5 uploaded and Apple processing complete; internal-group assignment awaiting approval",
+    "status": "Backend live; build 5 Testing in the existing internal group",
     "reasoningModel": "gpt-6-astra",
     "reasoningEffort": "max",
     "baselineBackendMs": [
@@ -151,5 +152,11 @@
     "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae66ba86a1999f83b5c8371",
     "supersededBuild4": "Canceled before IPA export/upload; final source targets build 5",
     "appleBuildId": "3a95a0e0-40ba-41f3-bffc-34cbdcb57d89"
+  },
+  "sessionHandshakeFix": {
+    "sourceBuild": 6,
+    "status": "37 app tests and 23 release checks passed; final analysis pending",
+    "change": "Send session.update after session.created, wait for session.updated to confirm no automatic responses and transcription before enabling microphone; bounded setup timeout; retain Astra Max checks",
+    "liveDeviceVerification": "pending"
   }
 }
