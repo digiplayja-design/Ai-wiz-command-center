@@ -37,7 +37,16 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
     WidgetsBinding.instance.addObserver(this);
     _api = BrainApi(widget.auth);
     _repository = BrainRepository(_api);
-    _voice = BrainVoice(_api, _emit);
+    _voice = BrainVoice(
+      _api,
+      _emit,
+      onSaved: (result) async {
+        // A confirmed write must remain visible even if the subsequent refresh fails.
+        final memory = Map<String, dynamic>.from(result['memory'] as Map);
+        _repository.acceptVoiceMemory(memory);
+        _emit({'type': 'brainSnapshot', 'snapshot': _repository.snapshot});
+      },
+    );
     _web = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xff100b1b))

@@ -1,19 +1,19 @@
 # KORLIX Brain+Voice
 
-Standalone iOS/Android app for the existing KORLIX account and `general` Rici agent. This app has its own `com.korlix.brain` identity and does not replace KORLIX AI. Version 1.0.0, build 1. Store submissions are not part of this source checkpoint.
+Standalone iOS/Android app for the existing KORLIX account and `general` Rici agent. This app has its own `com.korlix.brain` identity and does not replace KORLIX AI. Version 1.0.1, build 2. Store submissions are not part of this source checkpoint.
 
 The approved Violet Eclipse / Champagne Precision interface is bundled offline in `assets/web`. It retains the Halo Capsule Talk button, Add Memory chip, Magnetic Key controls, Electric Cyan Precision Dial orbits, silent 3.1–3.6 second lightning and crystal twinkle ambience at 1%. Animation pause and reduced-motion support are preserved. The official KORLIX emblem now uses purple, red, green and gold. Apple, Google Play and device icon sizes are checked in.
 
 ## Connected behavior
 
 - Native secure sign-in, refresh, password recovery, duplicate-account guidance, sign-out and shared-account deletion request.
-- Native authenticated memory and behavior loading, explicit review before saving, selected-item deletion, session undo and stale-training checks.
+- Native authenticated memory and behavior loading, reviewed typed/document changes, direct command-authorized voice saves, selected-item deletion, session undo and stale-training checks.
 - Typed, OS dictation and selected-document inputs. A file produces a draft, never an automatic memory. Suggested memories are individually selected for review. Analysis uses the existing account allowance.
-- Native WebRTC voice, usage limits, stop/reconnect, ephemeral transcript and response reporting. Credentials never cross the WebView bridge; remote navigation and network requests from the bundled page are blocked.
+- GPT-6 Astra (`gpt-6-astra`) with `reasoning.effort: max` generates every conversational answer on the server; no automatic downgrade. Realtime supplies microphone transcription and spoken delivery with automatic responses disabled. Native WebRTC voice, usage limits, stop/reconnect, ephemeral transcript and response reporting. Credentials never cross the WebView bridge; remote navigation and network requests from the bundled page are blocked.
 - Voice keeps running while navigating within the app. Android includes a microphone foreground service with a Stop notification; iOS declares background audio with a play-and-record session. Physical-device verification is required before claiming screen-lock reliability.
 - Existing service limits apply. No new prices, unlimited access or purchase flow are introduced in this first standalone build.
 
-Memory and behavior changes affect the shared general KORLIX agent. A running voice session keeps its initial instructions; reconnect Rici to use newly approved changes. The backend limits memory listing to 250 entries. Training performs a fresh-content check before writing, but the existing API does not offer an atomic compare-and-swap operation.
+Memory and behavior changes affect the shared general KORLIX agent. Astra reloads saved account memory and training before each reasoning turn. Say **“Rici, remember this: …”** or **“Rici, remember this instruction: …”** to save the exact spoken content without a separate password or review screen. Saying the command alone prompts for the next utterance, valid for 60 seconds; “cancel” or “never mind” discards it. Spoken instructions are saved as tagged, removable style memories in My Brain. Ordinary conversation is not automatically saved. Success is shown only after database acknowledgment. Duplicate transcript IDs are idempotent; interruptions suppress stale speech while preserving already-authorized saves. The backend limits memory listing to 250 entries. Training performs a fresh-content check before writing, but the existing API does not offer an atomic compare-and-swap operation.
 
 ## Build and validate
 
@@ -34,7 +34,9 @@ For browser view checks, install Playwright separately and run `node tools/check
 
 ## Remaining release verification
 
-This checkpoint passes Flutter analysis, all 16 Dart tests and browser interaction checks at 320, 390, 768 and 1024px. The local Android ARM64 debug APK and the cloud Android and iOS simulator builds succeeded. [GitHub validation run 41238096034](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41238096034) built code commit `d67aa4580457695c205a49976761a062a275b840`. Android signatures, app identities and bundled icons were verified. These are test builds; the iOS simulator ZIP is for a Mac simulator and cannot be installed on an iPhone or iPad through TestFlight.
+The previous 1.0.0 native builds passed [GitHub validation run 41238096034](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41238096034). Version 1.0.1 adds six native voice-controller tests and backend checks for model pinning, command authorization, ownership, persistence acknowledgment, deduplication, fresh memory, and usage metering. Check the latest workflow run for this source commit's Android/iOS build results. These are test builds; the iOS simulator ZIP requires a Mac simulator and cannot be installed on an iPhone or iPad through TestFlight.
+
+The production backend implementation is commit `0304a4a0d6927402e4461fac193247033b22c978` on `release/signup-plan-intent-20261021` in `backend/brain_voice/core.mjs` and the scoped `/api/brain-voice/turn` route. Deployment must use that release branch; this app branch retains its original backend snapshot. The app verifies the server's `astra-max-v1` protocol and exact model/effort headers before opening its microphone. Ephemeral voice sessions require reconnect after backend restart. Reasoning tokens are metered server-side and combined with speech usage.
 
 Test real shared-account sign-in, permission denial/recovery, two-way Rici audio, Bluetooth/speaker output, quota exhaustion, app switching, screen lock, Stop notification and file analysis on Android and iPhone. Confirm deletion-request and report receipts with the deployed backend. Configure dedicated signing and store records, then complete store privacy/foreground-service declarations and device screenshots. No live account data was written by local automated tests.
 

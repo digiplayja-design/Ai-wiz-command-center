@@ -701,6 +701,10 @@
       else {lastUserTranscript=message.text;get('kb-talk-review').disabled=false;}
       get('kb-transcript').append(row);
       while(get('kb-transcript').children.length>60)get('kb-transcript').firstChild.remove();
+    }else if(message.type==='brainSnapshot'){
+      applySnapshot(message.snapshot);
+    }else if(message.type==='voiceSaved'||message.type==='voiceNotice'){
+      announce(message.message);
     }else if(message.type==='dictation'){
       const target=message.kind==='training'?'kb-training':'kb-memory';
       get(target).value=message.text;
@@ -713,7 +717,7 @@
   const fail=error=>announce(error.message||'Could not complete this action. Please try again.');
   function applySnapshot(snapshot){
     training=snapshot.training||'';
-    memories=(snapshot.memories||[]).map(m=>({id:m.id,text:m.content,source:m.source||'Approved memory'}));
+    memories=(snapshot.memories||[]).map(m=>({id:m.id,text:m.content,source:m.source==='voice_confirmed'?((m.tags||[]).includes('instruction')?'Voice instruction':'Voice memory'):(m.source||'Approved memory')}));
     canUndo=!!snapshot.canUndo;ready=true;
     get('kb-account-status').textContent='Account connected';
     if(currentScreen==='brain')renderBrain();

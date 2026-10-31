@@ -17,6 +17,12 @@ class BrainRepository {
     'agentName': agent['name'] ?? 'Rici',
   };
 
+  void acceptVoiceMemory(Map<String, dynamic> memory) {
+    memories.removeWhere((value) => value['id'] == memory['id']);
+    memories.add(memory);
+    _undo = null;
+  }
+
   Future<Map<String, dynamic>> load() async {
     final results = await Future.wait([
       api.json('GET', BrainApi.agentPath),

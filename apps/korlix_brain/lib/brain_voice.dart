@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import 'brain_api.dart';
+import 'brain_voice_turns.dart';
 import 'voice_lifecycle.dart';
 
 import 'package:flutter/foundation.dart';
@@ -11,9 +12,11 @@ import 'package:flutter/foundation.dart';
 import 'voice_usage_guard.dart';
 
 class BrainVoice {
-  BrainVoice(this.api, this.emit);
+  BrainVoice(this.api, this.emit, {required this.onSaved});
   final BrainApi api;
   final void Function(Map<String, dynamic>) emit;
+  final Future<void> Function(Map<String, dynamic>) onSaved;
+  BrainVoiceTurns? _turns;
   RTCPeerConnection? _peer;
   MediaStream? _microphone;
   RTCDataChannel? _channel;
@@ -154,46 +157,36 @@ class BrainVoice {
           unawaited(_usage?.observeServerEvent(event));
           final type = event['type'];
           if (type == 'session.created') {
-            final instructions = (event['session'] as Map?)?['instructions'];
-            if (instructions is! String || instructions.isEmpty) {
+            final session = event['session'] as Map?;
+            final vad =
+                ((session?['audio'] as Map?)?['input']
+                        as Map?)?['turn_detection']
+                    as Map?;
+            if (vad?['create_response'] != false) {
               unawaited(
                 stop(
-                  message:
-                      'Rici could not load her instructions. Please reconnect.',
+                  message: 'The server needs the Astra Max voice update. Please reconnect later.',
                 ),
               );
               return;
             }
-            // Preserve all server instructions and account memory. The standalone
-            // app does not expose external-action tools or automatic memory writes.
-            unawaited(
-              channel.send(
-                RTCDataChannelMessage(
-                  jsonEncode({
-                    'type': 'session.update',
-                    'session': {
-                      'type': 'realtime',
-                      'tools': <Object>[],
-                      'tool_choice': 'none',
-                      'instructions':
-                          '$instructions\n\nIn this standalone KORLIX Brain app your spoken name is Rici, pronounced Ree-See. Memory and behavior changes require the user to review and approve them using the app controls. Never claim a change was saved through conversation.',
-                    },
-                  }),
-                ),
-              ),
-            );
-          } else if (type == 'session.updated') {
             _ready = true;
             _deadline?.cancel();
             for (final track in microphone.getAudioTracks()) {
               track.enabled = true;
             }
-            _state('listening', 'Rici is listening');
+            _state('listening', 'Rici is listening · Astra Max');
           } else if (type == 'input_audio_buffer.speech_started') {
+            _turns?.speechStarted(event['item_id']?.toString() ?? '');
             _state('listening', 'Listening…');
           } else if (type == 'input_audio_buffer.speech_stopped' ||
               type == 'response.created') {
-            _state('thinking', 'Rici is thinking');
+            if (type == 'response.created') {
+              _turns?.responseStarted(event['response'] as Map? ?? {});
+            } else {
+              _turns?.speechStopped(event['item_id']?.toString() ?? '');
+            }
+            _state('thinking', 'Rici is thinking · Astra Max');
           } else if (type == 'output_audio_buffer.started') {
             _state('speaking', 'Rici is speaking');
           } else if (type == 'output_audio_buffer.stopped' ||
@@ -201,11 +194,17 @@ class BrainVoice {
             _state('listening', 'Rici is listening');
           } else if (type ==
               'conversation.item.input_audio_transcription.completed') {
-            emit({
-              'type': 'transcript',
-              'role': 'you',
-              'text': event['transcript']?.toString() ?? '',
-            });
+            _turns?.accept(
+              event['item_id']?.toString() ?? '',
+              event['transcript']?.toString() ?? '',
+            );
+          } else if (type ==
+              'conversation.item.input_audio_transcription.failed') {
+            _turns?.transcriptionFailed(event['item_id']?.toString() ?? '');
+          } else if (type == 'response.done') {
+            _turns?.responseDone(
+              (event['response'] as Map?)?['id']?.toString(),
+            );
           } else if (type == 'response.output_audio_transcript.done' ||
               type == 'response.audio_transcript.done') {
             emit({
@@ -214,6 +213,10 @@ class BrainVoice {
               'text': event['transcript']?.toString() ?? '',
             });
           } else if (type == 'error') {
+            if ((event['error'] as Map?)?['code'] ==
+                'response_cancel_not_active') {
+              return;
+            }
             unawaited(
               stop(
                 message: 'Rici could not continue this conversation. Please reconnect.',
@@ -252,6 +255,7 @@ class BrainVoice {
         headers: {
           'Content-Type': 'application/sdp',
           'Accept': 'application/sdp, application/json',
+          'x-korlix-brain-voice': 'astra-max-v1',
           'x-korlix-character': 'jj',
           'x-korlix-language': 'English',
           'x-korlix-live-convo-agent': 'general',
@@ -273,6 +277,36 @@ class BrainVoice {
         check();
       }
       _usage = usage;
+      if (response.headers['x-korlix-brain-voice'] != 'astra-max-v1' ||
+          response.headers['x-korlix-brain-model'] != 'gpt-6-astra' ||
+          response.headers['x-korlix-brain-reasoning'] != 'max') {
+        throw const BrainApiException(
+          'Astra Max is not available on this server yet. Please reconnect later.',
+        );
+      }
+      _turns = BrainVoiceTurns(
+        isCurrent: current,
+        emit: emit,
+        saved: onSaved,
+        send: (event) async {
+          if (current()) {
+            await channel.send(RTCDataChannelMessage(jsonEncode(event)));
+          }
+        },
+        request: (id, text) async {
+          final result = await api.send(
+            'POST',
+            '/api/brain-voice/turn',
+            body: {
+              'sessionId': usage.sessionId,
+              'turnId': id,
+              'transcript': text,
+            },
+            timeout: const Duration(seconds: 155),
+          );
+          return Map<String, dynamic>.from(jsonDecode(result.body) as Map);
+        },
+      );
       if (!response.body.trimLeft().startsWith('v=')) {
         throw const BrainApiException(
           'Rici returned an invalid voice connection.',
@@ -296,6 +330,8 @@ class BrainVoice {
 
   Future<void> stop({String message = 'Microphone off'}) async {
     ++_generation;
+    _turns?.dispose();
+    _turns = null;
     _active = false;
     _ready = false;
     _deadline?.cancel();

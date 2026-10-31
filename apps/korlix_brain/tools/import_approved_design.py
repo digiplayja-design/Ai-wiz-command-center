@@ -27,9 +27,9 @@ replacements={
     'BRAIN':'BRAIN+VOICE',
     'Preview ready':'Your brain is ready',
     'Preview only · sample entries stay in this preview':'Your memories. Your voice. Your KORLIX account.',
-    'Scripted voice lighting · microphone off':'Tap Start conversation when you are ready.',
+    'Scripted voice lighting · microphone off':'GPT-6 Astra · Max reasoning',
     'Scripted example · microphone is off':'Rici can make mistakes. Review important information.',
-    'Planned inputs: voice, typing, or document upload.':'Speak, type, or upload a document. Review every change.',
+    'Planned inputs: voice, typing, or document upload.':'Say “Rici, remember this…” to save directly. Type or upload for review.',
     'Sample data only · no account connection':'Shared with your KORLIX general voice agent.',
     'This removes only the selected item from this preview.':'This removes the selected item from your shared KORLIX account.',
     'Preview only · no live account was changed':'Saved to your KORLIX account.',
@@ -52,6 +52,9 @@ bubbles=root.xpath('.//*[contains(concat(" ",normalize-space(@class)," ")," kb-b
 parent=bubbles[0].getparent()
 for bubble in bubbles:bubble.getparent().remove(bubble)
 parent.set('id','cinema-kb-transcript');parent.set('aria-live','polite')
+hint=etree.Element('p',{'class':'kb-caption'})
+hint.text='Say “Rici, remember this: …” to save a memory or instruction directly. No extra password. Say the command on its own, then tell Rici what to remember.'
+parent.addprevious(hint)
 for form in ['kb-training-form','kb-memory-form']:
     b=etree.SubElement(node(form),'button',{'type':'button','class':'kb-link','data-stop-dictation':''})
     b.text='Stop dictation'
