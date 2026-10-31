@@ -10,7 +10,7 @@
     "green",
     "gold"
   ],
-  "status": "Version 1.0.1 (5) streaming voice update prepared; TestFlight upload pending",
+  "status": "Version 1.0.1 (5) signed, uploaded and processed by Apple; internal TestFlight group assignment awaiting approval",
   "sharedAccount": true,
   "appleAppId": "6829319523",
   "appleSku": "KORLIX-BRAIN-VOICE-IOS"
