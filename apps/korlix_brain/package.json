@@ -1,0 +1,6 @@
+{
+  "name": "korlix-brain-interface-tests",
+  "private": true,
+  "scripts": { "test": "node --test tools/*.test.cjs" },
+  "devDependencies": { "jsdom": "26.1.0" }
+}
