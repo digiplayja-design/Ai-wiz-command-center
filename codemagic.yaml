@@ -563,7 +563,8 @@ workflows:
         provisioning_profiles: [KORLIX_APP_STORE_PROFILE]
         certificates: [KORLIX_APP_STORE_CERT]
     scripts:
-      - name: Prepare dedicated Brain+Voice Apple identity
+      - &brain_install_release_tools
+        name: Install Apple release tools
         script: |
           set -euo pipefail
           python3 -m venv "$CM_BUILD_DIR/.brain-release-tools"
@@ -571,14 +572,20 @@ workflows:
           export PATH="$CM_BUILD_DIR/.brain-release-tools/bin:$PATH"
           printf 'PATH=%s\n' "$PATH" >> "$CM_ENV"
           python3 -m unittest discover -s "$CM_BUILD_DIR/scripts/tests" -p 'test_*ios_release.py'
+      - &brain_prepare_ios_identity
+        name: Prepare dedicated Brain+Voice Apple identity
+        script: |
+          set -euo pipefail
           python3 "$CM_BUILD_DIR/scripts/prepare_brain_ios.py"
-      - name: Validate Brain+Voice
+      - &brain_validate_ios
+        name: Validate Brain+Voice
         script: |
           set -euo pipefail
           flutter pub get --enforce-lockfile
           flutter analyze --no-pub
           flutter test --no-pub --reporter expanded
-      - name: Build and verify Brain+Voice IPA
+      - &brain_build_ios
+        name: Build and verify Brain+Voice IPA
         script: |
           set -euo pipefail
           flutter build ios --release --config-only --no-codesign --no-pub \
@@ -617,6 +624,21 @@ workflows:
       vars:
         <<: *brain_ios_vars
         BRAIN_REQUIRE_APP_RECORD: 'true'
+    scripts:
+      - *brain_install_release_tools
+      - name: Query Apple for the exact Brain+Voice app record
+        script: |
+          set -euo pipefail
+          python3 "$CM_BUILD_DIR/scripts/prepare_brain_ios.py" --probe-app-record
+      - name: App Store Connect record is missing for com.korlix.brain
+        when:
+          condition: env.BRAIN_APP_RECORD_PRESENT == "false"
+        script: |
+          echo 'Create the KORLIX Brain+Voice iOS app record in App Store Connect, then rerun this workflow.'
+          exit 1
+      - *brain_prepare_ios_identity
+      - *brain_validate_ios
+      - *brain_build_ios
     publishing:
       app_store_connect:
         auth: integration

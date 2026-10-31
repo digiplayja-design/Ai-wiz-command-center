@@ -61,6 +61,11 @@ class BrainSigningTests(unittest.TestCase):
         self.assertEqual(brain.resolve_release([], "version: 1.0.1+2", False, latest), (None, "1.0.1", 2))
         latest.assert_not_called()
 
+    def test_malformed_apple_response_is_not_reported_as_missing_record(self):
+        for response in [None, {}, "", False]:
+            with self.subTest(response=response), self.assertRaises(ValueError):
+                brain.app_record_id(response)
+
     def test_testflight_requires_own_app_record(self):
         for apps in [[], [{"id": "6783100102", "attributes": {"bundleId": "com.korlixdeveloper.korlixai"}}]]:
             with self.subTest(apps=apps), self.assertRaises(ValueError):

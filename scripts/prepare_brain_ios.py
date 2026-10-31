@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Prepare Brain+Voice's dedicated profile using Codemagic's managed identity."""
 
+import argparse
 import base64
 import json
 import os
@@ -43,9 +44,15 @@ def validate_profile(profile, now=None):
         raise ValueError("Brain+Voice profile is expired or expires within one day")
 
 
+def app_record_id(apps):
+    if not isinstance(apps, list):
+        raise ValueError("Apple app lookup did not return a resource list")
+    return select_app(apps, BUNDLE_ID) if apps else None
+
+
 def resolve_release(apps, version_text, require_app_record, latest_build):
     version, build = source_version(version_text)
-    app_id = select_app(apps, BUNDLE_ID) if apps else None
+    app_id = app_record_id(apps)
     if app_id:
         build = next_build_number(latest_build(app_id), build)
     elif require_app_record:
@@ -54,6 +61,9 @@ def resolve_release(apps, version_text, require_app_record, latest_build):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--probe-app-record", action="store_true")
+    args = parser.parse_args()
     # Credentials stay in the existing Codemagic integration; never log keys,
     # generate a replacement certificate, or export the managed private key.
     from cryptography import x509
@@ -79,6 +89,16 @@ def main():
         if response.status_code != 201:
             raise RuntimeError(f"Apple {path} creation failed: HTTP {response.status_code}")
         return response.json()["data"]
+
+    if args.probe_app_record:
+        # A successful empty Apple response is distinguishable in the CI check
+        # summary from authentication, transport, and malformed-response errors.
+        identifier = app_record_id(read("apps", **{"filter[bundleId]": BUNDLE_ID}))
+        present = "true" if identifier else "false"
+        with Path(os.environ["CM_ENV"]).open("a") as stream:
+            stream.write(f"BRAIN_APP_RECORD_PRESENT={present}\n")
+        print(f"Brain+Voice App Store Connect record: {identifier or 'missing'}")
+        return
 
     certificate = read(f"certificates/{CERTIFICATE_ID}")
     if certificate["attributes"]["certificateType"] not in {"DISTRIBUTION", "IOS_DISTRIBUTION"}:
