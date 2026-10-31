@@ -181,7 +181,8 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
       case 'undo':
         return _repository.undo();
       case 'startVoice':
-        if (_voiceStarting || _voice.active) return null;
+        if (_voiceStarting) return {'canceled': true};
+        if (_voice.active) return null;
         final intent = ++_voiceIntent;
         _voiceStarting = true;
         try {

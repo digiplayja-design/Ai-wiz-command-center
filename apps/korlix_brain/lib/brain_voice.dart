@@ -24,7 +24,7 @@ class BrainVoice {
       emit({'type': 'voice', 'phase': phase, 'message': message});
 
   Future<void> start() async {
-    await stop();
+    await stop(notify: false);
     final generation = ++_generation;
     final account = api.auth.revision;
     bool current() =>
@@ -280,7 +280,10 @@ class BrainVoice {
     }
   }
 
-  Future<void> stop({String message = 'Microphone off'}) async {
+  Future<void> stop({
+    String message = 'Microphone off',
+    bool notify = true,
+  }) async {
     ++_generation;
     _active = false;
     _ready = false;
@@ -320,7 +323,7 @@ class BrainVoice {
         await renderer.dispose();
       }
     } catch (_) {}
-    _state('complete', message);
+    if (notify) _state('complete', message);
     await usage?.end();
   }
 }

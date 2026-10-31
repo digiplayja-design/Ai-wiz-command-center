@@ -42,6 +42,7 @@ class _BrainAppState extends State<BrainApp> with WidgetsBindingObserver {
     title: 'KORLIX Brain',
     debugShowCheckedModeBanner: false,
     theme: ThemeData(
+      fontFamily: 'Rajdhani',
       brightness: Brightness.dark,
       scaffoldBackgroundColor: brainPurple,
       colorScheme: ColorScheme.fromSeed(

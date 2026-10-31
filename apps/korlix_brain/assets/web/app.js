@@ -664,7 +664,7 @@
 
   let training='', memories=[], pending=null, deletion=null, canUndo=false;
   let loaded=false,busy=false,trainingExpected='',memorySource='typed',trainingSource='typed';
-  let dictating=null,dictationBase='',lastSpoken='',voiceActive=false,noticeTimer;
+  let dictating=null,dictationBase='',lastSpoken='',voiceActive=false,noticeTimer,voiceRequest=0;
   const bridge=window.BrainBridge;
   const announce=text=>{clearTimeout(noticeTimer);get('kb-status').textContent=text;if(text)noticeTimer=setTimeout(()=>get('kb-status').textContent='',12000);};
   const behaviors=()=>training.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
@@ -697,7 +697,7 @@
   }
   function stopDictation(){dictating=null;root.querySelectorAll('[data-stop-dictation]').forEach(b=>b.hidden=true);bridge.call('stopDictation').catch(()=>{});}
   function show(name,preserveDraft=false){
-    if(currentScreen==='talk'&&name!=='talk'){voiceActive=false;bridge.call('stopVoice').catch(()=>{});}
+    if(currentScreen==='talk'&&name!=='talk'){voiceRequest++;voiceActive=false;bridge.call('stopVoice').catch(()=>{});}
     stopDictation();clearFocus(false);resetDepth();clearLightning();
     if(name!=='home')finishIntro();
     if(name!=='transfer'){transferState=null;transferStage.dataset.transfer='ready';}
@@ -729,10 +729,11 @@
     if(entry==='file')analyze(target==='train'?'training':'memory');
   }
   function startVoice(){
+    const request=++voiceRequest;
     if(voiceActive){voiceActive=false;bridge.call('stopVoice').catch(e=>announce(e.message));return;}
     voiceActive=true;lastSpoken='';document.getElementById('brain-transcript').replaceChildren();get('kb-talk-review').hidden=true;
     get('kb-replay-demo').textContent='End conversation';get('kb-voice-phase').textContent='Connecting to Rici…';duckMusic();
-    bridge.call('startVoice').then(value=>{if(value?.canceled){voiceActive=false;setPhase(3);get('kb-replay-demo').textContent='Connect to Rici';}}).catch(error=>{voiceActive=false;setPhase(3);get('kb-replay-demo').textContent='Reconnect';announce(error.message);});
+    bridge.call('startVoice').then(value=>{if(request!==voiceRequest)return;if(value?.canceled){voiceActive=false;setPhase(3);get('kb-replay-demo').textContent='Connect to Rici';}}).catch(error=>{if(request!==voiceRequest)return;voiceActive=false;setPhase(3);get('kb-replay-demo').textContent='Reconnect';announce(error.message);});
   }
   function dictate(kind){
     if(dictating){stopDictation();announce('Dictation stopped. Review or edit your words.');return;}
@@ -805,7 +806,7 @@
       dictating=null;root.querySelectorAll('[data-stop-dictation]').forEach(b=>b.hidden=true);
     }else if(event.type==='notice')announce(event.text);
     else if(event.type==='back'){if(currentScreen!=='home')show('home');}
-    else if(event.type==='background'){dictating=null;voiceActive=false;silenceMusicInBackground();}
+    else if(event.type==='background'){voiceRequest++;dictating=null;voiceActive=false;silenceMusicInBackground();}
   });
   const resize=new ResizeObserver(measure);menus.forEach(menu=>resize.observe(menu.element));scenes.forEach(scene=>resize.observe(scene.canvas));resize.observe(transferStage);resize.observe(app);
   window.lucide?.createIcons();mountMusic();readPalette();measure();syncMotion();mountCinema();

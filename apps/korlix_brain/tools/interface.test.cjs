@@ -5,7 +5,7 @@ const path=require('node:path');
 const {JSDOM}=require('jsdom');
 const assets=path.join(__dirname,'../assets/web');
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
-async function setup({failSave=false,deferSave=false,reduced=true}={}){
+async function setup({failSave=false,deferSave=false,deferVoice=false,reduced=true}={}){
   const dom=new JSDOM(fs.readFileSync(path.join(assets,'index.html'),'utf8'),{url:'file:///android_asset/flutter_assets/assets/web/index.html',runScripts:'outside-only'});
   const w=dom.window,d=w.document,calls=[],pending=[];
   let training='Keep replies concise.',memories=[],sequence=0,time=0,rafId=0;
@@ -33,7 +33,7 @@ async function setup({failSave=false,deferSave=false,reduced=true}={}){
     }
     if(request.action==='saveTraining'){training=request.payload.text;data=snapshot();}
     if(request.action==='deleteMemory'){memories=memories.filter(m=>m.id!==request.payload.key);data=snapshot();}
-    if(request.action==='startVoice')data={canceled:true};
+    if(request.action==='startVoice'){if(deferVoice){pending.push(request);return;}data={canceled:true};}
     queueMicrotask(()=>reply(request,data));
   }};
   w.eval(fs.readFileSync(path.join(assets,'bridge.js'),'utf8'));
@@ -104,5 +104,19 @@ test('silent storm runs in one visual loop and obeys pause',async()=>{
     app.advance(4000);assert.equal(app.calls.filter(r=>/audio|sound|thunder/i.test(r.action)).length,0);
     app.get('kb-motion-toggle').click();app.advance(1000);assert.equal(app.frames.size,0);
     assert.equal(root.dataset.lightning,'idle');
+  }finally{app.dom.window.close();}
+});
+
+test('a late canceled start cannot overwrite a newer voice attempt',async()=>{
+  const app=await setup({deferVoice:true});try{
+    await app.go('talk');const original=app.pending[0];
+    app.get('kb-replay-demo').click();await tick();
+    app.w.KorlixBrainReceive({type:'voice',phase:'complete',message:'Microphone off'});
+    app.get('kb-replay-demo').click();await tick();
+    app.w.KorlixBrainReceive({type:'voice',phase:'listening',message:'Rici is listening'});
+    app.reply(original,{canceled:true});await tick();
+    assert.equal(app.get('kb-voice-phase').textContent,'Rici is listening');
+    assert.equal(app.get('kb-replay-demo').textContent,'End conversation');
+    app.reply(app.pending[1],null);await tick();
   }finally{app.dom.window.close();}
 });

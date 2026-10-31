@@ -31,7 +31,7 @@ The default API is the existing KORLIX backend. To test against staging, supply 
 
 ## Verification and release limits
 
-Local checks cover 16 auth/repository cases and 7 interface cases, including failed saves, duplicate taps, stale behaviors, separate deletion/undo, native bridge mappings, safe transcript rendering and animation pause. They use controlled fixtures and do not modify a real account.
+Local checks cover 16 auth/repository cases and 8 interface cases, including failed saves, duplicate taps, stale behaviors, separate deletion/undo, native bridge mappings, safe transcript rendering and animation pause. They use controlled fixtures and do not modify a real account.
 
 Physical-device microphone, speech permission, Bluetooth routing, live paid-plan usage, background interruption and real-account persistence still require a device acceptance pass. Automated native build artifacts are test packages, not store submissions. iOS simulator output cannot be installed on an iPhone; device distribution needs the existing Apple signing/release process.
 
