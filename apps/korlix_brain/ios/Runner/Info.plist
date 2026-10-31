@@ -33,10 +33,18 @@
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- Native media dependencies reference these APIs; the document and audio-only
+	     flows do not request these permissions merely because the keys exist. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Camera access is used only when you choose to capture content to attach to a memory or training document.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Photo access is used only when you choose a photo to attach to a memory or training document.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Location access is used only for optional location information on a photo attachment. Voice conversations and saving memories do not require your location.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Use your microphone to talk with Rici or dictate a memory you choose to save.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Convert your spoken memories and instructions into text for you to review.</string>
+	<string>Turn spoken commands into text so Rici can save the memories and instructions you ask it to remember.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

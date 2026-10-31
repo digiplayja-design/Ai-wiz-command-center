@@ -82,6 +82,14 @@ class BrainSigningTests(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             brain.resolve_release(apps, "version: 1.0.1+2", True, Mock(side_effect=RuntimeError("API unavailable")))
 
+    def test_rejected_build_is_not_reused_if_apple_omits_it(self):
+        apps = [{"id": "6829319523", "attributes": {"bundleId": brain.BUNDLE_ID}}]
+        for latest in ("", "2"):
+            with self.subTest(latest=latest):
+                self.assertEqual(brain.resolve_release(apps, "version: 1.0.1+3", True,
+                                                      Mock(return_value=latest)),
+                                 ("6829319523", "1.0.1", 3))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,7 +6,7 @@
 | --- | --- |
 | App name | KORLIX Brain+Voice |
 | Apple bundle ID / Android package | `com.korlix.brain` |
-| Version / minimum source build | `1.0.1` / `2` |
+| Version / minimum source build | `1.0.1` / `3` |
 | Apple team | `FJKJ9MUDZ4` |
 | Apple app ID | `6829319523` |
 | Apple SKU | `KORLIX-BRAIN-VOICE-IOS` |
@@ -14,7 +14,7 @@
 | Platforms | iPhone and iPad |
 | Store icon | Purple, red, green and gold KORLIX emblem |
 
-The dedicated [Apple app record](https://appstoreconnect.apple.com/apps/6829319523/distribution/info) was created on October 31, 2026. Its name, subtitle, Productivity category, version 1.0.1 draft, description, keywords and support URL are saved. Access is limited to the existing authorized account users. The earlier missing-record blocker is resolved; the [new TestFlight upload](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6612f6a1999f83b5c5925) succeeded from commit `13692038da1db765afd4860f8dc62f514a46cc8e`; Apple processing is not yet verified. Google Play listing ID remains unverified. Never reuse another KORLIX app's store record or bundle identity.
+The dedicated [Apple app record](https://appstoreconnect.apple.com/apps/6829319523/distribution/info) was created on October 31, 2026. Its name, subtitle, Productivity category, version 1.0.1 draft, description, keywords and support URL are saved. Access is limited to the existing authorized account users. The earlier missing-record blocker is resolved; the [new TestFlight upload](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6612f6a1999f83b5c5925) succeeded from commit `13692038da1db765afd4860f8dc62f514a46cc8e`; Apple subsequently rejected build 2 during processing (ITMS-90683) for missing camera and photo-library usage descriptions, with a location-description warning. Build 3 adds all three descriptions and verifies them in the exported IPA before upload. Google Play listing ID remains unverified. Never reuse another KORLIX app's store record or bundle identity.
 
 ## iOS build route
 
@@ -25,7 +25,7 @@ The [signed candidate build](https://codemagic.io/app/6a32198d2d0806059c3df062/b
 1. Run `korlix-brain-ios-candidate`. A push trigger is configured for this branch; it requires the repository's Codemagic webhook to be active. The workflow imports the existing managed KORLIX distribution certificate, registers/selects `com.korlix.brain`, and installs its dedicated App Store profile. The original KORLIX profile is only used to import the certificate and cannot pass Brain+Voice artifact verification. No store upload occurs in this workflow.
 2. Use the existing Apple app record `6829319523` with bundle `com.korlix.brain`. Keep its account access policy; do not create a duplicate record.
 3. Run `korlix-brain-ios-testflight`, or push the reviewed source to `release/korlix-brain-testflight-20261031`. That release branch alone triggers upload. It first queries Apple for the exact app record; a successful empty response produces a distinct “App Store Connect record is missing for com.korlix.brain” failed step. Authentication/API errors stop at the query step instead. With the app record present, it chooses a build number above existing builds, verifies the signed IPA, and uploads to App Store Connect. It does not submit for external beta or App Store review, assign testers, or send invitations.
-4. TestFlight beta information is saved, and the `KORLIX Brain Internal` group exists with automatic distribution disabled. After Apple processes the build, add it to this group. No tester was added: automatic approval review requires explicit approval for the chosen recipient and testing access. Verify an authenticated physical-device session before App Store submission.
+4. TestFlight beta information is saved, and the `KORLIX Brain Internal` group exists with automatic distribution disabled. After Apple processes the build, add it to this group. The owner explicitly approved the testing invitation and the chosen existing account was added; the group has one tester. Verify an authenticated physical-device session before App Store submission.
 
 The signing tools use the existing `Codemagic Korlix AI` integration and `KORLIX_APP_STORE_CERT` reference. No credentials are embedded in source. No certificate is created or revoked. Failed Apple lookups stop the build rather than resetting numbering.
 

@@ -1,9 +1,9 @@
 {
-  "updatedAt": "2026-10-31T21:50:37.378890+00:00",
+  "updatedAt": "2026-10-31T21:58:55.746900+00:00",
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "version": "1.0.1",
-  "minimumSourceBuild": 2,
+  "minimumSourceBuild": 3,
   "appCodeCommit": "5a504a2ef7a7937ce89e533a713ed8ba3501b83c",
   "releasePipelineCommit": "cba3d1607f96c9b6daac7d691e235b2f8c6158d5",
   "signedIosCandidate": {
@@ -22,7 +22,7 @@
     "releaseIdentityTests": 20
   },
   "testflight": {
-    "status": "uploaded_processing_not_yet_verified",
+    "status": "build_2_processing_rejected_build_3_correction_prepared",
     "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6612f6a1999f83b5c5925",
     "sourceCommit": "13692038da1db765afd4860f8dc62f514a46cc8e",
     "uploadBranch": "release/korlix-brain-testflight-20261031",
@@ -33,9 +33,23 @@
       "name": "KORLIX Brain Internal",
       "id": "ae86d9a2-5bdf-4f3d-910b-aa532675951f",
       "automaticDistribution": false,
-      "testerCount": 0,
-      "invitationStatus": "blocked by automatic approval review; explicit recipient and testing-access approval required"
-    }
+      "testerCount": 1,
+      "invitationStatus": "approved account added; no processed build available yet"
+    },
+    "processingRejection": {
+      "version": "1.0.1",
+      "build": 2,
+      "code": "ITMS-90683",
+      "required": [
+        "NSPhotoLibraryUsageDescription",
+        "NSCameraUsageDescription"
+      ],
+      "warning": [
+        "NSLocationWhenInUseUsageDescription"
+      ],
+      "source": "Apple Developer Relations email supplied by account owner"
+    },
+    "correction": "Add all three reported descriptions; verify exported IPA purposes; minimum build 3"
   },
   "storeSubmission": "not performed",
   "authenticatedDeviceVoiceTest": "not yet performed",
@@ -69,5 +83,9 @@
     "versionDraft": "1.0.1",
     "category": "PRODUCTIVITY",
     "userAccess": "Limited Access"
+  },
+  "releaseIdentityChecks": {
+    "tests": 23,
+    "result": "pass"
   }
 }

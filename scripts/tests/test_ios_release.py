@@ -1,4 +1,5 @@
 import importlib.util
+import plistlib
 import subprocess
 import unittest
 from pathlib import Path
@@ -117,6 +118,32 @@ class ReleaseIdentityTests(unittest.TestCase):
         ]:
             with self.subTest(signed=bad_signed, profile=bad_profile, info=bad_info), self.assertRaises(ValueError):
                 verify.verify_signed_entitlements(bad_signed, bad_profile, bad_info, True)
+
+    def test_brain_export_rejects_missing_or_invalid_privacy_purposes(self):
+        bundle = "com.korlix.brain"
+        keys = ("NSCameraUsageDescription", "NSPhotoLibraryUsageDescription",
+                "NSLocationWhenInUseUsageDescription", "NSMicrophoneUsageDescription",
+                "NSSpeechRecognitionUsageDescription")
+        info = {"CFBundleIdentifier": bundle, "CFBundleShortVersionString": "1.0.1",
+                "CFBundleVersion": "3", "CFBundleSupportedPlatforms": ["iPhoneOS"],
+                **{key: "A user-facing purpose." for key in keys}}
+        verify.verify_info(info, bundle, "1.0.1", "3")
+        for key in keys:
+            missing = {k: v for k, v in info.items() if k != key}
+            with self.subTest(key=key, missing=True), self.assertRaisesRegex(ValueError, key):
+                verify.verify_info(missing, bundle, "1.0.1", "3")
+            for value in ["", "  ", None, True]:
+                with self.subTest(key=key, value=value), self.assertRaisesRegex(ValueError, key):
+                    verify.verify_info({**info, key: value}, bundle, "1.0.1", "3")
+
+    def test_brain_source_contains_the_purposes_apple_required(self):
+        app = Path(__file__).resolve().parents[2] / "apps/korlix_brain"
+        info = plistlib.loads((app / "ios/Runner/Info.plist").read_bytes())
+        version, build = prepare.source_version((app / "pubspec.yaml").read_text())
+        self.assertGreaterEqual(build, 3)  # Never reuse rejected build 2.
+        info.update(CFBundleIdentifier="com.korlix.brain", CFBundleShortVersionString=version,
+                    CFBundleVersion=str(build), CFBundleSupportedPlatforms=["iPhoneOS"])
+        verify.verify_info(info, "com.korlix.brain", version, build)
 
 
 if __name__ == "__main__":

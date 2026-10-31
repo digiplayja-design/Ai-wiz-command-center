@@ -3,14 +3,14 @@
   "androidApplicationId": "com.korlix.brain",
   "iosBundleId": "com.korlix.brain",
   "version": "1.0.1",
-  "build": 2,
+  "build": 3,
   "iconColors": [
     "purple",
     "red",
     "green",
     "gold"
   ],
-  "status": "Apple app record created; signed build uploaded; Apple processing not yet verified; not submitted for App Store review",
+  "status": "Apple build 2 rejected for missing permission descriptions; build 3 correction prepared",
   "sharedAccount": true,
   "appleAppId": "6829319523",
   "appleSku": "KORLIX-BRAIN-VOICE-IOS"
