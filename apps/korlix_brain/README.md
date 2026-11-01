@@ -4,6 +4,10 @@ Standalone iOS/Android app for the existing KORLIX account and `general` Rici ag
 
 The approved Violet Eclipse / Champagne Precision interface is bundled offline in `assets/web`. It retains the Halo Capsule Talk button, Add Memory chip, Magnetic Key controls, Electric Cyan Precision Dial orbits, silent 3.1–3.6 second lightning and crystal twinkle ambience at 1%. Animation pause and reduced-motion support are preserved. The official KORLIX emblem now uses purple, red, green and gold. Apple, Google Play and device icon sizes are checked in.
 
+## Approved monthly plan
+
+The user selected **USD $34.99 per month** for the personal Brain, training features and **60 minutes of Live Conversation per month**. This replaces the earlier $9.99 recommendation. This is an approved product decision, not active billing: store products, the purchase flow and the new monthly minute limit are not configured by build 10. Existing account allowances still apply. Trial, top-up and Deep Think caps need to be finalized before monetization.
+
 ## Connected behavior
 
 - Native secure sign-in, refresh, password recovery, duplicate-account guidance, sign-out and shared-account deletion request.
@@ -35,7 +39,7 @@ For browser view checks, install Playwright separately and run `node tools/check
 
 ## Release verification
 
-The build-10 source passes Flutter analysis, 61 Dart tests and 23 Apple identity, privacy-purpose and build-number checks. Native tests and four viewport UI checks cover transcript Save/Share/Delete, reload persistence, account separation, failed and canceled writes, native message selection, safe text rendering, navigation and the persistent Stop button. The [signed build-10 pipeline](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6b3436a1999f83b5d7ed5) repeated the app tests and release checks, verified the signed IPA, and uploaded version 1.0.1 (10). Apple processing is complete (Apple build ID `c9374dea-470b-43e2-a213-79fdba1bc491`). Build 10 is ready but is not assigned to testers: automatic approval review requires explicit approval for this build and the existing KORLIX Brain Internal group. The group retains its one tester and six earlier builds; no new invitations or public submission were made. Physical-device share-sheet and persistence checks remain pending. See `store/release-status.json` for delivery evidence. Public App Store review has not been submitted.
+The build-10 source passes Flutter analysis, 61 Dart tests and 23 Apple identity, privacy-purpose and build-number checks. Native tests and four viewport UI checks cover transcript Save/Share/Delete, reload persistence, account separation, failed and canceled writes, native message selection, safe text rendering, navigation and the persistent Stop button. The [signed build-10 pipeline](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6b3436a1999f83b5d7ed5) repeated the app tests and release checks, verified the signed IPA, and uploaded version 1.0.1 (10). Apple processing is complete (Apple build ID `c9374dea-470b-43e2-a213-79fdba1bc491`). Version 1.0.1 (10) is Testing in KORLIX Brain Internal after explicit user approval. The group retains its one existing tester and now contains seven builds (10, 9, 8, 7, 6, 5 and 3). No testers were added, invitations resent or public App Store submission made. Physical-device share-sheet and persistence checks remain pending. See `store/release-status.json` for delivery evidence. Public App Store review has not been submitted.
 
 The preceding build-4 code passed Android, simulator and iPhoneOS arm64 compilation in [GitHub validation run 41247985018](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41247985018). Build 10 was compiled in the signed iOS pipeline; an updated Android binary has not been delivered.
 

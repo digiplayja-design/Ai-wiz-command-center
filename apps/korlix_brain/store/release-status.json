@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-01T03:45:25.409007+00:00",
+  "updatedAt": "2026-11-01T04:04:01.967404+00:00",
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "version": "1.0.1",
@@ -28,7 +28,7 @@
     "note": "Cross-platform compilation before the final cancellation-order fix. Final build 5 passed all 31 tests and the signed iPhone build; no updated Android artifact was delivered."
   },
   "testflight": {
-    "status": "processed_distribution_pending",
+    "status": "testing",
     "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6b3436a1999f83b5d7ed5",
     "sourceCommit": "1a9031ebbe90ed07b7070be47f1d2e8130b5d214",
     "uploadBranch": "release/korlix-brain-testflight-20261031",
@@ -41,8 +41,9 @@
       "automaticDistribution": false,
       "testerCount": 1,
       "invitationStatus": "Existing tester retained; no new testers or invitations",
-      "buildCount": 6,
+      "buildCount": 7,
       "builds": [
+        "1.0.1 (10)",
         "1.0.1 (9)",
         "1.0.1 (8)",
         "1.0.1 (7)",
@@ -56,7 +57,7 @@
       "build7Assigned": true,
       "build8Assigned": true,
       "build9Assigned": true,
-      "build10Assigned": false
+      "build10Assigned": true
     },
     "processingRejection": {
       "version": "1.0.1",
@@ -85,7 +86,7 @@
     "flutterTests": 61,
     "releaseIdentityTests": 23,
     "processingResult": "complete",
-    "console": "https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6829319523/testflight/ios",
+    "console": "https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6829319523/testflight/groups/ae86d9a2-5bdf-4f3d-910b-aa532675951f/builds",
     "previousReadyBuild": {
       "build": 9,
       "appleBuildId": "d681aa25-898b-4d77-b1b1-f67f45c1a087",
@@ -97,7 +98,7 @@
       "distributionVerifiedAt": "2026-11-01T02:59:22.335504+00:00",
       "groupState": "Testing"
     },
-    "distributionApprovedByUser": false,
+    "distributionApprovedByUser": true,
     "appleBuildId": "c9374dea-470b-43e2-a213-79fdba1bc491",
     "processingVerifiedAt": "2026-11-01T03:45:25.409007+00:00",
     "signedArtifact": {
@@ -111,16 +112,18 @@
       "location": "Codemagic signed IPA artifact"
     },
     "distributionApproval": {
-      "state": "blocked_pending_explicit_user_approval",
+      "state": "approved_and_completed",
       "action": "Add version 1.0.1 build 10 to existing KORLIX Brain Internal group for its one existing tester",
-      "recordedAt": "2026-11-01T03:45:25.409007+00:00",
-      "reason": "Automatic approval review requires explicit authorization to distribute build 10 to the existing KORLIX Brain Internal tester group. No assignment performed.",
+      "source": "User explicitly replied Approved to the build-10 internal distribution question",
+      "recordedAt": "2026-11-01T04:04:01.967404+00:00",
+      "previousBlock": "Automatic approval review required explicit build-10 and recipient-group approval; resolved by user approval",
       "existingTesterCount": 1,
       "newTesters": 0,
       "publicStoreSubmission": false
     },
     "pipelineFinishedVerifiedAt": "2026-11-01T03:45:25.409007+00:00",
-    "appleUploadDateDisplayed": "Oct 31, 2026 11:40 PM EDT"
+    "appleUploadDateDisplayed": "Oct 31, 2026 11:40 PM EDT",
+    "distributionVerifiedAt": "2026-11-01T04:04:01.967404+00:00"
   },
   "storeSubmission": "not performed",
   "authenticatedDeviceVoiceTest": "User confirms Live Conversation works in build 9. No quantified end-to-end latency measurement.",
@@ -337,7 +340,7 @@
   },
   "transcriptUpdate": {
     "sourceBuild": 10,
-    "status": "Signed build 10 uploaded and Apple processing complete; existing-group assignment blocked pending explicit approval",
+    "status": "Build 10 Testing in KORLIX Brain Internal; Apple processing and approved group assignment verified",
     "flutterTests": 61,
     "flutterAnalyze": "pass",
     "uiChecks": "pass in signed CI; all four viewport layouts",
@@ -362,6 +365,26 @@
     "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6b3436a1999f83b5d7ed5",
     "appleBuildId": "c9374dea-470b-43e2-a213-79fdba1bc491",
     "processingVerifiedAt": "2026-11-01T03:45:25.409007+00:00",
-    "distributionResult": "blocked_pending_explicit_user_approval"
+    "distributionResult": "testing",
+    "distributionVerifiedAt": "2026-11-01T04:04:01.967404+00:00"
+  },
+  "pricingDecision": {
+    "status": "monthly_plan_approved_not_activated",
+    "currency": "USD",
+    "monthlyPriceCents": 3499,
+    "billingInterval": "month",
+    "includedLiveMinutes": 60,
+    "includedFeatures": [
+      "Personal Brain and memories",
+      "Train My AI",
+      "Live Conversation within the monthly allowance"
+    ],
+    "source": "User approved $34.99 per month with a 60-minute limit because Brain and trainable features are included",
+    "recordedAt": "2026-11-01T04:04:01.967404+00:00",
+    "billingActivated": false,
+    "storeProductsConfigured": false,
+    "newMinuteLimitImplemented": false,
+    "trialAndTopUps": "Previous 5-minute welcome trial and $4.99 / 25-minute pack remain proposals; not configured",
+    "deepThinkAllowance": "Separate cap requires definition before monetization; no unlimited inference entitlement"
   }
 }
