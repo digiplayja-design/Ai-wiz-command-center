@@ -1,3 +1,15 @@
+# Live Conversation and Deep Think (build 9)
+
+`rici-live-v1` uses native `gpt-realtime-2.1` / low speech-to-speech replies with Marin. Ordinary turns bypass both transcript completion and `/api/brain-voice/turn`; that endpoint only executes the live memory tool against its original item-bound user transcript. It never sends a Live turn to Sol. Account context loads at connection, and successful tool output enters the live conversation. Reconnect to pick up external account edits.
+
+The native client binds each tool call to its triggering audio item, waits for the exact transcription only for saves, and preserves ownership, idempotency, allowance and durable acknowledgment checks. Tools cannot provide replacement memory text. Stop cancels pending starts and local media; already-authorized writes are not replayed. Live timing logs contain client-reported speech-stop-to-first-audio duration, with no transcripts or account IDs.
+
+Deep Think remains `sol-6.1-max-v1` / `gpt-6.1-sol` / max. Installed Astra and Sol-only builds keep their existing contracts. The mode selector is disabled during an active conversation, with truthful labels and no silent fallback.
+
+Diagnosis: three build-8 requests took 3,883 / 6,820 / 13,446 ms to first Sol text, while preparation took 47 / 64 / 82 ms. Native audio response latency must be measured on a signed-in device; tests establish routing, not a speed guarantee.
+
+## Previous text-reasoning protocol
+
 # KORLIX Brain+Voice: Sol 6.1 Max and spoken memory
 
 Build 8 of the standalone `com.korlix.brain` app opts into `sol-6.1-max-v1` with

@@ -1,11 +1,13 @@
 import {createHash} from 'node:crypto';
 import {readAnswerStream} from './stream.mjs';
 import {brainInstructions, brainQuickReply} from './context.mjs';
+import {brainLiveConfig} from './live.mjs';
 
 import {BRAIN_PROTOCOL, profileForProtocol, matchesBrainModel} from './models.mjs';
 export {BRAIN_MODEL, BRAIN_EFFORT, BRAIN_PROTOCOL, BRAIN_PROFILES, brainProfile, isBrainVoice} from './models.mjs';
 export const speechInstructions = 'You are the speech delivery layer for Rici, pronounced Ree-see. The application supplies the complete answer from its verified reasoning model. Speak only the supplied answer, verbatim, naturally. Never answer the microphone input yourself, add facts, call tools, or claim a save independently. Stop immediately when interrupted.';
-export function brainSpeechConfig(config) {
+export function brainSpeechConfig(config, profile, context) {
+  if (profile?.live) return brainLiveConfig(config, context);
   return {...config, instructions: speechInstructions, tools: [], tool_choice: 'none',
     audio: {...config.audio, input: {...config.audio.input,
       transcription: {model: 'gpt-transcribe', keywords: ['Rici', 'KORLIX', 'Rici remember this']},
@@ -36,7 +38,7 @@ export function createBrainVoice({loadRuntime, saveMemory, reportUsage, fetchImp
     sessions.set(sessionId, {userId, sessionId, limits, profile, started: now(),
       expires: now() + Math.min(86400, limits.maxSessionSeconds) * 1000,
       history: [], turns: new Map(), completedTurns: 0, busy: false, closed: false, awaiting: null,
-      reasonUsage: {totalTokens: 0, inputTokens: 0, outputTokens: 0}, voiceUsage: {}});
+      reasonUsage: {totalTokens: 0, inputTokens: 0, outputTokens: 0}, voiceUsage: {}, audioTimings: new Set()});
   }
   function get(userId, sessionId) {
     const s = sessions.get(sessionId);
@@ -88,9 +90,9 @@ export function createBrainVoice({loadRuntime, saveMemory, reportUsage, fetchImp
         // Read current memory concurrently with the allowance check. Never cache
         // account instructions, or call the provider until allowance is verified.
         const direct = rememberCommand(text) || (s.awaiting && s.awaiting.until > now());
-        const quick = direct ? null : brainQuickReply(text);
-        timing.route = direct ? 'memory' : quick?.kind || (s.profile.model === 'gpt-6-astra' ? 'astra' : 'sol');
-        const [, runtime] = await Promise.all([meter(s), direct || quick ? null : loadRuntime(userId)]);
+        const quick = direct || s.profile.live ? null : brainQuickReply(text);
+        timing.route = direct ? 'memory' : s.profile.live ? 'memory_tool_rejected' : quick?.kind || (s.profile.model === 'gpt-6-astra' ? 'astra' : 'sol');
+        const [, runtime] = await Promise.all([meter(s), direct || quick || s.profile.live ? null : loadRuntime(userId)]);
         timing.preparationMs = now() - started;
         if (s.closed) throw fail('This conversation has reached its allowance.', 'brain_allowance', 429);
         let command = rememberCommand(text);
@@ -104,6 +106,12 @@ export function createBrainVoice({loadRuntime, saveMemory, reportUsage, fetchImp
           command = {content: text, instruction: s.awaiting.instruction};
         }
         s.awaiting = null;
+        // Live audio answers directly in Realtime. This endpoint is only the
+        // deterministic, authenticated memory tool; it never invokes Sol for chat.
+        if (s.profile.live && !command) {
+          return {ok: true, saved: false, handled: false,
+            answer: 'No memory was saved. Say Rici, remember this, followed by what to save.'};
+        }
         if (command) {
           if (!command.content) {
             s.awaiting = {until: now() + 60000, instruction: command.instruction};
@@ -175,5 +183,17 @@ export function createBrainVoice({loadRuntime, saveMemory, reportUsage, fetchImp
     })();
     return entry.promise;
   }
-  return {register, turn, mergeUsage};
+  function reportAudioTiming({userId, sessionId, turnId, firstAudioMs}) {
+    const s = get(userId, sessionId);
+    if (!s.profile.live || typeof turnId !== 'string' || !/^[a-zA-Z0-9_-]{1,160}$/.test(turnId) ||
+        !Number.isInteger(firstAudioMs) || firstAudioMs < 0 || firstAudioMs > 120000)
+      throw fail('Invalid voice timing.', 'brain_invalid_timing');
+    if (!s.audioTimings.has(turnId) && s.audioTimings.size < s.limits.maxResponses) {
+      s.audioTimings.add(turnId);
+      try { onTiming({route: 'realtime', model: s.profile.model, reasoningEffort: s.profile.effort,
+        firstAudioMs, clientReported: true}); } catch {}
+    }
+    return {ok: true};
+  }
+  return {register, turn, mergeUsage, reportAudioTiming};
 }

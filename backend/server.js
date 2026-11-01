@@ -5986,6 +5986,8 @@ async function korlixLiveConvoAttachAgentSessionV1({
       language:
         req?.headers?.["x-korlix-language"] ||
         "English",
+      brainVoice: isBrainVoice(req),
+      memoryOptions: isBrainVoice(req) ? {maximumItems: 100, maximumCharacters: 48000} : undefined,
     });
 
   req.korlixLiveConvoAgentRuntime = runtime;
@@ -8497,7 +8499,7 @@ function korlixLiveConvoSessionConfigV1(req) {
     },
   };
   if(req.korlixAutoEmailVoice){config.tools=autoEmailVoiceTools;config.tool_choice="auto";config.max_output_tokens=1500;}
-  if (isBrainVoice(req)) return brainSpeechConfig(config);
+  if (isBrainVoice(req)) return brainSpeechConfig(config, brainProfile(req), req.korlixLiveConvoAgentRuntime?.context);
   config.instructions = riciRealtimeInstructions(config.instructions);
   return config;
 }
@@ -9491,8 +9493,8 @@ app.use("/api/live-convo/session", async (req, res, next) => {
 // KORLIX_LIVE_CONVO_BUILD129_LIMITS_END
 
 
-// Brain+Voice uses Realtime only for listening and speaking. Reasoning and
-// direct, user-authorized memory saves are account-bound server operations.
+// Brain+Voice Live answers directly in Realtime; Deep Think retains Sol Max.
+// Direct, user-authorized memory saves remain account-bound server operations.
 void checkBrainModelAccess({apiKey: korlixLiveConvoEnvStringV1('OPENAI_API_KEY')})
   .then(result => console.log('BRAIN_MODEL_ACCESS', JSON.stringify(result)));
 const brainVoice = createBrainVoice({
@@ -9509,6 +9511,7 @@ app.get('/api/brain-voice/health', (_req, res) => res.json({ok: true,
   speechModel: korlixLiveConvoModelV1(), voice: korlixLiveConvoVoiceV1(),
   directVoiceMemory: true, requiresAuthentication: true, additionalMemoryPassword: false,
   streamingAnswers: true, turnDetection: 'semantic_vad_high',
+  defaultVoiceProtocol: 'rici-live-v1', liveConversation: true, deepThinkModel: BRAIN_MODEL,
   spokenName: 'Rici', quickConnectionReplies: true, identityPolicy: 'brain-rici-v1',
   apiKeyConfigured: Boolean(korlixLiveConvoEnvStringV1('OPENAI_API_KEY')),
 }));
@@ -9521,6 +9524,12 @@ app.post('/api/brain-voice/turn', korlixLiveConvoAgentRouteV1(
       return streamBrainTurn({res, run: onEvent => brainVoice.turn({userId: user.id, sessionId, turnId, transcript, onEvent})});
     }
     return res.json(await brainVoice.turn({userId: user.id, sessionId, turnId, transcript}));
+  },
+));
+app.post('/api/brain-voice/timing', korlixLiveConvoAgentRouteV1(
+  'Could not record voice timing.', async ({req, res, user}) => {
+    const {sessionId, turnId, firstAudioMs} = req.body || {};
+    return res.json(brainVoice.reportAudioTiming({userId: user.id, sessionId, turnId, firstAudioMs}));
   },
 ));
 

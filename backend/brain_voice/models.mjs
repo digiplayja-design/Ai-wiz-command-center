@@ -3,7 +3,9 @@
 export const BRAIN_MODEL = 'gpt-6.1-sol';
 export const BRAIN_EFFORT = 'max';
 export const BRAIN_PROTOCOL = 'sol-6.1-max-v1';
+export const BRAIN_LIVE_PROTOCOL = 'rici-live-v1';
 export const BRAIN_PROFILES = Object.freeze([
+  Object.freeze({protocol: BRAIN_LIVE_PROTOCOL, model: 'gpt-realtime-2.1', effort: 'low', label: 'Rici Live Conversation', live: true}),
   Object.freeze({protocol: BRAIN_PROTOCOL, model: BRAIN_MODEL, effort: BRAIN_EFFORT, label: 'GPT-6.1 Sol Max'}),
   Object.freeze({protocol: 'astra-max-v1', model: 'gpt-6-astra', effort: 'max', label: 'GPT-6 Astra Max'}),
 ]);
