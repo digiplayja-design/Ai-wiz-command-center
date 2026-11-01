@@ -74,7 +74,7 @@
   }
   function maybeWelcome(){
     if(welcome.attempted)return;
-    welcome.attempted=true;
+    welcome.attempted=true;welcomeUi();
     if(!welcomeSeen())playWelcome();
   }
   welcomeAudio.addEventListener('ended',()=>stopWelcome());
