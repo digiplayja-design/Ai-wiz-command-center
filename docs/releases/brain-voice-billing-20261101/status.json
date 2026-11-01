@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-01T15:03:33.449953+00:00",
+  "updatedAt": "2026-11-01T15:09:47.897958+00:00",
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "appleAppId": "6829319523",
@@ -43,7 +43,7 @@
   },
   "stores": {
     "appleBuild14": "Uploaded and processed; not yet assigned to existing internal tester",
-    "googleBuild14": "Internal release published; zero testers; not publicly reviewed",
+    "googleBuild14": "Internal track active for one owner account; invite not yet accepted; not publicly reviewed",
     "productsConfigured": true,
     "appleProductAvailability": [
       "USA"
@@ -65,7 +65,7 @@
     "Android microphone foreground-service demonstration video",
     "Native subscription, restore, AI GAS verification/consumption, renewal/refund tests",
     "Apple browser sign-in remains at two-factor verification; no further credential attempt made",
-    "Assign and verify build 14 with authorized testers; billing flags remain off until native verification"
+    "Owner accepts Android build-14 test invite; assign iOS build 14 to the existing tester and verify native flows; billing flags remain off until native verification"
   ],
   "details": "review-readiness.json"
 }
