@@ -1,0 +1,31 @@
+{
+  "recordedAt": "2026-11-01T15:56:05.512211+00:00",
+  "app": "KORLIX Brain+Voice",
+  "packageName": "com.korlix.brain",
+  "status": "completed_saved_in_publishing_overview_not_sent_for_review",
+  "permission": "FOREGROUND_SERVICE_MICROPHONE",
+  "task": "Background audio input",
+  "video": {
+    "providedUrl": "https://youtu.be/Tav4IIS9zOg",
+    "resolvedUrl": "https://www.youtube.com/watch?v=Tav4IIS9zOg",
+    "title": "KORLIX Brain+Voice — Live Conversation & Microphone Demo",
+    "visibility": "unlisted",
+    "durationSeconds": 45,
+    "pageAccessibleWithoutSignIn": true,
+    "contentPlaybackVerified": false,
+    "limitation": "The public video page loaded, but playback remained buffering in this browser, including after one reload. Android foreground microphone and Stop behavior were not independently observed in the video."
+  },
+  "formSaved": true,
+  "appContentNeedAttentionCount": 0,
+  "appContentConfirmation": "You're all caught up. See completed declarations on the Actioned tab.",
+  "publishingOverviewForegroundServicesUpdated": true,
+  "publicAppReviewSubmitted": false,
+  "sendAppForReviewEnabled": false,
+  "remainingDashboardTask": "Set up your store listing",
+  "phoneScreenshotsUploaded": 0,
+  "phoneScreenshotsRequiredMinimum": 2,
+  "evidence": [
+    "review-evidence/korlix-brain-microphone-link-20261101.jpg",
+    "review-evidence/korlix-brain-app-content-complete-20261101.jpg"
+  ]
+}

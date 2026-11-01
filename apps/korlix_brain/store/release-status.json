@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-01T15:09:47.897958+00:00",
+  "updatedAt": "2026-11-01T15:56:05.512211+00:00",
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "version": "1.0.1",
@@ -453,7 +453,7 @@
       "sha256": "023761454a65f317e50252f9452e59d8b01fc66931a6d6f69ee55909f40c02f4",
       "voice": "marin",
       "pronunciation": "Ree-see",
-      "displayText": "Welcome to KORLIX Brain+Voice\u2014built to be one of the world's most versatile conversation apps! I'm Rici. Talk, learn, train me, and save what matters. Your voice. Your brain. Let's go!",
+      "displayText": "Welcome to KORLIX Brain+Voice—built to be one of the world's most versatile conversation apps! I'm Rici. Talk, learn, train me, and save what matters. Your voice. Your brain. Let's go!",
       "ttsModel": "gpt-4o-mini-tts",
       "speed": 1.12,
       "playback": "Bundled offline; once on first use, then manual Replay; Skip and capture stop immediately",
@@ -563,11 +563,11 @@
     "googleProductsConfigured": true,
     "publicStoreSubmission": "not performed",
     "accessBlockers": [
-      "Native iPhone and Android store screenshots; Apple IAP review screenshots",
-      "Android microphone foreground-service demonstration video",
+      "Native iPhone and Android store screenshots (Google requires at least 2 phone screenshots); Apple IAP review screenshots",
+      "Independently verify the supplied Android microphone demonstration video shows a user-started Live conversation, background microphone notification, and Stop action; video is saved but playback buffered in this browser",
       "Native subscription, restore, AI GAS verification/consumption, renewal/refund tests",
       "Apple browser sign-in remains at two-factor verification; no further credential attempt made",
-      "Owner accepts Android build-14 test invite; assign iOS build 14 to the existing tester and verify native flows; billing flags remain off until native verification"
+      "Confirm Android build-14 installation and native flows; assign iOS build 14 to the existing tester; billing flags remain off until native purchase verification"
     ],
     "appCodeCommit": "76d7d0f9c26e56883913ca3b079397c6b109bb77",
     "mobileValidation": {
@@ -625,7 +625,7 @@
       "healthFeatures": false,
       "healthDeclarationSaved": true,
       "internalRelease": {
-        "name": "1.0.1 (14) \u2014 Brain+Voice billing candidate",
+        "name": "1.0.1 (14) — Brain+Voice billing candidate",
         "versionCode": 14,
         "status": "Available to internal testers",
         "testersAssigned": 1,
@@ -687,9 +687,16 @@
         "verifiedAt": "2026-11-01T15:03:33.449953+00:00"
       },
       "foregroundServiceDeclaration": {
-        "status": "blocked_missing_native_android_demonstration_video",
+        "status": "completed_saved_in_publishing_overview_not_sent_for_review",
         "serviceType": "microphone",
-        "videoProvided": false
+        "task": "Background audio input",
+        "videoProvided": true,
+        "videoUrl": "https://youtu.be/Tav4IIS9zOg",
+        "pageAccessibleWithoutSignIn": true,
+        "contentPlaybackVerified": false,
+        "verificationLimitation": "The public video page loaded, but playback remained buffering in this browser, including after one reload. Android foreground microphone and Stop behavior were not independently observed in the video.",
+        "report": "google-play/foreground-service-declaration-20261101.json",
+        "verifiedAt": "2026-11-01T15:56:05.512211+00:00"
       },
       "screenshotsInspection": {
         "source": "Build 14 CI UI artifacts",
@@ -814,7 +821,7 @@
         "note": "Existing account-tier limits remain active while billing is disabled. The separate reviewer allowance is provisioned for billing activation. Full native-device reviewer flow still needs testing.",
         "reviewAllowanceMigration": "20261101145830_brain_voice_review_allowance.sql"
       },
-      "remainingAppContentDeclarations": 1,
+      "remainingAppContentDeclarations": 0,
       "ownerInternalTesting": {
         "configuredAt": "2026-11-01T15:09:47.897958+00:00",
         "listName": "KORLIX Brain owner testing",
@@ -825,7 +832,10 @@
         "invitationPageVerified": true,
         "inviteAccepted": false,
         "note": "Current Google Play developer account only. Existing other tester lists remain unselected. Account owner must accept Google tester data-sharing notice and install on Android. No invitation email was sent by the agent."
-      }
+      },
+      "appContentStatus": "all_caught_up",
+      "remainingDashboardTask": "Set up your store listing",
+      "sendAppForReviewEnabled": false
     },
     "androidSigning": {
       "workflow": "korlix-brain-android-release",
