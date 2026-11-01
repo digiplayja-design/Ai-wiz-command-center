@@ -1,0 +1,76 @@
+{
+  "appId": "6829319523",
+  "bundleId": "com.korlix.brain",
+  "apply": true,
+  "checkedAt": "2026-11-01T13:49:15.736416+00:00",
+  "products": [
+    {
+      "productId": "com.korlix.brain.monthly",
+      "id": "6829444906",
+      "availability": {
+        "usAvailable": true,
+        "planType": "UPFRONT"
+      },
+      "price": {
+        "territory": "USA",
+        "currency": "USD",
+        "price": "34.99",
+        "pricePointId": "eyJzIjoiNjgyOTQ0NDkwNiIsInQiOiJVU0EiLCJwIjoiMTAyNTIifQ",
+        "verified": true
+      }
+    },
+    {
+      "productId": "com.korlix.brain.ai_gas.1h",
+      "id": "6829446043",
+      "availability": {
+        "usAvailable": true,
+        "planType": null
+      },
+      "price": {
+        "territory": "USA",
+        "currency": "USD",
+        "price": "30",
+        "pricePointId": "eyJzIjoiNjgyOTQ0NjA0MyIsInQiOiJVU0EiLCJwIjoiMTAyMjgifQ",
+        "verified": true
+      }
+    },
+    {
+      "productId": "com.korlix.brain.ai_gas.2h",
+      "id": "6829446044",
+      "availability": {
+        "usAvailable": true,
+        "planType": null
+      },
+      "price": {
+        "territory": "USA",
+        "currency": "USD",
+        "price": "55",
+        "pricePointId": "eyJzIjoiNjgyOTQ0NjA0NCIsInQiOiJVU0EiLCJwIjoiMTAzNDMifQ",
+        "verified": true
+      }
+    },
+    {
+      "productId": "com.korlix.brain.ai_gas.3h",
+      "id": "6829446235",
+      "availability": {
+        "usAvailable": true,
+        "planType": null
+      },
+      "price": {
+        "territory": "USA",
+        "currency": "USD",
+        "price": "80",
+        "pricePointId": "eyJzIjoiNjgyOTQ0NjIzNSIsInQiOiJVU0EiLCJwIjoiMTA0MTgifQ",
+        "verified": true
+      }
+    }
+  ],
+  "publicSubmission": false,
+  "billingEnabled": false,
+  "remaining": [
+    "Non-US availability and subscription prices",
+    "IAP review screenshots",
+    "Native sandbox purchase tests",
+    "First products with app-version review"
+  ]
+}

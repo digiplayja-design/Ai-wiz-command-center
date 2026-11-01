@@ -1,11 +1,11 @@
 {
-  "updatedAt": "2026-11-01T12:09:00Z",
+  "updatedAt": "2026-11-01T13:56:36.626360+00:00",
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "version": "1.0.1",
   "minimumSourceBuild": 13,
-  "appCodeCommit": "b0885d8a8cb5755053ef2cf238c4fa1451a48460",
-  "releasePipelineCommit": "22efa287ca33a6919dbfa07ebe5335efacaba584",
+  "appCodeCommit": "76d7d0f9c26e56883913ca3b079397c6b109bb77",
+  "releasePipelineCommit": "dd1410328822501b3d5a26ae6d0f18a7e5cd2907",
   "signedIosCandidate": {
     "status": "success",
     "build": 4,
@@ -143,10 +143,10 @@
     "uiAudioChecks": "pass",
     "welcomeChecks": "pass"
   },
-  "storeSubmission": "not performed",
+  "storeSubmission": "Google Play internal build 14 published with no testers; Apple build 14 uploaded and processed; public review not submitted",
   "authenticatedDeviceVoiceTest": "User reports everything worked after the build-13 automatic welcome fix. No quantified end-to-end latency measurement.",
-  "androidStoreSigning": "not configured",
-  "listingText": "Apple name, subtitle, category, description, keywords and support URL saved; Google draft only",
+  "androidStoreSigning": "Dedicated upload key registered in Codemagic; signed AAB certificate and signature verified",
+  "listingText": "Apple metadata and Google text/four-color icon/feature graphic saved; screenshots and review setup incomplete",
   "iconColors": [
     "purple",
     "red",
@@ -387,7 +387,7 @@
     "distributionVerifiedAt": "2026-11-01T04:04:01.967404+00:00"
   },
   "pricingDecision": {
-    "status": "implemented_candidate_not_activated",
+    "status": "store_catalogs_configured_native_purchase_tests_pending",
     "currency": "USD",
     "monthlyPriceCents": 3499,
     "billingInterval": "month",
@@ -400,7 +400,7 @@
     "source": "User approved $34.99 per month with a 60-minute limit because Brain and trainable features are included",
     "recordedAt": "2026-11-01T04:04:01.967404+00:00",
     "billingActivated": false,
-    "storeProductsConfigured": false,
+    "storeProductsConfigured": true,
     "newMinuteLimitImplemented": true,
     "trialAndTopUps": "No trial. Retain three AI GAS packs: 60 minutes / USD 30, 120 minutes / USD 55, 180 minutes / USD 80.",
     "deepThinkAllowance": "Existing account limits remain; AI GAS extends Live Conversation only."
@@ -453,7 +453,7 @@
       "sha256": "023761454a65f317e50252f9452e59d8b01fc66931a6d6f69ee55909f40c02f4",
       "voice": "marin",
       "pronunciation": "Ree-see",
-      "displayText": "Welcome to KORLIX Brain+Voice—built to be one of the world's most versatile conversation apps! I'm Rici. Talk, learn, train me, and save what matters. Your voice. Your brain. Let's go!",
+      "displayText": "Welcome to KORLIX Brain+Voice\u2014built to be one of the world's most versatile conversation apps! I'm Rici. Talk, learn, train me, and save what matters. Your voice. Your brain. Let's go!",
       "ttsModel": "gpt-4o-mini-tts",
       "speed": 1.12,
       "playback": "Bundled offline; once on first use, then manual Replay; Skip and capture stop immediately",
@@ -544,7 +544,7 @@
   },
   "billingCandidate": {
     "build": 14,
-    "status": "iOS build 14 signed, uploaded and processed; Google Play record created; products, Android signing and native purchase testing pending",
+    "status": "Signed build 14 delivered to both stores; approved US catalog prices verified on Apple and Google; native purchase tests and public review pending",
     "backendCommit": "00894696f5371623adb827c7c5a77d0ecb60716b",
     "backendDeploy": "dep-dbjihnjbc2fs73ctvgpg",
     "backendDeployState": "live",
@@ -558,15 +558,14 @@
     "backendBillingTests": 9,
     "devicePurchaseTests": "not performed",
     "signedIosBuild": "uploaded and processed",
-    "signedAndroidAab": "blocked: no Android keystore configured in Codemagic; dedicated manual workflow prepared",
-    "appleProductsConfigured": false,
-    "googleProductsConfigured": false,
+    "signedAndroidAab": "Verified signed AAB uploaded; internal release 1.0.1 (14) published, no testers assigned",
+    "appleProductsConfigured": true,
+    "googleProductsConfigured": true,
     "publicStoreSubmission": "not performed",
     "accessBlockers": {
-      "apple": "Existing secure verification handoff still required for product configuration and public review. Build upload succeeded through the existing Codemagic API integration.",
-      "google": "Sign-in works and app record created. Subscription and one-time-product pages require the first Android build.",
-      "androidSigning": "Codemagic Code signing identities > Android keystores lists no available key. Configure dedicated KORLIX_BRAIN_UPLOAD_KEY before running korlix-brain-android-release.",
-      "healthDeclaration": "Automatic approval review rejected selecting and advancing My app does not have any health features because the exact compliance certification needs specific user approval; declaration remains unchanged."
+      "apple": "Browser two-factor verification remains pending. Existing Codemagic integration is available for authorized Apple API operations.",
+      "google": "Public release requires review access, content/target declarations, Data safety, foreground-service declaration/video and store screenshots.",
+      "devicePurchases": "Designated native store test accounts and purchase/restore/refund verification are still required."
     },
     "appCodeCommit": "76d7d0f9c26e56883913ca3b079397c6b109bb77",
     "mobileValidation": {
@@ -594,7 +593,7 @@
       "appId": "4973840118435464131",
       "packageName": "com.korlix.brain",
       "dashboardUrl": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4973840118435464131/app-dashboard",
-      "state": "draft",
+      "state": "Internal testing release published; no testers; not reviewed",
       "freeDownload": true,
       "defaultLocale": "en-US",
       "category": "PRODUCTIVITY",
@@ -602,8 +601,8 @@
       "website": "https://www.korlixdeveloper.com",
       "privacyPolicyUrl": "https://www.korlixdeveloper.com/privacy-policy.html",
       "containsAds": false,
-      "firstBuildUploaded": false,
-      "billingProductsBlockedUntilFirstBuild": true,
+      "firstBuildUploaded": true,
+      "billingProductsBlockedUntilFirstBuild": false,
       "governmentApp": false,
       "financialFeatures": false,
       "listingDraft": {
@@ -616,8 +615,82 @@
           "green",
           "gold"
         ],
-        "featureGraphicReady": false,
-        "screenshotsReady": false
+        "featureGraphicReady": true,
+        "screenshotsReady": false,
+        "featureGraphicSaved": true,
+        "featureGraphic": "google-play/feature-graphic-1024x500.png"
+      },
+      "healthFeatures": false,
+      "healthDeclarationSaved": true,
+      "internalRelease": {
+        "name": "1.0.1 (14) \u2014 Brain+Voice billing candidate",
+        "versionCode": 14,
+        "status": "Available to internal testers",
+        "testersAssigned": 0,
+        "reviewed": false,
+        "consoleUrl": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4973840118435464131/tracks/4700461790600418158?tab=releases"
+      },
+      "products": [
+        {
+          "productId": "korlix_brain_monthly",
+          "basePlan": "monthly",
+          "period": "P1M",
+          "status": "active",
+          "usdCents": 3499,
+          "liveSeconds": 3600,
+          "trial": false
+        },
+        {
+          "productId": "korlix_brain_ai_gas_1h",
+          "purchaseOption": "standard",
+          "purchaseType": "Buy",
+          "status": "active",
+          "usdCents": 3000,
+          "liveSeconds": 3600,
+          "expires": false,
+          "backwardsCompatible": true
+        },
+        {
+          "productId": "korlix_brain_ai_gas_2h",
+          "purchaseOption": "standard",
+          "purchaseType": "Buy",
+          "status": "active",
+          "usdCents": 5500,
+          "liveSeconds": 7200,
+          "expires": false,
+          "backwardsCompatible": true
+        },
+        {
+          "productId": "korlix_brain_ai_gas_3h",
+          "purchaseOption": "standard",
+          "purchaseType": "Buy",
+          "status": "active",
+          "usdCents": 8000,
+          "liveSeconds": 10800,
+          "expires": false,
+          "backwardsCompatible": true
+        }
+      ],
+      "usPricesVerified": true,
+      "nativePurchaseTests": "not performed",
+      "advertisingId": false,
+      "advertisingIdDeclarationSaved": true,
+      "targetAudienceDeclaration": {
+        "status": "blocked",
+        "reason": "Play requires completed Sign in details before starting target-audience questionnaire",
+        "intendedAgeGroups": [
+          "16-17",
+          "18+"
+        ]
+      },
+      "foregroundServiceDeclaration": {
+        "status": "required",
+        "serviceType": "microphone",
+        "videoProvided": false
+      },
+      "screenshotsInspection": {
+        "source": "Build 14 CI UI artifacts",
+        "result": "Automated full-page validation captures are not native store screenshots; not uploaded as store images"
       }
     },
     "androidSigning": {
@@ -628,8 +701,105 @@
       "privateBackupSaved": true,
       "publicCertificate": "google-play/upload-certificate.pem",
       "certificateSha256": "8E:9F:5D:E5:66:71:ED:F2:23:3F:78:5F:CD:80:16:FA:F9:71:F7:20:4F:AD:5E:3B:10:DD:B5:87:9E:1C:C7:A5",
-      "registeredWithCodemagic": false,
-      "status": "Dedicated key and private backup prepared; explicit action-time confirmation required before granting Codemagic access."
+      "registeredWithCodemagic": true,
+      "status": "Registered with explicit user approval; CI and downloaded AAB certificate matched the pinned SHA-256."
+    },
+    "androidDelivery": {
+      "pipelineId": "6ae7387eefa74786046fc030",
+      "pipelineUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae7387eefa74786046fc030",
+      "commit": "dd1410328822501b3d5a26ae6d0f18a7e5cd2907",
+      "version": "1.0.1",
+      "build": 14,
+      "status": "success",
+      "flutterTests": 75,
+      "analysis": "pass",
+      "aabBytes": 75379643,
+      "aabSha256": "1c8f32629b6b1d0f383d04cca36674f05f44e7e6d6d79435d1f22fab4e64ac38",
+      "signatureVerification": "CI jarsigner verified; independent downloaded CMS signature, manifest and 428 entry digests verified; upload certificate matched",
+      "publicRelease": false
+    },
+    "appleProducts": {
+      "pipelineId": "6ae7432cefa74786046fc35c",
+      "pipelineUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae7432cefa74786046fc35c",
+      "commit": "f8981126679cade55227badd90b5b44c9605276a",
+      "status": "success",
+      "tests": 10,
+      "localization": "en-US",
+      "availability": [
+        "USA"
+      ],
+      "products": [
+        {
+          "productId": "com.korlix.brain.monthly",
+          "id": "6829444906",
+          "availability": {
+            "usAvailable": true,
+            "planType": "UPFRONT"
+          },
+          "price": {
+            "territory": "USA",
+            "currency": "USD",
+            "price": "34.99",
+            "pricePointId": "eyJzIjoiNjgyOTQ0NDkwNiIsInQiOiJVU0EiLCJwIjoiMTAyNTIifQ",
+            "verified": true
+          }
+        },
+        {
+          "productId": "com.korlix.brain.ai_gas.1h",
+          "id": "6829446043",
+          "availability": {
+            "usAvailable": true,
+            "planType": null
+          },
+          "price": {
+            "territory": "USA",
+            "currency": "USD",
+            "price": "30",
+            "pricePointId": "eyJzIjoiNjgyOTQ0NjA0MyIsInQiOiJVU0EiLCJwIjoiMTAyMjgifQ",
+            "verified": true
+          }
+        },
+        {
+          "productId": "com.korlix.brain.ai_gas.2h",
+          "id": "6829446044",
+          "availability": {
+            "usAvailable": true,
+            "planType": null
+          },
+          "price": {
+            "territory": "USA",
+            "currency": "USD",
+            "price": "55",
+            "pricePointId": "eyJzIjoiNjgyOTQ0NjA0NCIsInQiOiJVU0EiLCJwIjoiMTAzNDMifQ",
+            "verified": true
+          }
+        },
+        {
+          "productId": "com.korlix.brain.ai_gas.3h",
+          "id": "6829446235",
+          "availability": {
+            "usAvailable": true,
+            "planType": null
+          },
+          "price": {
+            "territory": "USA",
+            "currency": "USD",
+            "price": "80",
+            "pricePointId": "eyJzIjoiNjgyOTQ0NjIzNSIsInQiOiJVU0EiLCJwIjoiMTA0MTgifQ",
+            "verified": true
+          }
+        }
+      ],
+      "checkedAt": "2026-11-01T13:49:15.736416+00:00",
+      "nativePurchaseTests": "not performed",
+      "publicReviewSubmitted": false,
+      "verificationReport": "apple/product-setup-20261101.json",
+      "remaining": [
+        "Non-US availability and subscription prices",
+        "IAP review screenshots",
+        "Native sandbox purchase tests",
+        "First products with app-version review"
+      ]
     }
   }
 }

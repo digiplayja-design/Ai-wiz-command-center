@@ -1,8 +1,10 @@
 ## Native subscription and AI GAS candidate — build 14
 
-Adds the approved USD 34.99 monthly plan with 60 Live minutes and the three retained AI GAS packs (60 / 120 / 180 minutes for USD 30 / 55 / 80). Native checkout, server verification, durable minute accounting, restore and refund handling are implemented. Billing remains disabled pending store-product configuration and physical-device purchase tests. Build 13 remains the last delivered TestFlight version. Neither public store submission is complete. See [BILLING-RELEASE.md](BILLING-RELEASE.md) for exact products, activation steps and access blockers.
+The approved USD 34.99 monthly plan includes 60 Live minutes. The three retained AI GAS packs add 60 / 120 / 180 minutes for USD 30 / 55 / 80. The four products and exact US prices are now configured and verified in both stores; Apple availability is currently USA only. Native checkout, server verification, durable minute accounting, restore and refund handling are implemented. Production billing remains disabled pending native purchase tests and completion of store review requirements.
 
-Local validation: 75 Flutter tests, clean analysis, 23 release identity checks and 9 backend billing tests passed. Android store builds now require a managed upload key.
+Signed iOS build 14 is uploaded and processed. Signed Android build 14 is published to Google Play internal testing, with no testers assigned and no review. Build 13 remains the last version assigned to the existing TestFlight group and the user-confirmed working voice/welcome build. Neither public store submission is complete. See [BILLING-RELEASE.md](BILLING-RELEASE.md) and [release-status.json](release-status.json) for current delivery evidence and remaining requirements; later sections retain historical build notes.
+
+Validation passed: 75 Flutter tests, clean analysis, 23 release identity checks, 9 backend billing tests, signed Android package verification, mobile builds and 10 targeted Apple product-setup tests. Google listing text, four-color icon and matching feature graphic are saved. Reviewer access, native purchase tests, screenshots and remaining declarations are still required.
 
 ## Automatic welcome on iPhone — build 13
 

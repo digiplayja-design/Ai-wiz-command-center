@@ -1,0 +1,11 @@
+{
+  "asset": "feature-graphic-1024x500.png",
+  "dimensions": [
+    1024,
+    500
+  ],
+  "sha256": "5f9c05ec23447c290ddbefce68b076af6c7f939cd13a44d1bfb3d1336f41fb6d",
+  "method": "Built-in image generation with existing KORLIX icon reference; downsampled only for required Play Store export dimensions.",
+  "prompt": "Google Play feature graphic for KORLIX Brain+Voice. Preserve the existing gold feminine AI face and purple, red, green and gold circular circuit branding on a nearly black aubergine background. Wide 1024 by 500 composition. Exact text: KORLIX; BRAIN+VOICE; Talk with Rici. Teach her your world. Premium restrained layout, strong legibility, no pricing, ratings, awards, store badges, exaggerated claims, fake UI, extra text or watermark.",
+  "storeDraftSaved": true
+}
