@@ -1,7 +1,7 @@
-KORLIX Brain+Voice 1.0.1 (10)
+KORLIX Brain+Voice 1.0.1 (11)
 
-Transcript messages now have Save, Share and Delete actions. Save keeps a secure copy for your account on this device; open Saved messages from Talk or My Brain. Share opens the system share sheet. Delete removes the transcript and its saved copy after confirmation, without changing Brain memories.
+iPhone music-bed update: tap Play ambience on Home, adjust its volume, and the app remembers your chosen level. The initial default remains 1%. Music pauses for voice and dictation and returns on Home afterward. Transcript Save, Share and Delete remain available.
 
-Live Conversation remains the fast default with Rici. Deep Think is still optional. No new prices or minute allowances are enabled in this build.
+Please test with iPhone Silent Mode both on and off, media volume above zero, then start/stop Rici and dictate a memory. Confirm music never interferes with the microphone and that your chosen volume survives closing/reopening the app. Check Bluetooth/headphones and returning from another app.
 
-Please test: save both your messages and Rici’s answers, close/reopen the app, open Saved messages, share on iPhone/iPad, cancel and confirm deletion, sign out/in to verify account separation, and confirm the Stop button stays available.
+The spoken welcome is still a draft. No billing or allowance changes are enabled.

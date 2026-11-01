@@ -604,7 +604,7 @@ workflows:
           cp "${IPA_FILES[0]}" artifacts/BrainVoice.ipa
           cp store/apple/testflight-notes.txt release_notes_en-US.txt
       - &brain_check_transcript_ui
-        name: Check transcript controls on phone and tablet layouts
+        name: Check ambience, voice handoff and transcript layouts
         script: |
           set -euo pipefail
           npm install --prefix "$CM_BUILD_DIR/.brain-ui-tools" --no-audit --no-fund playwright@1.62.1
@@ -612,6 +612,8 @@ workflows:
           PLAYWRIGHT_MODULE="$CM_BUILD_DIR/.brain-ui-tools/node_modules/playwright" \
             UI_SCREENSHOTS="$CM_BUILD_DIR/apps/korlix_brain/artifacts/ui" \
             node tools/check_ui.cjs
+          PLAYWRIGHT_MODULE="$CM_BUILD_DIR/.brain-ui-tools/node_modules/playwright" \
+            node tools/check_ambience.cjs
     artifacts:
       - $CM_BUILD_DIR/apps/korlix_brain/artifacts/*.ipa
       - $CM_BUILD_DIR/apps/korlix_brain/artifacts/*.json

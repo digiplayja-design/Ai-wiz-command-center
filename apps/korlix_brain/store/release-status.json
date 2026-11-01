@@ -1,11 +1,11 @@
 {
-  "updatedAt": "2026-11-01T03:15:42.708793+00:00",
+  "updatedAt": "2026-11-01T04:20:47.675097+00:00",
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "version": "1.0.1",
-  "minimumSourceBuild": 10,
-  "appCodeCommit": "bd6fae9f854786a323705cbe86061f672cc2e21a",
-  "releasePipelineCommit": "2803adee82ecde6798552efbcaef068426b9cf3c",
+  "minimumSourceBuild": 11,
+  "appCodeCommit": "403ba43b788526724ef201ca5e51bde03d460087",
+  "releasePipelineCommit": "1a9031ebbe90ed07b7070be47f1d2e8130b5d214",
   "signedIosCandidate": {
     "status": "success",
     "build": 4,
@@ -29,8 +29,8 @@
   },
   "testflight": {
     "status": "testing",
-    "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae69eaca74da3772d1eab3a",
-    "sourceCommit": "2803adee82ecde6798552efbcaef068426b9cf3c",
+    "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6b3436a1999f83b5d7ed5",
+    "sourceCommit": "1a9031ebbe90ed07b7070be47f1d2e8130b5d214",
     "uploadBranch": "release/korlix-brain-testflight-20261031",
     "workflow": "korlix-brain-ios-testflight",
     "betaInformation": "saved in App Store Connect",
@@ -41,8 +41,9 @@
       "automaticDistribution": false,
       "testerCount": 1,
       "invitationStatus": "Existing tester retained; no new testers or invitations",
-      "buildCount": 6,
+      "buildCount": 7,
       "builds": [
+        "1.0.1 (10)",
         "1.0.1 (9)",
         "1.0.1 (8)",
         "1.0.1 (7)",
@@ -55,7 +56,8 @@
       "build6Assigned": true,
       "build7Assigned": true,
       "build8Assigned": true,
-      "build9Assigned": true
+      "build9Assigned": true,
+      "build10Assigned": true
     },
     "processingRejection": {
       "version": "1.0.1",
@@ -78,45 +80,50 @@
       "processingResult": "rejected ITMS-90683",
       "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6612f6a1999f83b5c5925"
     },
-    "build": 9,
+    "build": 10,
     "signedArtifactVerification": "pass",
     "flutterAnalyze": "pass",
-    "flutterTests": 53,
+    "flutterTests": 61,
     "releaseIdentityTests": 23,
-    "completedAt": "2026-11-01T02:12:14Z",
     "processingResult": "complete",
     "console": "https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6829319523/testflight/groups/ae86d9a2-5bdf-4f3d-910b-aa532675951f/builds",
     "previousReadyBuild": {
-      "build": 8,
-      "appleBuildId": "f7244993-e1fd-448d-8fef-3dc0f1dcb63c",
-      "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae68f72a74da3772d1e758e",
-      "sourceCommit": "df692ff2c868c2c589635c242f0cd611f21115c6",
-      "completedAt": "2026-11-01T01:06:49Z",
+      "build": 9,
+      "appleBuildId": "d681aa25-898b-4d77-b1b1-f67f45c1a087",
+      "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae69eaca74da3772d1eab3a",
+      "sourceCommit": "2803adee82ecde6798552efbcaef068426b9cf3c",
+      "completedAt": "2026-11-01T02:12:14Z",
       "processingResult": "complete",
-      "groupState": "Testing",
-      "distributionApprovedByUser": true
+      "distributionApprovedByUser": true,
+      "distributionVerifiedAt": "2026-11-01T02:59:22.335504+00:00",
+      "groupState": "Testing"
     },
     "distributionApprovedByUser": true,
-    "appleBuildId": "d681aa25-898b-4d77-b1b1-f67f45c1a087",
-    "processingVerifiedAt": "2026-11-01T02:15:46.552519+00:00",
+    "appleBuildId": "c9374dea-470b-43e2-a213-79fdba1bc491",
+    "processingVerifiedAt": "2026-11-01T03:45:25.409007+00:00",
     "signedArtifact": {
-      "bytes": 33659833,
-      "sha256": "4e797b1a3fe1eca60c341d013fe498ed530a6729420eacac0a8801daeb1fd49e",
+      "bytes": 33683543,
+      "sha256": "d3ada6e052c4525e4537ed4e539b4b911e576b4fee591d7fc5d8e243a387f7b4",
       "bundleId": "com.korlix.brain",
       "version": "1.0.1",
-      "build": 9,
+      "build": 10,
       "profileType": "app_store",
       "signatureVerified": true,
-      "location": "Codemagic; not included in source archive"
+      "location": "Codemagic signed IPA artifact"
     },
     "distributionApproval": {
       "state": "approved_and_completed",
-      "action": "Add build 1.0.1 (9) to existing KORLIX Brain Internal group for its one existing tester",
-      "source": "Explicit user Approve response to the build-9 internal distribution question",
-      "recordedAt": "2026-11-01T02:59:22.335504+00:00",
-      "previousBlock": "Automatic approval review required explicit build-9 distribution approval; resolved by the user approval"
+      "action": "Add version 1.0.1 build 10 to existing KORLIX Brain Internal group for its one existing tester",
+      "source": "User explicitly replied Approved to the build-10 internal distribution question",
+      "recordedAt": "2026-11-01T04:04:01.967404+00:00",
+      "previousBlock": "Automatic approval review required explicit build-10 and recipient-group approval; resolved by user approval",
+      "existingTesterCount": 1,
+      "newTesters": 0,
+      "publicStoreSubmission": false
     },
-    "distributionVerifiedAt": "2026-11-01T02:59:22.335504+00:00"
+    "pipelineFinishedVerifiedAt": "2026-11-01T03:45:25.409007+00:00",
+    "appleUploadDateDisplayed": "Oct 31, 2026 11:40 PM EDT",
+    "distributionVerifiedAt": "2026-11-01T04:04:01.967404+00:00"
   },
   "storeSubmission": "not performed",
   "authenticatedDeviceVoiceTest": "User confirms Live Conversation works in build 9. No quantified end-to-end latency measurement.",
@@ -333,10 +340,10 @@
   },
   "transcriptUpdate": {
     "sourceBuild": 10,
-    "status": "implemented locally; signed build and distribution pending",
+    "status": "Build 10 Testing in KORLIX Brain Internal; Apple processing and approved group assignment verified",
     "flutterTests": 61,
     "flutterAnalyze": "pass",
-    "uiChecks": "pending in signed CI; local browser launch blocked by environment permissions",
+    "uiChecks": "pass in signed CI; all four viewport layouts",
     "savedTranscripts": "account-scoped native secure storage on this device; explicit Save only",
     "archiveLimits": {
       "messages": 100,
@@ -345,6 +352,56 @@
     "share": "native share sheet, selected message only",
     "delete": "confirmed local transcript and saved copy deletion; Brain memories unchanged",
     "billingChanged": false,
-    "physicalDeviceValidation": "pending"
+    "physicalDeviceValidation": "pending",
+    "uiViewports": [
+      320,
+      390,
+      768,
+      1024
+    ],
+    "releaseIdentityTests": 23,
+    "appCodeCommit": "403ba43b788526724ef201ca5e51bde03d460087",
+    "releaseCommit": "1a9031ebbe90ed07b7070be47f1d2e8130b5d214",
+    "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6b3436a1999f83b5d7ed5",
+    "appleBuildId": "c9374dea-470b-43e2-a213-79fdba1bc491",
+    "processingVerifiedAt": "2026-11-01T03:45:25.409007+00:00",
+    "distributionResult": "testing",
+    "distributionVerifiedAt": "2026-11-01T04:04:01.967404+00:00"
+  },
+  "pricingDecision": {
+    "status": "monthly_plan_approved_not_activated",
+    "currency": "USD",
+    "monthlyPriceCents": 3499,
+    "billingInterval": "month",
+    "includedLiveMinutes": 60,
+    "includedFeatures": [
+      "Personal Brain and memories",
+      "Train My AI",
+      "Live Conversation within the monthly allowance"
+    ],
+    "source": "User approved $34.99 per month with a 60-minute limit because Brain and trainable features are included",
+    "recordedAt": "2026-11-01T04:04:01.967404+00:00",
+    "billingActivated": false,
+    "storeProductsConfigured": false,
+    "newMinuteLimitImplemented": false,
+    "trialAndTopUps": "Previous 5-minute welcome trial and $4.99 / 25-minute pack remain proposals; not configured",
+    "deepThinkAllowance": "Separate cap requires definition before monetization; no unlimited inference entitlement"
+  },
+  "ambienceUpdate": {
+    "sourceBuild": 11,
+    "status": "implemented; signed CI and physical iPhone verification pending",
+    "changes": [
+      "Explicit optional playback audio-session category for user-started music",
+      "Release playback override and suspend ambience before native voice or dictation",
+      "Resume the chosen bed on Home after microphone use",
+      "Remember device music volume; default remains 1 percent"
+    ],
+    "flutterTests": 61,
+    "flutterAnalyze": "pass",
+    "releaseIdentityTests": 23,
+    "uiAudioChecks": "pending in signed CI",
+    "physicalIphoneVerification": "pending; test Silent Mode, media volume, voice, dictation and interruptions",
+    "introStatus": "Draft provided for review; no spoken introduction added in this build",
+    "billingChanged": false
   }
 }

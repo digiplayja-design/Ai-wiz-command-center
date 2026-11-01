@@ -345,6 +345,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
         _dictating = false;
         _emit({
           'type': 'dictationStatus',
+          'active': false,
           'message': 'Dictation stopped. Check microphone and speech permissions, or type instead.',
         });
       },
@@ -353,6 +354,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
           _dictating = false;
           _emit({
             'type': 'dictationStatus',
+            'active': false,
             'message': 'Dictation stopped. Review your text before saving.',
           });
         }
@@ -382,13 +384,22 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
     );
     _emit({
       'type': 'dictationStatus',
+      'active': _dictating,
       'message': 'Listening… tap Stop dictation when finished.',
     });
   }
 
   Future<void> _stopDictation() async {
+    final wasDictating = _dictating;
     _dictating = false;
     await _speech.stop();
+    if (wasDictating) {
+      _emit({
+        'type': 'dictationStatus',
+        'active': false,
+        'message': 'Dictation stopped. Review your text before saving.',
+      });
+    }
   }
 
   Future<Map<String, dynamic>> _pickFile(String kind) async {
@@ -530,7 +541,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
             ListTile(
               title: const Text('KORLIX Brain+Voice'),
               subtitle: Text(
-                '${widget.auth.session?.email ?? 'Your account'}\nVersion 1.0.1 · Build 10',
+                '${widget.auth.session?.email ?? 'Your account'}\nVersion 1.0.1 · Build 11',
               ),
             ),
             const Padding(
