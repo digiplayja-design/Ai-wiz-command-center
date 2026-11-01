@@ -71,6 +71,18 @@ class AppleProductTests(unittest.TestCase):
         self.assertEqual(body["included"][0]["attributes"], {"startDate": None, "endDate": None})
         self.assertEqual(body["included"][0]["relationships"]["inAppPurchasePricePoint"]["data"]["id"], "point-id")
 
+    def test_regular_monthly_plan_does_not_create_twelve_month_commitment(self):
+        class Api:
+            def all(self, path, **params):
+                return [{"id": "USA"}] if path.endswith("/availableTerritories") else []
+            def create(self, path, kind, attrs, relationships):
+                self.attrs, self.relationships = attrs, relationships
+                return {"id": "availability"}
+        api = Api()
+        module.ensure_us_availability(api, "subscription", True)
+        self.assertEqual(api.attrs["planType"], "UPFRONT")
+        self.assertEqual(api.relationships["availableTerritories"]["data"], [{"type": "territories", "id": "USA"}])
+
 
 if __name__ == "__main__":
     unittest.main()

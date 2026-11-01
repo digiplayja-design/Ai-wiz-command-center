@@ -152,6 +152,33 @@ def localization(api, list_path, create_path, kind, parent_name, parent_type, pa
                       {parent_name: relation(parent_type, parent_id)})
 
 
+def ensure_us_availability(api, identifier, subscription=False):
+    """Prepare the approved USD storefront without changing app release regions.
+
+    Apple's UPFRONT means pay for the full ONE_MONTH period. MONTHLY here means
+    a 12-month commitment paid in installments, which the user did not approve.
+    """
+    if subscription:
+        options = api.all(f"/v1/subscriptions/{identifier}/planAvailabilities", limit=200)
+        current = unique(options, lambda p: p["attributes"]["planType"] == "UPFRONT", "upfront plan availability")
+        kind, parent, parent_type = "subscriptionPlanAvailabilities", "subscription", "subscriptions"
+        attrs = {"planType": "UPFRONT", "availableInNewTerritories": False}
+    else:
+        result = api.request("GET", f"/v2/inAppPurchases/{identifier}/inAppPurchaseAvailability", allow_missing=True)
+        current = result.get("data") if result else None
+        kind, parent, parent_type = "inAppPurchaseAvailabilities", "inAppPurchase", "inAppPurchases"
+        attrs = {"availableInNewTerritories": False}
+    if current is None:
+        current = api.create(f"/v1/{kind}", kind, attrs, {
+            parent: relation(parent_type, identifier),
+            "availableTerritories": {"data": [{"type": "territories", "id": "USA"}]},
+        })
+    territories = api.all(f"/v1/{kind}/{current['id']}/availableTerritories", limit=200)
+    if "USA" not in {r["id"] for r in territories}:
+        raise ValueError("Existing product availability excludes USA; retained without overwriting")
+    return {"usAvailable": True, "planType": "UPFRONT" if subscription else None}
+
+
 def ensure_price(api, item, cents, subscription=False):
     identifier = item["id"]
     if subscription:
@@ -168,17 +195,18 @@ def ensure_price(api, item, cents, subscription=False):
         schedule = api.request("GET", base + "/iapPriceSchedule", allow_missing=True)
         price_path = (f"/v1/inAppPurchasePriceSchedules/{schedule['data']['id']}/manualPrices"
                       if schedule and schedule.get("data") else None)
-    existing = api.all(price_path, **{"filter[territory]": "USA", "include": relation_name,
-                                    "limit": 200}) if price_path else []
+    filters = {"filter[territory]": "USA", "include": relation_name, "limit": 200}
+    if subscription:
+        filters["filter[planType]"] = "UPFRONT"
+    existing = api.all(price_path, **filters) if price_path else []
     if existing:
         # Refuse to change an existing price or introduce a future price schedule.
         if len(existing) != 1 or existing[0]["relationships"][relation_name]["data"]["id"] != point["id"]:
             raise ValueError("Existing US price schedule differs; no price change made")
     elif subscription:
-        api.create("/v1/subscriptionPrices", "subscriptionPrices", {"startDate": None}, {
+        api.create("/v1/subscriptionPrices", "subscriptionPrices", {"startDate": None, "planType": "UPFRONT"}, {
             "subscription": relation("subscriptions", identifier),
             "subscriptionPricePoint": relation(point_kind, point["id"]),
-            "territory": relation("territories", "USA"),
         })
     else:
         api.request("POST", "/v1/inAppPurchasePriceSchedules", body=iap_price_body(identifier, point["id"]))
@@ -186,7 +214,7 @@ def ensure_price(api, item, cents, subscription=False):
     if not subscription:
         schedule = api.get(base + "/iapPriceSchedule")["data"]
         price_path = f"/v1/inAppPurchasePriceSchedules/{schedule['id']}/manualPrices"
-    saved = api.all(price_path, **{"filter[territory]": "USA", "include": relation_name, "limit": 200})
+    saved = api.all(price_path, **filters)
     if len(saved) != 1 or saved[0]["relationships"][relation_name]["data"]["id"] != point["id"]:
         raise ValueError("US price persistence verification failed")
     return {"territory": "USA", "currency": "USD", "price": str(Decimal(cents) / 100),
@@ -206,7 +234,7 @@ def run(api):
     report = {"appId": APP_ID, "bundleId": BUNDLE_ID, "apply": api.apply,
               "checkedAt": datetime.now(timezone.utc).isoformat(),
               "products": [], "publicSubmission": False, "billingEnabled": False,
-              "remaining": ["Availability and non-US subscription prices", "IAP review screenshots",
+              "remaining": ["Non-US availability and subscription prices", "IAP review screenshots",
                             "Native sandbox purchase tests", "First products with app-version review"]}
     if not api.apply:
         report["inventory"] = [{"id": r["id"], "productId": r["attributes"].get("productId"),
@@ -235,6 +263,7 @@ def run(api):
                  "/v1/subscriptionLocalizations", "subscriptionLocalizations", "subscription", "subscriptions",
                  sub["id"], {"name": "Brain+Voice Monthly", "description": "Brain, training and 60 Live minutes each month."})
     report["products"].append({"productId": monthly["appleId"], "id": sub["id"],
+                               "availability": ensure_us_availability(api, sub["id"], True),
                                "price": ensure_price(api, sub, monthly["usdCents"], True)})
     for product in catalog[1:]:
         item = unique(consumables, lambda r: r["attributes"]["productId"] == product["appleId"], "AI GAS product")
@@ -255,6 +284,7 @@ def run(api):
                      "inAppPurchases", item["id"], {"name": name,
                      "description": f"Add {minutes} Live minutes with Rici. Minutes never expire."})
         report["products"].append({"productId": product["appleId"], "id": item["id"],
+                                   "availability": ensure_us_availability(api, item["id"]),
                                    "price": ensure_price(api, item, product["usdCents"])})
     return report
 
