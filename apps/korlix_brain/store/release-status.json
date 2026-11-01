@@ -1,11 +1,11 @@
 {
-  "updatedAt": "2026-11-01T02:04:59.086681+00:00",
+  "updatedAt": "2026-11-01T03:15:42.708793+00:00",
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "version": "1.0.1",
-  "minimumSourceBuild": 9,
-  "appCodeCommit": "71af10143c640f614f01c22dd879f3c3332e894b",
-  "releasePipelineCommit": "df692ff2c868c2c589635c242f0cd611f21115c6",
+  "minimumSourceBuild": 10,
+  "appCodeCommit": "bd6fae9f854786a323705cbe86061f672cc2e21a",
+  "releasePipelineCommit": "2803adee82ecde6798552efbcaef068426b9cf3c",
   "signedIosCandidate": {
     "status": "success",
     "build": 4,
@@ -29,8 +29,8 @@
   },
   "testflight": {
     "status": "testing",
-    "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae68f72a74da3772d1e758e",
-    "sourceCommit": "df692ff2c868c2c589635c242f0cd611f21115c6",
+    "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae69eaca74da3772d1eab3a",
+    "sourceCommit": "2803adee82ecde6798552efbcaef068426b9cf3c",
     "uploadBranch": "release/korlix-brain-testflight-20261031",
     "workflow": "korlix-brain-ios-testflight",
     "betaInformation": "saved in App Store Connect",
@@ -41,8 +41,9 @@
       "automaticDistribution": false,
       "testerCount": 1,
       "invitationStatus": "Existing tester retained; no new testers or invitations",
-      "buildCount": 5,
+      "buildCount": 6,
       "builds": [
+        "1.0.1 (9)",
         "1.0.1 (8)",
         "1.0.1 (7)",
         "1.0.1 (6)",
@@ -53,7 +54,8 @@
       "build5Assigned": true,
       "build6Assigned": true,
       "build7Assigned": true,
-      "build8Assigned": true
+      "build8Assigned": true,
+      "build9Assigned": true
     },
     "processingRejection": {
       "version": "1.0.1",
@@ -76,39 +78,48 @@
       "processingResult": "rejected ITMS-90683",
       "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6612f6a1999f83b5c5925"
     },
-    "build": 8,
+    "build": 9,
     "signedArtifactVerification": "pass",
     "flutterAnalyze": "pass",
-    "flutterTests": 41,
+    "flutterTests": 53,
     "releaseIdentityTests": 23,
-    "completedAt": "2026-11-01T01:06:49Z",
+    "completedAt": "2026-11-01T02:12:14Z",
     "processingResult": "complete",
     "console": "https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6829319523/testflight/groups/ae86d9a2-5bdf-4f3d-910b-aa532675951f/builds",
     "previousReadyBuild": {
-      "build": 7,
-      "appleBuildId": "90e1d36f-3483-4d0d-a9c5-d197cc2711f2",
-      "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae68823a74da3772d1e5bed",
-      "sourceCommit": "bcb6a6da480602ac40fb8e138321f7544b2fd715",
-      "completedAt": "2026-11-01T00:35:38Z",
+      "build": 8,
+      "appleBuildId": "f7244993-e1fd-448d-8fef-3dc0f1dcb63c",
+      "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae68f72a74da3772d1e758e",
+      "sourceCommit": "df692ff2c868c2c589635c242f0cd611f21115c6",
+      "completedAt": "2026-11-01T01:06:49Z",
       "processingResult": "complete",
-      "groupState": "Testing"
+      "groupState": "Testing",
+      "distributionApprovedByUser": true
     },
     "distributionApprovedByUser": true,
-    "appleBuildId": "f7244993-e1fd-448d-8fef-3dc0f1dcb63c",
-    "processingVerifiedAt": "2026-11-01T01:10:23.250352+00:00",
+    "appleBuildId": "d681aa25-898b-4d77-b1b1-f67f45c1a087",
+    "processingVerifiedAt": "2026-11-01T02:15:46.552519+00:00",
     "signedArtifact": {
-      "bytes": 33647485,
-      "sha256": "65bd79de3c18f7c5d5a8b913f7b5f4ebf42da33077c700d31a74b081d6e9f0b6",
+      "bytes": 33659833,
+      "sha256": "4e797b1a3fe1eca60c341d013fe498ed530a6729420eacac0a8801daeb1fd49e",
       "bundleId": "com.korlix.brain",
       "version": "1.0.1",
-      "build": 8,
+      "build": 9,
       "profileType": "app_store",
       "signatureVerified": true,
       "location": "Codemagic; not included in source archive"
-    }
+    },
+    "distributionApproval": {
+      "state": "approved_and_completed",
+      "action": "Add build 1.0.1 (9) to existing KORLIX Brain Internal group for its one existing tester",
+      "source": "Explicit user Approve response to the build-9 internal distribution question",
+      "recordedAt": "2026-11-01T02:59:22.335504+00:00",
+      "previousBlock": "Automatic approval review required explicit build-9 distribution approval; resolved by the user approval"
+    },
+    "distributionVerifiedAt": "2026-11-01T02:59:22.335504+00:00"
   },
   "storeSubmission": "not performed",
-  "authenticatedDeviceVoiceTest": "Prior Astra conversations succeeded but the user reported slow responses and a Kim identity conflict. Build 8 Sol inference, spoken identity and end-to-end phone latency remain unverified.",
+  "authenticatedDeviceVoiceTest": "User confirms Live Conversation works in build 9. No quantified end-to-end latency measurement.",
   "androidStoreSigning": "not configured",
   "listingText": "Apple name, subtitle, category, description, keywords and support URL saved; Google draft only",
   "iconColors": [
@@ -120,7 +131,8 @@
   "reasoning": {
     "model": "gpt-6.1-sol",
     "effort": "max",
-    "liveProviderInference": "Build-8 Sol inference and device latency pending; prior live runs used Astra."
+    "liveProviderInference": "Sol Max inference verified in build-8 production logs; reserved for explicit Deep Think in build 9. Default Live uses the separate voiceModes.live profile.",
+    "mode": "deep"
   },
   "voiceMemory": {
     "command": "Rici, remember this: ...",
@@ -174,7 +186,7 @@
     "sourceBuild": 6,
     "status": "Testing in KORLIX Brain Internal; Apple processing and group assignment verified",
     "change": "Send session.update after session.created, wait for session.updated to confirm no automatic responses and transcription before enabling microphone; bounded setup timeout; retain Astra Max checks",
-    "liveDeviceVerification": "Build-6 production conversation requests succeeded. Current build-8 Sol device verification is pending.",
+    "liveDeviceVerification": "Build-6 production conversation requests succeeded. Later build-8 Sol inference also verified; build-9 native voice verification remains pending.",
     "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6700ba74da3772d1e02f4",
     "sourceCommit": "a68df1fe69691896f7489fe7458d925055214f4b",
     "releaseCommit": "1ccc328733298d0aeed2330f11ad605e4ca84269",
@@ -248,8 +260,8 @@
       768,
       1024
     ],
-    "modelAccess": "OpenAI model metadata HTTP 200 for existing server key at 2026-11-01T01:01:33Z; inference not benchmarked",
-    "deviceLatencyVerification": "pending",
+    "modelAccess": "Model metadata HTTP 200 and subsequent successful production Sol inference verified.",
+    "deviceLatencyVerification": "Server first text 3,883 / 6,820 / 13,446 ms; end-to-end audio timing not measured.",
     "automaticFallback": false,
     "paidProcessingTierChanged": false,
     "backendDeploy": "dep-dbj8ui0473hc739nu67g",
@@ -279,7 +291,7 @@
   },
   "liveConversationUpdate": {
     "sourceBuild": 9,
-    "status": "validated locally; deployment and signed delivery pending",
+    "status": "Backend live; build 9 Testing in KORLIX Brain Internal; Apple processing and approved existing-group assignment verified",
     "userSelected": "Live + Deep Think",
     "baselineSolFirstTextMs": [
       3883,
@@ -303,11 +315,36 @@
       1024
     ],
     "flutterAnalyze": "pass",
-    "deviceLatencyVerification": "pending",
+    "deviceLatencyVerification": "User confirms Live Conversation works; quantified latency remains unmeasured.",
     "ordinaryTurnWaitsForTranscript": false,
     "ordinaryTurnCallsSol": false,
     "paidProcessingTierChanged": false,
     "backendCommit": "8dff4033d983cb10aafe3cb032b13fadaf18418d",
-    "backendDeploy": "dep-dbj9sq7b9u1s73deb3a0"
+    "backendDeploy": "dep-dbj9sq7b9u1s73deb3a0",
+    "backendStatus": "live",
+    "backendHealth": "200; rici-live-v1 default; gpt-realtime-2.1/low; Sol Max Deep Think; anonymous turn and timing 401",
+    "appCodeCommit": "bd6fae9f854786a323705cbe86061f672cc2e21a",
+    "releaseCommit": "2803adee82ecde6798552efbcaef068426b9cf3c",
+    "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae69eaca74da3772d1eab3a",
+    "appleBuildId": "d681aa25-898b-4d77-b1b1-f67f45c1a087",
+    "completedAt": "2026-11-01T02:12:14Z",
+    "processingVerifiedAt": "2026-11-01T02:15:46.552519+00:00",
+    "distributionVerifiedAt": "2026-11-01T02:59:22.335504+00:00"
+  },
+  "transcriptUpdate": {
+    "sourceBuild": 10,
+    "status": "implemented locally; signed build and distribution pending",
+    "flutterTests": 61,
+    "flutterAnalyze": "pass",
+    "uiChecks": "pending in signed CI; local browser launch blocked by environment permissions",
+    "savedTranscripts": "account-scoped native secure storage on this device; explicit Save only",
+    "archiveLimits": {
+      "messages": 100,
+      "bytes": 524288
+    },
+    "share": "native share sheet, selected message only",
+    "delete": "confirmed local transcript and saved copy deletion; Brain memories unchanged",
+    "billingChanged": false,
+    "physicalDeviceValidation": "pending"
   }
 }

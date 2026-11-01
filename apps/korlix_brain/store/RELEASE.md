@@ -1,10 +1,20 @@
+## Transcript actions — build 10 candidate
+
+Adds Save, Share and Delete to each transcript message and a Saved messages view accessible from Talk and My Brain. Saving is explicit and account-scoped in native secure storage on this device; it does not create a shared Brain memory. Sharing opens the native share sheet with the selected message only. Deletion confirms removal of the local transcript and saved copy, preserves Brain memories, and commits only after storage succeeds. The archive is bounded to 100 messages / 512 KiB, with an explicit full-storage error and no silent eviction. Unsaved live messages are temporary (last 60 shown). Account deletion clears the local saved archive before submitting the existing shared-account deletion request.
+
+Local validation: 61 Flutter tests and clean analysis. UI checks run in the signed build workflow because this session disallows launching a local browser. Build 10 has not yet been uploaded or distributed. Physical-device share-sheet and persistence checks remain pending.
+
+The user confirmed that build-9 Live Conversation works. No model, voice, backend, or billing configuration changes are included. Pricing discussed in this conversation remains a proposal.
+
 ## Native Live Conversation — build 9
 
 The user selected Live + Deep Think after measured build-8 Sol Max first-text delays of 3,883 / 6,820 / 13,446 ms. Account preparation took 47 / 64 / 82 ms. Live is now the default and uses native `gpt-realtime-2.1` / low with Marin. It does not wait for ASR or Sol on ordinary replies. Deep Think retains `gpt-6.1-sol` / max. Mode changes require stopping the current conversation.
 
 Direct memory commands are executed only against the original user transcript by the authenticated server. Tool-supplied content cannot replace it; acknowledged writes, ownership, idempotency and allowance remain enforced. Stop and barge-in suppress stale continuations. Live audio timing is content-free and explicitly marked client-reported. No claim of measured phone latency is made before device testing.
 
-Validation: 53 Flutter tests, analysis, 34 Brain backend tests, 20 agent-studio tests, 13 shared-agent checks, 23 release checks and UI checks at 320 / 390 / 768 / 1024 pixels. Build 9 signed delivery is being prepared; build 8 remains Testing.
+Validation: 53 Flutter tests, analysis, 34 Brain backend tests, 20 agent-studio tests, 13 shared-agent checks, 23 release checks and UI checks at 320 / 390 / 768 / 1024 pixels. **Version 1.0.1 (9) is Testing in KORLIX Brain Internal.** The [signed pipeline](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae69eaca74da3772d1eab3a) completed at 2026-11-01T02:12:14Z; it repeated app and release checks, verified IPA identity, purpose strings, profile and signature, and uploaded successfully. Apple processing and approved group assignment are verified; Apple build ID is `d681aa25-898b-4d77-b1b1-f67f45c1a087`.
+
+App code: `bd6fae9f854786a323705cbe86061f672cc2e21a`. Release commit: `2803adee82ecde6798552efbcaef068426b9cf3c`. Production backend: `8dff4033d983cb10aafe3cb032b13fadaf18418d`, Render deploy `dep-dbj9sq7b9u1s73deb3a0`, verified live. The user explicitly approved assigning build 9 to the existing KORLIX Brain Internal group. Apple shows Testing; the group retains its one tester and now contains builds 9, 8, 7, 6, 5 and 3. The earlier approval-review block is resolved. No invitations or public App Store submission were sent. Physical-device native audio timing remains pending.
 
 ## Sol 6.1 reasoning migration — build 8
 
@@ -67,7 +77,7 @@ Validation: 31 Flutter tests, including incremental UTF-8, truncation, account c
 | --- | --- |
 | App name | KORLIX Brain+Voice |
 | Apple bundle ID / Android package | `com.korlix.brain` |
-| Version / minimum source build | `1.0.1` / `9` |
+| Version / minimum source build | `1.0.1` / `10` |
 | Apple team | `FJKJ9MUDZ4` |
 | Apple app ID | `6829319523` |
 | Apple SKU | `KORLIX-BRAIN-VOICE-IOS` |
@@ -75,7 +85,7 @@ Validation: 31 Flutter tests, including incremental UTF-8, truncation, account c
 | Platforms | iPhone and iPad |
 | Store icon | Purple, red, green and gold KORLIX emblem |
 
-The dedicated [Apple app record](https://appstoreconnect.apple.com/apps/6829319523/distribution/info) is created. **Version 1.0.1 (8) is Testing in [KORLIX Brain Internal](https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6829319523/testflight/groups/ae86d9a2-5bdf-4f3d-910b-aa532675951f/builds).** Builds 3, 5, 6 and 7 remain available in that group. The group has one approved existing tester. Automatic distribution is disabled. App Store review has not been submitted. The user reported slow voice and a conflicting name on build 6; build-8 Sol physical-device verification remains pending.
+The dedicated [Apple app record](https://appstoreconnect.apple.com/apps/6829319523/distribution/info) is created. **Version 1.0.1 (9) is Testing in [KORLIX Brain Internal](https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6829319523/testflight/groups/ae86d9a2-5bdf-4f3d-910b-aa532675951f/builds).** Builds 3, 5, 6, 7 and 8 remain available in that group. The group has one approved existing tester. Automatic distribution is disabled. App Store review has not been submitted. The user reported slow voice and a conflicting name on build 6; build-8 logs confirmed Sol first-text delays, and build-9 native live audio verification remains pending.
 
 Apple rejected build 2 during processing (ITMS-90683) for missing camera and photo-library descriptions and warned about a missing location description. Build 3 includes all three and checks the exported IPA before upload. Its four-color icon is visible in Apple's processed build. Apple listing text is saved in the version 1.0.1 draft. Google Play listing ID remains unverified. Never reuse another KORLIX app's store record or bundle identity.
 
@@ -88,7 +98,7 @@ The [final signed build-5 pipeline](https://codemagic.io/app/6a32198d2d0806059c3
 1. Run `korlix-brain-ios-candidate`. A push trigger is configured for this branch; it requires the repository's Codemagic webhook to be active. The workflow imports the existing managed KORLIX distribution certificate, registers/selects `com.korlix.brain`, and installs its dedicated App Store profile. The original KORLIX profile is only used to import the certificate and cannot pass Brain+Voice artifact verification. No store upload occurs in this workflow.
 2. Use the existing Apple app record `6829319523` with bundle `com.korlix.brain`. Keep its account access policy; do not create a duplicate record.
 3. Run `korlix-brain-ios-testflight`, or push the reviewed source to `release/korlix-brain-testflight-20261031`. That release branch alone triggers upload. It first queries Apple for the exact app record; a successful empty response produces a distinct “App Store Connect record is missing for com.korlix.brain” failed step. Authentication/API errors stop at the query step instead. With the app record present, it chooses a build number above existing builds, verifies the signed IPA, and uploads to App Store Connect. It does not submit for external beta or App Store review, assign testers, or send invitations.
-4. TestFlight beta information is saved. Builds 8, 7, 6, 5 and 3 are assigned to the existing `KORLIX Brain Internal` group under the user's distribution approval, and Apple shows Testing. Do not add testers or resend invitations. Automatic distribution remains disabled. Verify an authenticated physical-device session before App Store submission.
+4. TestFlight beta information is saved. Builds 9, 8, 7, 6, 5 and 3 are assigned to the existing `KORLIX Brain Internal` group under the user's distribution approval, and Apple shows Testing. Do not add testers or resend invitations. Automatic distribution remains disabled. Verify an authenticated physical-device session before App Store submission.
 
 The previous privacy correction shipped as build 3 from release commit `2a4d2737b14222fde1d407d0da6d3fc043d9119e` and passed Apple processing. Final streaming build 5 uses app-code commit `816eee71abfecd2ebe4989fb8ce901af16bec83a` and release commit `afb7eed81fd032e914f28d208801cff12aa5816a`. Its upload completed at 2026-10-31T22:37:09Z; Apple build ID is `3a95a0e0-40ba-41f3-bffc-34cbdcb57d89`. All privacy-purpose checks remain in place. The iOS flow still imports documents and requests audio for voice; adding purpose strings does not itself request camera, photos or location.
 
@@ -102,16 +112,16 @@ GitHub validation independently compiles an unsigned iPhoneOS arm64 release bina
 
 Reviewer instructions: sign in using a working review account supplied privately in each store console. Accept the third-party AI notice, start Talk with Rici, grant microphone permission, and ask a question. Say “Rici, remember this: My preferred example color is purple.” Wait for the save acknowledgment, open My Brain, confirm the item, then delete it. Say “Rici, remember this instruction: Use short answers.” Confirm it appears as a removable instruction. Stop voice before signing out. Verify that the review account has sufficient allowance; never put reviewer credentials in this repository.
 
-Before submission, capture real-device screenshots, verify the account review flow and live Sol inference, and complete privacy, age-rating and microphone/background-audio declarations from the implemented data flows. The account offers age ranges starting at 16; store age-rating questionnaires must still be completed. Pricing and purchase arrangements are unchanged. Android store signing and a dedicated Play listing remain to be configured.
+Before submission, capture real-device screenshots, verify the account review flow and both Live Conversation and Deep Think, and complete privacy, age-rating and microphone/background-audio declarations from the implemented data flows. The account offers age ranges starting at 16; store age-rating questionnaires must still be completed. Pricing and purchase arrangements are unchanged. Android store signing and a dedicated Play listing remain to be configured.
 
 ## Verification still requiring a signed-in device
 
-- A two-way Sol 6.1 Max conversation and correct pronunciation of Rici (Ree-see).
+- Native Live Conversation with measured speech-stop to first-audio timing, optional Sol Max Deep Think, and correct pronunciation of Rici (Ree-see).
 - Direct save, persistence after reconnect, instruction use on the next turn, and deletion.
 - No duplicate saves after repeated transcript events; ordinary conversation is not saved.
 - Permission denial/recovery, interruption, Bluetooth output, quota errors, app switching, screen lock and Stop.
 - Account deletion request and AI-response report acknowledgment.
 
-Backend releases must use `release/signup-plan-intent-20261021`; this app branch retains an older backend snapshot. Do not deploy its backend. Build-8 Brain voice protocol is `sol-6.1-max-v1`, model `gpt-6.1-sol`, reasoning effort `max`. Older app builds retain `astra-max-v1` / `gpt-6-astra`. Public health verifies configuration; the separate startup model-discovery check does not benchmark inference.
+Backend releases must use `release/signup-plan-intent-20261021`; this app branch retains an older backend snapshot. Do not deploy its backend. Build-9 default Live protocol is `rici-live-v1`, model `gpt-realtime-2.1`, effort `low`; Deep Think retains `sol-6.1-max-v1` / `gpt-6.1-sol` / `max`. Older app builds retain `astra-max-v1` / `gpt-6-astra`. Public health verifies configuration; the separate startup model-discovery check does not benchmark inference.
 
 References: [Codemagic automatic builds](https://docs.codemagic.io/yaml-running-builds/starting-builds-automatically/), [Codemagic App Store publishing](https://docs.codemagic.io/yaml-publishing/app-store-connect/), [Apple app record creation](https://developer.apple.com/help/app-store-connect/create-an-app-record/add-a-new-app/).

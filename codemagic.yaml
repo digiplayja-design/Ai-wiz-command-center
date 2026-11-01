@@ -603,9 +603,19 @@ workflows:
             --build "$KORLIX_IOS_BUILD_NUMBER" --output artifacts/BrainVoice-verification.json
           cp "${IPA_FILES[0]}" artifacts/BrainVoice.ipa
           cp store/apple/testflight-notes.txt release_notes_en-US.txt
+      - &brain_check_transcript_ui
+        name: Check transcript controls on phone and tablet layouts
+        script: |
+          set -euo pipefail
+          npm install --prefix "$CM_BUILD_DIR/.brain-ui-tools" --no-audit --no-fund playwright@1.62.1
+          "$CM_BUILD_DIR/.brain-ui-tools/node_modules/.bin/playwright" install chromium
+          PLAYWRIGHT_MODULE="$CM_BUILD_DIR/.brain-ui-tools/node_modules/playwright" \
+            UI_SCREENSHOTS="$CM_BUILD_DIR/apps/korlix_brain/artifacts/ui" \
+            node tools/check_ui.cjs
     artifacts:
       - $CM_BUILD_DIR/apps/korlix_brain/artifacts/*.ipa
       - $CM_BUILD_DIR/apps/korlix_brain/artifacts/*.json
+      - $CM_BUILD_DIR/apps/korlix_brain/artifacts/ui/*.png
       - /tmp/xcodebuild_logs/*.log
 
   korlix-brain-ios-testflight:
@@ -638,6 +648,7 @@ workflows:
           exit 1
       - *brain_prepare_ios_identity
       - *brain_validate_ios
+      - *brain_check_transcript_ui
       - *brain_build_ios
     publishing:
       app_store_connect:
