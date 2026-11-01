@@ -4,7 +4,9 @@ Fixes the reported startup failure where Replay worked but the welcome did not p
 
 On iPhone the bundled recording uses AVAudioPlayer through a dedicated local Flutter channel. It explicitly owns and releases the playback audio session. Skip, navigation, account controls, backgrounding and microphone handoff stop the recording. A pending native Stop must finish before voice or dictation starts; stale completion events cannot interrupt Replay. WebView playback remains the non-iOS fallback. The exact approved Marin recording, pronunciation, voice models and billing are unchanged.
 
-Delivery and final checks pending. Build 12 remains the currently verified TestFlight build until build 13 is processed and assigned.
+**Version 1.0.1 (13) is Testing in KORLIX Brain Internal.** The [signed pipeline](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6cde26a1999f83b5dd3bb) finished successfully after passing 71 Flutter tests, clean analysis, 23 release checks, four viewport transcript checks, ambience tests and the expanded welcome regressions. Apple processing and assignment to the existing group are verified. The group has one tester and ten builds; no new testers, invitations or public App Store submission.
+
+App code: `b0885d8a8cb5755053ef2cf238c4fa1451a48460`. Release commit: `22efa287ca33a6919dbfa07ebe5335efacaba584`. Apple build ID: `7523179c-97d2-4048-b793-7ed0123da02a`. Signed IPA: 34,251,568 bytes; SHA-256 `f8fb975840f47b643753e24963a7320ac76cf2580ba9656255b089594165b53b`. The downloaded package matches that hash, includes the native welcome channel and AVAudioPlayer implementation, and contains the unchanged 14.378-second recording. The user confirmed Replay worked in build 12; automatic native playback on a physical iPhone in build 13 still needs user confirmation.
 
 ## Spoken welcome and Risi pronunciation — build 12
 
