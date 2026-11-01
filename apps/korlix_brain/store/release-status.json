@@ -1,9 +1,9 @@
 {
-  "updatedAt": "2026-11-01T02:59:22.335504+00:00",
+  "updatedAt": "2026-11-01T03:15:42.708793+00:00",
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "version": "1.0.1",
-  "minimumSourceBuild": 9,
+  "minimumSourceBuild": 10,
   "appCodeCommit": "bd6fae9f854786a323705cbe86061f672cc2e21a",
   "releasePipelineCommit": "2803adee82ecde6798552efbcaef068426b9cf3c",
   "signedIosCandidate": {
@@ -119,7 +119,7 @@
     "distributionVerifiedAt": "2026-11-01T02:59:22.335504+00:00"
   },
   "storeSubmission": "not performed",
-  "authenticatedDeviceVoiceTest": "Build-8 Sol inference verified: first text 3,883 / 6,820 / 13,446 ms, preparation 47 / 64 / 82 ms. Build-9 native live audio, spoken identity and phone latency remain unverified.",
+  "authenticatedDeviceVoiceTest": "User confirms Live Conversation works in build 9. No quantified end-to-end latency measurement.",
   "androidStoreSigning": "not configured",
   "listingText": "Apple name, subtitle, category, description, keywords and support URL saved; Google draft only",
   "iconColors": [
@@ -315,7 +315,7 @@
       1024
     ],
     "flutterAnalyze": "pass",
-    "deviceLatencyVerification": "pending",
+    "deviceLatencyVerification": "User confirms Live Conversation works; quantified latency remains unmeasured.",
     "ordinaryTurnWaitsForTranscript": false,
     "ordinaryTurnCallsSol": false,
     "paidProcessingTierChanged": false,
@@ -330,5 +330,21 @@
     "completedAt": "2026-11-01T02:12:14Z",
     "processingVerifiedAt": "2026-11-01T02:15:46.552519+00:00",
     "distributionVerifiedAt": "2026-11-01T02:59:22.335504+00:00"
+  },
+  "transcriptUpdate": {
+    "sourceBuild": 10,
+    "status": "implemented locally; signed build and distribution pending",
+    "flutterTests": 61,
+    "flutterAnalyze": "pass",
+    "uiChecks": "pending in signed CI; local browser launch blocked by environment permissions",
+    "savedTranscripts": "account-scoped native secure storage on this device; explicit Save only",
+    "archiveLimits": {
+      "messages": 100,
+      "bytes": 524288
+    },
+    "share": "native share sheet, selected message only",
+    "delete": "confirmed local transcript and saved copy deletion; Brain memories unchanged",
+    "billingChanged": false,
+    "physicalDeviceValidation": "pending"
   }
 }

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:korlix_receipt_core/privacy/korlix_third_party_ai_consent.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
@@ -13,6 +14,7 @@ import 'brain_auth.dart';
 import 'brain_repository.dart';
 import 'brain_voice.dart';
 import 'brain_model.dart';
+import 'brain_transcripts.dart';
 
 class BrainWorkspace extends StatefulWidget {
   const BrainWorkspace({super.key, required this.auth});
@@ -32,6 +34,27 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
   bool _disposed = false, _pickerBusy = false, _dictating = false;
   int _voiceStartRequest = 0;
   String? _pageError;
+  BrainTranscripts? _transcripts;
+
+  BrainTranscripts get _transcriptStore {
+    final session = widget.auth.session;
+    if (session == null) {
+      throw const BrainTranscriptException('Please sign in again.');
+    }
+    final owner = brainTranscriptOwner(session.accessToken);
+    return _transcripts ??= BrainTranscripts(
+      owner: owner,
+      isCurrent: () {
+        if (_disposed || !mounted || widget.auth.session == null) return false;
+        try {
+          return brainTranscriptOwner(widget.auth.session!.accessToken) ==
+              owner;
+        } catch (_) {
+          return false;
+        }
+      },
+    );
+  }
 
   @override
   void initState() {
@@ -88,6 +111,17 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
 
   void _emit(Map<String, dynamic> event) {
     if (_disposed || !mounted) return;
+    if (event['type'] == 'transcript') {
+      try {
+        final item = _transcriptStore.receive(
+          event['role'] as String,
+          event['text'] as String,
+        );
+        if (item != null) event = {...event, ...item.toJson()};
+      } on BrainTranscriptException {
+        // A local archive/account error must not interrupt working live audio.
+      }
+    }
     unawaited(
       _web
           .runJavaScript('window.KorlixBrainReceive?.(${jsonEncode(event)});')
@@ -137,7 +171,10 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
         _emit({
           'type': 'reply',
           'id': id,
-          'error': error is BrainApiException || error is BrainAuthException
+          'error':
+              error is BrainApiException ||
+                  error is BrainAuthException ||
+                  error is BrainTranscriptException
               ? error.toString()
               : 'Could not complete this action. Check your connection and try again.',
         });
@@ -159,6 +196,55 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
       throw const BrainApiException('Please sign in again.');
     }
     switch (action) {
+      case 'listSavedTranscripts':
+        return _transcriptStore.listSaved();
+      case 'saveTranscript':
+        return _transcriptStore.save(_text(data, 'messageId', max: 32));
+      case 'shareTranscript':
+        final item = await _transcriptStore.get(
+          _text(data, 'messageId', max: 32),
+        );
+        if (!mounted || _disposed) return null;
+        final box = context.findRenderObject() as RenderBox?;
+        if (box == null || !box.hasSize) {
+          throw const BrainTranscriptException(
+            'Open this message again to share it.',
+          );
+        }
+        final result = await SharePlus.instance.share(
+          ShareParams(
+            text: item.shareText,
+            subject:
+                'KORLIX Brain+Voice · ${item.role == 'you' ? 'You' : 'Rici'}',
+            sharePositionOrigin: box.localToGlobal(Offset.zero) & box.size,
+          ),
+        );
+        return {'shared': result.status == ShareResultStatus.success};
+      case 'deleteTranscript':
+        final store = _transcriptStore;
+        final item = await store.get(_text(data, 'messageId', max: 32));
+        if (!mounted || _disposed) return {'deleted': false};
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Delete this transcript message?'),
+            content: const Text(
+              'Removes this message and its saved copy from this device. Brain memories and copies you already shared are unchanged.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Delete message'),
+              ),
+            ],
+          ),
+        );
+        if (confirmed == true) await store.delete(item.id);
+        return {'deleted': confirmed == true};
       case 'load':
         return _repository.load();
       case 'saveMemory':
@@ -444,7 +530,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
             ListTile(
               title: const Text('KORLIX Brain+Voice'),
               subtitle: Text(
-                '${widget.auth.session?.email ?? 'Your account'}\nVersion 1.0.0 · Build 1',
+                '${widget.auth.session?.email ?? 'Your account'}\nVersion 1.0.1 · Build 10',
               ),
             ),
             const Padding(
@@ -503,6 +589,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
         ),
       );
       if (confirmed == true) {
+        await _transcriptStore.clear();
         await widget.auth.requestAccountDeletion();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

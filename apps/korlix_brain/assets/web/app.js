@@ -669,6 +669,8 @@
   let voiceActive=false, voiceStopping=false, voiceStarting=false, lastUserTranscript='', ready=false, writing=false;
   let requestNumber=0, voiceRequestEpoch=0;
   const requests=new Map();
+  const transcriptMessages=new Map(), savedMessages=new Map(), transcriptBusy=new Set();
+  let savedRevision=0;
   const announce=text=>{get('kb-status').textContent=text;};
   const behaviors=()=>training.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
   function native(action,payload={}){
@@ -701,13 +703,9 @@
       get('kb-replay-demo').textContent='Start conversation';
       root.dataset.voiceActive=String(voiceActive);refreshMusic();
     }else if(message.type==='transcript'&&message.text){
-      const row=document.createElement('div');row.className='kb-bubble';
-      const label=document.createElement('small');label.textContent=message.role==='you'?'YOU':'RICI';
-      const text=document.createElement('p');text.textContent=message.text;row.append(label,text);
-      if(message.role==='rici')row.append(makeButton('Report response',()=>native('report',{text:message.text}).then(result=>{if(result?.submitted)announce('Report received. Thank you.');}).catch(fail)));
-      else {lastUserTranscript=message.text;get('kb-talk-review').disabled=false;}
-      get('kb-transcript').append(row);
-      while(get('kb-transcript').children.length>60)get('kb-transcript').firstChild.remove();
+      transcriptMessages.set(message.id||'unavailable-'+Date.now(),message);
+      while(transcriptMessages.size>60)transcriptMessages.delete(transcriptMessages.keys().next().value);
+      renderTranscripts();
     }else if(message.type==='brainSnapshot'){
       applySnapshot(message.snapshot);
     }else if(message.type==='voiceSaved'||message.type==='voiceNotice'){
@@ -747,6 +745,51 @@
   function makeButton(label,fn,classes='kb-link cursor-interaction'){
     const button=document.createElement('button');button.type='button';button.className=classes;button.textContent=label;button.addEventListener('click',fn);return button;
   }
+  function transcriptRow(message){
+    const row=document.createElement('article');row.className='kb-bubble';row.dataset.messageId=message.id||'';
+    const label=document.createElement('small');label.textContent=message.role==='you'?'YOU':'RICI';
+    const text=document.createElement('p');text.textContent=message.text;row.append(label,text);
+    if(message.createdAt){const time=document.createElement('time');time.dateTime=message.createdAt;time.textContent=new Date(message.createdAt).toLocaleString();row.append(time);}
+    const actions=document.createElement('div');actions.className='kb-transcript-actions';
+    for(const [action,label] of [['save',savedMessages.has(message.id)?'Saved':'Save'],['share','Share'],['delete','Delete']]){
+      const button=makeButton(label,()=>transcriptAction(action,message),action==='delete'?'kb-link kb-danger cursor-interaction':'kb-link cursor-interaction');
+      button.dataset.transcriptAction=action;
+      button.disabled=!message.id||transcriptBusy.has(message.id)||(action==='save'&&savedMessages.has(message.id));
+      actions.append(button);
+    }
+    if(message.role==='rici')actions.append(makeButton('Report response',()=>native('report',{text:message.text}).then(result=>{if(result?.submitted)announce('Report received. Thank you.');}).catch(fail)));
+    row.append(actions);return row;
+  }
+  function renderTranscripts(){
+    get('kb-transcript').replaceChildren(...Array.from(transcriptMessages.values(),transcriptRow));
+    lastUserTranscript=Array.from(transcriptMessages.values()).reverse().find(m=>m.role==='you')?.text||'';
+    get('kb-talk-review').disabled=!lastUserTranscript;
+    const list=get('kb-saved-transcripts');list.replaceChildren(...Array.from(savedMessages.values(),transcriptRow));
+    get('kb-saved-empty').hidden=savedMessages.size>0;
+    get('kb-saved-count').textContent=savedMessages.size+' saved '+(savedMessages.size===1?'message':'messages');
+  }
+  async function loadSavedTranscripts(){
+    const revision=savedRevision;
+    try{
+      const items=await native('listSavedTranscripts');
+      if(revision!==savedRevision)return;
+      savedMessages.clear();(items||[]).forEach(item=>savedMessages.set(item.id,item));renderTranscripts();
+    }catch(error){if(currentScreen==='saved')fail(error);}
+  }
+  async function transcriptAction(action,message){
+    if(transcriptBusy.has(message.id))return;
+    transcriptBusy.add(message.id);++savedRevision;renderTranscripts();
+    try{
+      const result=await native(action+'Transcript',{messageId:message.id});
+      if(action==='save'){
+        const previous=Array.from(savedMessages.entries());savedMessages.clear();savedMessages.set(result.id,result);previous.forEach(([id,item])=>savedMessages.set(id,item));
+        announce('Message saved on this device. Find it in Saved messages.');
+      }else if(action==='delete'&&result?.deleted){
+        transcriptMessages.delete(message.id);savedMessages.delete(message.id);announce('Transcript message deleted from this device.');
+      }else if(action==='share'&&result?.shared)announce('Message shared.');
+    }catch(error){fail(error);}
+    finally{transcriptBusy.delete(message.id);++savedRevision;renderTranscripts();}
+  }
   function confirmDeletion(kind,key,text){
     deletion={kind,key,text,expected:training};
     get('kb-delete-title').textContent=kind==='behavior'?'Delete this behavior?':'Delete this memory?';
@@ -780,6 +823,7 @@
     currentScreen=name;screens.forEach(screen=>{screen.hidden=screen.dataset.screen!==name;});announce('');
     root.dataset.screen=name;musicScreenChanged();
     if(name==='brain')renderBrain();
+    if(name==='saved'){renderTranscripts();loadSavedTranscripts();}
     if(name==='manage-behaviors')renderDeleteList('behavior');if(name==='manage-memories')renderDeleteList('memory');
     if(name==='train'&&!preserveDraft){get('kb-training').value=training;trainingSource='Typed instructions';}
     if(name==='memory'&&!preserveDraft){get('kb-memory').value='';memorySource='Typed entry';}
@@ -878,8 +922,10 @@
   get('kb-undo-deletion').addEventListener('click',()=>mutate('undo',{},()=>{show('brain');announce('Previous change restored.');}));
   get('kb-account').addEventListener('click',()=>native('account').catch(fail));get('kb-refresh').addEventListener('click',refresh);
   get('kb-return-voice').addEventListener('click',()=>show('talk'));
+  get('kb-saved-back').addEventListener('click',()=>show('talk'));
+  get('kb-saved-refresh').addEventListener('click',loadSavedTranscripts);
   get('kb-stop-voice').addEventListener('click',stopVoice);
-  setPhase(3);refresh();
+  setPhase(3);refresh();loadSavedTranscripts();
 
   const resize=new ResizeObserver(measure);menus.forEach(menu=>resize.observe(menu.element));scenes.forEach(scene=>resize.observe(scene.canvas));
   resize.observe(transferStage);resize.observe(app);

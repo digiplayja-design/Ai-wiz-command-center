@@ -1,3 +1,11 @@
+## Transcript actions — build 10 candidate
+
+Adds Save, Share and Delete to each transcript message and a Saved messages view accessible from Talk and My Brain. Saving is explicit and account-scoped in native secure storage on this device; it does not create a shared Brain memory. Sharing opens the native share sheet with the selected message only. Deletion confirms removal of the local transcript and saved copy, preserves Brain memories, and commits only after storage succeeds. The archive is bounded to 100 messages / 512 KiB, with an explicit full-storage error and no silent eviction. Unsaved live messages are temporary (last 60 shown). Account deletion clears the local saved archive before submitting the existing shared-account deletion request.
+
+Local validation: 61 Flutter tests and clean analysis. UI checks run in the signed build workflow because this session disallows launching a local browser. Build 10 has not yet been uploaded or distributed. Physical-device share-sheet and persistence checks remain pending.
+
+The user confirmed that build-9 Live Conversation works. No model, voice, backend, or billing configuration changes are included. Pricing discussed in this conversation remains a proposal.
+
 ## Native Live Conversation — build 9
 
 The user selected Live + Deep Think after measured build-8 Sol Max first-text delays of 3,883 / 6,820 / 13,446 ms. Account preparation took 47 / 64 / 82 ms. Live is now the default and uses native `gpt-realtime-2.1` / low with Marin. It does not wait for ASR or Sol on ordinary replies. Deep Think retains `gpt-6.1-sol` / max. Mode changes require stopping the current conversation.
@@ -69,7 +77,7 @@ Validation: 31 Flutter tests, including incremental UTF-8, truncation, account c
 | --- | --- |
 | App name | KORLIX Brain+Voice |
 | Apple bundle ID / Android package | `com.korlix.brain` |
-| Version / minimum source build | `1.0.1` / `9` |
+| Version / minimum source build | `1.0.1` / `10` |
 | Apple team | `FJKJ9MUDZ4` |
 | Apple app ID | `6829319523` |
 | Apple SKU | `KORLIX-BRAIN-VOICE-IOS` |

@@ -1,7 +1,7 @@
-KORLIX Brain+Voice 1.0.1 (9)
+KORLIX Brain+Voice 1.0.1 (10)
 
-Live Conversation is now the default: Rici responds directly through the live voice engine used by KORLIX AI, without waiting for a separate Sol Max answer. Choose Deep Think for Sol 6.1 Max reasoning. Stop the conversation before changing modes.
+Transcript messages now have Save, Share and Delete actions. Save keeps a secure copy for your account on this device; open Saved messages from Talk or My Brain. Share opens the system share sheet. Delete removes the transcript and its saved copy after confirmation, without changing Brain memories.
 
-Rici retains the Marin voice, direct “Rici, remember this” memory/instruction commands, and the large red Stop conversation button. A memory save is acknowledged only after the server confirms it.
+Live Conversation remains the fast default with Rici. Deep Think is still optional. No new prices or minute allowances are enabled in this build.
 
-Please test natural back-and-forth, interruptions, Stop, and both memory command formats. Deep Think is deliberately slower.
+Please test: save both your messages and Rici’s answers, close/reopen the app, open Saved messages, share on iPhone/iPad, cancel and confirm deletion, sign out/in to verify account separation, and confirm the Stop button stays available.

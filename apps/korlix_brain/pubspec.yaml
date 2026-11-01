@@ -1,7 +1,7 @@
 name: korlix_brain
 description: Standalone KORLIX Brain with shared accounts, approved memory and live Rici voice.
 publish_to: none
-version: 1.0.1+9
+version: 1.0.1+10
 environment:
   sdk: ^3.13.5
 dependencies:
@@ -11,6 +11,8 @@ dependencies:
     path: ../../packages/korlix_receipt_core
   http: 1.6.0
   shared_preferences: 2.5.5
+  flutter_secure_storage: 10.3.4
+  share_plus: 12.0.2
   webview_flutter: 4.14.1
   flutter_webrtc: 1.5.2
   speech_to_text: 7.4.0

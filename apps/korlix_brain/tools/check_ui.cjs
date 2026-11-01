@@ -13,11 +13,22 @@ const app = path.resolve(__dirname,'..');
     await page.addInitScript(()=>{
       window.testAccount={training:'Use plain language.',memories:[],canUndo:false};
       window.testCommands=[];window.testFailSave=false;window.testHoldStop=false;
+      window.testMessages={};window.testSaved=JSON.parse(localStorage.getItem('testSavedMessages')||'{}');
+      window.testFailTranscript=false;window.testCancelDelete=false;
       window.Korlix={postMessage:raw=>{
         const m=JSON.parse(raw);window.testCommands.push(m);
         const reply=(data,error)=>setTimeout(()=>window.KorlixBrainReceive({type:'reply',id:m.id,data,error}),0);
         switch(m.action){
           case 'load':return reply(window.testAccount);
+          case 'listSavedTranscripts':return reply(Object.values(window.testSaved).reverse());
+          case 'saveTranscript':
+            if(window.testFailTranscript)return reply(null,'Device storage unavailable. Please retry.');
+            window.testSaved[m.payload.messageId]=window.testMessages[m.payload.messageId];localStorage.setItem('testSavedMessages',JSON.stringify(window.testSaved));return reply(window.testSaved[m.payload.messageId]);
+          case 'shareTranscript':return reply({shared:false});
+          case 'deleteTranscript':
+            if(window.testCancelDelete)return reply({deleted:false});
+            if(window.testFailTranscript)return reply(null,'Device storage unavailable. Please retry.');
+            delete window.testSaved[m.payload.messageId];localStorage.setItem('testSavedMessages',JSON.stringify(window.testSaved));return reply({deleted:true});
           case 'saveMemory':
             if(window.testFailSave)return reply(null,'Connection interrupted. Refresh before retrying.');
             window.testAccount.memories.push({id:'m'+window.testAccount.memories.length,content:m.payload.text,source:m.payload.source});return reply(window.testAccount);
@@ -61,9 +72,30 @@ const app = path.resolve(__dirname,'..');
     await page.locator('#cinema-kb-cancel').click();
     await page.getByRole('button',{name:/Talk to Rici/}).click();
     await page.waitForFunction(()=>document.querySelector('#cinema-kb-voice-phase').textContent==='Rici is listening');
-    await page.evaluate(()=>window.KorlixBrainReceive({type:'transcript',role:'rici',text:'<img src=x onerror="window.injected=true">'}));
+    await page.evaluate(()=>{
+      const item={type:'transcript',id:'message-a',role:'rici',text:'<img src=x onerror="window.injected=true">',createdAt:'2026-11-01T03:00:00Z'};
+      window.testMessages[item.id]=item;window.KorlixBrainReceive(item);
+    });
     assert.equal(await page.locator('#cinema-kb-transcript img').count(),0,'Transcript must remain inert text');
     assert.equal(await page.locator('#cinema-kb-transcript').getByRole('button',{name:'Report response'}).count(),1);
+    const row=page.locator('#cinema-kb-transcript [data-message-id="message-a"]');
+    await page.evaluate(()=>window.testFailTranscript=true);
+    await row.getByRole('button',{name:'Save',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelector('#cinema-kb-status').textContent.includes('storage unavailable'));
+    assert.equal(await row.getByRole('button',{name:'Save',exact:true}).isEnabled(),true);
+    await page.evaluate(()=>window.testFailTranscript=false);
+    await row.getByRole('button',{name:'Save',exact:true}).click();
+    await row.getByRole('button',{name:'Saved',exact:true}).waitFor();
+    await row.getByRole('button',{name:'Share',exact:true}).click();
+    assert.deepEqual(await page.evaluate(()=>window.testCommands.filter(c=>c.action==='shareTranscript').at(-1).payload),{messageId:'message-a'},'Only selected message ID crosses bridge');
+    await page.locator('section[data-screen="talk"] [data-go="saved"]').click();
+    assert.equal(await page.locator('#cinema-kb-saved-transcripts img').count(),0);
+    assert.equal(await page.locator('#cinema-kb-saved-transcripts p').textContent(),'<img src=x onerror="window.injected=true">');
+    assert.equal(await page.evaluate(()=>window.testCommands.filter(c=>c.action==='saveMemory').length),2,'Transcript Save never calls Brain save');
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'Saved view fits '+width);
+    for(const button of await page.locator('#cinema-kb-saved-transcripts [data-transcript-action]').all())assert.ok((await button.boundingBox()).height>=44,'Accessible transcript action');
+    if(process.env.UI_SCREENSHOTS)await page.screenshot({path:path.join(process.env.UI_SCREENSHOTS,'brain-saved-'+width+'.png'),fullPage:true});
+    await page.locator('#cinema-kb-saved-back').click();
     if(process.env.UI_SCREENSHOTS)await page.screenshot({path:path.join(process.env.UI_SCREENSHOTS,'brain-talk-'+width+'.png'),fullPage:true});
     const stop=page.getByRole('button',{name:'Stop conversation',exact:true});
     for(const phase of ['connecting','listening','thinking','speaking']){
@@ -116,9 +148,32 @@ const app = path.resolve(__dirname,'..');
     assert.equal(await page.evaluate(()=>window.testCommands.filter(c=>c.action==='startVoice').at(-1).payload.mode),'deep');
     assert.equal(await page.getByRole('radio',{name:/Live Conversation/}).isDisabled(),true,'Mode is fixed during a conversation');
     assert.equal(await page.evaluate(()=>window.testCommands.find(c=>c.action==='startVoice').payload.mode),'live','Live is the default');
+    await page.getByRole('button',{name:'Stop conversation',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelector('.kb-product').dataset.voiceActive==='false');
+    await page.reload();
+    await page.waitForFunction(()=>document.querySelector('#cinema-kb-account-status')?.textContent==='Account connected');
+    await page.getByRole('button',{name:/My Brain/}).first().click();
+    await page.locator('section[data-screen="brain"] [data-go="saved"]').click();
+    const savedRow=page.locator('#cinema-kb-saved-transcripts [data-message-id="message-a"]');
+    await savedRow.waitFor();
+    assert.equal(await savedRow.locator('p').textContent(),'<img src=x onerror="window.injected=true">','Saved text survives reload');
+    await page.evaluate(()=>window.testCancelDelete=true);
+    await savedRow.getByRole('button',{name:'Delete',exact:true}).click();
+    await page.waitForFunction(()=>!document.querySelector('#cinema-kb-saved-transcripts [data-transcript-action="delete"]').disabled);
+    assert.equal(await savedRow.count(),1,'Cancel retains saved message');
+    await page.evaluate(()=>{window.testCancelDelete=false;window.testFailTranscript=true;});
+    await savedRow.getByRole('button',{name:'Delete',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelector('#cinema-kb-status').textContent.includes('storage unavailable'));
+    assert.equal(await savedRow.count(),1,'Failed delete remains visible');
+    await page.evaluate(()=>window.testFailTranscript=false);
+    await savedRow.getByRole('button',{name:'Delete',exact:true}).click();
+    await savedRow.waitFor({state:'detached'});
+    assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('testSavedMessages'))),{});
+    await page.locator('#cinema-kb-saved-back').click();
+    assert.equal(await page.evaluate(()=>window.testCommands.some(c=>c.action==='startVoice')),false,'Reading saved messages never starts a charged conversation');
     await page.close();
   }
   assert.deepEqual(errors,[]);
   await browser.close();
-  console.log('PASS: four viewport layouts; approval gates; server failure; exact deletion; live voice navigation; persistent 58px Stop across four phases and scrolling; immediate stopping feedback; inert transcripts; response reporting.');
+  console.log('PASS: four viewport layouts; approval gates; failure handling; exact deletion; live voice navigation; persistent Stop; transcript Save/Share/Delete; saved reload; canceled/failed deletion; 44px actions; inert transcript text; response reporting.');
 })().catch(e=>{console.error(e);process.exit(1);});
