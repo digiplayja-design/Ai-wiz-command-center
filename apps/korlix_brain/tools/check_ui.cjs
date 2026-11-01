@@ -107,6 +107,15 @@ const app = path.resolve(__dirname,'..');
     await page.waitForFunction(()=>document.querySelector('#cinema-kb-voice-phase').textContent==='Rici is listening');
     await page.evaluate(()=>{const old=window.testCommands.find(c=>c.action==='stopVoice');window.KorlixBrainReceive({type:'reply',id:old.id,error:'Old cleanup failed'});});
     assert.equal(await page.locator('#cinema-kb-stop-label').textContent(),'Stop conversation','Old stop reply cannot alter the new session');
+    await page.evaluate(()=>window.testHoldStop=false);
+    await page.getByRole('button',{name:'Stop conversation',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelector('.kb-product').dataset.voiceActive==='false');
+    await page.getByRole('radio',{name:/Deep Think/}).check();
+    await page.getByRole('button',{name:'Start conversation',exact:true}).click();
+    await page.waitForFunction(()=>document.querySelector('#cinema-kb-voice-phase').textContent==='Rici is listening');
+    assert.equal(await page.evaluate(()=>window.testCommands.filter(c=>c.action==='startVoice').at(-1).payload.mode),'deep');
+    assert.equal(await page.getByRole('radio',{name:/Live Conversation/}).isDisabled(),true,'Mode is fixed during a conversation');
+    assert.equal(await page.evaluate(()=>window.testCommands.find(c=>c.action==='startVoice').payload.mode),'live','Live is the default');
     await page.close();
   }
   assert.deepEqual(errors,[]);

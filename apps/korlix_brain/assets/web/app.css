@@ -370,3 +370,6 @@ html,body{margin:0;background:#100b1b;color:#fff9e9;min-height:100%;font-family:
 
 #korlix-silent-storm .kb-bubble p{white-space:pre-wrap;overflow-wrap:anywhere}
 #korlix-silent-storm .kb-status{position:relative;z-index:50;white-space:pre-wrap}
+
+/* Visible voice choice: keep the selected mode fixed until Stop completes. */
+.kb-voice-modes{display:grid;grid-template-columns:1fr 1fr;gap:8px;border:0;padding:0;margin:14px 0 8px;min-width:0}.kb-voice-modes legend{font-size:13px;margin-bottom:8px;color:#c8c1e9}.kb-voice-modes label{display:flex;align-items:center;gap:8px;min-height:64px;padding:12px 8px;border:1px solid #65518f;border-radius:14px;background:#171027;color:#fff;font-size:15px;cursor:pointer}.kb-voice-modes label:has(input:checked){border-color:#7ef3e5;background:#1d2440;box-shadow:0 0 0 1px #7ef3e5}.kb-voice-modes input{accent-color:#7ef3e5;width:18px;height:18px;flex-shrink:0}.kb-voice-modes small{display:block;font-size:12px;color:#c8c1e9;margin-top:5px}.kb-voice-modes:disabled{opacity:.8}.kb-voice-modes label:focus-within{outline:2px solid #f6d889;outline-offset:2px}

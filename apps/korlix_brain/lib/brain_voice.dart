@@ -5,6 +5,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import 'brain_api.dart';
 import 'brain_model.dart';
+import 'brain_live_turns.dart';
 import 'brain_voice_session.dart';
 import 'brain_voice_turns.dart';
 import 'voice_lifecycle.dart';
@@ -19,6 +20,7 @@ class BrainVoice {
   final void Function(Map<String, dynamic>) emit;
   final Future<void> Function(Map<String, dynamic>) onSaved;
   BrainVoiceTurns? _turns;
+  BrainLiveTurns? _live;
   RTCPeerConnection? _peer;
   MediaStream? _microphone;
   RTCDataChannel? _channel;
@@ -32,7 +34,7 @@ class BrainVoice {
   void _state(String phase, String message) =>
       emit({'type': 'voice', 'phase': phase, 'message': message});
 
-  Future<void> start() async {
+  Future<void> start({BrainVoiceMode mode = BrainVoiceMode.live}) async {
     final cleanupGeneration = _generation + 1;
     await stop(announce: false);
     if (_generation != cleanupGeneration) return;
@@ -152,14 +154,16 @@ class BrainVoice {
         check();
       }
       _channel = channel;
-      final sessionGate = BrainVoiceSessionGate();
+      final sessionGate = BrainVoiceSessionGate(mode: mode);
       channel.onMessage = (message) {
         if (!current() || message.isBinary) return;
         try {
           final event = Map<String, dynamic>.from(
             jsonDecode(message.text) as Map,
           );
-          unawaited(_usage?.observeServerEvent(event));
+          unawaited(
+            _usage?.observeServerEvent(_live?.usageEvent(event) ?? event),
+          );
           final type = event['type'];
           if (type == 'session.created' || type == 'session.updated') {
             switch (sessionGate.observe(event)) {
@@ -176,7 +180,7 @@ class BrainVoice {
                   channel
                       .send(
                         RTCDataChannelMessage(
-                          jsonEncode(BrainVoiceSessionGate.update),
+                          jsonEncode(sessionGate.configuration),
                         ),
                       )
                       .catchError((Object _) async {
@@ -194,7 +198,7 @@ class BrainVoice {
                   for (final track in microphone.getAudioTracks()) {
                     track.enabled = true;
                   }
-                  _state('listening', 'Rici is listening · $brainModelLabel');
+                  _state('listening', 'Rici is listening · ${mode.label}');
                 }
               case BrainSessionAction.reject:
                 unawaited(
@@ -211,16 +215,25 @@ class BrainVoice {
           if (!_ready && type != 'error') return;
           if (type == 'input_audio_buffer.speech_started') {
             _turns?.speechStarted(event['item_id']?.toString() ?? '');
+            _live?.speechStarted(event['item_id']?.toString() ?? '');
             _state('listening', 'Listening…');
           } else if (type == 'input_audio_buffer.speech_stopped' ||
               type == 'response.created') {
             if (type == 'response.created') {
               _turns?.responseStarted(event['response'] as Map? ?? {});
+              _live?.responseStarted(event['response'] as Map? ?? {});
             } else {
               _turns?.speechStopped(event['item_id']?.toString() ?? '');
+              _live?.speechStopped(event['item_id']?.toString() ?? '');
             }
-            _state('thinking', 'Rici is thinking · $brainModelLabel');
+            _state(
+              'thinking',
+              mode.isLive
+                  ? 'Rici is responding…'
+                  : 'Rici is thinking · ${mode.label}',
+            );
           } else if (type == 'output_audio_buffer.started') {
+            _live?.audioStarted(event['response_id']?.toString());
             _state('speaking', 'Rici is speaking');
           } else if (type == 'output_audio_buffer.stopped' ||
               type == 'output_audio_buffer.cleared') {
@@ -231,12 +244,30 @@ class BrainVoice {
               event['item_id']?.toString() ?? '',
               event['transcript']?.toString() ?? '',
             );
+            _live?.accept(
+              event['item_id']?.toString() ?? '',
+              event['transcript']?.toString() ?? '',
+            );
           } else if (type ==
               'conversation.item.input_audio_transcription.failed') {
             _turns?.transcriptionFailed(event['item_id']?.toString() ?? '');
+            _live?.transcriptionFailed(event['item_id']?.toString() ?? '');
           } else if (type == 'response.done') {
             _turns?.responseDone(
               (event['response'] as Map?)?['id']?.toString(),
+            );
+            unawaited(
+              _live?.responseDone(event['response'] as Map? ?? {}).catchError((
+                Object _,
+              ) {
+                if (current()) {
+                  emit({
+                    'type': 'voiceNotice',
+                    'message':
+                        'The memory reply was interrupted. Check My Brain.',
+                  });
+                }
+              }),
             );
           } else if (type == 'response.output_audio_transcript.done' ||
               type == 'response.audio_transcript.done') {
@@ -288,7 +319,7 @@ class BrainVoice {
         headers: {
           'Content-Type': 'application/sdp',
           'Accept': 'application/sdp, application/json',
-          'x-korlix-brain-voice': brainProtocol,
+          'x-korlix-brain-voice': mode.protocol,
           'x-korlix-character': 'jj',
           'x-korlix-language': 'English',
           'x-korlix-live-convo-agent': 'general',
@@ -310,26 +341,49 @@ class BrainVoice {
         check();
       }
       _usage = usage;
-      if (!hasBrainVoiceContract(response.headers)) {
-        throw const BrainApiException(
-          '$brainModelLabel is not available on this server yet. Please reconnect later.',
+      if (!mode.accepts(response.headers)) {
+        throw BrainApiException(
+          '${mode.label} is not available on this server yet. Please reconnect later.',
         );
       }
-      _turns = BrainVoiceTurns(
-        isCurrent: current,
-        emit: emit,
-        saved: onSaved,
-        send: (event) async {
-          if (current()) {
-            await channel.send(RTCDataChannelMessage(jsonEncode(event)));
-          }
-        },
-        request: (id, text, onDelta) => api.voiceTurn({
-          'sessionId': usage.sessionId,
-          'turnId': id,
-          'transcript': text,
-        }, onDelta),
-      );
+      Future<void> sendEvent(Map<String, dynamic> event) async {
+        if (current()) {
+          await channel.send(RTCDataChannelMessage(jsonEncode(event)));
+        }
+      }
+
+      if (mode.isLive) {
+        _live = BrainLiveTurns(
+          isCurrent: current,
+          emit: emit,
+          saved: onSaved,
+          send: sendEvent,
+          requestMemory: (id, text) => api.json(
+            'POST',
+            '/api/brain-voice/turn',
+            {'sessionId': usage.sessionId, 'turnId': id, 'transcript': text},
+          ),
+          reportTiming: (id, ms) async {
+            await api.json('POST', '/api/brain-voice/timing', {
+              'sessionId': usage.sessionId,
+              'turnId': id,
+              'firstAudioMs': ms,
+            });
+          },
+        );
+      } else {
+        _turns = BrainVoiceTurns(
+          isCurrent: current,
+          emit: emit,
+          saved: onSaved,
+          send: sendEvent,
+          request: (id, text, onDelta) => api.voiceTurn({
+            'sessionId': usage.sessionId,
+            'turnId': id,
+            'transcript': text,
+          }, onDelta),
+        );
+      }
       if (!response.body.trimLeft().startsWith('v=')) {
         throw const BrainApiException(
           'Rici returned an invalid voice connection.',
@@ -358,6 +412,8 @@ class BrainVoice {
     final generation = ++_generation;
     _turns?.dispose();
     _turns = null;
+    _live?.dispose();
+    _live = null;
     _active = false;
     _ready = false;
     _deadline?.cancel();

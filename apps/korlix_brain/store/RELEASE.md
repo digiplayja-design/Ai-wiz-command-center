@@ -1,3 +1,11 @@
+## Native Live Conversation — build 9
+
+The user selected Live + Deep Think after measured build-8 Sol Max first-text delays of 3,883 / 6,820 / 13,446 ms. Account preparation took 47 / 64 / 82 ms. Live is now the default and uses native `gpt-realtime-2.1` / low with Marin. It does not wait for ASR or Sol on ordinary replies. Deep Think retains `gpt-6.1-sol` / max. Mode changes require stopping the current conversation.
+
+Direct memory commands are executed only against the original user transcript by the authenticated server. Tool-supplied content cannot replace it; acknowledged writes, ownership, idempotency and allowance remain enforced. Stop and barge-in suppress stale continuations. Live audio timing is content-free and explicitly marked client-reported. No claim of measured phone latency is made before device testing.
+
+Validation: 53 Flutter tests, analysis, 34 Brain backend tests, 20 agent-studio tests, 13 shared-agent checks, 23 release checks and UI checks at 320 / 390 / 768 / 1024 pixels. Build 9 signed delivery is being prepared; build 8 remains Testing.
+
 ## Sol 6.1 reasoning migration — build 8
 
 Build 8 selects GPT-6.1 Sol (`gpt-6.1-sol`) with the user's previously requested
@@ -59,7 +67,7 @@ Validation: 31 Flutter tests, including incremental UTF-8, truncation, account c
 | --- | --- |
 | App name | KORLIX Brain+Voice |
 | Apple bundle ID / Android package | `com.korlix.brain` |
-| Version / minimum source build | `1.0.1` / `8` |
+| Version / minimum source build | `1.0.1` / `9` |
 | Apple team | `FJKJ9MUDZ4` |
 | Apple app ID | `6829319523` |
 | Apple SKU | `KORLIX-BRAIN-VOICE-IOS` |

@@ -1,11 +1,7 @@
-KORLIX Brain+Voice 1.0.1 (8)
+KORLIX Brain+Voice 1.0.1 (9)
 
-Reasoning now uses GPT-6.1 Sol with Max effort, as requested. Compare response speed on the same questions. Rici keeps her name even when a shared agent profile uses another name.
+Live Conversation is now the default: Rici responds directly through the live voice engine used by KORLIX AI, without waiting for a separate Sol Max answer. Choose Deep Think for Sol 6.1 Max reasoning. Stop the conversation before changing modes.
 
-Simple connection and name checks now use immediate app replies, avoiding a reasoning wait. Other questions now use GPT-6.1 Sol with Max reasoning. Spoken answers begin at the first complete sentence without the old character minimum. Complex reasoning can still take several seconds.
+Rici retains the Marin voice, direct “Rici, remember this” memory/instruction commands, and the large red Stop conversation button. A memory save is acknowledged only after the server confirms it.
 
-A large red Stop conversation button stays at the bottom while connecting, listening, thinking or speaking, and while moving around the app. Tapping it immediately starts stopping the microphone and playback.
-
-Say “Rici, remember this: …” after signing in to save a memory or instruction without another password.
-
-Please check “Rici, are you there?”, “What’s your name?”, a detailed question, stopping mid-answer and during connection, and saving/reviewing a memory. The purple, red, green and gold icon is preserved.
+Please test natural back-and-forth, interruptions, Stop, and both memory command formats. Deep Think is deliberately slower.

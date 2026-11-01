@@ -12,6 +12,7 @@ import 'brain_api.dart';
 import 'brain_auth.dart';
 import 'brain_repository.dart';
 import 'brain_voice.dart';
+import 'brain_model.dart';
 
 class BrainWorkspace extends StatefulWidget {
   const BrainWorkspace({super.key, required this.auth});
@@ -186,6 +187,12 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
       case 'undo':
         return _repository.undo();
       case 'startVoice':
+        final modeValue = data['mode'] ?? 'live';
+        if (modeValue != 'live' && modeValue != 'deep') {
+          throw const BrainApiException(
+            'Choose Live Conversation or Deep Think.',
+          );
+        }
         final startRequest = ++_voiceStartRequest;
         await _stopDictation();
         if (await _consent('Talk to Rici', {
@@ -196,7 +203,11 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
               mounted &&
               startRequest == _voiceStartRequest &&
               widget.auth.session != null) {
-            await _voice.start();
+            await _voice.start(
+              mode: modeValue == 'deep'
+                  ? BrainVoiceMode.deep
+                  : BrainVoiceMode.live,
+            );
           }
         }
         return {'active': _voice.active};

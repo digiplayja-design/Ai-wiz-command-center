@@ -1,9 +1,9 @@
 {
-  "updatedAt": "2026-11-01T01:10:23.250352+00:00",
+  "updatedAt": "2026-11-01T02:04:59.086681+00:00",
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "version": "1.0.1",
-  "minimumSourceBuild": 8,
+  "minimumSourceBuild": 9,
   "appCodeCommit": "71af10143c640f614f01c22dd879f3c3332e894b",
   "releasePipelineCommit": "df692ff2c868c2c589635c242f0cd611f21115c6",
   "signedIosCandidate": {
@@ -260,5 +260,54 @@
     "appleBuildId": "f7244993-e1fd-448d-8fef-3dc0f1dcb63c",
     "completedAt": "2026-11-01T01:06:49Z",
     "processingVerifiedAt": "2026-11-01T01:10:23.250352+00:00"
+  },
+  "voiceModes": {
+    "default": "live",
+    "live": {
+      "protocol": "rici-live-v1",
+      "model": "gpt-realtime-2.1",
+      "reasoningEffort": "low",
+      "voice": "marin",
+      "automaticAudioReplies": true
+    },
+    "deep": {
+      "protocol": "sol-6.1-max-v1",
+      "model": "gpt-6.1-sol",
+      "reasoningEffort": "max"
+    },
+    "switchRequiresStop": true
+  },
+  "liveConversationUpdate": {
+    "sourceBuild": 9,
+    "status": "validated locally; deployment and signed delivery pending",
+    "userSelected": "Live + Deep Think",
+    "baselineSolFirstTextMs": [
+      3883,
+      6820,
+      13446
+    ],
+    "baselinePreparationMs": [
+      47,
+      64,
+      82
+    ],
+    "flutterTests": 53,
+    "brainBackendTests": 34,
+    "agentStudioTests": 20,
+    "sharedAgentChecks": 13,
+    "releaseIdentityTests": 23,
+    "uiViewports": [
+      320,
+      390,
+      768,
+      1024
+    ],
+    "flutterAnalyze": "pass",
+    "deviceLatencyVerification": "pending",
+    "ordinaryTurnWaitsForTranscript": false,
+    "ordinaryTurnCallsSol": false,
+    "paidProcessingTierChanged": false,
+    "backendCommit": "8dff4033d983cb10aafe3cb032b13fadaf18418d",
+    "backendDeploy": "dep-dbj9sq7b9u1s73deb3a0"
   }
 }

@@ -693,6 +693,7 @@
       if(index>=0)setPhase(index);
       voiceActive=message.phase!=='complete';
       voiceStopping=message.phase==='stopping';
+      get('kb-voice-modes').disabled=voiceActive;
       get('kb-voice-phase').textContent=message.message;
       get('kb-live-phase').textContent=message.message;
       get('kb-stop-voice').disabled=voiceStopping;
@@ -824,7 +825,7 @@
     const epoch=++voiceRequestEpoch;
     voiceStarting=true;
     window.KorlixBrainReceive({type:'voice',phase:'connecting',message:'Connecting to Rici…'});
-    native('startVoice').then(result=>{
+    native('startVoice',{mode:root.querySelector('input[name="brain-voice-mode"]:checked')?.value||'live'}).then(result=>{
       // Consent can be declined without creating a voice session.
       if(epoch===voiceRequestEpoch&&result?.active===false)
         window.KorlixBrainReceive({type:'voice',phase:'complete',message:'Microphone off'});
@@ -852,6 +853,10 @@
   });
   get('kb-motion-toggle').addEventListener('click',()=>{userPaused=!userPaused;motionOverride=!userPaused;syncMotion();});
   get('kb-replay-demo').addEventListener('click',toggleVoice);
+  get('kb-voice-modes').addEventListener('change',()=>{
+    const deep=root.querySelector('input[name="brain-voice-mode"]:checked')?.value==='deep';
+    get('kb-mode-hint').textContent=deep?'Deep Think uses Sol Max for every answer and takes longer.':'Live Conversation is ready. Stop the conversation to switch modes.';
+  });
   document.addEventListener('visibilitychange',syncMotion);reducedMotion.addEventListener('change',event=>{userPaused=event.matches;motionOverride=false;syncMotion();});
   get('kb-training-form').addEventListener('submit',event=>{event.preventDefault();review('training',get('kb-training').value,trainingSource);});
   get('kb-memory-form').addEventListener('submit',event=>{event.preventDefault();review('memory',get('kb-memory').value,memorySource);});
