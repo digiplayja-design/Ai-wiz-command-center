@@ -1,4 +1,5 @@
 import {brainRuntimeContext} from './brain_voice/context.mjs';
+import {createBrainBilling} from './brain_voice/billing/routes.mjs';
 import {checkBrainModelAccess} from './brain_voice/model_access.mjs';
 import {createBrainVoice, brainSpeechConfig, isBrainVoice, brainProfile, BRAIN_PROFILES, BRAIN_MODEL, BRAIN_EFFORT, BRAIN_PROTOCOL} from './brain_voice/core.mjs';
 import {streamBrainTurn} from './brain_voice/stream.mjs';
@@ -339,6 +340,8 @@ const supabaseAdmin =
     : null;
 
 registerAutoEmailMailboxRoutes(app,{requireUser,database:supabaseAdmin});
+const brainBilling = createBrainBilling({database:supabaseAdmin,requireUser});
+brainBilling.register(app);
 registerAutoEmailOutboxRoutes(app,{requireUser,database:supabaseAdmin,loadAgentProfile:korlixAgentLoadProfileV1});
 
 const videoAccess = createVideoAccess({database:supabaseAdmin});
@@ -9282,6 +9285,10 @@ app.get("/api/live-convo/usage", async (req, res) => {
 
 async function korlixRecordVoiceUsage({user, body, limits, entitlement}) {
   const sessionId = body.sessionId;
+  if (brainBilling.enabled()) {
+    const metered = await brainBilling.usage(user.id, body);
+    if (metered) return metered;
+  }
     let usage;
     if (entitlement.unlimited) {
       usage = await korlixLiveConvoBuild131ReportUnlimitedUsage({
@@ -9415,7 +9422,9 @@ app.use("/api/live-convo/session", async (req, res, next) => {
     const profile = await getOrCreateProfile(user);
     let result;
 
-    if (entitlement.unlimited) {
+    if (brainBilling.enabled() && brainProfile(req)?.protocol === 'rici-live-v1') {
+      result = await brainBilling.reserve(req, user);
+    } else if (entitlement.unlimited) {
       const limits = korlixLiveConvoBuild131LimitsForEntitlement(
         profile,
         entitlement
@@ -9458,10 +9467,15 @@ app.use("/api/live-convo/session", async (req, res, next) => {
     };
 
     korlixLiveConvoBuild129ExposeHeaders(res, autoEmailVoiceBridge.limits(req,reservation));
+    res.once('close', () => {
+      if (req.korlixBrainMeter && !res.writableFinished) void brainBilling.end(user.id, sessionId).catch(() => {});
+    });
 
     res.once("finish", () => {
       if (res.statusCode >= 400) {
-        if (entitlement.unlimited) {
+        if (req.korlixBrainMeter) {
+          void brainBilling.end(user.id, sessionId).catch(() => {});
+        } else if (entitlement.unlimited) {
           void korlixLiveConvoBuild131CancelUnlimited({
             sessionId,
             userId: user.id,
@@ -9693,6 +9707,7 @@ app.post(
           });
       }
 
+      await brainBilling.started(req, providerResponse);
       if (isBrainVoice(req)) {
         const profile = brainProfile(req);
         brainVoice.register({...req.korlixLiveConvoBuild129, protocol: profile.protocol});
