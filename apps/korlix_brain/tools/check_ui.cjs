@@ -94,8 +94,17 @@ const app = path.resolve(__dirname,'..');
     assert.equal(await page.locator('#cinema-kb-saved-transcripts p').textContent(),'<img src=x onerror="window.injected=true">');
     assert.equal(await page.evaluate(()=>window.testCommands.filter(c=>c.action==='saveMemory').length),2,'Transcript Save never calls Brain save');
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'Saved view fits '+width);
-    // The native list refresh can replace rows between async locator calls.
-    // Measure all three targets in one DOM read, after the screen is visible.
+    // A native refresh replaces rows; wait for their final visible geometry.
+    try{
+      await page.waitForFunction(()=>{
+        const buttons=[...document.querySelectorAll('#cinema-kb-saved-transcripts [data-transcript-action]')];
+        return buttons.length===3&&buttons.every(button=>button.getBoundingClientRect().height>=44);
+      },null,{timeout:5000});
+    }catch(error){
+      console.log('Transcript geometry at '+width,await page.evaluate(()=>({screen:document.querySelector('.kb-product').dataset.screen,motion:document.querySelector('.kb-product').dataset.motion,targets:[...document.querySelectorAll('#cinema-kb-saved-transcripts [data-transcript-action]')].map(button=>({action:button.dataset.transcriptAction,height:button.getBoundingClientRect().height,minHeight:getComputedStyle(button).minHeight,display:getComputedStyle(button).display}))})));
+      if(process.env.UI_SCREENSHOTS)await page.screenshot({path:path.join(process.env.UI_SCREENSHOTS,'brain-saved-failure-'+width+'.png'),fullPage:true});
+      throw error;
+    }
     const actionSizes=await page.locator('#cinema-kb-saved-transcripts [data-transcript-action]').evaluateAll(buttons=>buttons.map(button=>({action:button.dataset.transcriptAction,height:button.getBoundingClientRect().height})));
     assert.equal(actionSizes.length,3,'Three transcript actions at '+width);
     for(const target of actionSizes)assert.ok(target.height>=44,'Accessible '+target.action+' target at '+width);

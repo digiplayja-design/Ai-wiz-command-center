@@ -376,3 +376,4 @@ html,body{margin:0;background:#100b1b;color:#fff9e9;min-height:100%;font-family:
 
 /* Transcript actions remain usable on compact phones. */
 .kb-transcript-actions{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:12px}.kb-transcript-actions button{min-height:44px;min-width:48px;touch-action:manipulation}.kb-transcript-actions button:disabled{opacity:.55}.kb-bubble time{display:block;font-size:12px;opacity:.7}.kb-bubble p{white-space:pre-wrap;overflow-wrap:anywhere}.kb-transcript-actions .kb-danger{color:#ffafbc}
+#korlix-silent-storm .kb-product .kb-transcript-actions .kb-link{min-height:48px}
