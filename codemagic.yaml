@@ -531,7 +531,107 @@ workflows:
           flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
           flutter analyze --no-pub
           flutter test --no-pub --reporter expanded
-      - nam…1173 tokens truncated…in/playwright" install chromium
+      - name: Validate independent app
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/apps/receipt_wiz"
+          flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
+          flutter analyze --no-pub
+          flutter test --no-pub --reporter expanded
+      - name: Build Receipt Wiz Android test APK
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/apps/receipt_wiz"
+          flutter build apk --debug --no-pub
+      - name: Build Receipt Wiz iOS simulator
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/apps/receipt_wiz"
+          flutter build ios --simulator --debug --no-pub
+          cd build/ios/iphonesimulator
+          ditto -c -k --sequesterRsrc --keepParent Runner.app ReceiptWiz-Simulator.zip
+    artifacts:
+      - apps/receipt_wiz/build/app/outputs/flutter-apk/app-debug.apk
+      - apps/receipt_wiz/build/ios/iphonesimulator/ReceiptWiz-Simulator.zip
+      - /tmp/xcodebuild_logs/*.log
+
+  korlix-brain-ios-candidate: &brain_ios_candidate
+    name: KORLIX Brain+Voice — signed iOS candidate
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    working_directory: apps/korlix_brain
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    triggering:
+      events: [push]
+      branch_patterns:
+        - pattern: feature/korlix-brain-voice-20261031
+          include: true
+          source: true
+      cancel_previous_builds: true
+    environment: &brain_ios_environment
+      flutter: 3.47.9
+      xcode: 26.6
+      cocoapods: default
+      vars: &brain_ios_vars
+        BOT: 'true'
+        CI: 'true'
+        FLUTTER_SUPPRESS_ANALYTICS: 'true'
+        DART_SUPPRESS_ANALYTICS: 'true'
+        COCOAPODS_DISABLE_STATS: 'true'
+        BRAIN_REQUIRE_APP_RECORD: 'false'
+      ios_signing:
+        # Imports the managed certificate only. prepare_brain_ios.py installs
+        # a separate com.korlix.brain profile before Xcode configures signing.
+        provisioning_profiles: [KORLIX_APP_STORE_PROFILE]
+        certificates: [KORLIX_APP_STORE_CERT]
+    scripts:
+      - &brain_install_release_tools
+        name: Install Apple release tools
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.brain-release-tools"
+          "$CM_BUILD_DIR/.brain-release-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+          export PATH="$CM_BUILD_DIR/.brain-release-tools/bin:$PATH"
+          printf 'PATH=%s\n' "$PATH" >> "$CM_ENV"
+          python3 -m unittest discover -s "$CM_BUILD_DIR/scripts/tests" -p 'test_*ios_release.py'
+      - &brain_prepare_ios_identity
+        name: Prepare dedicated Brain+Voice Apple identity
+        script: |
+          set -euo pipefail
+          python3 "$CM_BUILD_DIR/scripts/prepare_brain_ios.py"
+      - &brain_validate_ios
+        name: Validate Brain+Voice
+        script: |
+          set -euo pipefail
+          flutter pub get --enforce-lockfile
+          flutter analyze --no-pub
+          flutter test --no-pub --reporter expanded
+      - &brain_build_ios
+        name: Build and verify Brain+Voice IPA
+        script: |
+          set -euo pipefail
+          flutter build ios --release --config-only --no-codesign --no-pub \
+            --build-name="$KORLIX_IOS_VERSION" --build-number="$KORLIX_IOS_BUILD_NUMBER"
+          xcode-project use-profiles --project ios/Runner.xcodeproj \
+            --export-options-plist "$CM_BUILD_DIR/brain-ios-export.plist" \
+            --custom-export-options '{"manageAppVersionAndBuildNumber": false}'
+          flutter build ipa --release --no-pub \
+            --build-name="$KORLIX_IOS_VERSION" --build-number="$KORLIX_IOS_BUILD_NUMBER" \
+            --export-options-plist="$CM_BUILD_DIR/brain-ios-export.plist"
+          IPA_FILES=(build/ios/ipa/*.ipa)
+          test "${#IPA_FILES[@]}" -eq 1
+          python3 "$CM_BUILD_DIR/scripts/verify_ios_ipa.py" "${IPA_FILES[0]}" \
+            --bundle-id com.korlix.brain --version "$KORLIX_IOS_VERSION" \
+            --build "$KORLIX_IOS_BUILD_NUMBER" --output artifacts/BrainVoice-verification.json
+          cp "${IPA_FILES[0]}" artifacts/BrainVoice.ipa
+          cp store/apple/testflight-notes.txt release_notes_en-US.txt
+      - &brain_check_transcript_ui
+        name: Check welcome, ambience, voice handoff and transcript layouts
+        script: |
+          set -euo pipefail
+          npm install --prefix "$CM_BUILD_DIR/.brain-ui-tools" --no-audit --no-fund playwright@1.62.1
+          "$CM_BUILD_DIR/.brain-ui-tools/node_modules/.bin/playwright" install chromium
           PLAYWRIGHT_MODULE="$CM_BUILD_DIR/.brain-ui-tools/node_modules/playwright" \
             UI_SCREENSHOTS="$CM_BUILD_DIR/apps/korlix_brain/artifacts/ui" \
             node tools/check_ui.cjs
