@@ -1,10 +1,20 @@
-## Spoken welcome and Risi pronunciation — build 12 candidate
+## Automatic welcome on iPhone — build 13
+
+Fixes the reported startup failure where Replay worked but the welcome did not play automatically. The old persistent seen flag now controls only the Replay label; automatic playback is once per app launch, after Home is visible and the app is active. Local startup no longer waits for account/network syncing. An inactive startup remains eligible when the app becomes active.
+
+On iPhone the bundled recording uses AVAudioPlayer through a dedicated local Flutter channel. It explicitly owns and releases the playback audio session. Skip, navigation, account controls, backgrounding and microphone handoff stop the recording. A pending native Stop must finish before voice or dictation starts; stale completion events cannot interrupt Replay. WebView playback remains the non-iOS fallback. The exact approved Marin recording, pronunciation, voice models and billing are unchanged.
+
+Delivery and final checks pending. Build 12 remains the currently verified TestFlight build until build 13 is processed and assigned.
+
+## Spoken welcome and Risi pronunciation — build 12
 
 The approved 14.378-second Marin welcome is bundled offline and plays once on first use. Skip and Replay are visible on Home. Navigation, account controls, microphone use and backgrounding stop it immediately; resuming the app does not restart it. Music ducks for the introduction. The clip opens no microphone and consumes no Live Conversation minutes.
 
 Brain's voice configuration previously returned before the shared pronunciation boundary. Both Live and Deep Think now receive the soft-s “Ree-see” rule. Deep Think speech text is phonetic while its written answer remains unchanged; Live memory readbacks reinforce the same pronunciation. The explicit memory command also accepts an ASR spelling of “Risi”, preserving the existing ownership and command gates. Native captions normalize only the spoken “Ree-see” form to the written brand Rici.
 
-Backend `20706bb385dc9658247e0ecbcea89bacc62d3e89` is live on the existing service (deploy `dep-dbjc7r7lk1mc738r8l0g`). All 41 targeted backend checks and 63 Flutter tests passed, with clean Flutter analysis. New browser checks cover the actual bundled WAV, first use, Skip/Replay, pause before voice/dictation, app backgrounding, delayed/blocked playback, offline playback and music ducking. Signed CI and physical iPhone listening remain pending. No model selection, voice identity, billing or public App Store submission change.
+**Version 1.0.1 (12) is Testing in KORLIX Brain Internal.** The [signed pipeline](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6c73b6a1999f83b5dbed2) completed successfully, and Apple processing plus the existing-group assignment are verified. The group retains one tester and now has nine builds; no new testers, invitations or public App Store submission were made. Apple build ID: `42fa1e65-d106-4120-9e48-e1ed1d7deef4`. App code: `1f7ac625c734ec98b15a0b371eab461ff313116d`. Release commit: `6dca9ee30355df719e349f9170f24198e92a5901`.
+
+Backend `20706bb385dc9658247e0ecbcea89bacc62d3e89` is live on the existing service (deploy `dep-dbjc7r7lk1mc738r8l0g`). All 41 targeted backend checks, 63 Flutter tests, analysis, 23 iOS release checks, four viewport UI checks and the complete ambience/welcome playback checks passed. CI caught and fixed the Replay label after reopening before any upload. The signed IPA is 34,236,888 bytes, SHA-256 `c84484a21a8ee4ed1791fda781c7e4442cc828365b9ac49e0e1b48ae5a81f2f6`; its bundled welcome matches the tested asset SHA-256 in `welcome-audio.json`. Physical iPhone listening and pronunciation confirmation remain pending. Live/Deep Think models, the Marin voice and pricing are unchanged.
 
 ## iPhone ambience — build 11
 
@@ -97,7 +107,7 @@ Validation: 31 Flutter tests, including incremental UTF-8, truncation, account c
 | --- | --- |
 | App name | KORLIX Brain+Voice |
 | Apple bundle ID / Android package | `com.korlix.brain` |
-| Version / minimum source build | `1.0.1` / `11` |
+| Version / minimum source build | `1.0.1` / `13` |
 | Apple team | `FJKJ9MUDZ4` |
 | Apple app ID | `6829319523` |
 | Apple SKU | `KORLIX-BRAIN-VOICE-IOS` |

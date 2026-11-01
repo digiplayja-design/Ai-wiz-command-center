@@ -1,11 +1,11 @@
 {
-  "updatedAt": "2026-11-01T04:50:33.769151+00:00",
+  "updatedAt": "2026-11-01T05:27:23.332451+00:00",
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "version": "1.0.1",
-  "minimumSourceBuild": 12,
-  "appCodeCommit": "8a93ddcf16eb1c92d9d16bd15013f2cc16bd96d4",
-  "releasePipelineCommit": "13f731b1a781825d2d6a08d5a1f093622ff05122",
+  "minimumSourceBuild": 13,
+  "appCodeCommit": "1f7ac625c734ec98b15a0b371eab461ff313116d",
+  "releasePipelineCommit": "6dca9ee30355df719e349f9170f24198e92a5901",
   "signedIosCandidate": {
     "status": "success",
     "build": 4,
@@ -29,11 +29,11 @@
   },
   "testflight": {
     "status": "testing",
-    "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6be3fa74da3772d1f0f8a",
-    "sourceCommit": "13f731b1a781825d2d6a08d5a1f093622ff05122",
+    "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6c73b6a1999f83b5dbed2",
+    "sourceCommit": "6dca9ee30355df719e349f9170f24198e92a5901",
     "uploadBranch": "release/korlix-brain-testflight-20261031",
     "workflow": "korlix-brain-ios-testflight",
-    "betaInformation": "saved in App Store Connect",
+    "betaInformation": "Build-12 What to Test notes uploaded by the successful Codemagic post-processing step",
     "uploadResult": "success",
     "internalGroup": {
       "name": "KORLIX Brain Internal",
@@ -41,8 +41,9 @@
       "automaticDistribution": false,
       "testerCount": 1,
       "invitationStatus": "Existing tester retained; no new testers or invitations",
-      "buildCount": 8,
+      "buildCount": 9,
       "builds": [
+        "1.0.1 (12)",
         "1.0.1 (11)",
         "1.0.1 (10)",
         "1.0.1 (9)",
@@ -59,7 +60,8 @@
       "build8Assigned": true,
       "build9Assigned": true,
       "build10Assigned": true,
-      "build11Assigned": true
+      "build11Assigned": true,
+      "build12Assigned": true
     },
     "processingRejection": {
       "version": "1.0.1",
@@ -82,58 +84,60 @@
       "processingResult": "rejected ITMS-90683",
       "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6612f6a1999f83b5c5925"
     },
-    "build": 11,
+    "build": 12,
     "signedArtifactVerification": "pass",
     "flutterAnalyze": "pass",
-    "flutterTests": 61,
+    "flutterTests": 63,
     "releaseIdentityTests": 23,
     "processingResult": "complete",
     "console": "https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6829319523/testflight/groups/ae86d9a2-5bdf-4f3d-910b-aa532675951f/builds",
     "previousReadyBuild": {
-      "build": 10,
-      "appleBuildId": "c9374dea-470b-43e2-a213-79fdba1bc491",
-      "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6b3436a1999f83b5d7ed5",
-      "sourceCommit": "1a9031ebbe90ed07b7070be47f1d2e8130b5d214",
+      "build": 11,
+      "appleBuildId": "4c9b5a85-4800-47cd-be7b-362b84343d83",
+      "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6be3fa74da3772d1f0f8a",
+      "sourceCommit": "13f731b1a781825d2d6a08d5a1f093622ff05122",
       "processingResult": "complete",
       "distributionApprovedByUser": true,
-      "distributionVerifiedAt": "2026-11-01T04:04:01.967404+00:00",
+      "distributionVerifiedAt": "2026-11-01T04:32:53.707788+00:00",
       "signedArtifact": {
-        "bytes": 33683543,
-        "sha256": "d3ada6e052c4525e4537ed4e539b4b911e576b4fee591d7fc5d8e243a387f7b4",
+        "bytes": 33683993,
+        "sha256": "42c753ff4757c34de50acd35165adf6289a92b9b9109a62839245beb989b5979",
         "bundleId": "com.korlix.brain",
         "version": "1.0.1",
-        "build": 10,
+        "build": 11,
         "profileType": "app_store",
         "signatureVerified": true,
         "location": "Codemagic signed IPA artifact"
       }
     },
     "distributionApprovedByUser": true,
-    "appleBuildId": "4c9b5a85-4800-47cd-be7b-362b84343d83",
-    "processingVerifiedAt": "2026-11-01T04:32:53.707788+00:00",
+    "appleBuildId": "42fa1e65-d106-4120-9e48-e1ed1d7deef4",
+    "processingVerifiedAt": "2026-11-01T05:11:04.644566+00:00",
     "signedArtifact": {
-      "bytes": 33683993,
-      "sha256": "42c753ff4757c34de50acd35165adf6289a92b9b9109a62839245beb989b5979",
+      "bytes": 34236888,
+      "sha256": "c84484a21a8ee4ed1791fda781c7e4442cc828365b9ac49e0e1b48ae5a81f2f6",
       "bundleId": "com.korlix.brain",
       "version": "1.0.1",
-      "build": 11,
+      "build": 12,
       "profileType": "app_store",
       "signatureVerified": true,
-      "location": "Codemagic signed IPA artifact"
+      "location": "Codemagic signed IPA artifact; downloaded and verified against the published SHA-256",
+      "welcomeAssetVerified": true
     },
     "distributionApproval": {
-      "state": "completed_within_authorized_repair_scope",
-      "action": "Add version 1.0.1 build 11 to existing KORLIX Brain Internal group for its one existing tester",
-      "source": "User requested correction of inaudible iPhone music within the ongoing approved app release work",
-      "recordedAt": "2026-11-01T04:32:53.707788+00:00",
+      "state": "completed_within_authorized_install_scope",
+      "action": "Add version 1.0.1 build 12 to the existing KORLIX Brain Internal group for its one existing tester",
+      "source": "User asked to install the approved welcome and make Rici pronounced Risi within ongoing approved app release work",
+      "recordedAt": "2026-11-01T05:11:04.644566+00:00",
       "existingTesterCount": 1,
       "newTesters": 0,
       "publicStoreSubmission": false
     },
-    "pipelineFinishedVerifiedAt": "2026-11-01T04:32:53.707788+00:00",
-    "appleUploadDateDisplayed": "Nov 1, 2026 12:28 AM EDT",
-    "distributionVerifiedAt": "2026-11-01T04:32:53.707788+00:00",
-    "uiAudioChecks": "pass"
+    "pipelineFinishedVerifiedAt": "2026-11-01T05:11:04.644566+00:00",
+    "appleUploadDateDisplayed": "Nov 1, 2026 1:05 AM EDT",
+    "distributionVerifiedAt": "2026-11-01T05:11:04.644566+00:00",
+    "uiAudioChecks": "pass",
+    "welcomeChecks": "pass"
   },
   "storeSubmission": "not performed",
   "authenticatedDeviceVoiceTest": "User confirms Live Conversation works in build 9. No quantified end-to-end latency measurement.",
@@ -437,7 +441,7 @@
   },
   "welcomeUpdate": {
     "sourceBuild": 12,
-    "status": "implemented; signed iPhone CI pending",
+    "status": "Build 12 Testing in KORLIX Brain Internal; backend pronunciation update live",
     "audio": {
       "seconds": 14.378,
       "rate": 24000,
@@ -445,7 +449,7 @@
       "sha256": "023761454a65f317e50252f9452e59d8b01fc66931a6d6f69ee55909f40c02f4",
       "voice": "marin",
       "pronunciation": "Ree-see",
-      "displayText": "Welcome to KORLIX Brain+Voice\u2014built to be one of the world's most versatile conversation apps! I'm Rici. Talk, learn, train me, and save what matters. Your voice. Your brain. Let's go!",
+      "displayText": "Welcome to KORLIX Brain+Voice—built to be one of the world's most versatile conversation apps! I'm Rici. Talk, learn, train me, and save what matters. Your voice. Your brain. Let's go!",
       "ttsModel": "gpt-4o-mini-tts",
       "speed": 1.12,
       "playback": "Bundled offline; once on first use, then manual Replay; Skip and capture stop immediately",
@@ -461,6 +465,53 @@
     "physicalIphoneListening": "pending",
     "spokenName": "Ree-see (Risi)",
     "writtenName": "Rici",
-    "billingChanged": false
+    "billingChanged": false,
+    "sourceCommit": "1f7ac625c734ec98b15a0b371eab461ff313116d",
+    "releaseCommit": "6dca9ee30355df719e349f9170f24198e92a5901",
+    "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6c73b6a1999f83b5dbed2",
+    "releaseIdentityTests": 23,
+    "uiAudioChecks": "pass",
+    "welcomeChecks": "pass: local WAV decode, first-use autoplay, Skip/Replay, saved first-use state, music duck/resume, natural ending, blocked playback, late playback, background stop, native voice/dictation handoff, no microphone or network",
+    "uploadResult": "success",
+    "appleDeliveryId": "42fa1e65-d106-4120-9e48-e1ed1d7deef4",
+    "signedPackageVerification": {
+      "bundleId": "com.korlix.brain",
+      "version": "1.0.1",
+      "build": "12",
+      "ipaBytes": 34236888,
+      "ipaSha256": "c84484a21a8ee4ed1791fda781c7e4442cc828365b9ac49e0e1b48ae5a81f2f6",
+      "welcomeAsset": "Payload/Runner.app/Frameworks/App.framework/flutter_assets/assets/web/welcome-v1.wav",
+      "welcomeSha256": "023761454a65f317e50252f9452e59d8b01fc66931a6d6f69ee55909f40c02f4",
+      "welcomeSeconds": 14.378,
+      "bundledAudioMatchesTestedAsset": true
+    },
+    "appleBuildId": "42fa1e65-d106-4120-9e48-e1ed1d7deef4",
+    "processingResult": "complete",
+    "distributionVerifiedAt": "2026-11-01T05:11:04.644566+00:00",
+    "physicalPhoneListening": "Pending: automated decoding and phonetic input are verified; no claim of human listening or physical-device audibility"
+  },
+  "currentBackend": {
+    "commit": "20706bb385dc9658247e0ecbcea89bacc62d3e89",
+    "branch": "release/signup-plan-intent-20261021",
+    "serviceId": "srv-d8csvkkp3tds73emfikg",
+    "deployId": "dep-dbjc7r7lk1mc738r8l0g",
+    "state": "live",
+    "liveVerifiedAt": "2026-11-01T04:46:01.578855Z"
+  },
+  "automaticWelcomeFix": {
+    "sourceBuild": 13,
+    "status": "Local validation passed; signed pipeline and TestFlight distribution pending",
+    "reportedIssue": "Replay works on iPhone but the welcome does not play automatically on opening",
+    "changes": [
+      "Automatic once per app launch, independent of prior Replay and account syncing",
+      "Native iPhone AVAudioPlayer using the unchanged bundled Marin recording",
+      "Inactive startup waits for foreground; Skip and capture cancel pending playback",
+      "Native Stop completion is awaited before microphone use; stale events are ignored"
+    ],
+    "flutterTests": 71,
+    "flutterAnalysis": "pass",
+    "releaseChecks": 23,
+    "browserChecks": "pending CI",
+    "physicalDeviceValidation": "Pending user confirmation on build 13"
   }
 }

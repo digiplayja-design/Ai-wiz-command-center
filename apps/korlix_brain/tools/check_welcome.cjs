@@ -14,6 +14,7 @@ const url='file://'+path.resolve(__dirname,'../assets/web/index.html');
       page.on('request',r=>{if(/^https?:/.test(r.url()))remote.push(r.url());});
       await page.addInitScript(mode=>{
         window.testAudioType='auto';window.testCommands=[];
+        if(['seen','native','inactive','slow-sync'].includes(mode))localStorage.setItem('korlix-brain-welcome-v1-seen','true');
         Object.defineProperty(navigator,'audioSession',{configurable:true,value:{
           get type(){return window.testAudioType;},set type(value){window.testAudioType=value;}
         }});
@@ -33,6 +34,10 @@ const url='file://'+path.resolve(__dirname,'../assets/web/index.html');
           window.testCommands.push({...m,audioType:window.testAudioType,welcomePaused:document.querySelector('audio').paused});
           const send=data=>window.KorlixBrainReceive(data);
           let result=null;
+          if(m.action==='welcomeState')result={native:mode==='native',automatic:true,foreground:mode!=='inactive'};
+          if(m.action==='playWelcome'){window.testNativeToken=m.payload.token;window.testNativePlaying=true;result={started:true};}
+          if(m.action==='stopWelcome')window.testNativePlaying=false;
+          if(m.action==='load'&&mode==='slow-sync')return;
           if(m.action==='load')result={training:'',memories:[],canUndo:false};
           if(m.action==='listSavedTranscripts')result=[];
           if(m.action==='startVoice'){send({type:'voice',phase:'listening',message:'Rici is listening'});result={active:true};}
@@ -42,7 +47,7 @@ const url='file://'+path.resolve(__dirname,'../assets/web/index.html');
         }};
       },mode);
       await page.goto(url);
-      await page.waitForFunction(()=>document.querySelector('#cinema-kb-account-status').textContent==='Account connected');
+      await page.waitForFunction(()=>window.testCommands.some(c=>c.action==='welcomeState'));
       return {page,errors,remote};
     }
     const {page,errors,remote}=await pageFor();
@@ -81,8 +86,7 @@ const url='file://'+path.resolve(__dirname,'../assets/web/index.html');
     assert(dictation.welcomePaused);assert.equal(dictation.audioType,'auto');
     await page.reload();
     await page.waitForFunction(()=>document.querySelector('#cinema-kb-account-status').textContent==='Account connected');
-    assert.equal(await audio.evaluate(a=>a.paused),true,'First-use setting survives reload');
-    await page.getByRole('button',{name:'Replay welcome',exact:true}).click();await playing();
+    await playing(); // A new launch plays even after the old seen flag was saved.
     await audio.evaluate(a=>{a.currentTime=a.duration-.15;});
     await page.waitForFunction(()=>document.querySelector('.kb-product').dataset.welcome==='idle');
     assert.equal(await page.evaluate(()=>window.testAudioType),'auto','Natural ending releases playback category');
@@ -109,6 +113,33 @@ const url='file://'+path.resolve(__dirname,'../assets/web/index.html');
     await delayed.page.waitForFunction(()=>document.querySelector('audio').paused);
     assert.equal(await delayed.page.evaluate(()=>document.querySelector('.kb-product').dataset.welcome),'idle');
     assert.deepEqual(delayed.errors,[]);await delayed.page.close();
-    console.log('PASS: local welcome decode; first-use autoplay; Skip/Replay; no microphone or network; background stop; native voice/dictation handoff; replay after reload; blocked and late playback; natural completion. Physical iPhone listening remains required.');
+    for(const mode of ['seen','slow-sync','inactive']){
+      const item=await pageFor(mode), p=item.page;
+      if(mode==='inactive'){
+        await p.waitForTimeout(350);
+        assert.equal(await p.locator('audio').evaluate(a=>a.paused),true);
+        await p.evaluate(()=>window.KorlixBrainReceive({type:'appLifecycle',active:true}));
+      }
+      await p.waitForFunction(()=>!document.querySelector('audio').paused&&document.querySelector('audio').currentTime>0);
+      if(mode==='slow-sync')assert.equal(await p.locator('#cinema-kb-account-status').textContent(),'Syncing…');
+      await p.getByRole('button',{name:'Skip introduction',exact:true}).click();
+      assert.deepEqual(item.errors,[]);await p.close();
+    }
+    const native=await pageFor('native'), n=native.page;
+    await n.waitForFunction(()=>window.testNativePlaying===true);
+    assert.equal(await n.locator('audio').evaluate(a=>a.paused),true,'iPhone greeting uses the native player');
+    assert.equal(await n.evaluate(()=>window.testAudioType),'auto','WebView must not override the native playback category');
+    const firstToken=await n.evaluate(()=>window.testNativeToken);
+    await n.getByRole('button',{name:'Skip introduction',exact:true}).click();
+    await n.waitForFunction(()=>!window.testNativePlaying);
+    await n.getByRole('button',{name:'Replay welcome',exact:true}).click();
+    await n.waitForFunction(()=>window.testNativePlaying);
+    await n.evaluate(token=>window.KorlixBrainReceive({type:'welcomeEnded',token,reason:'completed'}),firstToken);
+    assert.equal(await n.locator('.kb-product').getAttribute('data-welcome'),'playing','Old native completion is ignored');
+    await n.getByRole('button',{name:/Talk to Rici/}).click();
+    await n.waitForFunction(()=>window.testCommands.some(c=>c.action==='startVoice'));
+    assert.equal(await n.evaluate(()=>window.testNativePlaying),false);
+    assert.deepEqual(native.errors,[]);await n.close();
+    console.log('PASS: bundled welcome decode; startup after prior Replay; startup during stalled sync; inactive startup retries; native iPhone bridge; Skip/Replay; no microphone or network; background stop; voice/dictation handoff; blocked and late playback; natural completion. Physical iPhone listening remains required.');
   }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exit(1);});

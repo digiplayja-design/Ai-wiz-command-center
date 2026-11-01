@@ -30,10 +30,11 @@
   let voicePower = .15;
   const clamp = (x,min=0,max=1) => Math.max(min,Math.min(max,x));
   const smooth = x => {const t=clamp(x);return t*t*(3-2*t);};
-  let appVisible = true;
-  const welcome = {active:false, attempted:false, sequence:0, timer:null};
+  let appVisible = true, lifecycleRevision = 0;
+  const welcome = {active:false, ready:false, native:false, attempted:false, started:false, retries:0, sequence:0, timer:null, retryTimer:null};
   const welcomeAudio = get('kb-welcome-audio');
   const welcomeKey = 'korlix-brain-welcome-v1-seen';
+  // Kept only for the Replay label. A previous visit must not suppress startup.
   function welcomeSeen(){try{return localStorage.getItem(welcomeKey)==='true';}catch(error){return false;}}
   function rememberWelcome(){try{localStorage.setItem(welcomeKey,'true');}catch(error){}}
   function welcomeUi(message){
@@ -42,46 +43,79 @@
     get('kb-welcome-status').textContent=message||'AI welcome from Rici';
     get('kb-welcome-play').hidden=welcome.active;
     get('kb-welcome-play').textContent=welcomeSeen()?'Replay welcome':'Play welcome';
-    get('kb-welcome-play').disabled=musicCaptureActive();
+    get('kb-welcome-play').disabled=!welcome.ready||musicCaptureActive();
     get('kb-welcome-skip').hidden=!welcome.active;
   }
-  function stopWelcome(markSeen=true){
+  function stopWelcome(dismiss=true){
     const wasActive=welcome.active;
-    welcome.sequence++;welcome.active=false;clearTimeout(welcome.timer);
+    if(dismiss)welcome.attempted=true;
+    welcome.sequence++;welcome.active=false;clearTimeout(welcome.timer);clearTimeout(welcome.retryTimer);
     welcomeAudio.pause();welcomeAudio.currentTime=0;
-    if(markSeen)rememberWelcome();
+    // Dismissal is distinct from having actually heard the recording.
+    if(welcome.ready)native('stopWelcome',{dismiss}).catch(()=>{});
     welcomeUi();
     if(wasActive){music.idleUntil=performance.now()+3000;musicSession(false);refreshMusic();}
   }
-  async function playWelcome(){
-    if(musicCaptureActive()||currentScreen!=='home'||!musicVisible()||music.disposed)return;
-    const sequence=++welcome.sequence;welcome.active=true;
-    welcomeAudio.currentTime=0;welcomeAudio.volume=.9;
-    welcomeUi('Rici is welcoming you…');musicSession(true);refreshMusic(.12);
+  async function playWelcome(automatic=false){
+    if(!welcome.ready||welcome.active||musicCaptureActive()||currentScreen!=='home'||!musicVisible()||music.disposed)return;
+    if(!automatic)welcome.attempted=true;
+    const sequence=++welcome.sequence;welcome.active=true;welcome.started=false;
+    welcomeUi('Rici is welcoming you…');
     clearTimeout(welcome.timer);
     welcome.timer=setTimeout(()=>stopWelcome(),30000);
     try{
-      await welcomeAudio.play();
-      if(sequence!==welcome.sequence||musicCaptureActive()||!musicVisible()){
-        if(!welcome.active)welcomeAudio.pause();
-        return;
+      if(welcome.native){
+        // Release the WebView audio category before iOS takes playback ownership.
+        musicSession(false);rampMusic(0,0);
+        if(music.context&&music.context.state==='running'){
+          music.autoSuspended=true;await music.context.suspend();
+        }
+      }else{
+        welcomeAudio.currentTime=0;welcomeAudio.volume=.9;musicSession(true);
       }
-      rememberWelcome();
+      refreshMusic(.12);
+      if(sequence!==welcome.sequence||musicCaptureActive()||!musicVisible())return;
+      if(welcome.native){
+        const result=await native('playWelcome',{token:sequence,automatic});
+        if(sequence!==welcome.sequence)return;
+        if(!result?.started){
+          stopWelcome(false);
+          if(automatic&&result?.retry&&++welcome.retries<=10){
+            welcome.retryTimer=setTimeout(maybeWelcome,300);return;
+          }
+          welcome.attempted=true;welcomeUi('Tap Replay welcome to listen.');return;
+        }
+      }else await welcomeAudio.play();
+      if(sequence!==welcome.sequence||musicCaptureActive()||!musicVisible()){
+        if(!welcome.active)welcomeAudio.pause();return;
+      }
+      welcome.started=true;welcome.attempted=true;rememberWelcome();
+      if(!welcome.native)native('welcomeHeard').catch(()=>{});
     }catch(error){
       if(sequence!==welcome.sequence)return;
-      stopWelcome(false);welcomeUi('Tap Play welcome to listen.');
+      welcome.attempted=true;stopWelcome(false);welcomeUi('Tap Play welcome to listen.');
     }
   }
   function maybeWelcome(){
-    if(welcome.attempted)return;
-    welcome.attempted=true;welcomeUi();
-    if(!welcomeSeen())playWelcome();
+    if(!welcome.ready||welcome.attempted||welcome.active||!musicVisible())return;
+    playWelcome(true);
   }
-  welcomeAudio.addEventListener('ended',()=>stopWelcome());
+  async function initializeWelcome(){
+    welcomeUi();
+    const revision=lifecycleRevision;
+    try{
+      const state=await native('welcomeState');
+      welcome.native=state?.native===true;welcome.ready=true;
+      if(state?.automatic===false)welcome.attempted=true;
+      if(revision===lifecycleRevision)appVisible=state?.foreground!==false;
+      welcomeUi();musicEnvironmentChanged();maybeWelcome();
+    }catch(error){welcome.ready=true;welcomeUi('Tap Play welcome to listen.');}
+  }
+  welcomeAudio.addEventListener('ended',()=>{if(!welcome.native)stopWelcome(false);});
   welcomeAudio.addEventListener('error',()=>{
-    if(welcome.active){stopWelcome(false);welcomeUi('Welcome unavailable. You can keep using the app.');}
+    if(welcome.active&&!welcome.native){stopWelcome(false);welcomeUi('Welcome unavailable. You can keep using the app.');}
   });
-  get('kb-welcome-play').addEventListener('click',playWelcome);
+  get('kb-welcome-play').addEventListener('click',()=>playWelcome(false));
   get('kb-welcome-skip').addEventListener('click',()=>stopWelcome());
 
   const musicToggle = get('kb-music-toggle');
@@ -103,7 +137,8 @@
     // our playback override before native voice/dictation takes the microphone.
     try{
       if(!navigator.audioSession)return;
-      if(playback||(welcome.active&&!musicCaptureActive()&&musicVisible())){
+      if(welcome.active&&welcome.native)playback=false;
+      if(playback||(welcome.active&&!welcome.native&&!musicCaptureActive()&&musicVisible())){
         if(navigator.audioSession.type!=='playback')navigator.audioSession.type='playback';
         music.ownsPlaybackSession=true;
       }else if(music.ownsPlaybackSession){
@@ -279,7 +314,8 @@
     const hidden=!musicVisible();
     if(hidden===music.hidden)return;
     music.hidden=hidden;
-    if(hidden){stopWelcome();silenceMusicInBackground();return;}
+    if(hidden){stopWelcome(false);silenceMusicInBackground();return;}
+    maybeWelcome();
     clearTimeout(music.suspendTimer);
     if(!music.wanted)return;
     music.idleUntil=performance.now()+3000;
@@ -819,8 +855,13 @@
     }else if(message.type==='dictationStatus'){
       music.dictating=message.active===true;if(music.dictating)stopWelcome();refreshMusic();welcomeUi();
       announce(message.message);
+    }else if(message.type==='welcomeEnded'){
+      if(welcome.native&&welcome.active&&message.token===welcome.sequence){
+        stopWelcome(false);
+        if(message.reason==='error')welcomeUi('Welcome unavailable. You can keep using the app.');
+      }
     }else if(message.type==='appLifecycle'){
-      appVisible=message.active===true;musicEnvironmentChanged();
+      lifecycleRevision++;appVisible=message.active===true;musicEnvironmentChanged();maybeWelcome();
     }
   };
   const fail=error=>announce(error.message||'Could not complete this action. Please try again.');
@@ -829,7 +870,6 @@
     memories=(snapshot.memories||[]).map(m=>({id:m.id,text:m.content,source:m.source==='voice_confirmed'?((m.tags||[]).includes('instruction')?'Voice instruction':'Voice memory'):(m.source||'Approved memory')}));
     canUndo=!!snapshot.canUndo;ready=true;
     get('kb-account-status').textContent='Account connected';
-    maybeWelcome();
     if(currentScreen==='brain')renderBrain();
   }
   async function refresh(){
@@ -1038,7 +1078,7 @@
 
   const resize=new ResizeObserver(measure);menus.forEach(menu=>resize.observe(menu.element));scenes.forEach(scene=>resize.observe(scene.canvas));
   resize.observe(transferStage);resize.observe(app);
-  mountMusic();readPalette();measure();syncMotion();mountCinema();
+  mountMusic();readPalette();measure();syncMotion();mountCinema();initializeWelcome();
 
 
 })();
