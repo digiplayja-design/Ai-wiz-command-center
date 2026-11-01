@@ -6,8 +6,8 @@ import 'package:korlix_brain/brain_voice_turns.dart';
 void main() {
   Future<void> flush() => Future<void>.delayed(Duration.zero);
   final answer = {
-    'answer': 'An Astra answer.',
-    'model': 'gpt-6-astra',
+    'answer': 'A Sol answer.',
+    'model': 'gpt-6.1-sol',
     'reasoningEffort': 'max',
   };
 
@@ -35,7 +35,7 @@ void main() {
       expect(sent.single['response']['conversation'], 'none');
       expect(
         sent.single['response']['input'][0]['content'][0]['text'],
-        'An Astra answer.',
+        'A Sol answer.',
       );
       turns.dispose();
     },

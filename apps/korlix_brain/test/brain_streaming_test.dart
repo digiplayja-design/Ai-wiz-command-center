@@ -17,16 +17,16 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   Future<void> flush() => Future<void>.delayed(Duration.zero);
   const first =
-      'This is the first complete sentence of the answer arriving from Astra Max. ';
+      'This is the first complete sentence of the answer arriving from Sol 6.1 Max. ';
   final answer = {
     'answer': '${first}Here is the rest.',
-    'model': 'gpt-6-astra',
+    'model': 'gpt-6.1-sol',
     'reasoningEffort': 'max',
   };
   final delta = {
     'type': 'answer.delta',
     'text': first,
-    'model': 'gpt-6-astra',
+    'model': 'gpt-6.1-sol',
     'reasoningEffort': 'max',
   };
 
