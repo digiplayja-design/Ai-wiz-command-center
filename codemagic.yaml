@@ -661,3 +661,62 @@ workflows:
         submit_to_testflight: false
         submit_to_app_store: false
 
+
+  korlix-brain-android-release:
+    name: KORLIX Brain+Voice — signed Android release candidate
+    instance_type: linux_x2
+    max_build_duration: 60
+    working_directory: apps/korlix_brain
+    # Manual only until the dedicated upload key is installed and verified.
+    environment:
+      flutter: 3.47.9
+      java: 17
+      android_signing:
+        - KORLIX_BRAIN_UPLOAD_KEY
+      vars:
+        CI: 'true'
+        FLUTTER_SUPPRESS_ANALYTICS: 'true'
+        DART_SUPPRESS_ANALYTICS: 'true'
+        BRAIN_UPLOAD_CERTIFICATE_SHA256: '8E:9F:5D:E5:66:71:ED:F2:23:3F:78:5F:CD:80:16:FA:F9:71:F7:20:4F:AD:5E:3B:10:DD:B5:87:9E:1C:C7:A5'
+    scripts:
+      - name: Verify managed Android upload signing
+        script: |
+          set -euo pipefail
+          test -n "${CM_KEYSTORE_PATH:-}" && test -f "$CM_KEYSTORE_PATH"
+          test -n "${CM_KEYSTORE_PASSWORD:-}"
+          test -n "${CM_KEY_ALIAS:-}"
+          test -n "${CM_KEY_PASSWORD:-}"
+          keytool -list -keystore "$CM_KEYSTORE_PATH" \
+            -storepass:env CM_KEYSTORE_PASSWORD -alias "$CM_KEY_ALIAS" >/dev/null
+          mkdir -p artifacts
+          keytool -exportcert -rfc -keystore "$CM_KEYSTORE_PATH" \
+            -storepass:env CM_KEYSTORE_PASSWORD -alias "$CM_KEY_ALIAS" \
+            -file artifacts/BrainVoice-upload-certificate.pem
+          actual_fingerprint="$(openssl x509 -in artifacts/BrainVoice-upload-certificate.pem -noout -fingerprint -sha256 | cut -d= -f2)"
+          test "$actual_fingerprint" = "$BRAIN_UPLOAD_CERTIFICATE_SHA256"
+      - name: Validate and build Brain+Voice Android bundle
+        script: |
+          set -euo pipefail
+          flutter pub get --enforce-lockfile
+          flutter analyze --no-pub
+          flutter test --no-pub --reporter expanded
+          flutter build appbundle --release --no-pub
+          cp build/app/outputs/bundle/release/app-release.aab artifacts/BrainVoice.aab
+          jarsigner -verify artifacts/BrainVoice.aab | tee artifacts/BrainVoice-signature.txt
+          grep -Fq 'jar verified.' artifacts/BrainVoice-signature.txt
+          keytool -printcert -jarfile artifacts/BrainVoice.aab -rfc > artifacts/BrainVoice-signer.pem
+          openssl x509 -in artifacts/BrainVoice-upload-certificate.pem -outform DER > artifacts/upload-cert.der
+          openssl x509 -in artifacts/BrainVoice-signer.pem -outform DER > artifacts/signer-cert.der
+          cmp artifacts/upload-cert.der artifacts/signer-cert.der
+          if openssl x509 -in artifacts/BrainVoice-signer.pem -noout -subject | grep -Fq 'Android Debug'; then
+            echo 'Refusing a debug-signed store bundle.' >&2
+            exit 1
+          fi
+          sha256sum artifacts/BrainVoice.aab > artifacts/BrainVoice.sha256
+    artifacts:
+      - $CM_BUILD_DIR/apps/korlix_brain/artifacts/BrainVoice.aab
+      - $CM_BUILD_DIR/apps/korlix_brain/artifacts/BrainVoice.sha256
+      - $CM_BUILD_DIR/apps/korlix_brain/artifacts/BrainVoice-signature.txt
+      - $CM_BUILD_DIR/apps/korlix_brain/artifacts/BrainVoice-upload-certificate.pem
+    # First upload is performed in the dedicated Play record. No automatic
+    # publishing, tester invitations, or billing activation is configured here.

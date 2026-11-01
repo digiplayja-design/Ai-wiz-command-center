@@ -23,6 +23,20 @@ The monthly plan is USD 34.99 with 60 Live minutes per store billing period. The
 6. On designated store test accounts, verify monthly buy/restore/renewal, each of the three GAS packs, repeated restore without duplicate minutes, exhausted allowance, pending/canceled purchase, refund, account switch, reinstallation and Stop returning unused minutes. Sandbox receipts require an existing server allowlist entry.
 7. Build a signed IPA and Android AAB. Android upload signing and the Play app record still need verification. Run the standard signed iOS identity checks, mobile tests and UI checks. Select the new build and IAPs for Apple review; submit the AAB and matching subscriptions/products to Play's appropriate release track.
 
-## Current access blockers
+## Verified delivery and remaining setup
 
-Apple sign-in reached two-factor verification but rejected the supplied code. Complete secure browser authentication to configure its products and submission. Play Console was blocked by automatic approval review after the browser origin gate evaluated `https://google.play` even though the requested URL was `https://play.google.com/console`; no Play mutations were made. Neither store submission is confirmed.
+- Codemagic pipeline `6ae72b7fa74da3772d20a213` finished successfully for source `f6d98bf5ced9df6d346ec5072df94c85d0a504cd`. Version 1.0.1 (14) was signed, uploaded and found processed in App Store Connect as build `5ad5cbef-679c-4ba2-a5e6-a3677c27d0d8`. Beta localization was updated. No tester assignment or public review submission was performed.
+- Production billing module and migration are deployed. Billing and both product-readiness flags remain disabled pending native purchase tests.
+- The dedicated Google Play app now exists: account `4772708594176030332`, app `4973840118435464131`, package `com.korlix.brain`. It is a draft, free to download, English (US), Productivity. Privacy policy, Productivity category, support email/website, no-ads, non-government and no-financial-features declarations are saved. The listing text and four-color icon are saved as a draft; feature graphic and screenshots remain pending.
+- Google requires an APK/AAB before its subscription and one-time-product creation controls become available. No products have been created in either store.
+- Apple browser sign-in still needs verification through the existing secure handoff; the managed Codemagic integration successfully uploaded the binary independently.
+
+## Android signing handoff
+
+Codemagic Personal Account settings > Code signing identities > Android keystores currently contains no key. A dedicated Brain+Voice RSA-4096 upload key and private backup have been prepared outside this repository. Only its public certificate is in `google-play/upload-certificate.pem`. User confirmation is required before uploading the private key to Codemagic. Once approved, add it under reference `KORLIX_BRAIN_UPLOAD_KEY`; retain an independent secure backup. Do not put private keys or passwords in this repository, build logs, artifacts, or chat.
+
+A manual `korlix-brain-android-release` workflow is prepared in `codemagic.yaml`. After the key is configured, run it from `release/korlix-brain-store-20261101`. It uses the locked dependencies and current app version, runs analysis/tests, signs the AAB, verifies the JAR signature and that its certificate matches the prepared public fingerprint and the managed key, rejects Android Debug certificates, and exports only the signed bundle, SHA-256 and public certificate. It has no automatic build trigger or store-publishing step.
+
+Upload the verified AAB to the dedicated Play record. Then create the exact four products from `billing-products.json`, verify native purchase flows, complete the remaining listing/review requirements and submit. No changes to other KORLIX apps are authorized by this workflow.
+
+The health declaration is unchanged: automatic approval review rejected selecting and advancing “My app does not have any health features” until the user specifically approves that certification.
