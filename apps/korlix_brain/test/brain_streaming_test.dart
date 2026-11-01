@@ -197,6 +197,26 @@ void main() {
     expect(parts.join(''), '$first José is here.');
   });
 
+  test('short first sentence starts before the rest of the answer arrives', () {
+    final parts = <String>[];
+    final buffer = BrainSpeechBuffer(parts.add);
+    buffer.add("I'm Rici. ");
+    expect(parts, ["I'm Rici. "]);
+    buffer.add('Dr. Jones prefers metric units.');
+    expect(parts.length, 1);
+    buffer.finish();
+    expect(parts.join(), "I'm Rici. Dr. Jones prefers metric units.");
+  });
+
+  test('first phrase does not split an abbreviation or decimal', () {
+    final parts = <String>[];
+    final buffer = BrainSpeechBuffer(parts.add);
+    buffer.add('Dr. ');
+    expect(parts, isEmpty);
+    buffer.add('Jones measured 1.5 meters. ');
+    expect(parts, ['Dr. Jones measured 1.5 meters. ']);
+  });
+
   Future<BrainAuthController> login() async {
     SharedPreferences.setMockInitialValues({});
     final auth = BrainAuthController(

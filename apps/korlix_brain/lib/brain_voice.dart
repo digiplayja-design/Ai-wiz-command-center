@@ -32,7 +32,9 @@ class BrainVoice {
       emit({'type': 'voice', 'phase': phase, 'message': message});
 
   Future<void> start() async {
-    await stop();
+    final cleanupGeneration = _generation + 1;
+    await stop(announce: false);
+    if (_generation != cleanupGeneration) return;
     final generation = ++_generation;
     final account = api.auth.revision;
     bool current() =>
@@ -350,8 +352,11 @@ class BrainVoice {
     }
   }
 
-  Future<void> stop({String message = 'Microphone off'}) async {
-    ++_generation;
+  Future<void> stop({
+    String message = 'Microphone off',
+    bool announce = true,
+  }) async {
+    final generation = ++_generation;
     _turns?.dispose();
     _turns = null;
     _active = false;
@@ -368,6 +373,16 @@ class BrainVoice {
     _channel = null;
     _renderer = null;
     _usage = null;
+    // Silence local input and remote playback before awaiting any cleanup.
+    for (final track in microphone?.getTracks() ?? <MediaStreamTrack>[]) {
+      try {
+        track.enabled = false;
+      } catch (_) {}
+    }
+    try {
+      if (renderer != null) renderer.srcObject = null;
+    } catch (_) {}
+    if (announce) _state('stopping', 'Stopping conversation…');
     // Release microphone before any network bookkeeping, even during failures.
     if (microphone != null) {
       for (final track in microphone.getTracks()) {
@@ -395,7 +410,7 @@ class BrainVoice {
     try {
       await VoiceLifecycle.stop();
     } catch (_) {}
-    _state('complete', message);
+    if (announce && generation == _generation) _state('complete', message);
     await usage?.end();
   }
 }

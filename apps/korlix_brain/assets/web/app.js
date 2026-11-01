@@ -666,8 +666,8 @@
   // vocabulary can cross the native bridge; all account requests stay native.
   let training='', memories=[], pending=null, deletion=null, canUndo=false;
   let memorySource='Typed entry',trainingSource='Typed instructions';
-  let voiceActive=false, lastUserTranscript='', ready=false, writing=false;
-  let requestNumber=0;
+  let voiceActive=false, voiceStopping=false, voiceStarting=false, lastUserTranscript='', ready=false, writing=false;
+  let requestNumber=0, voiceRequestEpoch=0;
   const requests=new Map();
   const announce=text=>{get('kb-status').textContent=text;};
   const behaviors=()=>training.split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
@@ -687,11 +687,17 @@
       clearTimeout(request.timer);requests.delete(message.id);
       message.error?request.reject(new Error(message.error)):request.resolve(message.data);
     }else if(message.type==='voice'){
+      if(message.phase==='complete'){voiceStarting=false;voiceStopping=false;}
+      if(voiceStopping&&message.phase!=='complete')message={...message,phase:'stopping',message:'Stopping conversation…'};
       const index=phases.findIndex(p=>p.key===message.phase);
       if(index>=0)setPhase(index);
       voiceActive=message.phase!=='complete';
+      voiceStopping=message.phase==='stopping';
       get('kb-voice-phase').textContent=message.message;
-      get('kb-replay-demo').textContent=voiceActive?'Stop conversation':'Start conversation';
+      get('kb-live-phase').textContent=message.message;
+      get('kb-stop-voice').disabled=voiceStopping;
+      get('kb-stop-label').textContent=voiceStopping?'Stopping…':'Stop conversation';
+      get('kb-replay-demo').textContent='Start conversation';
       root.dataset.voiceActive=String(voiceActive);refreshMusic();
     }else if(message.type==='transcript'&&message.text){
       const row=document.createElement('div');row.className='kb-bubble';
@@ -802,12 +808,37 @@
     }catch(error){fail(error);}
   }
   function dictate(kind){native('dictate',{kind}).catch(fail);}
-  function toggleVoice(){native(voiceActive?'stopVoice':'startVoice').catch(fail);}
+  function stopVoice(){
+    if(voiceStopping)return;
+    const epoch=++voiceRequestEpoch;
+    voiceStopping=true;
+    window.KorlixBrainReceive({type:'voice',phase:'stopping',message:'Stopping conversation…'});
+    native('stopVoice').catch(error=>{
+      if(epoch!==voiceRequestEpoch)return;
+      voiceStopping=false;get('kb-stop-voice').disabled=false;
+      get('kb-stop-label').textContent='Retry stop';fail(error);
+    });
+  }
+  function startVoice(){
+    if(voiceActive||voiceStarting)return;
+    const epoch=++voiceRequestEpoch;
+    voiceStarting=true;
+    window.KorlixBrainReceive({type:'voice',phase:'connecting',message:'Connecting to Rici…'});
+    native('startVoice').then(result=>{
+      // Consent can be declined without creating a voice session.
+      if(epoch===voiceRequestEpoch&&result?.active===false)
+        window.KorlixBrainReceive({type:'voice',phase:'complete',message:'Microphone off'});
+    }).catch(error=>{
+      if(epoch!==voiceRequestEpoch)return;
+      window.KorlixBrainReceive({type:'voice',phase:'complete',message:'Microphone off'});fail(error);
+    }).finally(()=>{if(epoch===voiceRequestEpoch)voiceStarting=false;});
+  }
+  function toggleVoice(){voiceActive?stopVoice():startVoice();}
   root.querySelectorAll('[data-go]').forEach(button=>button.addEventListener('click',()=>cinematicNavigate(button,()=>{
     if(writing){announce('Please wait for this change to finish.');return;}
     pending=null;deletion=null;show(button.dataset.go);
     if(button.dataset.go==='brain')refresh();
-    if(button.dataset.go==='talk'&&!voiceActive)native('startVoice').catch(fail);
+    if(button.dataset.go==='talk'&&!voiceActive)startVoice();
   })));
   menus.forEach(menu=>{
     menu.element.addEventListener('pointerenter',event=>{if(event.pointerType!=='touch')menu.hover=true;});menu.element.addEventListener('pointerleave',()=>{menu.hover=false;});
@@ -842,7 +873,7 @@
   get('kb-undo-deletion').addEventListener('click',()=>mutate('undo',{},()=>{show('brain');announce('Previous change restored.');}));
   get('kb-account').addEventListener('click',()=>native('account').catch(fail));get('kb-refresh').addEventListener('click',refresh);
   get('kb-return-voice').addEventListener('click',()=>show('talk'));
-  get('kb-stop-voice').addEventListener('click',()=>native('stopVoice').catch(fail));
+  get('kb-stop-voice').addEventListener('click',stopVoice);
   setPhase(3);refresh();
 
   const resize=new ResizeObserver(measure);menus.forEach(menu=>resize.observe(menu.element));scenes.forEach(scene=>resize.observe(scene.canvas));
