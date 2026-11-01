@@ -1,10 +1,18 @@
+## Native subscription and AI GAS candidate — build 14
+
+Adds the approved USD 34.99 monthly plan with 60 Live minutes and the three retained AI GAS packs (60 / 120 / 180 minutes for USD 30 / 55 / 80). Native checkout, server verification, durable minute accounting, restore and refund handling are implemented. Billing remains disabled pending store-product configuration and physical-device purchase tests. Build 13 remains the last delivered TestFlight version. Neither public store submission is complete. See [BILLING-RELEASE.md](BILLING-RELEASE.md) for exact products, activation steps and access blockers.
+
+Local validation: 75 Flutter tests, clean analysis, 23 release identity checks and 9 backend billing tests passed. Android store builds now require a managed upload key.
+
 ## Automatic welcome on iPhone — build 13
 
 Fixes the reported startup failure where Replay worked but the welcome did not play automatically. The old persistent seen flag now controls only the Replay label; automatic playback is once per app launch, after Home is visible and the app is active. Local startup no longer waits for account/network syncing. An inactive startup remains eligible when the app becomes active.
 
 On iPhone the bundled recording uses AVAudioPlayer through a dedicated local Flutter channel. It explicitly owns and releases the playback audio session. Skip, navigation, account controls, backgrounding and microphone handoff stop the recording. A pending native Stop must finish before voice or dictation starts; stale completion events cannot interrupt Replay. WebView playback remains the non-iOS fallback. The exact approved Marin recording, pronunciation, voice models and billing are unchanged.
 
-Delivery and final checks pending. Build 12 remains the currently verified TestFlight build until build 13 is processed and assigned.
+**Version 1.0.1 (13) is Testing in KORLIX Brain Internal.** The [signed pipeline](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6cde26a1999f83b5dd3bb) finished successfully after passing 71 Flutter tests, clean analysis, 23 release checks, four viewport transcript checks, ambience tests and the expanded welcome regressions. Apple processing and assignment to the existing group are verified. The group has one tester and ten builds; no new testers, invitations or public App Store submission.
+
+App code: `b0885d8a8cb5755053ef2cf238c4fa1451a48460`. Release commit: `22efa287ca33a6919dbfa07ebe5335efacaba584`. Apple build ID: `7523179c-97d2-4048-b793-7ed0123da02a`. Signed IPA: 34,251,568 bytes; SHA-256 `f8fb975840f47b643753e24963a7320ac76cf2580ba9656255b089594165b53b`. The downloaded package matches that hash, includes the native welcome channel and AVAudioPlayer implementation, and contains the unchanged 14.378-second recording. The user subsequently confirmed everything worked in build 13 and authorized public store release with AI GAS purchases.
 
 ## Spoken welcome and Risi pronunciation — build 12
 

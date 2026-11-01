@@ -1,9 +1,7 @@
-KORLIX Brain+Voice 1.0.1 (13)
+KORLIX Brain+Voice 1.0.1 (14) — billing candidate
 
-Fix: the welcome starts automatically when you launch the app and Home opens, including after you have used Replay before. It no longer waits for account syncing. iPhone playback now uses a native audio player with the same bundled 14-second Marin recording and Risi (Ree-see) pronunciation.
+Adds Plan & AI GAS from Home and Account. The approved plan is $34.99/month with 60 Live Conversation minutes, Personal Brain and Train My AI. Three optional AI GAS packs add 60, 120 or 180 Live minutes for $30, $55 or $80. Localized store prices are shown at checkout. Included minutes reset each billing period; purchased AI GAS carries over. Deep Think keeps its existing account limits.
 
-Skip introduction and Replay welcome remain on Home. Starting a conversation or dictation stops the welcome before opening the microphone. Backgrounding, navigation and account controls stop it too. Returning from the background does not repeat a welcome you already heard; a fresh app launch does.
+Purchasing remains unavailable until store products and server readiness are verified. This candidate alone does not activate billing or change the existing Live allowance. Designated store test accounts must verify purchase, restore, renewal, all three GAS packs, cancellation, refunds, account switching and Stop returning unused reserved time before activation.
 
-Please fully close and reopen the app. Confirm that the welcome starts without tapping Replay, then test Skip, Replay, immediate Talk to Rici, Silent Mode and Bluetooth. Check that a slow account connection does not delay the intro. Music, Live Conversation, Deep Think and transcript Save/Share/Delete remain available.
-
-The $34.99/60-minute plan is not activated in this build.
+The working automatic welcome, music, Risi (Ree-see) pronunciation, Live Conversation, Deep Think and transcript Save/Share/Delete are preserved. Please retest opening Home, Skip/Replay, immediate Talk to Rici and Stop.

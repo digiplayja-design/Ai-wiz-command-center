@@ -1,8 +1,23 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+val brainSigning = Properties().apply {
+    val file = rootProject.file("key.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}
+fun brainSigningValue(name: String, environment: String): String? =
+    System.getenv(environment)?.takeIf { it.isNotBlank() }
+        ?: brainSigning.getProperty(name)?.takeIf { it.isNotBlank() }
+val brainKeystore = brainSigningValue("storeFile", "CM_KEYSTORE_PATH")
+val brainStorePassword = brainSigningValue("storePassword", "CM_KEYSTORE_PASSWORD")
+val brainKeyAlias = brainSigningValue("keyAlias", "CM_KEY_ALIAS")
+val brainKeyPassword = brainSigningValue("keyPassword", "CM_KEY_PASSWORD")
+val brainSigningReady = listOf(brainKeystore, brainStorePassword, brainKeyAlias, brainKeyPassword).all { it != null }
 
 android {
     namespace = "com.korlix.brain"
@@ -28,11 +43,26 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (brainSigningReady) {
+            create("brainRelease") {
+                storeFile = file(brainKeystore!!)
+                storePassword = brainStorePassword
+                keyAlias = brainKeyAlias
+                keyPassword = brainKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
-            // Configure a dedicated Brain+Voice release signing key in CI.
-            // Store builds must never use the debug signing identity.
+            if (brainSigningReady) signingConfig = signingConfigs.getByName("brainRelease")
         }
+    }
+}
+
+gradle.taskGraph.whenReady {
+    if (allTasks.any { it.name.endsWith("Release") } && !brainSigningReady) {
+        throw GradleException("Brain+Voice release signing is missing. Configure the managed upload key in CI; debug signing is not allowed for store builds.")
     }
 }
 
