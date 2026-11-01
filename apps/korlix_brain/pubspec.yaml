@@ -1,7 +1,7 @@
 name: korlix_brain
 description: Standalone KORLIX Brain with shared accounts, approved memory and live Rici voice.
 publish_to: none
-version: 1.0.1+6
+version: 1.0.1+7
 environment:
   sdk: ^3.13.5
 dependencies:

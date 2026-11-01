@@ -1,9 +1,11 @@
-KORLIX Brain+Voice 1.0.1 (6)
+KORLIX Brain+Voice 1.0.1 (7)
 
-Fixes the misleading “server needs the Astra Max voice update” message. Rici now confirms the speech-session settings before opening the microphone.
+Rici keeps her name even when a shared agent profile uses another name.
 
-Faster voice replies: Rici starts speaking complete phrases while GPT-6 Astra Max continues producing the answer. Faster end-of-turn detection, overlapping memory/allowance reads, and immediate spoken acknowledgement after a confirmed memory save.
+Simple connection and name checks now use immediate app replies, avoiding a reasoning wait. Other questions still use GPT-6 Astra with Max reasoning. Spoken answers begin at the first complete sentence without the old character minimum. Complex reasoning can still take several seconds.
 
-GPT-6 Astra with Max reasoning is unchanged. Say “Rici, remember this: …” to save a memory or instruction after signing in, without another password.
+A large red Stop conversation button stays at the bottom while connecting, listening, thinking or speaking, and while moving around the app. Tapping it immediately starts stopping the microphone and playback.
 
-Please test response speed, interrupting Rici mid-answer, multi-sentence answers, and saving/reviewing a memory. Complex reasoning still takes time. This build preserves the purple, red, green, and gold icon and the corrected iOS privacy descriptions.
+Say “Rici, remember this: …” after signing in to save a memory or instruction without another password.
+
+Please check “Rici, are you there?”, “What’s your name?”, a detailed question, stopping mid-answer and during connection, and saving/reviewing a memory. The purple, red, green and gold icon is preserved.

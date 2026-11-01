@@ -29,6 +29,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
   final _speech = SpeechToText();
   final _inFlight = <String>{};
   bool _disposed = false, _pickerBusy = false, _dictating = false;
+  int _voiceStartRequest = 0;
   String? _pageError;
 
   @override
@@ -122,7 +123,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
       }
       id = value['id'] as String;
       if (!RegExp(r'^\d{1,10}$').hasMatch(id) || !_inFlight.add(id)) return;
-      if (_inFlight.length > 12) {
+      if (_inFlight.length > 12 && value['action'] != 'stopVoice') {
         throw const BrainApiException(
           'Please wait for the current actions to finish.',
         );
@@ -146,6 +147,13 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
   }
 
   Future<Object?> _dispatch(String action, Map<String, dynamic> data) async {
+    // Stop is local hardware control. It must remain available while another
+    // command or consent dialog is pending, even if the account expires.
+    if (action == 'stopVoice') {
+      ++_voiceStartRequest;
+      await _voice.stop();
+      return null;
+    }
     if (widget.auth.session == null) {
       throw const BrainApiException('Please sign in again.');
     }
@@ -178,17 +186,20 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
       case 'undo':
         return _repository.undo();
       case 'startVoice':
+        final startRequest = ++_voiceStartRequest;
         await _stopDictation();
         if (await _consent('Talk to Rici', {
           KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts,
           KorlixThirdPartyAiDataCategory.agentTrainingAndMemory,
         })) {
-          await _voice.start();
+          if (!_disposed &&
+              mounted &&
+              startRequest == _voiceStartRequest &&
+              widget.auth.session != null) {
+            await _voice.start();
+          }
         }
-        return null;
-      case 'stopVoice':
-        await _voice.stop();
-        return null;
+        return {'active': _voice.active};
       case 'dictate':
         await _dictate(_kind(data));
         return null;

@@ -109,12 +109,20 @@ class BrainSpeechBuffer {
   BrainSpeechBuffer(this.emit);
   void add(String text) {
     _buffer += text;
-    final minimum = _first ? 60 : 180;
-    final maximum = _first ? 240 : 600;
-    while (_buffer.length >= minimum) {
+    while (_buffer.isNotEmpty) {
+      final minimum = _first ? 1 : 180;
+      final maximum = _first ? 160 : 600;
+      if (_buffer.length < minimum) break;
       final ends = RegExp(r'[.!?]["”\x27]?\s+').allMatches(_buffer);
       var cut = 0;
       for (final end in ends) {
+        // Do not start speech on an abbreviation within a sentence.
+        if (RegExp(
+          r'\b(?:Mr|Mrs|Ms|Dr|Prof|e\.g|i\.e)\.$',
+          caseSensitive: false,
+        ).hasMatch(_buffer.substring(0, end.end).trim())) {
+          continue;
+        }
         if (end.end >= minimum) {
           cut = end.end;
           break;

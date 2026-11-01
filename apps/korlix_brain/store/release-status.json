@@ -1,11 +1,11 @@
 {
-  "updatedAt": "2026-10-31T22:41:39.126647+00:00",
+  "updatedAt": "2026-11-01T00:27:46.677153+00:00",
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "version": "1.0.1",
-  "minimumSourceBuild": 6,
-  "appCodeCommit": "816eee71abfecd2ebe4989fb8ce901af16bec83a",
-  "releasePipelineCommit": "afb7eed81fd032e914f28d208801cff12aa5816a",
+  "minimumSourceBuild": 7,
+  "appCodeCommit": "a68df1fe69691896f7489fe7458d925055214f4b",
+  "releasePipelineCommit": "1ccc328733298d0aeed2330f11ad605e4ca84269",
   "signedIosCandidate": {
     "status": "success",
     "build": 4,
@@ -29,8 +29,8 @@
   },
   "testflight": {
     "status": "testing",
-    "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae66ba86a1999f83b5c8371",
-    "sourceCommit": "afb7eed81fd032e914f28d208801cff12aa5816a",
+    "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6700ba74da3772d1e02f4",
+    "sourceCommit": "1ccc328733298d0aeed2330f11ad605e4ca84269",
     "uploadBranch": "release/korlix-brain-testflight-20261031",
     "workflow": "korlix-brain-ios-testflight",
     "betaInformation": "saved in App Store Connect",
@@ -40,14 +40,16 @@
       "id": "ae86d9a2-5bdf-4f3d-910b-aa532675951f",
       "automaticDistribution": false,
       "testerCount": 1,
-      "invitationStatus": "Installed 1.0.1 (5), observed in App Store Connect",
-      "buildCount": 2,
+      "invitationStatus": "Existing tester retained; App Store Connect reports Installed 1.0.1 (6)",
+      "buildCount": 3,
       "builds": [
+        "1.0.1 (6)",
         "1.0.1 (5)",
         "1.0.1 (3)"
       ],
       "buildState": "Testing",
-      "build5Assigned": true
+      "build5Assigned": true,
+      "build6Assigned": true
     },
     "processingRejection": {
       "version": "1.0.1",
@@ -70,28 +72,29 @@
       "processingResult": "rejected ITMS-90683",
       "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6612f6a1999f83b5c5925"
     },
-    "build": 5,
+    "build": 6,
     "signedArtifactVerification": "pass",
     "flutterAnalyze": "pass",
-    "flutterTests": 31,
+    "flutterTests": 37,
     "releaseIdentityTests": 23,
-    "completedAt": "2026-10-31T22:37:09Z",
+    "completedAt": "2026-10-31T22:58:49Z",
     "processingResult": "complete",
-    "appleBuildId": "3a95a0e0-40ba-41f3-bffc-34cbdcb57d89",
     "console": "https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6829319523/testflight/groups/ae86d9a2-5bdf-4f3d-910b-aa532675951f/builds",
-    "processingVerifiedAt": "2026-10-31T22:41:39.126647+00:00",
     "previousReadyBuild": {
-      "build": 3,
-      "appleBuildId": "44635f64-b6fd-4cd9-b300-5a733408e30e",
-      "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae664bb6a1999f83b5c67a2",
-      "sourceCommit": "2a4d2737b14222fde1d407d0da6d3fc043d9119e",
+      "build": 5,
+      "appleBuildId": "3a95a0e0-40ba-41f3-bffc-34cbdcb57d89",
+      "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae66ba86a1999f83b5c8371",
+      "sourceCommit": "afb7eed81fd032e914f28d208801cff12aa5816a",
+      "completedAt": "2026-10-31T22:37:09Z",
       "processingResult": "complete",
       "groupState": "Testing"
     },
-    "distributionApprovedByUser": true
+    "distributionApprovedByUser": true,
+    "appleBuildId": "62dfea86-1c40-4a05-90ce-1ab2c23dda60",
+    "processingVerifiedAt": "2026-10-31T23:03:28.985305+00:00"
   },
   "storeSubmission": "not performed",
-  "authenticatedDeviceVoiceTest": "User tested build 3 and reported latency; build 5 device measurement pending",
+  "authenticatedDeviceVoiceTest": "Build 6 conversation requests succeeded; user reported 2\u20138 second first-text delays and incorrect Kim identity. Build 7 device verification pending.",
   "androidStoreSigning": "not configured",
   "listingText": "Apple name, subtitle, category, description, keywords and support URL saved; Google draft only",
   "iconColors": [
@@ -103,7 +106,7 @@
   "reasoning": {
     "model": "gpt-6-astra",
     "effort": "max",
-    "liveProviderInference": "Exact model and effort are pinned in code and verified by deployed health. Final build-5 authenticated device timing remains pending."
+    "liveProviderInference": "Production build-6 requests completed with verified Astra model; gpt-6-astra/max retained. Build-7 timing pending."
   },
   "voiceMemory": {
     "command": "Rici, remember this: ...",
@@ -129,7 +132,7 @@
   },
   "latencyUpdate": {
     "sourceBuild": 5,
-    "status": "Backend live; build 5 Testing in the existing internal group",
+    "status": "Backend live; streaming and corrected session handshake are Testing in build 6",
     "reasoningModel": "gpt-6-astra",
     "reasoningEffort": "max",
     "baselineBackendMs": [
@@ -155,8 +158,52 @@
   },
   "sessionHandshakeFix": {
     "sourceBuild": 6,
-    "status": "37 app tests and 23 release checks passed; final analysis pending",
+    "status": "Testing in KORLIX Brain Internal; Apple processing and group assignment verified",
     "change": "Send session.update after session.created, wait for session.updated to confirm no automatic responses and transcription before enabling microphone; bounded setup timeout; retain Astra Max checks",
-    "liveDeviceVerification": "pending"
+    "liveDeviceVerification": "pending",
+    "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6700ba74da3772d1e02f4",
+    "sourceCommit": "a68df1fe69691896f7489fe7458d925055214f4b",
+    "releaseCommit": "1ccc328733298d0aeed2330f11ad605e4ca84269",
+    "flutterTests": 37,
+    "releaseIdentityTests": 23,
+    "flutterAnalyze": "pass",
+    "appleBuildId": "62dfea86-1c40-4a05-90ce-1ab2c23dda60",
+    "completedAt": "2026-10-31T22:58:49Z"
+  },
+  "riciResponsivenessUpdate": {
+    "sourceBuild": 7,
+    "status": "Backend live; local validation passed; signed iOS upload pending",
+    "backendCommit": "7df8f95489511f5be8486714b260252553ad8003",
+    "backendDeploy": "dep-dbj8dg6tlv9c73cgtem0",
+    "backendHealth": "200; spokenName Rici; identityPolicy brain-rici-v1; quickConnectionReplies true; anonymous turn 401",
+    "baselineFirstTextMs": [
+      2234,
+      5363,
+      7955
+    ],
+    "baselinePreparationMs": [
+      50,
+      59,
+      56
+    ],
+    "changes": [
+      "Dedicated Rici system identity; shared training and memories remain account data",
+      "Exact standalone presence/name checks use metered app phrases without inference",
+      "First complete sentence starts speech without old 60-character minimum",
+      "Fixed 58px red Stop conversation button across screens and voice states",
+      "Stop disables microphone and playback before cleanup; cancels pending start"
+    ],
+    "backendTests": 44,
+    "sharedAgentTests": 13,
+    "uiViewports": [
+      320,
+      390,
+      768,
+      1024
+    ],
+    "deviceVerification": "pending",
+    "flutterTests": 39,
+    "flutterAnalyze": "pass",
+    "releaseIdentityTests": 23
   }
 }

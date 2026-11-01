@@ -12,7 +12,7 @@ const app = path.resolve(__dirname,'..');
     page.on('pageerror',e=>errors.push(e.message));
     await page.addInitScript(()=>{
       window.testAccount={training:'Use plain language.',memories:[],canUndo:false};
-      window.testCommands=[];window.testFailSave=false;
+      window.testCommands=[];window.testFailSave=false;window.testHoldStop=false;
       window.Korlix={postMessage:raw=>{
         const m=JSON.parse(raw);window.testCommands.push(m);
         const reply=(data,error)=>setTimeout(()=>window.KorlixBrainReceive({type:'reply',id:m.id,data,error}),0);
@@ -24,7 +24,7 @@ const app = path.resolve(__dirname,'..');
           case 'saveTraining':window.testAccount.training=m.payload.text;return reply(window.testAccount);
           case 'deleteMemory':window.testAccount.memories=window.testAccount.memories.filter(x=>x.id!==m.payload.key);return reply(window.testAccount);
           case 'startVoice':setTimeout(()=>window.KorlixBrainReceive({type:'voice',phase:'listening',message:'Rici is listening'}),0);return reply(null);
-          case 'stopVoice':setTimeout(()=>window.KorlixBrainReceive({type:'voice',phase:'complete',message:'Microphone off'}),0);return reply(null);
+          case 'stopVoice':if(window.testHoldStop)return;setTimeout(()=>window.KorlixBrainReceive({type:'voice',phase:'complete',message:'Microphone off'}),0);return reply(null);
           case 'pickFile':return reply({text:'Document draft, not yet saved.',filename:'guide.txt'});
           default:return reply(null);
         }
@@ -65,6 +65,22 @@ const app = path.resolve(__dirname,'..');
     assert.equal(await page.locator('#cinema-kb-transcript img').count(),0,'Transcript must remain inert text');
     assert.equal(await page.locator('#cinema-kb-transcript').getByRole('button',{name:'Report response'}).count(),1);
     if(process.env.UI_SCREENSHOTS)await page.screenshot({path:path.join(process.env.UI_SCREENSHOTS,'brain-talk-'+width+'.png'),fullPage:true});
+    const stop=page.getByRole('button',{name:'Stop conversation',exact:true});
+    for(const phase of ['connecting','listening','thinking','speaking']){
+      await page.evaluate(phase=>window.KorlixBrainReceive({type:'voice',phase,message:'Rici '+phase}),phase);
+      assert.equal(await stop.isVisible(),true,'Stop stays visible during '+phase);
+      for(const scroll of [0,10000]){
+        await page.evaluate(y=>window.scrollTo(0,y),scroll);
+        const bounds=await stop.boundingBox();
+        assert.ok(bounds.height>=56,'Large stop target');
+        assert.ok(bounds.y>=0&&bounds.y+bounds.height<=page.viewportSize().height,'Stop remains inside viewport');
+      }
+    }
+    if(process.env.UI_SCREENSHOTS){
+      await page.evaluate(()=>{document.querySelector('#cinema-kb-transcript p').textContent="I'm Rici. How can I help?";window.scrollTo(0,0);});
+      await page.screenshot({path:path.join(process.env.UI_SCREENSHOTS,'brain-stop-'+width+'.png')});
+    }
+    await page.evaluate(()=>window.scrollTo(0,0));
     await page.locator('section[data-screen="talk"] [data-go="home"]').click();
     assert.equal(await page.locator('.kb-live-banner').isVisible(),true,'Voice controls remain available while navigating');
     await page.evaluate(()=>{
@@ -77,11 +93,23 @@ const app = path.resolve(__dirname,'..');
     assert.equal(await page.locator('#cinema-kb-memory-list').textContent().then(t=>t.includes('Always use metric units.')),true);
     assert.equal(await page.locator('#cinema-kb-memory-list').textContent().then(t=>t.includes('Voice instruction')),true);
     assert.equal(await page.locator('section[data-screen="review"]').isVisible(),false,'Voice save must not require an approval screen');
+    await page.evaluate(()=>window.testHoldStop=true);
     await page.locator('#cinema-kb-stop-voice').click();
+    assert.equal(await page.locator('#cinema-kb-stop-label').textContent(),'Stopping…','Feedback precedes native acknowledgement');
+    assert.equal(await page.locator('#cinema-kb-stop-voice').isDisabled(),true);
+    await page.evaluate(()=>window.KorlixBrainReceive({type:'voice',phase:'speaking',message:'Late event'}));
+    assert.equal(await page.locator('#cinema-kb-stop-label').textContent(),'Stopping…','Late audio event cannot restart UI');
+    assert.equal(await page.evaluate(()=>window.testCommands.filter(c=>c.action==='stopVoice').length),1);
+    await page.evaluate(()=>window.KorlixBrainReceive({type:'voice',phase:'complete',message:'Microphone off'}));
     await page.waitForFunction(()=>document.querySelector('.kb-product').dataset.voiceActive==='false');
+    await page.locator('section[data-screen="brain"] [data-go="home"]').click();
+    await page.getByRole('button',{name:/Talk to Rici/}).click();
+    await page.waitForFunction(()=>document.querySelector('#cinema-kb-voice-phase').textContent==='Rici is listening');
+    await page.evaluate(()=>{const old=window.testCommands.find(c=>c.action==='stopVoice');window.KorlixBrainReceive({type:'reply',id:old.id,error:'Old cleanup failed'});});
+    assert.equal(await page.locator('#cinema-kb-stop-label').textContent(),'Stop conversation','Old stop reply cannot alter the new session');
     await page.close();
   }
   assert.deepEqual(errors,[]);
   await browser.close();
-  console.log('PASS: four viewport layouts; approval gates; server failure; exact deletion; live voice navigation; inert transcripts; response reporting.');
+  console.log('PASS: four viewport layouts; approval gates; server failure; exact deletion; live voice navigation; persistent 58px Stop across four phases and scrolling; immediate stopping feedback; inert transcripts; response reporting.');
 })().catch(e=>{console.error(e);process.exit(1);});
