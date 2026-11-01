@@ -1,8 +1,20 @@
-## iPhone ambience — build 11 candidate
+## Spoken welcome and Risi pronunciation — build 12 candidate
+
+The approved 14.378-second Marin welcome is bundled offline and plays once on first use. Skip and Replay are visible on Home. Navigation, account controls, microphone use and backgrounding stop it immediately; resuming the app does not restart it. Music ducks for the introduction. The clip opens no microphone and consumes no Live Conversation minutes.
+
+Brain's voice configuration previously returned before the shared pronunciation boundary. Both Live and Deep Think now receive the soft-s “Ree-see” rule. Deep Think speech text is phonetic while its written answer remains unchanged; Live memory readbacks reinforce the same pronunciation. The explicit memory command also accepts an ASR spelling of “Risi”, preserving the existing ownership and command gates. Native captions normalize only the spoken “Ree-see” form to the written brand Rici.
+
+Backend `20706bb385dc9658247e0ecbcea89bacc62d3e89` is live on the existing service (deploy `dep-dbjc7r7lk1mc738r8l0g`). All 41 targeted backend checks and 63 Flutter tests passed, with clean Flutter analysis. New browser checks cover the actual bundled WAV, first use, Skip/Replay, pause before voice/dictation, app backgrounding, delayed/blocked playback, offline playback and music ducking. Signed CI and physical iPhone listening remain pending. No model selection, voice identity, billing or public App Store submission change.
+
+## iPhone ambience — build 11
 
 The Web Audio bed used the default audio category, which can be silenced by the iPhone Ring/Silent control. User-started ambience now requests the optional playback category and releases it before native voice or dictation starts. The Web Audio context is suspended during capture and can resume on Home after capture ends. Music volume persists on the device; a new installation keeps the approved 1% default. Music still requires a tap and stays quiet outside Home. No voice model, backend, billing or spoken welcome changes.
 
-Validation: 61 Flutter tests, clean analysis and 23 release checks pass locally. Dedicated browser checks cover real MP3 decoding, playback category, voice/dictation handoff, pause/resume, remembered volume and API fallback. Signed CI and audible physical iPhone checks remain pending. Reference: https://bugs.webkit.org/show_bug.cgi?id=237322 and https://www.w3.org/TR/audio-session/.
+The [signed build-11 pipeline](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6be3fa74da3772d1f0f8a) passed Flutter analysis, 61 Dart tests, 23 release checks, four viewport transcript checks and the new audio handoff checks. It verified the IPA identity, privacy-purpose strings, App Store profile and signature, then uploaded version 1.0.1 (11) without errors. Apple processing is complete. Build 11 is **Testing in KORLIX Brain Internal**, which retains one existing tester and now has eight builds (11, 10, 9, 8, 7, 6, 5 and 3). No new testers or public App Store submission. Physical iPhone audibility, Silent Mode, Bluetooth and interruption checks remain pending.
+
+App code: `8a93ddcf16eb1c92d9d16bd15013f2cc16bd96d4`. Release commit: `13f731b1a781825d2d6a08d5a1f093622ff05122`. Apple build ID: `4c9b5a85-4800-47cd-be7b-362b84343d83`. IPA: 33,683,993 bytes; SHA-256 `42c753ff4757c34de50acd35165adf6289a92b9b9109a62839245beb989b5979`.
+
+References: https://bugs.webkit.org/show_bug.cgi?id=237322 and https://www.w3.org/TR/audio-session/.
 
 ## Transcript actions — build 10
 
@@ -85,7 +97,7 @@ Validation: 31 Flutter tests, including incremental UTF-8, truncation, account c
 | --- | --- |
 | App name | KORLIX Brain+Voice |
 | Apple bundle ID / Android package | `com.korlix.brain` |
-| Version / minimum source build | `1.0.1` / `10` |
+| Version / minimum source build | `1.0.1` / `11` |
 | Apple team | `FJKJ9MUDZ4` |
 | Apple app ID | `6829319523` |
 | Apple SKU | `KORLIX-BRAIN-VOICE-IOS` |
@@ -93,7 +105,7 @@ Validation: 31 Flutter tests, including incremental UTF-8, truncation, account c
 | Platforms | iPhone and iPad |
 | Store icon | Purple, red, green and gold KORLIX emblem |
 
-The dedicated [Apple app record](https://appstoreconnect.apple.com/apps/6829319523/distribution/info) is created. **Version 1.0.1 (10) is Testing in [KORLIX Brain Internal](https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6829319523/testflight/groups/ae86d9a2-5bdf-4f3d-910b-aa532675951f/builds).** Builds 3, 5, 6, 7, 8 and 9 remain available in that group. The group has one approved existing tester. Automatic distribution is disabled. App Store review has not been submitted. The user confirms build-9 Live Conversation works. Build 10 adds transcript controls and is Testing after approved existing-group distribution. Quantified phone latency remains unmeasured.
+The dedicated [Apple app record](https://appstoreconnect.apple.com/apps/6829319523/distribution/info) is created. **Version 1.0.1 (11) is Testing in [KORLIX Brain Internal](https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6829319523/testflight/groups/ae86d9a2-5bdf-4f3d-910b-aa532675951f/builds).** Earlier builds 3, 5, 6, 7, 8, 9 and 10 remain in the same group, with one existing tester and automatic distribution disabled. App Store review has not been submitted. The user confirms build-9 Live Conversation works; build 10 added transcript controls and build 11 corrects iPhone ambience playback. Audible phone verification and quantified latency remain pending.
 
 Apple rejected build 2 during processing (ITMS-90683) for missing camera and photo-library descriptions and warned about a missing location description. Build 3 includes all three and checks the exported IPA before upload. Its four-color icon is visible in Apple's processed build. Apple listing text is saved in the version 1.0.1 draft. Google Play listing ID remains unverified. Never reuse another KORLIX app's store record or bundle identity.
 
