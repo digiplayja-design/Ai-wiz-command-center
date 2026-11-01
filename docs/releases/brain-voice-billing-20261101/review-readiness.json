@@ -1,0 +1,62 @@
+{
+  "recordedAt": "2026-11-01T15:03:33.449953+00:00",
+  "app": "KORLIX Brain+Voice",
+  "build": 14,
+  "publicReleaseSubmitted": false,
+  "reviewerLogin": {
+    "googlePlaySaved": true,
+    "name": "KORLIX Brain+Voice reviewer",
+    "passwordHandledByUser": true,
+    "credentialsStoredInRepository": false,
+    "deviceSignInTestPerformed": false
+  },
+  "reviewAllowance": {
+    "migration": "20261101145830_brain_voice_review_allowance.sql",
+    "applied": true,
+    "accountCount": 1,
+    "secondsPerUtcCalendarMonth": 3600,
+    "remainingSecondsVerified": 3600,
+    "rollover": false,
+    "storePurchaseRecordsCreated": 0,
+    "subscriptionActive": false,
+    "rls": true,
+    "clientReadWriteExecuteAccess": false,
+    "serviceRoleOnly": true,
+    "passwordChanged": false,
+    "sharedUltraTierChanged": false,
+    "customerBillingEnabled": false,
+    "note": "Existing account-tier limits remain active while billing is disabled. The separate reviewer allowance is provisioned for billing activation. Full native-device reviewer flow still needs testing."
+  },
+  "googlePlay": {
+    "signInDetailsSaved": true,
+    "targetAgeGroups": [
+      "16-17",
+      "18 and over"
+    ],
+    "targetAudienceSaved": true,
+    "dataSafetySavedForReview": true,
+    "dataTypesCompleted": 11,
+    "contentRatingPreviouslyCompleted": true,
+    "remainingAppContentDeclarations": [
+      "Foreground service permissions"
+    ],
+    "foregroundService": "microphone",
+    "requiredEvidence": "Native Android screen recording of a user-started Live conversation, background microphone notification, and Stop action; provide a reviewer-accessible video URL.",
+    "appReviewSubmitted": false
+  },
+  "tests": {
+    "billing": 14,
+    "voiceAndMemory": 22,
+    "passed": 36,
+    "failed": 0,
+    "nativeStorePurchaseTestsPerformed": false
+  },
+  "remainingReleaseRequirements": [
+    "Native iPhone and Android store screenshots; Apple IAP review screenshots",
+    "Android microphone foreground-service demonstration video",
+    "Native subscription, restore, AI GAS verification/consumption, renewal/refund tests",
+    "Apple browser sign-in remains at two-factor verification; no further credential attempt made",
+    "Assign and verify build 14 with authorized testers; billing flags remain off until native verification"
+  ],
+  "evidence": "google-play/review-evidence/declarations-20261101.jpg"
+}

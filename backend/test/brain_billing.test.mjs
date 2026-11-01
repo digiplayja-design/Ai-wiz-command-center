@@ -26,6 +26,7 @@ async function database(t){
  const db=new PGlite();t.after(()=>db.close());
  await db.exec('create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create table auth.users(id uuid primary key);');
  await db.exec(await readFile(new URL('../../supabase/migrations/20261101113614_brain_voice_store_billing.sql',import.meta.url),'utf8'));
+ await db.exec(await readFile(new URL('../../supabase/migrations/20261101145830_brain_voice_review_allowance.sql',import.meta.url),'utf8'));
  await db.query('insert into auth.users values($1),($2)',[owner,other]);
  const call=async(actor,action,p={})=>(await db.query("select public.korlix_brain_billing_command($1,$2,$3) result",[actor,action,JSON.stringify(p)])).rows[0].result;
  return {db,call};
@@ -106,4 +107,65 @@ test('verification ignores client user ID; store consumption follows durable gra
  billing.register(app);const server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));t.after(()=>server.close());
  const result=await fetch(`http://127.0.0.1:${server.address().port}/api/brain/billing/verify`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({provider:'google',productId:BRAIN_CATALOG[1].google,userId:other})});
  assert.equal(result.status,200);assert.deepEqual(operations,['apply','consume']);
+});
+
+
+test('review access grants 60 minutes once per month without creating store purchases',async t=>{
+ const {call,db}=await database(t);
+ await call(owner,'snapshot');
+ await db.query("insert into korlix_brain_review_access(user_id,reason,authorized_by) values($1,'Dedicated store review account','Release owner')",[owner]);
+ const balance=await call(owner,'snapshot');
+ assert.equal(balance.reviewAccess,true);assert.equal(balance.reviewSeconds,3600);
+ assert.equal(balance.includedSeconds,3600);assert.equal(balance.subscriptionActive,false);
+ assert.equal((await call(other,'snapshot')).remainingSeconds,0);
+ assert.equal((await db.query('select count(*) n from korlix_brain_purchases')).rows[0].n,0);
+ const r=await call(owner,'reserve');assert.equal(r.maxSessionSeconds,3600);
+ await call(owner,'start',{sessionId:r.sessionId,callId:'rtc_review'});
+ await db.query("update korlix_brain_voice_sessions set started_at=now()-interval '60 seconds' where id=$1",[r.sessionId]);
+ const ended=await call(owner,'end',{sessionId:r.sessionId});
+ assert.equal((await call(owner,'snapshot')).reviewSeconds,3600-ended.chargedSeconds);
+ assert.equal((await db.query("select count(*) n from korlix_brain_minute_grants where kind='review'")).rows[0].n,1);
+});
+test('review allowance is bounded and revocable without removing purchased GAS',async t=>{
+ const {call,db}=await database(t);
+ await call(owner,'snapshot');
+ await db.query("insert into korlix_brain_review_access(user_id,reason,authorized_by) values($1,'Dedicated store review account','Release owner')",[owner]);
+ await call(owner,'snapshot');
+ await db.query("update korlix_brain_minute_grants set used_seconds=3600 where kind='review'");
+ await assert.rejects(call(owner,'reserve'),/run out/);
+ await call(owner,'apply',appleFacts(apple(),owner));
+ await db.query('update korlix_brain_review_access set enabled=false');
+ const balance=await call(owner,'snapshot');
+ assert.equal(balance.reviewAccess,false);assert.equal(balance.reviewSeconds,0);assert.equal(balance.gasSeconds,3600);
+ assert.equal((await db.query("select revoked from korlix_brain_minute_grants where kind='review'")).rows[0].revoked,true);
+});
+test('revoking review access ends its active session on the next usage check',async t=>{
+ const {call,db}=await database(t);await call(owner,'snapshot');
+ await db.query("insert into korlix_brain_review_access(user_id,reason,authorized_by) values($1,'Dedicated store review account','Release owner')",[owner]);
+ const r=await call(owner,'reserve');await call(owner,'start',{sessionId:r.sessionId,callId:'rtc_review_revoked'});
+ await db.query('update korlix_brain_review_access set enabled=false');
+ assert.equal((await call(owner,'usage',{sessionId:r.sessionId})).allowed,false);
+ assert.equal((await db.query('select sum(reserved_seconds) n from korlix_brain_minute_grants')).rows[0].n,0);
+});
+test('expired review minutes do not roll over and a new UTC month is granted once',async t=>{
+ const {call,db}=await database(t);await call(owner,'snapshot');
+ await db.query("insert into korlix_brain_review_access(user_id,reason,authorized_by) values($1,'Dedicated store review account','Release owner')",[owner]);
+ await call(owner,'snapshot');
+ await db.query("update korlix_brain_minute_grants set grant_key='review:previous-month',expires_at=now()-interval '1 day',used_seconds=600 where kind='review'");
+ assert.equal((await call(owner,'snapshot')).reviewSeconds,3600);
+ assert.equal((await call(owner,'snapshot')).reviewSeconds,3600);
+ assert.equal((await db.query("select count(*) n from korlix_brain_minute_grants where kind='review'")).rows[0].n,2);
+});
+test('clients cannot read or grant review access and cannot forge a purchase source',async t=>{
+ const {call,db}=await database(t);await call(owner,'snapshot');
+ await assert.rejects(db.query("insert into korlix_brain_minute_grants(grant_key,user_id,kind,seconds) values('fake-source',$1,'subscription',3600)",[owner]),/check constraint/);
+ for(const role of ['anon','authenticated']){
+  await db.exec('set role '+role);
+  await assert.rejects(db.query('select * from korlix_brain_review_access'),/permission denied/);
+  await assert.rejects(db.query("insert into korlix_brain_review_access(user_id,reason,authorized_by) values($1,'Forged review access','attacker')",[owner]),/permission denied/);
+  await assert.rejects(call(owner,'snapshot'),/permission denied/);
+  await db.exec('reset role');
+ }
+ await db.exec('set role service_role');
+ assert.equal((await call(owner,'snapshot')).reviewAccess,false);
 });

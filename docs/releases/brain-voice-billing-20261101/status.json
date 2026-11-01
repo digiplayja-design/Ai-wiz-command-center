@@ -1,70 +1,71 @@
 {
-  "updatedAt": "2026-11-01T12:01:30Z",
+  "updatedAt": "2026-11-01T15:03:33.449953+00:00",
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "appleAppId": "6829319523",
-  "lastDeliveredBuild": 13,
-  "userVerifiedBaseline": true,
+  "lastUserVerifiedBuild": 13,
   "candidateBuild": 14,
-  "appCommit": "76d7d0f9c26e56883913ca3b079397c6b109bb77",
-  "appBranch": "feature/korlix-brain-voice-20261031",
+  "appBranch": "release/korlix-brain-store-20261101",
+  "appCodeCommit": "76d7d0f9c26e56883913ca3b079397c6b109bb77",
   "backend": {
-    "commit": "00894696f5371623adb827c7c5a77d0ecb60716b",
+    "runtimeCommit": "00894696f5371623adb827c7c5a77d0ecb60716b",
     "deploy": "dep-dbjihnjbc2fs73ctvgpg",
     "state": "live",
-    "health200": true,
     "billingEnabled": false,
     "appleReady": false,
     "googleReady": false
   },
   "database": {
-    "migration": "20261101113614_brain_voice_store_billing.sql",
-    "applied": true,
-    "rls": true,
-    "clientTableAccess": false,
-    "clientRpcAccess": false
+    "billingMigration": "20261101113614_brain_voice_store_billing.sql",
+    "reviewAllowanceMigration": "20261101145830_brain_voice_review_allowance.sql",
+    "bothApplied": true,
+    "reviewerMinutes": 60,
+    "serviceRoleOnly": true
   },
   "pricing": {
-    "currency": "USD",
-    "monthlyPrice": 34.99,
+    "monthlyUsd": 34.99,
     "monthlyLiveMinutes": 60,
     "gas": [
       {
         "minutes": 60,
-        "price": 30
+        "usd": 30
       },
       {
         "minutes": 120,
-        "price": 55
+        "usd": 55
       },
       {
         "minutes": 180,
-        "price": 80
+        "usd": 80
       }
     ],
-    "gasExpires": false,
-    "deepThink": "existing account limits"
-  },
-  "validation": {
-    "flutterTests": 75,
-    "flutterAnalyze": "pass",
-    "releaseIdentityTests": 23,
-    "billingTests": 9,
-    "mobileCI": "in_progress",
-    "mobileCIUrl": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41304207865",
-    "signedIosCandidate": "not yet verified",
-    "androidStoreKey": "not yet verified",
-    "nativeStorePurchases": "not yet tested"
+    "gasExpires": false
   },
   "stores": {
-    "apple": "Not submitted. Sign-in verification code rejected; supported secure manual handoff is next.",
-    "google": "Not submitted. Automatic approval review rejected Console navigation because the origin gate evaluated https://google.play instead of the requested https://play.google.com/console. Do not bypass or retry without resolving this approval block.",
-    "productsConfigured": false
+    "appleBuild14": "Uploaded and processed; not yet assigned to existing internal tester",
+    "googleBuild14": "Internal release published; zero testers; not publicly reviewed",
+    "productsConfigured": true,
+    "appleProductAvailability": [
+      "USA"
+    ],
+    "nativePurchaseTests": "not performed",
+    "googleDeclarationsRemaining": 1,
+    "googleRemainingDeclaration": "Foreground service microphone demonstration video",
+    "publicReviewSubmitted": false
+  },
+  "validation": {
+    "billing": 14,
+    "voiceAndMemory": 22,
+    "passed": 36,
+    "failed": 0,
+    "nativeStorePurchaseTestsPerformed": false
   },
   "next": [
-    "Complete Apple secure sign-in and configure monthly plus three consumables from apps/korlix_brain/store/billing-products.json on the app feature branch.",
-    "Resolve Play Console access, verify app record and managed Android upload signing; configure the same four products.",
-    "Check mobile validation and signed candidate builds. Test native purchases, restore, renewal, refunds and actual usage on designated store test accounts.",
-    "Only enable billing/store readiness after store configuration and purchase tests. Submit the verified builds and products for store review under the existing user authorization."
-  ]
+    "Native iPhone and Android store screenshots; Apple IAP review screenshots",
+    "Android microphone foreground-service demonstration video",
+    "Native subscription, restore, AI GAS verification/consumption, renewal/refund tests",
+    "Apple browser sign-in remains at two-factor verification; no further credential attempt made",
+    "Assign and verify build 14 with authorized testers; billing flags remain off until native verification"
+  ],
+  "details": "review-readiness.json"
 }
