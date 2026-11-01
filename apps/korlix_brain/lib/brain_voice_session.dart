@@ -20,7 +20,7 @@ class BrainVoiceSessionGate {
               'input': {
                 'transcription': {
                   'model': 'gpt-transcribe',
-                  'keywords': ['Rici', 'KORLIX', 'Rici remember this'],
+                  'keywords': ['Rici', 'Risi', 'KORLIX', 'Rici remember this'],
                 },
                 'turn_detection': {
                   'type': 'semantic_vad',
@@ -44,7 +44,7 @@ class BrainVoiceSessionGate {
         'input': {
           'transcription': {
             'model': 'gpt-transcribe',
-            'keywords': ['Rici', 'KORLIX', 'Rici remember this'],
+            'keywords': ['Rici', 'Risi', 'KORLIX', 'Rici remember this'],
           },
           'turn_detection': {
             'type': 'semantic_vad',

@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'brain_pronunciation.dart';
+
 /// Native Realtime replies are never held behind ASR, HTTP or Sol. Only an
 /// explicit memory tool waits for the original, item-bound user transcript.
 class BrainLiveTurns {
@@ -225,7 +227,8 @@ class BrainLiveTurns {
         'type': 'response.create',
         'response': {
           'metadata': {'brain_turn': turnId},
-          'instructions': 'Briefly relay the memory tool result accurately. Confirm a save only when saved is true. Do not call another tool for the same utterance. Your name is Rici, pronounced Ree-see.',
+          'instructions':
+              'Briefly relay the memory tool result accurately. Confirm a save only when saved is true. Do not call another tool for the same utterance. Your name is Ree-see. $brainPronunciation',
           'tool_choice': 'none',
         },
       });

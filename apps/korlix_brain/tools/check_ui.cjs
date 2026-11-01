@@ -11,6 +11,7 @@ const app = path.resolve(__dirname,'..');
     const page=await browser.newPage({viewport:{width,height:width===1024?768:900},reducedMotion:'reduce'});
     page.on('pageerror',e=>errors.push(e.message));
     await page.addInitScript(()=>{
+      localStorage.setItem('korlix-brain-welcome-v1-seen','true');
       window.testAccount={training:'Use plain language.',memories:[],canUndo:false};
       window.testCommands=[];window.testFailSave=false;window.testHoldStop=false;
       window.testMessages={};window.testSaved=JSON.parse(localStorage.getItem('testSavedMessages')||'{}');

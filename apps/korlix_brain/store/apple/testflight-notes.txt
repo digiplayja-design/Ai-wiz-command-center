@@ -1,7 +1,9 @@
-KORLIX Brain+Voice 1.0.1 (11)
+KORLIX Brain+Voice 1.0.1 (12)
 
-iPhone music-bed update: tap Play ambience on Home, adjust its volume, and the app remembers your chosen level. The initial default remains 1%. Music pauses for voice and dictation and returns on Home afterward. Transcript Save, Share and Delete remain available.
+New: a short, excited Rici welcome, bundled for instant offline playback. It plays once on first use; use Skip introduction or Replay welcome on Home. Starting voice, dictation, navigating away or backgrounding stops it. Music stays quiet during the welcome and resumes afterward if you enabled it.
 
-Please test with iPhone Silent Mode both on and off, media volume above zero, then start/stop Rici and dictate a memory. Confirm music never interferes with the microphone and that your chosen volume survives closing/reopening the app. Check Bluetooth/headphones and returning from another app.
+Rici is pronounced Risi (Ree-see), with a soft s. Live and Deep Think speech now share the pronunciation rule. Say “Rici, remember this: ...” as before; Risi transcriptions are accepted too.
 
-The spoken welcome is still a draft. No billing or allowance changes are enabled.
+Please listen on iPhone speaker and Bluetooth, test Silent Mode, Skip/Replay, close/reopen, and immediate Talk to Rici. Check that the introduction never overlaps the microphone or resumes after you skip or leave the app. Confirm Rici says her name correctly in Live, Deep Think and memory acknowledgments. Existing transcript Save/Share/Delete and music volume persistence remain available.
+
+The $34.99/60-minute plan is not activated in this build.

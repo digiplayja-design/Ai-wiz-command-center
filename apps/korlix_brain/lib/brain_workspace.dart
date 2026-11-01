@@ -8,6 +8,8 @@ import 'package:share_plus/share_plus.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:webview_flutter_android/webview_flutter_android.dart';
+import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
 import 'brain_api.dart';
 import 'brain_auth.dart';
@@ -15,6 +17,7 @@ import 'brain_repository.dart';
 import 'brain_voice.dart';
 import 'brain_model.dart';
 import 'brain_transcripts.dart';
+import 'brain_pronunciation.dart';
 
 class BrainWorkspace extends StatefulWidget {
   const BrainWorkspace({super.key, required this.auth});
@@ -72,7 +75,13 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
         _emit({'type': 'brainSnapshot', 'snapshot': _repository.snapshot});
       },
     );
-    _web = WebViewController()
+    final params = WebViewPlatform.instance is WebKitWebViewPlatform
+        ? WebKitWebViewControllerCreationParams(
+            allowsInlineMediaPlayback: true,
+            mediaTypesRequiringUserAction: const <PlaybackMediaTypes>{},
+          )
+        : const PlatformWebViewControllerCreationParams();
+    _web = WebViewController.fromPlatformCreationParams(params)
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(const Color(0xff100b1b))
       ..addJavaScriptChannel(
@@ -96,12 +105,24 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
             }
           },
         ),
-      )
-      ..loadFlutterAsset('assets/web/index.html');
+      );
+    if (_web.platform is AndroidWebViewController) {
+      unawaited(
+        (_web.platform as AndroidWebViewController)
+            .setMediaPlaybackRequiresUserGesture(false)
+            .then((_) => _web.loadFlutterAsset('assets/web/index.html')),
+      );
+    } else {
+      unawaited(_web.loadFlutterAsset('assets/web/index.html'));
+    }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _emit({
+      'type': 'appLifecycle',
+      'active': state == AppLifecycleState.resumed,
+    });
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       unawaited(_stopDictation());
@@ -112,6 +133,9 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
   void _emit(Map<String, dynamic> event) {
     if (_disposed || !mounted) return;
     if (event['type'] == 'transcript') {
+      if (event['role'] == 'rici' && event['text'] is String) {
+        event = {...event, 'text': brainDisplaySpeech(event['text'] as String)};
+      }
       try {
         final item = _transcriptStore.receive(
           event['role'] as String,
@@ -541,7 +565,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
             ListTile(
               title: const Text('KORLIX Brain+Voice'),
               subtitle: Text(
-                '${widget.auth.session?.email ?? 'Your account'}\nVersion 1.0.1 · Build 11',
+                '${widget.auth.session?.email ?? 'Your account'}\nVersion 1.0.1 · Build 12',
               ),
             ),
             const Padding(

@@ -1,9 +1,9 @@
 {
-  "updatedAt": "2026-11-01T04:32:53.707788+00:00",
+  "updatedAt": "2026-11-01T04:50:33.769151+00:00",
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "version": "1.0.1",
-  "minimumSourceBuild": 11,
+  "minimumSourceBuild": 12,
   "appCodeCommit": "8a93ddcf16eb1c92d9d16bd15013f2cc16bd96d4",
   "releasePipelineCommit": "13f731b1a781825d2d6a08d5a1f093622ff05122",
   "signedIosCandidate": {
@@ -434,5 +434,33 @@
     "processingResult": "complete",
     "distributionVerifiedAt": "2026-11-01T04:32:53.707788+00:00",
     "groupState": "Testing"
+  },
+  "welcomeUpdate": {
+    "sourceBuild": 12,
+    "status": "implemented; signed iPhone CI pending",
+    "audio": {
+      "seconds": 14.378,
+      "rate": 24000,
+      "bytes": 690188,
+      "sha256": "023761454a65f317e50252f9452e59d8b01fc66931a6d6f69ee55909f40c02f4",
+      "voice": "marin",
+      "pronunciation": "Ree-see",
+      "displayText": "Welcome to KORLIX Brain+Voice\u2014built to be one of the world's most versatile conversation apps! I'm Rici. Talk, learn, train me, and save what matters. Your voice. Your brain. Let's go!",
+      "ttsModel": "gpt-4o-mini-tts",
+      "speed": 1.12,
+      "playback": "Bundled offline; once on first use, then manual Replay; Skip and capture stop immediately",
+      "generatedBy": "Existing KORLIX backend fixed-text welcome endpoint",
+      "backendCommit": "20706bb385dc9658247e0ecbcea89bacc62d3e89"
+    },
+    "backendCommit": "20706bb385dc9658247e0ecbcea89bacc62d3e89",
+    "backendDeploy": "dep-dbjc7r7lk1mc738r8l0g",
+    "backendState": "live",
+    "backendTests": 41,
+    "flutterTests": 63,
+    "flutterAnalyze": "pass",
+    "physicalIphoneListening": "pending",
+    "spokenName": "Ree-see (Risi)",
+    "writtenName": "Rici",
+    "billingChanged": false
   }
 }

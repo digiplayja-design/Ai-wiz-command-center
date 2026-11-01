@@ -1,3 +1,11 @@
+## Spoken welcome and Risi pronunciation — build 12 candidate
+
+The approved 14.378-second Marin welcome is bundled offline and plays once on first use. Skip and Replay are visible on Home. Navigation, account controls, microphone use and backgrounding stop it immediately; resuming the app does not restart it. Music ducks for the introduction. The clip opens no microphone and consumes no Live Conversation minutes.
+
+Brain's voice configuration previously returned before the shared pronunciation boundary. Both Live and Deep Think now receive the soft-s “Ree-see” rule. Deep Think speech text is phonetic while its written answer remains unchanged; Live memory readbacks reinforce the same pronunciation. The explicit memory command also accepts an ASR spelling of “Risi”, preserving the existing ownership and command gates. Native captions normalize only the spoken “Ree-see” form to the written brand Rici.
+
+Backend `20706bb385dc9658247e0ecbcea89bacc62d3e89` is live on the existing service (deploy `dep-dbjc7r7lk1mc738r8l0g`). All 41 targeted backend checks and 63 Flutter tests passed, with clean Flutter analysis. New browser checks cover the actual bundled WAV, first use, Skip/Replay, pause before voice/dictation, app backgrounding, delayed/blocked playback, offline playback and music ducking. Signed CI and physical iPhone listening remain pending. No model selection, voice identity, billing or public App Store submission change.
+
 ## iPhone ambience — build 11
 
 The Web Audio bed used the default audio category, which can be silenced by the iPhone Ring/Silent control. User-started ambience now requests the optional playback category and releases it before native voice or dictation starts. The Web Audio context is suspended during capture and can resume on Home after capture ends. Music volume persists on the device; a new installation keeps the approved 1% default. Music still requires a tap and stays quiet outside Home. No voice model, backend, billing or spoken welcome changes.

@@ -30,6 +30,59 @@
   let voicePower = .15;
   const clamp = (x,min=0,max=1) => Math.max(min,Math.min(max,x));
   const smooth = x => {const t=clamp(x);return t*t*(3-2*t);};
+  let appVisible = true;
+  const welcome = {active:false, attempted:false, sequence:0, timer:null};
+  const welcomeAudio = get('kb-welcome-audio');
+  const welcomeKey = 'korlix-brain-welcome-v1-seen';
+  function welcomeSeen(){try{return localStorage.getItem(welcomeKey)==='true';}catch(error){return false;}}
+  function rememberWelcome(){try{localStorage.setItem(welcomeKey,'true');}catch(error){}}
+  function welcomeUi(message){
+    root.dataset.welcome=welcome.active?'playing':'idle';
+    get('kb-welcome-controls').hidden=currentScreen!=='home';
+    get('kb-welcome-status').textContent=message||'AI welcome from Rici';
+    get('kb-welcome-play').hidden=welcome.active;
+    get('kb-welcome-play').textContent=welcomeSeen()?'Replay welcome':'Play welcome';
+    get('kb-welcome-play').disabled=musicCaptureActive();
+    get('kb-welcome-skip').hidden=!welcome.active;
+  }
+  function stopWelcome(markSeen=true){
+    const wasActive=welcome.active;
+    welcome.sequence++;welcome.active=false;clearTimeout(welcome.timer);
+    welcomeAudio.pause();welcomeAudio.currentTime=0;
+    if(markSeen)rememberWelcome();
+    welcomeUi();
+    if(wasActive){music.idleUntil=performance.now()+3000;musicSession(false);refreshMusic();}
+  }
+  async function playWelcome(){
+    if(musicCaptureActive()||currentScreen!=='home'||!musicVisible()||music.disposed)return;
+    const sequence=++welcome.sequence;welcome.active=true;
+    welcomeAudio.currentTime=0;welcomeAudio.volume=.9;
+    welcomeUi('Rici is welcoming you…');musicSession(true);refreshMusic(.12);
+    clearTimeout(welcome.timer);
+    welcome.timer=setTimeout(()=>stopWelcome(),30000);
+    try{
+      await welcomeAudio.play();
+      if(sequence!==welcome.sequence||musicCaptureActive()||!musicVisible()){
+        if(!welcome.active)welcomeAudio.pause();
+        return;
+      }
+      rememberWelcome();
+    }catch(error){
+      if(sequence!==welcome.sequence)return;
+      stopWelcome(false);welcomeUi('Tap Play welcome to listen.');
+    }
+  }
+  function maybeWelcome(){
+    if(welcome.attempted)return;
+    welcome.attempted=true;
+    if(!welcomeSeen())playWelcome();
+  }
+  welcomeAudio.addEventListener('ended',()=>stopWelcome());
+  welcomeAudio.addEventListener('error',()=>{
+    if(welcome.active){stopWelcome(false);welcomeUi('Welcome unavailable. You can keep using the app.');}
+  });
+  get('kb-welcome-play').addEventListener('click',playWelcome);
+  get('kb-welcome-skip').addEventListener('click',()=>stopWelcome());
 
   const musicToggle = get('kb-music-toggle');
   const musicVolume = get('kb-music-volume');
@@ -43,14 +96,14 @@
     ramp:{from:0,to:0,start:0,end:0}, samples:new Uint8Array(256), glow:0
   };
 
-  function musicVisible(){return !document.hidden && inViewport && root.isConnected;}
+  function musicVisible(){return appVisible && !document.hidden && inViewport && root.isConnected;}
   function musicCaptureActive(){return root.dataset.voiceActive==='true'||music.dictating;}
   function musicSession(playback){
     // Web Audio otherwise uses iOS's ringer-muted ambient category. Release
     // our playback override before native voice/dictation takes the microphone.
     try{
       if(!navigator.audioSession)return;
-      if(playback){
+      if(playback||(welcome.active&&!musicCaptureActive()&&musicVisible())){
         if(navigator.audioSession.type!=='playback')navigator.audioSession.type='playback';
         music.ownsPlaybackSession=true;
       }else if(music.ownsPlaybackSession){
@@ -99,6 +152,7 @@
     if(musicCaptureActive()){
       pauseMusicForCapture();musicText('quiet','Paused while the microphone is in use');return;
     }
+    if(welcome.active){rampMusic(0,.12);musicText('quiet','Quiet for Rici’s welcome');return;}
     if(music.loading){musicText('loading','Preparing the ambient bed…');return;}
     if(music.autoSuspended&&currentScreen==='home'&&music.context&&music.source){
       music.autoSuspended=false;playMusic();return;
@@ -225,7 +279,7 @@
     const hidden=!musicVisible();
     if(hidden===music.hidden)return;
     music.hidden=hidden;
-    if(hidden){silenceMusicInBackground();return;}
+    if(hidden){stopWelcome();silenceMusicInBackground();return;}
     clearTimeout(music.suspendTimer);
     if(!music.wanted)return;
     music.idleUntil=performance.now()+3000;
@@ -250,7 +304,7 @@
   }
   function disposeMusic(){
     if(music.disposed)return;
-    music.disposed=true;music.wanted=false;music.sequence++;
+    music.disposed=true;music.wanted=false;music.sequence++;stopWelcome();
     musicSession(false);
     clearMusicWait();clearTimeout(music.suspendTimer);clearTimeout(music.removalTimer);
     if(music.source){try{music.source.stop();}catch(error){}}
@@ -735,6 +789,7 @@
       clearTimeout(request.timer);requests.delete(message.id);
       message.error?request.reject(new Error(message.error)):request.resolve(message.data);
     }else if(message.type==='voice'){
+      if(message.phase!=='complete')stopWelcome();
       if(message.phase==='complete'){voiceStarting=false;voiceStopping=false;}
       if(voiceStopping&&message.phase!=='complete')message={...message,phase:'stopping',message:'Stopping conversation…'};
       const index=phases.findIndex(p=>p.key===message.phase);
@@ -747,7 +802,7 @@
       get('kb-stop-voice').disabled=voiceStopping;
       get('kb-stop-label').textContent=voiceStopping?'Stopping…':'Stop conversation';
       get('kb-replay-demo').textContent='Start conversation';
-      root.dataset.voiceActive=String(voiceActive);refreshMusic();
+      root.dataset.voiceActive=String(voiceActive);refreshMusic();welcomeUi();
     }else if(message.type==='transcript'&&message.text){
       transcriptMessages.set(message.id||'unavailable-'+Date.now(),message);
       while(transcriptMessages.size>60)transcriptMessages.delete(transcriptMessages.keys().next().value);
@@ -762,8 +817,10 @@
       if(message.kind==='training')trainingSource='Voice';else memorySource='Voice';
       announce(message.final?'Dictation ready. Review before saving.':'Listening… tap Stop dictation when finished.');
     }else if(message.type==='dictationStatus'){
-      music.dictating=message.active===true;refreshMusic();
+      music.dictating=message.active===true;if(music.dictating)stopWelcome();refreshMusic();welcomeUi();
       announce(message.message);
+    }else if(message.type==='appLifecycle'){
+      appVisible=message.active===true;musicEnvironmentChanged();
     }
   };
   const fail=error=>announce(error.message||'Could not complete this action. Please try again.');
@@ -772,6 +829,7 @@
     memories=(snapshot.memories||[]).map(m=>({id:m.id,text:m.content,source:m.source==='voice_confirmed'?((m.tags||[]).includes('instruction')?'Voice instruction':'Voice memory'):(m.source||'Approved memory')}));
     canUndo=!!snapshot.canUndo;ready=true;
     get('kb-account-status').textContent='Account connected';
+    maybeWelcome();
     if(currentScreen==='brain')renderBrain();
   }
   async function refresh(){
@@ -864,11 +922,11 @@
   }
   function show(name,preserveDraft=false){
     clearFocus(false);resetDepth();clearLightning();
-    if(name!=='home')finishIntro();
+    if(name!=='home'){finishIntro();stopWelcome();}
     if(name!=='transfer'){transferState=null;transferStage.dataset.transfer='ready';}
     if((currentScreen==='train'||currentScreen==='memory')&&name!==currentScreen)native('stopDictation').catch(()=>{});
     currentScreen=name;screens.forEach(screen=>{screen.hidden=screen.dataset.screen!==name;});announce('');
-    root.dataset.screen=name;musicScreenChanged();
+    root.dataset.screen=name;musicScreenChanged();welcomeUi();
     if(name==='brain')renderBrain();
     if(name==='saved'){renderTranscripts();loadSavedTranscripts();}
     if(name==='manage-behaviors')renderDeleteList('behavior');if(name==='manage-memories')renderDeleteList('memory');
@@ -900,7 +958,7 @@
     }catch(error){fail(error);}
   }
   function dictate(kind){
-    music.dictating=true;refreshMusic();
+    stopWelcome();music.dictating=true;refreshMusic();welcomeUi();
     native('dictate',{kind}).catch(error=>{music.dictating=false;refreshMusic();fail(error);});
   }
   function stopVoice(){
@@ -916,6 +974,7 @@
   }
   function startVoice(){
     if(voiceActive||voiceStarting)return;
+    stopWelcome();
     const epoch=++voiceRequestEpoch;
     voiceStarting=true;
     window.KorlixBrainReceive({type:'voice',phase:'connecting',message:'Connecting to Rici…'});
@@ -970,7 +1029,7 @@
   get('kb-open-delete-behavior').addEventListener('click',()=>show('manage-behaviors'));get('kb-open-delete-memory').addEventListener('click',()=>show('manage-memories'));
   get('kb-confirm-delete').addEventListener('click',()=>{if(!deletion)return;const selected={...deletion};mutate(selected.kind==='behavior'?'deleteBehavior':'deleteMemory',selected,()=>{deletion=null;show('brain');announce('Selected item deleted from your account.');});});
   get('kb-undo-deletion').addEventListener('click',()=>mutate('undo',{},()=>{show('brain');announce('Previous change restored.');}));
-  get('kb-account').addEventListener('click',()=>native('account').catch(fail));get('kb-refresh').addEventListener('click',refresh);
+  get('kb-account').addEventListener('click',()=>{stopWelcome();native('account').catch(fail);});get('kb-refresh').addEventListener('click',refresh);
   get('kb-return-voice').addEventListener('click',()=>show('talk'));
   get('kb-saved-back').addEventListener('click',()=>show('talk'));
   get('kb-saved-refresh').addEventListener('click',loadSavedTranscripts);

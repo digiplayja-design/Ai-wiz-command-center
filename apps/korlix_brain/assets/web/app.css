@@ -377,3 +377,9 @@ html,body{margin:0;background:#100b1b;color:#fff9e9;min-height:100%;font-family:
 /* Transcript actions remain usable on compact phones. */
 .kb-transcript-actions{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:12px}.kb-transcript-actions button{min-height:44px;min-width:48px;touch-action:manipulation}.kb-transcript-actions button:disabled{opacity:.55}.kb-bubble time{display:block;font-size:12px;opacity:.7}.kb-bubble p{white-space:pre-wrap;overflow-wrap:anywhere}.kb-transcript-actions .kb-danger{color:#ffafbc}
 #korlix-silent-storm .kb-product .kb-transcript-actions .kb-link{min-height:48px}
+
+#korlix-silent-storm .kb-welcome-controls{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin:0 23px;color:var(--kb-muted);font-size:12px}
+#korlix-silent-storm .kb-welcome-controls[hidden]{display:none}
+#korlix-silent-storm .kb-welcome-controls button{min-height:44px;min-width:44px;color:var(--kb-cyan,#77e9ef)}
+#korlix-silent-storm [data-welcome="playing"] .kb-welcome-controls{color:var(--kb-gold,#e2c58d)}
+@media(max-width:420px){#korlix-silent-storm .kb-welcome-controls{margin:0 17px}}

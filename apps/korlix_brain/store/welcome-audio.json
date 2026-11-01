@@ -1,0 +1,14 @@
+{
+  "seconds": 14.378,
+  "rate": 24000,
+  "bytes": 690188,
+  "sha256": "023761454a65f317e50252f9452e59d8b01fc66931a6d6f69ee55909f40c02f4",
+  "voice": "marin",
+  "pronunciation": "Ree-see",
+  "displayText": "Welcome to KORLIX Brain+Voice—built to be one of the world's most versatile conversation apps! I'm Rici. Talk, learn, train me, and save what matters. Your voice. Your brain. Let's go!",
+  "ttsModel": "gpt-4o-mini-tts",
+  "speed": 1.12,
+  "playback": "Bundled offline; once on first use, then manual Replay; Skip and capture stop immediately",
+  "generatedBy": "Existing KORLIX backend fixed-text welcome endpoint",
+  "backendCommit": "20706bb385dc9658247e0ecbcea89bacc62d3e89"
+}

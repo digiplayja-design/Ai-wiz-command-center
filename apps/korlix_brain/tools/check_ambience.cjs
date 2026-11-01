@@ -11,6 +11,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
       const page=await browser.newPage({viewport:{width:390,height:900},reducedMotion:'reduce'});
       const errors=[];page.on('pageerror',error=>errors.push(error.message));
       await page.addInitScript(supported=>{
+        localStorage.setItem('korlix-brain-welcome-v1-seen','true');
         window.testAudioType='auto';window.testCommands=[];
         Object.defineProperty(navigator,'audioSession',{configurable:true,value:supported?{
           get type(){return window.testAudioType;},
