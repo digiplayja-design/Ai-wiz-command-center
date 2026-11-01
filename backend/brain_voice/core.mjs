@@ -2,11 +2,9 @@ import {createHash} from 'node:crypto';
 import {readAnswerStream} from './stream.mjs';
 import {brainInstructions, brainQuickReply} from './context.mjs';
 
-export const BRAIN_MODEL = 'gpt-6-astra';
-export const BRAIN_EFFORT = 'max';
-export const BRAIN_PROTOCOL = 'astra-max-v1';
-export const speechInstructions = 'You are the speech delivery layer for Rici, pronounced Ree-see. The application supplies the complete answer from GPT-6 Astra Max. Speak only the supplied answer, verbatim, naturally. Never answer the microphone input yourself, add facts, call tools, or claim a save independently. Stop immediately when interrupted.';
-export const isBrainVoice = req => req.headers?.['x-korlix-brain-voice'] === BRAIN_PROTOCOL;
+import {BRAIN_PROTOCOL, profileForProtocol, matchesBrainModel} from './models.mjs';
+export {BRAIN_MODEL, BRAIN_EFFORT, BRAIN_PROTOCOL, BRAIN_PROFILES, brainProfile, isBrainVoice} from './models.mjs';
+export const speechInstructions = 'You are the speech delivery layer for Rici, pronounced Ree-see. The application supplies the complete answer from its verified reasoning model. Speak only the supplied answer, verbatim, naturally. Never answer the microphone input yourself, add facts, call tools, or claim a save independently. Stop immediately when interrupted.';
 export function brainSpeechConfig(config) {
   return {...config, instructions: speechInstructions, tools: [], tool_choice: 'none',
     audio: {...config.audio, input: {...config.audio.input,
@@ -30,10 +28,12 @@ export function rememberCommand(text) {
 export function createBrainVoice({loadRuntime, saveMemory, reportUsage, fetchImpl = fetch, apiKey,
   now = () => Date.now(), onTiming = () => {}}) {
   const sessions = new Map();
-  function register({userId, sessionId, limits}) {
+  function register({userId, sessionId, limits, protocol = BRAIN_PROTOCOL}) {
+    const profile = profileForProtocol(protocol);
+    if (!profile) throw fail('Update KORLIX Brain+Voice to continue.', 'brain_protocol_unsupported', 426);
     for (const [id, s] of sessions) if (s.expires < now()) sessions.delete(id);
     if (sessions.size >= 2000) throw fail('Voice is busy. Please reconnect shortly.', 'brain_capacity', 503);
-    sessions.set(sessionId, {userId, sessionId, limits, started: now(),
+    sessions.set(sessionId, {userId, sessionId, limits, profile, started: now(),
       expires: now() + Math.min(86400, limits.maxSessionSeconds) * 1000,
       history: [], turns: new Map(), completedTurns: 0, busy: false, closed: false, awaiting: null,
       reasonUsage: {totalTokens: 0, inputTokens: 0, outputTokens: 0}, voiceUsage: {}});
@@ -82,14 +82,14 @@ export function createBrainVoice({loadRuntime, saveMemory, reportUsage, fetchImp
     s.turns.set(turnId, entry);
     entry.promise = (async () => {
       const started = now();
-      const timing = {streaming: Boolean(onEvent)};
+      const timing = {streaming: Boolean(onEvent), model: s.profile.model, reasoningEffort: s.profile.effort};
       try {
         // Check persisted allowance before starting a billable response or save.
         // Read current memory concurrently with the allowance check. Never cache
         // account instructions, or call the provider until allowance is verified.
         const direct = rememberCommand(text) || (s.awaiting && s.awaiting.until > now());
         const quick = direct ? null : brainQuickReply(text);
-        timing.route = direct ? 'memory' : quick?.kind || 'astra';
+        timing.route = direct ? 'memory' : quick?.kind || (s.profile.model === 'gpt-6-astra' ? 'astra' : 'sol');
         const [, runtime] = await Promise.all([meter(s), direct || quick ? null : loadRuntime(userId)]);
         timing.preparationMs = now() - started;
         if (s.closed) throw fail('This conversation has reached its allowance.', 'brain_allowance', 429);
@@ -133,12 +133,12 @@ export function createBrainVoice({loadRuntime, saveMemory, reportUsage, fetchImp
           return {ok: true, saved: false, answer: quick.answer, source: 'app_phrase', kind: quick.kind};
         }
         const key = apiKey();
-        if (!key) throw fail('Astra Max is not configured. Please try again later.', 'brain_provider_not_configured', 503);
+        if (!key) throw fail(`${s.profile.label} is not configured. Please try again later.`, 'brain_provider_not_configured', 503);
         const activeRuntime = runtime ?? await loadRuntime(userId);
         const response = await fetchImpl('https://api.openai.com/v1/responses', {
           method: 'POST', signal: AbortSignal.timeout(140000),
           headers: {Authorization: `Bearer ${key}`, 'Content-Type': 'application/json'},
-          body: JSON.stringify({model: BRAIN_MODEL, reasoning: {effort: BRAIN_EFFORT}, store: false,
+          body: JSON.stringify({model: s.profile.model, reasoning: {effort: s.profile.effort}, store: false,
             ...(onEvent ? {stream: true} : {}),
             max_output_tokens: 24000,
             instructions: brainInstructions,
@@ -146,12 +146,12 @@ export function createBrainVoice({loadRuntime, saveMemory, reportUsage, fetchImp
               ...s.history.slice(-16), {role: 'user', content: text}],
           }),
         });
-        if (!response.ok) throw fail('GPT-6 Astra Max is unavailable right now. Please try again. Your model has not been changed.', 'brain_astra_unavailable', 503);
+        if (!response.ok) throw fail(`${s.profile.label} is unavailable right now. Please try again. Your model has not been changed.`, 'brain_model_unavailable', 503);
         const result = onEvent ? await readAnswerStream(response, (text, model) => {
           timing.firstTextMs ??= now() - started;
           // A disconnected listener must not cancel an authorized save or usage.
-          try { onEvent({type: 'answer.delta', text, model, reasoningEffort: BRAIN_EFFORT}); } catch {}
-        }) : await response.json();
+          try { onEvent({type: 'answer.delta', text, model, reasoningEffort: s.profile.effort}); } catch {}
+        }, s.profile.model) : await response.json();
         timing.providerDoneMs = now() - started;
         for (const [field, provider] of [['totalTokens','total_tokens'],['inputTokens','input_tokens'],['outputTokens','output_tokens']])
           s.reasonUsage[field] += count(result.usage?.[provider]);
@@ -159,10 +159,10 @@ export function createBrainVoice({loadRuntime, saveMemory, reportUsage, fetchImp
         await meter(s);
         const answer = (result.output || []).filter(x => x.type === 'message')
           .flatMap(x => x.content || []).filter(x => x.type === 'output_text').map(x => x.text).join('\n').trim();
-        if (result.status !== 'completed' || !answer || !/^gpt-6-astra(?:-|$)/.test(result.model || ''))
-          throw fail('Astra Max could not finish that answer. Please try again.', 'brain_incomplete_answer', 502);
+        if (result.status !== 'completed' || !answer || !matchesBrainModel(result.model, s.profile.model))
+          throw fail(`${s.profile.label} could not finish that answer. Please try again.`, 'brain_incomplete_answer', 502);
         s.history.push({role: 'user', content: text}, {role: 'assistant', content: answer});
-        return {ok: true, saved: false, answer, model: result.model, reasoningEffort: BRAIN_EFFORT};
+        return {ok: true, saved: false, answer, model: result.model, reasoningEffort: s.profile.effort};
       } catch (error) {
         if (error?.statusCode) throw error;
         throw fail('Rici could not complete that turn. Check My Brain before repeating a save, or try your question again.', 'brain_turn_failed', 503);

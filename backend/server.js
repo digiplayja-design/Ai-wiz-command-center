@@ -1,5 +1,6 @@
 import {brainRuntimeContext} from './brain_voice/context.mjs';
-import {createBrainVoice, brainSpeechConfig, isBrainVoice, BRAIN_MODEL, BRAIN_EFFORT, BRAIN_PROTOCOL} from './brain_voice/core.mjs';
+import {checkBrainModelAccess} from './brain_voice/model_access.mjs';
+import {createBrainVoice, brainSpeechConfig, isBrainVoice, brainProfile, BRAIN_PROFILES, BRAIN_MODEL, BRAIN_EFFORT, BRAIN_PROTOCOL} from './brain_voice/core.mjs';
 import {streamBrainTurn} from './brain_voice/stream.mjs';
 import {registerMagicApple} from './magic_camera/apple.mjs';
 import {registerMagicBilling, MAGIC_PACKAGE} from './magic_camera/billing.mjs';
@@ -9492,6 +9493,8 @@ app.use("/api/live-convo/session", async (req, res, next) => {
 
 // Brain+Voice uses Realtime only for listening and speaking. Reasoning and
 // direct, user-authorized memory saves are account-bound server operations.
+void checkBrainModelAccess({apiKey: korlixLiveConvoEnvStringV1('OPENAI_API_KEY')})
+  .then(result => console.log('BRAIN_MODEL_ACCESS', JSON.stringify(result)));
 const brainVoice = createBrainVoice({
   onTiming: timing => console.log('BRAIN_VOICE_TIMING', JSON.stringify(timing)),
   apiKey: () => korlixLiveConvoEnvStringV1('OPENAI_API_KEY'),
@@ -9502,6 +9505,7 @@ const brainVoice = createBrainVoice({
 app.get('/api/brain-voice/health', (_req, res) => res.json({ok: true,
   enabled: korlixLiveConvoEnabledV1(), protocol: BRAIN_PROTOCOL,
   model: BRAIN_MODEL, reasoningEffort: BRAIN_EFFORT,
+  supportedProfiles: BRAIN_PROFILES.map(({protocol, model, effort}) => ({protocol, model, reasoningEffort: effort})),
   speechModel: korlixLiveConvoModelV1(), voice: korlixLiveConvoVoiceV1(),
   directVoiceMemory: true, requiresAuthentication: true, additionalMemoryPassword: false,
   streamingAnswers: true, turnDetection: 'semantic_vad_high',
@@ -9681,10 +9685,11 @@ app.post(
       }
 
       if (isBrainVoice(req)) {
-        brainVoice.register(req.korlixLiveConvoBuild129);
-        res.set('X-Korlix-Brain-Voice', BRAIN_PROTOCOL);
-        res.set('X-Korlix-Brain-Model', BRAIN_MODEL);
-        res.set('X-Korlix-Brain-Reasoning', BRAIN_EFFORT);
+        const profile = brainProfile(req);
+        brainVoice.register({...req.korlixLiveConvoBuild129, protocol: profile.protocol});
+        res.set('X-Korlix-Brain-Voice', profile.protocol);
+        res.set('X-Korlix-Brain-Model', profile.model);
+        res.set('X-Korlix-Brain-Reasoning', profile.effort);
       }
       autoEmailVoiceBridge.started(req,res,providerResponse);
       res.status(200);

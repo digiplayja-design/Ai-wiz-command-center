@@ -1,13 +1,13 @@
-# KORLIX Brain+Voice: Astra Max and spoken memory
+# KORLIX Brain+Voice: Sol 6.1 Max and spoken memory
 
-The standalone `com.korlix.brain` app opts into `astra-max-v1` with
+Build 8 of the standalone `com.korlix.brain` app opts into `sol-6.1-max-v1` with
 `x-korlix-brain-voice` on the existing authenticated, metered voice-session route.
 Other KORLIX voice workspaces keep their existing model configuration.
 
 The server disables Realtime automatic answers and tools. `gpt-transcribe`
 transcribes committed microphone turns with Rici/KORLIX keyword guidance. The
 native client submits completed user transcripts to `/api/brain-voice/turn`.
-Ordinary answers use Responses `gpt-6-astra`, `reasoning.effort: max`, `store: false`.
+Ordinary answers use Responses `gpt-6.1-sol`, `reasoning.effort: max`, `store: false`.
 There is no lower-model fallback. Realtime speaks the supplied answer through an
 out-of-band response with no microphone-conversation context. The native app
 checks the protocol and model/effort headers before enabling the microphone.
@@ -28,7 +28,7 @@ memory ID. Fresh runtime memory/training is loaded before every reasoning turn
 
 Ephemeral session state is bound to a server-issued usage session and user ID.
 Turns are serialized and bounded by existing session time/response limits.
-Backend restarts require reconnect. Astra usage is recorded server-side even if
+Backend restarts require reconnect. Reasoning usage is recorded server-side even if
 the phone disconnects, then combined with cumulative speech usage. The existing
 database usage RPC and developer entitlement remain authoritative. No database
 schema, secret, price, or general account password policy is changed.
@@ -65,3 +65,27 @@ preparation was 50–59 ms. New timing logs include a content-free route label.
 First-sentence speech starts without the previous 60-character minimum in build
 7. These changes remove avoidable waits; they do not guarantee subsecond Astra
 Max reasoning. Post-update device/audio timing must be checked separately.
+
+## Sol migration (build 8)
+
+The user requested GPT-6.1 Sol to reduce response delay. Build 8 selects
+`gpt-6.1-sol` and keeps the previously requested `reasoning.effort: max`.
+No paid processing-tier upgrade or automatic fallback is introduced. Rici's
+Marin speech voice, identity prompt, account memory and direct saves are unchanged.
+
+`astra-max-v1` stays mapped to `gpt-6-astra/max` for installed builds 3–7.
+The protocol selects a frozen profile at authenticated session registration;
+subsequent turn bodies cannot switch models. Response headers, each streamed
+text event and the terminal result identify and verify the selected model.
+Public health reports the default Sol profile and both supported protocols.
+Timing logs include model and effort without transcripts or account context.
+
+Tests cover interleaved Sol/Astra sessions, wrong-model stream rejection,
+unsupported protocols, private reasoning suppression, usage and memory writes.
+Live account availability, end-to-end speech timing and a same-prompt speed
+comparison are separate checks; a passing fixture test does not establish them.
+
+The startup `BRAIN_MODEL_ACCESS` log performs one non-generating model metadata
+request with the existing server key. It never blocks startup or voice, sends
+user context, logs credentials, or retries. `available` verifies model discovery
+for that key, not successful inference, latency, quotas or audio delivery.

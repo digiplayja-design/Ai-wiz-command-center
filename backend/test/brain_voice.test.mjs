@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {createBrainVoice, rememberCommand, brainSpeechConfig} from '../brain_voice/core.mjs';
+import {createBrainVoice, rememberCommand, brainSpeechConfig, brainProfile, isBrainVoice} from '../brain_voice/core.mjs';
 import {brainRuntimeContext, brainQuickReply} from '../brain_voice/context.mjs';
 
 const sessionId = 'voice-session', userId = 'signed-in-user';
@@ -12,7 +12,7 @@ function setup(overrides = {}) {
     loadRuntime: async () => ({context: `Current account memories: ${saves.map(s => s.body.content).join(';')}`}),
     saveMemory: async value => {saves.push(value); return {id: 'memory-1', ...value.body};},
     reportUsage: async value => {meters.push(value); return {allowed: true};},
-    fetchImpl: async (url, options) => {requests.push({url, ...JSON.parse(options.body)}); return Response.json({model: 'gpt-6-astra-2026-10-01', status: 'completed',
+    fetchImpl: async (url, options) => {requests.push({url, ...JSON.parse(options.body)}); return Response.json({model: 'gpt-6.1-sol', status: 'completed',
       usage: {total_tokens: 200, input_tokens: 150, output_tokens: 50},
       output: [{type: 'message', content: [{type: 'output_text', text: 'Here is the answer.'}]}]});}, ...overrides});
   voice.register({userId, sessionId, limits: {maxSessionSeconds: 600, maxResponses: 8}});
@@ -20,9 +20,9 @@ function setup(overrides = {}) {
   return {voice, turn, requests, saves, meters, advance: ms => clock += ms};
 }
 
-test('Astra Max is pinned, no sampling or provider fallback; microphone answers disabled', async () => {
+test('Sol 6.1 Max is pinned, no sampling or provider fallback; microphone answers disabled', async () => {
   const c = setup(); await c.turn('Explain the tradeoffs.');
-  assert.equal(c.requests.length, 1); assert.equal(c.requests[0].model, 'gpt-6-astra');
+  assert.equal(c.requests.length, 1); assert.equal(c.requests[0].model, 'gpt-6.1-sol');
   assert.deepEqual(c.requests[0].reasoning, {effort: 'max'}); assert.equal(c.requests[0].store, false);
   assert.equal(c.requests[0].temperature, undefined); assert.equal(c.saves.length, 0);
   const config = brainSpeechConfig({audio: {input: {transcription: {model:'asr'}, turn_detection: {type:'semantic_vad'}}, output: {voice:'marin'}}});
@@ -81,7 +81,7 @@ test('server counts reasoning tokens even when client reports zero; usage is not
 test('provider errors or a different returned model do not silently downgrade', async () => {
   let calls = 0;
   const c = setup({fetchImpl: async () => {calls++; return new Response('', {status: 403});}});
-  await assert.rejects(c.turn('Hello'), {code:'brain_astra_unavailable'}); assert.equal(calls, 1);
+  await assert.rejects(c.turn('Hello'), {code:'brain_model_unavailable'}); assert.equal(calls, 1);
   const wrong = setup({fetchImpl: async () => Response.json({model:'gpt-6-luna',status:'completed',output:[]})});
   await assert.rejects(wrong.turn('Hello'), {code:'brain_incomplete_answer'});
 });
@@ -89,7 +89,8 @@ test('production routes authenticate first and register only scoped successful v
   const source = await readFile(new URL('../server.js', import.meta.url), 'utf8');
   assert.match(source, /app\.post\('\/api\/brain-voice\/turn', korlixLiveConvoAgentRouteV1/);
   assert.match(source, /brainVoice\.turn\(\{userId: user\.id, sessionId, turnId, transcript\}\)/);
-  assert.match(source, /if \(isBrainVoice\(req\)\) \{\s*brainVoice\.register\(req\.korlixLiveConvoBuild129\)/);
+  assert.match(source, /const profile = brainProfile\(req\);/);
+  assert.match(source, /brainVoice\.register\(\{\.\.\.req\.korlixLiveConvoBuild129, protocol: profile\.protocol\}\)/);
 });
 
 test('Brain identity is protected from shared Kim training without changing saved data', async () => {
@@ -150,4 +151,27 @@ test('identity questions retain Rici when the name is the question object', () =
     assert.equal(brainQuickReply(text)?.kind, 'identity', text);
     assert.match(brainQuickReply(text).answer, /I.m Rici/);
   }
+});
+
+test('Sol and legacy Astra sessions stay independently pinned', async () => {
+  const calls = [];
+  const voice = createBrainVoice({apiKey: () => 'fixture', loadRuntime: async () => ({context: '{}'}),
+    saveMemory: async () => ({id: 'm'}), reportUsage: async () => ({allowed: true}),
+    fetchImpl: async (_, options) => {
+      const body = JSON.parse(options.body); calls.push(body);
+      return Response.json({model: body.model, status: 'completed', output: [{type: 'message', content: [{type: 'output_text', text: 'Verified answer.'}]}]});
+    }});
+  for (const [protocol, model] of [['sol-6.1-max-v1', 'gpt-6.1-sol'], ['astra-max-v1', 'gpt-6-astra']]) {
+    voice.register({userId, sessionId: protocol, protocol, limits: {maxSessionSeconds: 600, maxResponses: 5}});
+    const result = await voice.turn({userId, sessionId: protocol, turnId: 'one', transcript: 'Explain one useful idea.', model: 'ignored', protocol: 'ignored'});
+    assert.equal(result.model, model); assert.equal(result.reasoningEffort, 'max');
+    assert.equal(calls.at(-1).model, model); assert.deepEqual(calls.at(-1).reasoning, {effort: 'max'});
+    const profile = brainProfile({headers: {'x-korlix-brain-voice': protocol}});
+    assert.equal(profile.model, model); assert.ok(Object.isFrozen(profile));
+  }
+  assert.equal(calls.length, 2);
+  for (const protocol of ['unknown', '', undefined, 'toString']) {
+    assert.equal(isBrainVoice({headers: {'x-korlix-brain-voice': protocol}}), false);
+  }
+  assert.throws(() => voice.register({userId, sessionId: 'bad', protocol: 'unknown', limits: {}}), {code: 'brain_protocol_unsupported'});
 });

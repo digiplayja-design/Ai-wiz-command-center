@@ -1,5 +1,7 @@
+import {BRAIN_MODEL, matchesBrainModel} from './models.mjs';
+
 // Decode the provider's SSE incrementally; never expose reasoning events.
-export async function readAnswerStream(response, onDelta) {
+export async function readAnswerStream(response, onDelta, expectedModel = BRAIN_MODEL) {
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '', model = '', result;
@@ -18,7 +20,7 @@ export async function readAnswerStream(response, onDelta) {
         const event = JSON.parse(data);
         if (event.response?.model) model = event.response.model;
         if (event.type === 'response.output_text.delta') {
-          if (!/^gpt-6-astra(?:-|$)/.test(model)) throw Error('Unverified model');
+          if (!matchesBrainModel(model, expectedModel)) throw Error('Unverified model');
           if (typeof event.delta === 'string') onDelta(event.delta, model);
         } else if (['response.completed', 'response.incomplete', 'response.failed'].includes(event.type)) {
           result = event.response;

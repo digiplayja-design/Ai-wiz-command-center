@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {createBrainVoice} from '../brain_voice/core.mjs';
 import {readAnswerStream, streamBrainTurn} from '../brain_voice/stream.mjs';
 
-const model = 'gpt-6-astra-2026-10-01';
+const model = 'gpt-6.1-sol';
 const complete = {model, status: 'completed', usage: {total_tokens: 50},
   output: [{type: 'message', content: [{type: 'output_text', text: 'Hello, José.'}]}]};
 function provider() {
@@ -106,4 +106,19 @@ test('HTTP stream fails explicitly after partial text; disconnected writes do no
   res.destroyed = true; let count = 0;
   await streamBrainTurn({res, run: async emit => {count++; emit({type:'answer.delta'}); return {};}});
   assert.equal(count, 1); assert.equal(writes.length, 2);
+});
+
+test('legacy stream verifies Astra only; Sol stream refuses Astra', async () => {
+  const legacy = provider(), events = [];
+  legacy.send({type: 'response.created', response: {model: 'gpt-6-astra'}});
+  legacy.send({type: 'response.output_text.delta', delta: 'Legacy answer.'});
+  legacy.send({type: 'response.completed', response: {...complete, model: 'gpt-6-astra'}}); legacy.end();
+  await readAnswerStream(legacy.response, text => events.push(text), 'gpt-6-astra');
+  assert.deepEqual(events, ['Legacy answer.']);
+  for (const [actual, expected] of [['gpt-6-astra', 'gpt-6.1-sol'], ['gpt-6.1-sol', 'gpt-6-astra'], ['gpt-6x1-sol', 'gpt-6.1-sol']]) {
+    const p = provider();
+    p.send({type: 'response.created', response: {model: actual}});
+    p.send({type: 'response.output_text.delta', delta: 'Wrong model.'}); p.end();
+    await assert.rejects(readAnswerStream(p.response, () => assert.fail('must not emit'), expected), /Unverified model/);
+  }
 });
