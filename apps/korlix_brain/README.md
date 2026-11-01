@@ -1,6 +1,6 @@
 # KORLIX Brain+Voice
 
-Standalone iOS/Android app for the existing KORLIX account and `general` Rici agent, with its own `com.korlix.brain` identity. Version 1.0.1, build 10 adds per-message Save, Share and Delete plus Saved messages. The user confirmed that the build-9 Live Conversation works. Live remains the default native speech-to-speech mode; Deep Think retains GPT-6.1 Sol Max. No model, voice, backend or billing configuration changes are included in build 10. See `store/release-status.json` for the verified delivery state. App Store review has not been submitted.
+Standalone iOS/Android app for the existing KORLIX account and `general` Rici agent, with its own `com.korlix.brain` identity. Version 1.0.1, build 11 updates iPhone ambience playback and keeps the build-10 per-message Save, Share and Delete controls plus Saved messages. The user confirmed that the build-9 Live Conversation works. Live remains the default native speech-to-speech mode; Deep Think retains GPT-6.1 Sol Max. No model, voice, backend or billing configuration changes are included in build 11. See `store/release-status.json` for the verified delivery state. App Store review has not been submitted.
 
 The approved Violet Eclipse / Champagne Precision interface is bundled offline in `assets/web`. It retains the Halo Capsule Talk button, Add Memory chip, Magnetic Key controls, Electric Cyan Precision Dial orbits, silent 3.1–3.6 second lightning and crystal twinkle ambience at 1%. Animation pause and reduced-motion support are preserved. The official KORLIX emblem now uses purple, red, green and gold. Apple, Google Play and device icon sizes are checked in.
 
@@ -10,6 +10,7 @@ The user selected **USD $34.99 per month** for the personal Brain, training feat
 
 ## Connected behavior
 
+- User-started ambience requests the media playback category on supporting iPhone WebViews, then releases it and suspends the music context before voice or dictation. The saved device volume survives restarts; the initial default stays at 1%. No music or microphone starts automatically. Physical iPhone audibility and interruption checks remain required.
 - Native secure sign-in, refresh, password recovery, duplicate-account guidance, sign-out and shared-account deletion request.
 - Native authenticated memory and behavior loading, reviewed typed/document changes, direct command-authorized voice saves, selected-item deletion, session undo and stale-training checks.
 - Typed, OS dictation and selected-document inputs. A file produces a draft, never an automatic memory. Suggested memories are individually selected for review. Analysis uses the existing account allowance.

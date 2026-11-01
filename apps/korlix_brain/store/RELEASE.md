@@ -1,3 +1,9 @@
+## iPhone ambience — build 11 candidate
+
+The Web Audio bed used the default audio category, which can be silenced by the iPhone Ring/Silent control. User-started ambience now requests the optional playback category and releases it before native voice or dictation starts. The Web Audio context is suspended during capture and can resume on Home after capture ends. Music volume persists on the device; a new installation keeps the approved 1% default. Music still requires a tap and stays quiet outside Home. No voice model, backend, billing or spoken welcome changes.
+
+Validation: 61 Flutter tests, clean analysis and 23 release checks pass locally. Dedicated browser checks cover real MP3 decoding, playback category, voice/dictation handoff, pause/resume, remembered volume and API fallback. Signed CI and audible physical iPhone checks remain pending. Reference: https://bugs.webkit.org/show_bug.cgi?id=237322 and https://www.w3.org/TR/audio-session/.
+
 ## Transcript actions — build 10
 
 Adds Save, Share and Delete to each transcript message and a Saved messages view accessible from Talk and My Brain. Saving is explicit and account-scoped in native secure storage on this device; it does not create a shared Brain memory. Sharing opens the native share sheet with the selected message only. Deletion confirms removal of the local transcript and saved copy, preserves Brain memories, and commits only after storage succeeds. The archive is bounded to 100 messages / 512 KiB, with an explicit full-storage error and no silent eviction. Unsaved live messages are temporary (last 60 shown). Account deletion clears the local saved archive before submitting the existing shared-account deletion request.

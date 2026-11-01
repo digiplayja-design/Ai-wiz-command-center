@@ -39,10 +39,31 @@
     context:null, gain:null, analyser:null, source:null, buffer:null, decoding:null,
     volume:1, sequence:0, idleUntil:0, idleTimer:null, statusTimer:null,
     suspendTimer:null, removalTimer:null, hidden:false, autoSuspended:false,
+    dictating:false, ownsPlaybackSession:false,
     ramp:{from:0,to:0,start:0,end:0}, samples:new Uint8Array(256), glow:0
   };
 
   function musicVisible(){return !document.hidden && inViewport && root.isConnected;}
+  function musicCaptureActive(){return root.dataset.voiceActive==='true'||music.dictating;}
+  function musicSession(playback){
+    // Web Audio otherwise uses iOS's ringer-muted ambient category. Release
+    // our playback override before native voice/dictation takes the microphone.
+    try{
+      if(!navigator.audioSession)return;
+      if(playback){
+        if(navigator.audioSession.type!=='playback')navigator.audioSession.type='playback';
+        music.ownsPlaybackSession=true;
+      }else if(music.ownsPlaybackSession){
+        navigator.audioSession.type='auto';music.ownsPlaybackSession=false;
+      }
+    }catch(error){/* Older WebViews keep their normal audio behavior. */}
+  }
+  function pauseMusicForCapture(){
+    clearTimeout(music.suspendTimer);
+    music.loading=false;music.autoSuspended=true;
+    rampMusic(0,0);musicSession(false);
+    if(music.context&&music.context.state==='running')music.context.suspend().catch(()=>{});
+  }
   function musicText(state,text){
     root.dataset.music=state;
     if(musicStatus.textContent!==text)musicStatus.textContent=text;
@@ -75,20 +96,27 @@
     if(music.disposed)return;
     if(!music.wanted){musicText('off','Off · tap to listen');return;}
     if(!musicVisible()){musicText('paused','Paused in background');return;}
+    if(musicCaptureActive()){
+      pauseMusicForCapture();musicText('quiet','Paused while the microphone is in use');return;
+    }
     if(music.loading){musicText('loading','Preparing the ambient bed…');return;}
+    if(music.autoSuspended&&currentScreen==='home'&&music.context&&music.source){
+      music.autoSuspended=false;playMusic();return;
+    }
     if(music.needsTap||!music.context||music.context.state!=='running'){
       music.needsTap=true;musicText('paused','Tap to resume music');return;
     }
     if(!music.source)return;
-    if(root.dataset.voiceActive==='true'||currentScreen!=='home'||performance.now()<music.idleUntil){
+    if(currentScreen!=='home'||performance.now()<music.idleUntil){
       rampMusic(0,.48);
+      if(currentScreen!=='home')musicSession(false);
       const fading=musicGainNow()>.002;
       musicText('quiet',fading?'Fading for your action':currentScreen==='home'?'Returns after 3 seconds':'Quiet while you work');
       if(fading)music.statusTimer=setTimeout(()=>refreshMusic(),500);
-      else if(currentScreen==='home'&&root.dataset.voiceActive!=='true')music.idleTimer=setTimeout(()=>refreshMusic(),Math.max(0,music.idleUntil-performance.now()));
+      else if(currentScreen==='home')music.idleTimer=setTimeout(()=>refreshMusic(),Math.max(0,music.idleUntil-performance.now()));
       return;
     }
-    rampMusic(music.volume/100,fade);
+    musicSession(music.volume>0);rampMusic(music.volume/100,fade);
     musicText(music.volume?'playing':'quiet',music.volume?'Playing softly':'Muted · volume is at 0%');
   }
   function seamlessMusicBuffer(decoded){
@@ -131,7 +159,9 @@
     const request=++music.sequence;
     music.wanted=true;music.loading=true;music.needsTap=false;
     clearTimeout(music.suspendTimer);
+    if(musicCaptureActive()){refreshMusic();return;}
     try{
+      musicSession(currentScreen==='home'&&musicVisible());
       if(!music.context){
         music.context=new AudioEngine();music.gain=music.context.createGain();
         music.gain.gain.value=0;music.analyser=music.context.createAnalyser();
@@ -148,6 +178,7 @@
       refreshMusic();watchMusicConnection();
       const results=await Promise.all([resume,decodeMusic()]);
       if(request!==music.sequence||!music.wanted||music.disposed)return;
+      if(musicCaptureActive()){pauseMusicForCapture();refreshMusic();return;}
       if(!music.source){
         music.source=music.context.createBufferSource();music.source.buffer=results[1];
         music.source.loop=true;music.source.connect(music.gain);music.source.start();
@@ -159,6 +190,7 @@
     }catch(error){
       if(request!==music.sequence||music.disposed)return;
       music.loading=false;music.wanted=false;rampMusic(0,.1);
+      musicSession(false);
       musicText('off','Couldn’t start audio · tap to retry');
     }
   }
@@ -166,6 +198,7 @@
     music.sequence++;music.wanted=false;music.loading=false;music.needsTap=false;
     clearMusicWait();clearTimeout(music.suspendTimer);clearTimeout(music.removalTimer);
     rampMusic(0,.6);refreshMusic();
+    musicSession(false);
     music.suspendTimer=setTimeout(()=>{
       if(!music.wanted&&music.context&&music.context.state==='running')music.context.suspend().catch(()=>{});
     },650);
@@ -182,7 +215,7 @@
   }
   function silenceMusicInBackground(){
     clearMusicWait();clearTimeout(music.suspendTimer);
-    music.autoSuspended=true;rampMusic(0,.08);
+    music.autoSuspended=true;rampMusic(0,.08);musicSession(false);
     if(music.wanted)musicText('paused','Paused in background');
     music.suspendTimer=setTimeout(()=>{
       if(!musicVisible()&&music.context&&music.context.state==='running')music.context.suspend().catch(()=>{});
@@ -196,8 +229,10 @@
     clearTimeout(music.suspendTimer);
     if(!music.wanted)return;
     music.idleUntil=performance.now()+3000;
-    if(music.context&&music.autoSuspended&&!music.loading){
+    if(musicCaptureActive()){refreshMusic();return;}
+    if(currentScreen==='home'&&music.context&&music.autoSuspended&&!music.loading){
       music.autoSuspended=false;
+      musicSession(true);
       music.context.resume().then(()=>{
         if(music.wanted&&!music.disposed){music.needsTap=music.context.state!=='running';refreshMusic();}
       }).catch(()=>{if(music.wanted){music.needsTap=true;refreshMusic();}});
@@ -216,6 +251,7 @@
   function disposeMusic(){
     if(music.disposed)return;
     music.disposed=true;music.wanted=false;music.sequence++;
+    musicSession(false);
     clearMusicWait();clearTimeout(music.suspendTimer);clearTimeout(music.removalTimer);
     if(music.source){try{music.source.stop();}catch(error){}}
     if(music.context&&music.context.state!=='closed')music.context.close().catch(()=>{});
@@ -223,6 +259,18 @@
   function mountMusic(){
     const settings=get('kb-music-settings');
     const details=get('kb-music-details');
+    try{
+      const saved=localStorage.getItem('korlix-brain-ambience-volume');
+      if(saved!==null&&/^\d{1,3}$/.test(saved))music.volume=clamp(Number(saved),0,100);
+    }catch(error){}
+    const showVolume=()=>{
+      musicVolume.value=String(music.volume);
+      get('kb-music-volume-value').textContent=music.volume+'%';
+      get('kb-music-level').textContent=music.volume+'%';
+      settings.setAttribute('aria-label','Volume controls, '+music.volume+' percent');
+      musicVolume.setAttribute('aria-valuetext',music.volume+' percent');
+    };
+    showVolume();
     settings.addEventListener('click',()=>{
       details.hidden=!details.hidden;
       settings.setAttribute('aria-expanded',String(!details.hidden));
@@ -239,10 +287,8 @@
     });
     musicVolume.addEventListener('input',()=>{
       music.volume=clamp(Number(musicVolume.value),0,100);
-      get('kb-music-volume-value').textContent=music.volume+'%';
-      get('kb-music-level').textContent=music.volume+'%';
-      settings.setAttribute('aria-label','Volume controls, '+music.volume+' percent');
-      musicVolume.setAttribute('aria-valuetext',music.volume+' percent');refreshMusic(.18);
+      try{localStorage.setItem('korlix-brain-ambience-volume',String(music.volume));}catch(error){}
+      showVolume();refreshMusic(.18);
     });
     stage.addEventListener('click',event=>{
       const button=event.target.closest('button');
@@ -716,6 +762,7 @@
       if(message.kind==='training')trainingSource='Voice';else memorySource='Voice';
       announce(message.final?'Dictation ready. Review before saving.':'Listening… tap Stop dictation when finished.');
     }else if(message.type==='dictationStatus'){
+      music.dictating=message.active===true;refreshMusic();
       announce(message.message);
     }
   };
@@ -852,7 +899,10 @@
       announce('Draft ready. Edit and review before approving.');
     }catch(error){fail(error);}
   }
-  function dictate(kind){native('dictate',{kind}).catch(fail);}
+  function dictate(kind){
+    music.dictating=true;refreshMusic();
+    native('dictate',{kind}).catch(error=>{music.dictating=false;refreshMusic();fail(error);});
+  }
   function stopVoice(){
     if(voiceStopping)return;
     const epoch=++voiceRequestEpoch;

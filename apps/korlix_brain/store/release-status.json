@@ -1,9 +1,9 @@
 {
-  "updatedAt": "2026-11-01T04:04:01.967404+00:00",
+  "updatedAt": "2026-11-01T04:20:47.675097+00:00",
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "version": "1.0.1",
-  "minimumSourceBuild": 10,
+  "minimumSourceBuild": 11,
   "appCodeCommit": "403ba43b788526724ef201ca5e51bde03d460087",
   "releasePipelineCommit": "1a9031ebbe90ed07b7070be47f1d2e8130b5d214",
   "signedIosCandidate": {
@@ -386,5 +386,22 @@
     "newMinuteLimitImplemented": false,
     "trialAndTopUps": "Previous 5-minute welcome trial and $4.99 / 25-minute pack remain proposals; not configured",
     "deepThinkAllowance": "Separate cap requires definition before monetization; no unlimited inference entitlement"
+  },
+  "ambienceUpdate": {
+    "sourceBuild": 11,
+    "status": "implemented; signed CI and physical iPhone verification pending",
+    "changes": [
+      "Explicit optional playback audio-session category for user-started music",
+      "Release playback override and suspend ambience before native voice or dictation",
+      "Resume the chosen bed on Home after microphone use",
+      "Remember device music volume; default remains 1 percent"
+    ],
+    "flutterTests": 61,
+    "flutterAnalyze": "pass",
+    "releaseIdentityTests": 23,
+    "uiAudioChecks": "pending in signed CI",
+    "physicalIphoneVerification": "pending; test Silent Mode, media volume, voice, dictation and interruptions",
+    "introStatus": "Draft provided for review; no spoken introduction added in this build",
+    "billingChanged": false
   }
 }
