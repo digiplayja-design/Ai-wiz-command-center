@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-11-01T15:03:33.449953+00:00",
+  "recordedAt": "2026-11-01T15:09:47.897958+00:00",
   "app": "KORLIX Brain+Voice",
   "build": 14,
   "publicReleaseSubmitted": false,
@@ -42,7 +42,18 @@
     ],
     "foregroundService": "microphone",
     "requiredEvidence": "Native Android screen recording of a user-started Live conversation, background microphone notification, and Stop action; provide a reviewer-accessible video URL.",
-    "appReviewSubmitted": false
+    "appReviewSubmitted": false,
+    "ownerInternalTesting": {
+      "configuredAt": "2026-11-01T15:09:47.897958+00:00",
+      "listName": "KORLIX Brain owner testing",
+      "allowedUsers": 1,
+      "trackState": "Active",
+      "versionCode": 14,
+      "invitationUrl": "https://play.google.com/apps/internaltest/4700461790600418158",
+      "invitationPageVerified": true,
+      "inviteAccepted": false,
+      "note": "Current Google Play developer account only. Existing other tester lists remain unselected. Account owner must accept Google tester data-sharing notice and install on Android. No invitation email was sent by the agent."
+    }
   },
   "tests": {
     "billing": 14,
@@ -56,7 +67,7 @@
     "Android microphone foreground-service demonstration video",
     "Native subscription, restore, AI GAS verification/consumption, renewal/refund tests",
     "Apple browser sign-in remains at two-factor verification; no further credential attempt made",
-    "Assign and verify build 14 with authorized testers; billing flags remain off until native verification"
+    "Owner accepts Android build-14 test invite; assign iOS build 14 to the existing tester and verify native flows; billing flags remain off until native verification"
   ],
   "evidence": "google-play/review-evidence/declarations-20261101.jpg"
 }

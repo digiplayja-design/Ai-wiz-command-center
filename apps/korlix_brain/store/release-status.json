@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-01T15:03:33.449953+00:00",
+  "updatedAt": "2026-11-01T15:09:47.897958+00:00",
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "version": "1.0.1",
@@ -143,7 +143,7 @@
     "uiAudioChecks": "pass",
     "welcomeChecks": "pass"
   },
-  "storeSubmission": "Google Play internal build 14 published with no testers; Apple build 14 uploaded and processed; public review not submitted",
+  "storeSubmission": "Google Play internal build 14 active for one owner account; Apple build 14 uploaded and processed; public review not submitted",
   "authenticatedDeviceVoiceTest": "User reports everything worked after the build-13 automatic welcome fix. No quantified end-to-end latency measurement.",
   "androidStoreSigning": "Dedicated upload key registered in Codemagic; signed AAB certificate and signature verified",
   "listingText": "Apple metadata and Google text/four-color icon/feature graphic saved; screenshots and review setup incomplete",
@@ -567,7 +567,7 @@
       "Android microphone foreground-service demonstration video",
       "Native subscription, restore, AI GAS verification/consumption, renewal/refund tests",
       "Apple browser sign-in remains at two-factor verification; no further credential attempt made",
-      "Assign and verify build 14 with authorized testers; billing flags remain off until native verification"
+      "Owner accepts Android build-14 test invite; assign iOS build 14 to the existing tester and verify native flows; billing flags remain off until native verification"
     ],
     "appCodeCommit": "76d7d0f9c26e56883913ca3b079397c6b109bb77",
     "mobileValidation": {
@@ -595,7 +595,7 @@
       "appId": "4973840118435464131",
       "packageName": "com.korlix.brain",
       "dashboardUrl": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4973840118435464131/app-dashboard",
-      "state": "Internal testing release published; no testers; not reviewed",
+      "state": "Internal testing active for one owner account; invitation awaiting acceptance; not reviewed",
       "freeDownload": true,
       "defaultLocale": "en-US",
       "category": "PRODUCTIVITY",
@@ -628,9 +628,10 @@
         "name": "1.0.1 (14) \u2014 Brain+Voice billing candidate",
         "versionCode": 14,
         "status": "Available to internal testers",
-        "testersAssigned": 0,
+        "testersAssigned": 1,
         "reviewed": false,
-        "consoleUrl": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4973840118435464131/tracks/4700461790600418158?tab=releases"
+        "consoleUrl": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4973840118435464131/tracks/4700461790600418158?tab=releases",
+        "trackState": "Active"
       },
       "products": [
         {
@@ -813,7 +814,18 @@
         "note": "Existing account-tier limits remain active while billing is disabled. The separate reviewer allowance is provisioned for billing activation. Full native-device reviewer flow still needs testing.",
         "reviewAllowanceMigration": "20261101145830_brain_voice_review_allowance.sql"
       },
-      "remainingAppContentDeclarations": 1
+      "remainingAppContentDeclarations": 1,
+      "ownerInternalTesting": {
+        "configuredAt": "2026-11-01T15:09:47.897958+00:00",
+        "listName": "KORLIX Brain owner testing",
+        "allowedUsers": 1,
+        "trackState": "Active",
+        "versionCode": 14,
+        "invitationUrl": "https://play.google.com/apps/internaltest/4700461790600418158",
+        "invitationPageVerified": true,
+        "inviteAccepted": false,
+        "note": "Current Google Play developer account only. Existing other tester lists remain unselected. Account owner must accept Google tester data-sharing notice and install on Android. No invitation email was sent by the agent."
+      }
     },
     "androidSigning": {
       "workflow": "korlix-brain-android-release",
