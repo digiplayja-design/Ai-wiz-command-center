@@ -94,7 +94,11 @@ const app = path.resolve(__dirname,'..');
     assert.equal(await page.locator('#cinema-kb-saved-transcripts p').textContent(),'<img src=x onerror="window.injected=true">');
     assert.equal(await page.evaluate(()=>window.testCommands.filter(c=>c.action==='saveMemory').length),2,'Transcript Save never calls Brain save');
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'Saved view fits '+width);
-    for(const button of await page.locator('#cinema-kb-saved-transcripts [data-transcript-action]').all())assert.ok((await button.boundingBox()).height>=44,'Accessible transcript action');
+    // The native list refresh can replace rows between async locator calls.
+    // Measure all three targets in one DOM read, after the screen is visible.
+    const actionSizes=await page.locator('#cinema-kb-saved-transcripts [data-transcript-action]').evaluateAll(buttons=>buttons.map(button=>({action:button.dataset.transcriptAction,height:button.getBoundingClientRect().height})));
+    assert.equal(actionSizes.length,3,'Three transcript actions at '+width);
+    for(const target of actionSizes)assert.ok(target.height>=44,'Accessible '+target.action+' target at '+width);
     if(process.env.UI_SCREENSHOTS)await page.screenshot({path:path.join(process.env.UI_SCREENSHOTS,'brain-saved-'+width+'.png'),fullPage:true});
     await page.locator('#cinema-kb-saved-back').click();
     if(process.env.UI_SCREENSHOTS)await page.screenshot({path:path.join(process.env.UI_SCREENSHOTS,'brain-talk-'+width+'.png'),fullPage:true});
