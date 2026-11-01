@@ -1070,6 +1070,7 @@
   get('kb-confirm-delete').addEventListener('click',()=>{if(!deletion)return;const selected={...deletion};mutate(selected.kind==='behavior'?'deleteBehavior':'deleteMemory',selected,()=>{deletion=null;show('brain');announce('Selected item deleted from your account.');});});
   get('kb-undo-deletion').addEventListener('click',()=>mutate('undo',{},()=>{show('brain');announce('Previous change restored.');}));
   get('kb-account').addEventListener('click',()=>{stopWelcome();native('account').catch(fail);});get('kb-refresh').addEventListener('click',refresh);
+  get('kb-billing').addEventListener('click',()=>{stopWelcome();native('billing').catch(fail);});
   get('kb-return-voice').addEventListener('click',()=>show('talk'));
   get('kb-saved-back').addEventListener('click',()=>show('talk'));
   get('kb-saved-refresh').addEventListener('click',loadSavedTranscripts);

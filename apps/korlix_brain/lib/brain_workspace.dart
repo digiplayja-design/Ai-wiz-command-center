@@ -19,6 +19,8 @@ import 'brain_model.dart';
 import 'brain_transcripts.dart';
 import 'brain_pronunciation.dart';
 import 'brain_welcome.dart';
+import 'brain_billing.dart';
+import 'brain_billing_screen.dart';
 
 class BrainWorkspace extends StatefulWidget {
   const BrainWorkspace({super.key, required this.auth});
@@ -33,6 +35,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
   late final BrainRepository _repository;
   late final BrainVoice _voice;
   late final BrainWelcome _welcome;
+  late final BrainBilling _billing;
   late final WebViewController _web;
   final _speech = SpeechToText();
   final _inFlight = <String>{};
@@ -67,6 +70,8 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _api = BrainApi(widget.auth);
+    _billing = BrainBilling(_api);
+    unawaited(_billing.initialize().catchError((Object _) {}));
     _repository = BrainRepository(_api);
     _voice = BrainVoice(
       _api,
@@ -390,6 +395,9 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
         await _welcome.stop();
         await _account();
         return null;
+      case 'billing':
+        await _openBilling();
+        return null;
       case 'report':
         return _report(_text(data, 'text', max: 20000));
       default:
@@ -623,7 +631,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
             ListTile(
               title: const Text('KORLIX Brain+Voice'),
               subtitle: Text(
-                '${widget.auth.session?.email ?? 'Your account'}\nVersion 1.0.1 · Build 13',
+                '${widget.auth.session?.email ?? 'Your account'}\nVersion 1.0.1 · Build 14',
               ),
             ),
             const Padding(
@@ -631,6 +639,12 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
               child: Text(
                 'Memory and behaviors are shared with your KORLIX general voice agent. Changes apply across your KORLIX apps.',
               ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.bolt),
+              title: const Text('Plan & AI GAS'),
+              subtitle: const Text('Live minutes, top-ups and store purchases'),
+              onTap: () => Navigator.pop(context, 'billing'),
             ),
             ListTile(
               title: const Text('Privacy policy'),
@@ -657,7 +671,9 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
       ),
     );
     if (!mounted) return;
-    if (action == 'signout') {
+    if (action == 'billing') {
+      await _openBilling();
+    } else if (action == 'signout') {
       await _voice.stop();
       await _stopDictation();
       await widget.auth.signOut();
@@ -705,11 +721,25 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
   @override
   void dispose() {
     _disposed = true;
+    _billing.dispose();
     unawaited(_welcome.dispose().catchError((Object _) {}));
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_speech.cancel());
     unawaited(_voice.stop().whenComplete(_api.dispose));
     super.dispose();
+  }
+
+  Future<void> _openBilling() async {
+    ++_voiceStartRequest;
+    _captureStarting = false;
+    await _welcome.stop();
+    await _stopDictation();
+    await _voice.stop();
+    if (!mounted || _disposed) return;
+    unawaited(_billing.refresh());
+    await Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => BrainBillingScreen(billing: _billing),
+    ));
   }
 
   @override

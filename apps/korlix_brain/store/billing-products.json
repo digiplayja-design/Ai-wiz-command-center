@@ -1,0 +1,20 @@
+{
+  "app": "KORLIX Brain+Voice",
+  "bundleId": "com.korlix.brain",
+  "appleAppId": "6829319523",
+  "catalogVersion": "brain_monthly_60_gas_60_120_180_v1",
+  "currency": "USD",
+  "storeConfigurationVerified": false,
+  "products": [
+    {"name":"Brain+Voice Monthly","type":"auto_renewable_subscription","appleId":"com.korlix.brain.monthly","googleId":"korlix_brain_monthly","googleBasePlan":"monthly","period":"P1M","usdCents":3499,"liveSeconds":3600,"rollover":false},
+    {"name":"AI GAS · 60 minutes","type":"consumable","appleId":"com.korlix.brain.ai_gas.1h","googleId":"korlix_brain_ai_gas_1h","usdCents":3000,"liveSeconds":3600,"expires":false},
+    {"name":"AI GAS · 120 minutes","type":"consumable","appleId":"com.korlix.brain.ai_gas.2h","googleId":"korlix_brain_ai_gas_2h","usdCents":5500,"liveSeconds":7200,"expires":false},
+    {"name":"AI GAS · 180 minutes","type":"consumable","appleId":"com.korlix.brain.ai_gas.3h","googleId":"korlix_brain_ai_gas_3h","usdCents":8000,"liveSeconds":10800,"expires":false}
+  ],
+  "notes": [
+    "Three existing AI GAS package amounts retained at the user's direction; the old fourth package is not offered in Brain+Voice.",
+    "Native storefront prices are displayed before checkout. These identifiers are application configuration, not proof the store records exist.",
+    "AI GAS applies to Live Conversation only; Deep Think retains existing account limits.",
+    "No free trial or introductory discount has been approved or configured."
+  ]
+}

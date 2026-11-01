@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-01T05:39:06.977652+00:00",
+  "updatedAt": "2026-11-01T11:57:16.189773+00:00",
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "version": "1.0.1",
@@ -144,7 +144,7 @@
     "welcomeChecks": "pass"
   },
   "storeSubmission": "not performed",
-  "authenticatedDeviceVoiceTest": "User confirms Live Conversation works in build 9. No quantified end-to-end latency measurement.",
+  "authenticatedDeviceVoiceTest": "User reports everything worked after the build-13 automatic welcome fix. No quantified end-to-end latency measurement.",
   "androidStoreSigning": "not configured",
   "listingText": "Apple name, subtitle, category, description, keywords and support URL saved; Google draft only",
   "iconColors": [
@@ -387,7 +387,7 @@
     "distributionVerifiedAt": "2026-11-01T04:04:01.967404+00:00"
   },
   "pricingDecision": {
-    "status": "monthly_plan_approved_not_activated",
+    "status": "implemented_candidate_not_activated",
     "currency": "USD",
     "monthlyPriceCents": 3499,
     "billingInterval": "month",
@@ -401,9 +401,9 @@
     "recordedAt": "2026-11-01T04:04:01.967404+00:00",
     "billingActivated": false,
     "storeProductsConfigured": false,
-    "newMinuteLimitImplemented": false,
-    "trialAndTopUps": "Previous 5-minute welcome trial and $4.99 / 25-minute pack remain proposals; not configured",
-    "deepThinkAllowance": "Separate cap requires definition before monetization; no unlimited inference entitlement"
+    "newMinuteLimitImplemented": true,
+    "trialAndTopUps": "No trial. Retain three AI GAS packs: 60 minutes / USD 30, 120 minutes / USD 55, 180 minutes / USD 80.",
+    "deepThinkAllowance": "Existing account limits remain; AI GAS extends Live Conversation only."
   },
   "ambienceUpdate": {
     "sourceBuild": 11,
@@ -453,7 +453,7 @@
       "sha256": "023761454a65f317e50252f9452e59d8b01fc66931a6d6f69ee55909f40c02f4",
       "voice": "marin",
       "pronunciation": "Ree-see",
-      "displayText": "Welcome to KORLIX Brain+Voice—built to be one of the world's most versatile conversation apps! I'm Rici. Talk, learn, train me, and save what matters. Your voice. Your brain. Let's go!",
+      "displayText": "Welcome to KORLIX Brain+Voice\u2014built to be one of the world's most versatile conversation apps! I'm Rici. Talk, learn, train me, and save what matters. Your voice. Your brain. Let's go!",
       "ttsModel": "gpt-4o-mini-tts",
       "speed": 1.12,
       "playback": "Bundled offline; once on first use, then manual Replay; Skip and capture stop immediately",
@@ -492,7 +492,7 @@
     "appleBuildId": "42fa1e65-d106-4120-9e48-e1ed1d7deef4",
     "processingResult": "complete",
     "distributionVerifiedAt": "2026-11-01T05:11:04.644566+00:00",
-    "physicalPhoneListening": "User-reported build-12 Replay works; build-13 automatic native playback still needs physical iPhone confirmation"
+    "physicalPhoneListening": "User confirmed everything worked after build 13."
   },
   "currentBackend": {
     "commit": "20706bb385dc9658247e0ecbcea89bacc62d3e89",
@@ -516,7 +516,7 @@
     "flutterAnalysis": "pass",
     "releaseChecks": 23,
     "browserChecks": "pass: startup after prior Replay, stalled account sync, inactive startup, native bridge, Skip/Replay, stale completion, capture handoff, background stop, fallback decode",
-    "physicalDeviceValidation": "Pending user confirmation on build 13",
+    "physicalDeviceValidation": "User confirmed everything worked and authorized store release.",
     "sourceCommit": "b0885d8a8cb5755053ef2cf238c4fa1451a48460",
     "releaseCommit": "22efa287ca33a6919dbfa07ebe5335efacaba584",
     "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6cde26a1999f83b5dd3bb",
@@ -540,5 +540,30 @@
     },
     "billingChanged": false,
     "backendChanged": false
+  },
+  "billingCandidate": {
+    "build": 14,
+    "status": "source validated; store configuration and native purchase testing pending",
+    "backendCommit": "00894696f5371623adb827c7c5a77d0ecb60716b",
+    "backendDeploy": "dep-dbjihnjbc2fs73ctvgpg",
+    "backendDeployState": "update_in_progress",
+    "databaseMigration": "20261101113614_brain_voice_store_billing.sql",
+    "databaseMigrationApplied": true,
+    "billingEnabled": false,
+    "catalog": "billing-products.json",
+    "flutterTests": 75,
+    "flutterAnalysis": "pass",
+    "releaseIdentityTests": 23,
+    "backendBillingTests": 9,
+    "devicePurchaseTests": "not performed",
+    "signedIosBuild": "pending",
+    "signedAndroidAab": "pending upload-key verification",
+    "appleProductsConfigured": false,
+    "googleProductsConfigured": false,
+    "publicStoreSubmission": "not performed",
+    "accessBlockers": {
+      "apple": "Two-factor sign-in rejected the supplied verification code; secure manual authentication required.",
+      "google": "Automatic browser approval review rejected Play Console access after evaluating the malformed origin https://google.play. No workaround or Play mutation attempted."
+    }
   }
 }
