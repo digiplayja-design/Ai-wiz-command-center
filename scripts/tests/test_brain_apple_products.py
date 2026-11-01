@@ -43,6 +43,27 @@ class AppleProductTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Wrong Apple app"):
             module.run(WrongApp())
 
+    def test_oversize_localization_is_rejected_before_network(self):
+        with self.assertRaisesRegex(ValueError, "character limit"):
+            module.localization(None, "", "", "", "", "", "", {"description": "x" * 56})
+
+    def test_missing_schedule_is_readable_without_hiding_auth_failure(self):
+        class Response:
+            status_code = 404
+            def json(self):
+                return {"errors": [{"code": "NOT_FOUND"}]}
+        class Session:
+            def request(self, *args, **kwargs):
+                self.kwargs = kwargs
+                return Response()
+        session = Session()
+        api = module.Apple(session)
+        self.assertIsNone(api.request("GET", "/v2/inAppPurchases/1/iapPriceSchedule", allow_missing=True))
+        self.assertIs(session.kwargs["allow_redirects"], False)
+        Response.status_code = 401
+        with self.assertRaisesRegex(RuntimeError, "HTTP 401"):
+            api.request("GET", "/v2/inAppPurchases/1/iapPriceSchedule", allow_missing=True)
+
     def test_price_schedule_uses_one_USA_manual_price(self):
         body = module.iap_price_body("iap-id", "point-id")
         self.assertEqual(body["data"]["relationships"]["baseTerritory"]["data"]["id"], "USA")

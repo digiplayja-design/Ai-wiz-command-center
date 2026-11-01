@@ -80,8 +80,9 @@ def iap_price_body(identifier, point_id):
 
 
 class Apple:
-    def __init__(self, session, apply=False):
+    def __init__(self, session, apply=False, auth_headers=None):
         self.session, self.apply = session, apply
+        self.auth_headers = auth_headers or (lambda: {})
 
     @staticmethod
     def url(path):
@@ -97,7 +98,7 @@ class Apple:
             raise ValueError("Catalog write requires --apply")
         # Never retry POST automatically: a network timeout may mean it committed.
         response = self.session.request(method, self.url(path), params=params, json=body,
-                                        timeout=60, allow_redirects=False)
+                                        headers=self.auth_headers(), timeout=60, allow_redirects=False)
         if allow_missing and response.status_code == 404:
             return None
         expected = 201 if method == "POST" else 200
@@ -140,6 +141,8 @@ class Apple:
 
 
 def localization(api, list_path, create_path, kind, parent_name, parent_type, parent_id, attrs):
+    if len(attrs.get("name", "")) > 30 or len(attrs.get("description", "")) > 55:
+        raise ValueError("Apple localization exceeds its name/description character limit")
     existing = unique(api.all(list_path), lambda r: r["attributes"]["locale"] == "en-US", kind)
     if existing:
         if any(existing["attributes"].get(k) != v for k, v in attrs.items()):
@@ -230,7 +233,7 @@ def run(api):
         raise ValueError("Existing subscription period or family sharing differs")
     localization(api, f"/v1/subscriptions/{sub['id']}/subscriptionLocalizations",
                  "/v1/subscriptionLocalizations", "subscriptionLocalizations", "subscription", "subscriptions",
-                 sub["id"], {"name": "Brain+Voice Monthly", "description": "Personal Brain, training and 60 Live minutes each month."})
+                 sub["id"], {"name": "Brain+Voice Monthly", "description": "Brain, training and 60 Live minutes each month."})
     report["products"].append({"productId": monthly["appleId"], "id": sub["id"],
                                "price": ensure_price(api, sub, monthly["usdCents"], True)})
     for product in catalog[1:]:
@@ -263,12 +266,16 @@ def main():
     args = parser.parse_args()
     from codemagic.apple.app_store_connect import AppStoreConnectApiClient
     from codemagic.tools.app_store_connect.arguments import Types
+    import requests
     client = AppStoreConnectApiClient(
         key_identifier=Types.KeyIdentifierArgument(os.environ["APP_STORE_CONNECT_KEY_IDENTIFIER"]).value,
         issuer_id=Types.IssuerIdArgument(os.environ["APP_STORE_CONNECT_ISSUER_ID"]).value,
         private_key=Types.PrivateKeyArgument(os.environ["APP_STORE_CONNECT_PRIVATE_KEY"]).value,
         log_requests=False, enable_jwt_cache=False)
-    report = run(Apple(client.session, apply=args.apply))
+    # A plain Session avoids the CLI's failed-request audit files and automatic
+    # retries. Auth stays in memory and is refreshed by the existing integration.
+    with requests.Session() as session:
+        report = run(Apple(session, apply=args.apply, auth_headers=client.generate_auth_headers))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps(report, indent=2))
