@@ -1,0 +1,161 @@
+{
+  "recordedAt": "2026-11-01T14:37:20.988908+00:00",
+  "app": "KORLIX Brain+Voice",
+  "packageName": "com.korlix.brain",
+  "version": "1.0.1",
+  "build": 14,
+  "status": "iarc_completed_saved_in_publishing_overview",
+  "publicAppReviewSubmitted": false,
+  "consoleUrl": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4973840118435464131/app-content/content-rating-overview",
+  "contactEmail": "support@korlixdeveloper.com",
+  "category": "All Other App Types",
+  "agreement": {
+    "termsUrl": "https://web.iarcservices.com/terms",
+    "accepted": true,
+    "authorization": "User replied APPROVE to the explicit request to accept IARC Terms of Use for Brain+Voice Google Play content rating."
+  },
+  "questionnaire": {
+    "ratingsRelevantPackagedContent": false,
+    "nativeUserToUserContentExchange": false,
+    "onlineContentIncludingGeneratedAI": true,
+    "violence": {
+      "possible": true,
+      "primaryPurpose": false,
+      "visualDepictions": false,
+      "textOrSpeechReferences": true
+    },
+    "sexuality": {
+      "possible": true,
+      "primaryPurpose": false,
+      "visualDepictions": false,
+      "textOrSpeechReferences": true
+    },
+    "language": {
+      "potentiallyOffensive": true,
+      "primaryPurpose": false,
+      "minorProfanities": true,
+      "moderateOrSignificantOffensiveLanguage": true,
+      "discriminatoryLanguage": true,
+      "sexualExpletives": true
+    },
+    "controlledSubstances": {
+      "possible": true,
+      "primaryPurpose": false,
+      "visualDepictions": false,
+      "textOrSpeechReferences": true
+    },
+    "promotesOrSellsAgeRestrictedProducts": false,
+    "preciseLocationSharedWithUsers": false,
+    "digitalGoodsPurchases": true,
+    "randomOrChanceBasedPurchases": false,
+    "cashRewardsCryptoOrTransferableDigitalAssets": false,
+    "webBrowserOrSearchEngine": false,
+    "primarilyNewsOrEducation": false
+  },
+  "rationale": [
+    "General-purpose AI-generated responses may discuss mature topics or quote language. No unsupported claim of complete content filtering was made.",
+    "Current Brain voice/text flows do not generate or display images depicting the declared mature material.",
+    "The native share sheet sends a selected transcript to a secondary app; Brain has no built-in person-to-person messaging.",
+    "The catalog contains one subscription and exactly three fixed-minute AI GAS products, with no loot boxes or cash rewards.",
+    "Google generated the regional ratings. The app target-audience intention remains 16-17 and 18+, independently of lower generated regional ratings."
+  ],
+  "guidanceUrls": [
+    "https://support.google.com/googleplay/android-developer/answer/11070862?hl=en",
+    "https://support.google.com/googleplay/android-developer/answer/11070055?hl=en"
+  ],
+  "ratings": [
+    {
+      "region": "North America",
+      "authority": "ESRB",
+      "rating": "Teen",
+      "descriptors": [
+        "Diverse Content: Discretion Advised"
+      ],
+      "interactiveElements": [
+        "In-App Purchases"
+      ]
+    },
+    {
+      "region": "Brazil",
+      "authority": "ClassInd",
+      "rating": "14+",
+      "descriptors": [
+        "Violence",
+        "Sexual Content",
+        "Illegal Drugs"
+      ],
+      "interactiveElements": [
+        "In-App Purchases"
+      ]
+    },
+    {
+      "region": "Europe",
+      "authority": "PEGI",
+      "rating": "Parental guidance",
+      "descriptors": [
+        "Parental Guidance Recommended"
+      ],
+      "interactiveElements": [
+        "In-App Purchases"
+      ]
+    },
+    {
+      "region": "Germany",
+      "authority": "USK",
+      "rating": "12+",
+      "descriptors": [
+        "Contents for Different Age Groups"
+      ],
+      "interactiveElements": [
+        "In-App Purchases"
+      ]
+    },
+    {
+      "region": "Rest of world",
+      "authority": "IARC Generic",
+      "rating": "12+",
+      "descriptors": [
+        "Parental Guidance Recommended"
+      ],
+      "interactiveElements": [
+        "In-App Purchases"
+      ]
+    },
+    {
+      "region": "Russia",
+      "authority": "Google Play",
+      "rating": "12+",
+      "descriptors": [
+        "Parental Guidance Recommended"
+      ],
+      "interactiveElements": [
+        "In-App Purchases"
+      ]
+    },
+    {
+      "region": "South Korea",
+      "authority": "Google Play",
+      "rating": "12+",
+      "descriptors": [
+        "Parental Guidance Recommended"
+      ],
+      "interactiveElements": [
+        "In-App Purchases"
+      ]
+    }
+  ],
+  "iarcCertificateId": null,
+  "certificateNote": "Google currently displays a dash for certificate ID; no certificate identifier invented.",
+  "consoleSubmittedDateDisplayed": "November 1, 2026, 9:30 AM",
+  "verifiedUiStatus": "Completed; Content ratings moved to Actioned declarations; Need attention reduced from 5 to 4.",
+  "proof": [
+    {
+      "path": "google-play/review-evidence/content-ratings-complete-20261101.jpg",
+      "sha256": "217bda6c9f048650da75dd479fecffae08a377689a2a85499d1296f66a8ec48b"
+    },
+    {
+      "path": "google-play/review-evidence/review-access-prepared-20261101.jpg",
+      "sha256": "727dcd534f4404e75a44b0ef1f507cf025acac95c9d89a6f7e1f5eb5fc080e96"
+    }
+  ]
+}

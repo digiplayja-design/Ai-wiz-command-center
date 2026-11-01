@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-01T14:22:59.633835+00:00",
+  "updatedAt": "2026-11-01T14:37:20.988908+00:00",
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "version": "1.0.1",
@@ -564,7 +564,7 @@
     "publicStoreSubmission": "not performed",
     "accessBlockers": {
       "apple": "Browser two-factor verification remains pending. Existing Codemagic integration is available for authorized Apple API operations.",
-      "google": "Data safety complete as a saved draft; final Save blocked by target audience, which requires reviewer Sign in details. Content rating requires IARC Terms of Use acceptance. Review account, native screenshots and foreground microphone demo video remain required.",
+      "google": "Content rating completed and saved. Data safety complete as a saved draft; final Save blocked by target audience, which requires reviewer Sign in details. Existing reviewer identity is verified, but credentials and separate Brain paid access are still needed. Native screenshots and foreground microphone demo video remain required.",
       "devicePurchases": "Designated native store test accounts and purchase/restore/refund verification are still required."
     },
     "appCodeCommit": "76d7d0f9c26e56883913ca3b079397c6b109bb77",
@@ -702,13 +702,113 @@
         "verifiedAt": "2026-11-01T14:22:59.633835+00:00"
       },
       "contentRatingDeclaration": {
-        "status": "category_prepared_terms_not_accepted",
+        "status": "iarc_completed_saved_in_publishing_overview",
         "category": "All Other App Types",
         "contactEmail": "support@korlixdeveloper.com",
         "termsUrl": "https://web.iarcservices.com/terms",
-        "termsAccepted": false,
-        "questionnaireCompleted": false,
-        "reason": "IARC Terms of Use checkbox requires explicit action-time confirmation before acceptance. Prepared fields are in the retained browser form, not a completed rating."
+        "termsAccepted": true,
+        "questionnaireCompleted": true,
+        "report": "google-play/content-rating-20261101.json",
+        "esrb": "Teen",
+        "regionalRatings": [
+          {
+            "region": "North America",
+            "authority": "ESRB",
+            "rating": "Teen",
+            "descriptors": [
+              "Diverse Content: Discretion Advised"
+            ],
+            "interactiveElements": [
+              "In-App Purchases"
+            ]
+          },
+          {
+            "region": "Brazil",
+            "authority": "ClassInd",
+            "rating": "14+",
+            "descriptors": [
+              "Violence",
+              "Sexual Content",
+              "Illegal Drugs"
+            ],
+            "interactiveElements": [
+              "In-App Purchases"
+            ]
+          },
+          {
+            "region": "Europe",
+            "authority": "PEGI",
+            "rating": "Parental guidance",
+            "descriptors": [
+              "Parental Guidance Recommended"
+            ],
+            "interactiveElements": [
+              "In-App Purchases"
+            ]
+          },
+          {
+            "region": "Germany",
+            "authority": "USK",
+            "rating": "12+",
+            "descriptors": [
+              "Contents for Different Age Groups"
+            ],
+            "interactiveElements": [
+              "In-App Purchases"
+            ]
+          },
+          {
+            "region": "Rest of world",
+            "authority": "IARC Generic",
+            "rating": "12+",
+            "descriptors": [
+              "Parental Guidance Recommended"
+            ],
+            "interactiveElements": [
+              "In-App Purchases"
+            ]
+          },
+          {
+            "region": "Russia",
+            "authority": "Google Play",
+            "rating": "12+",
+            "descriptors": [
+              "Parental Guidance Recommended"
+            ],
+            "interactiveElements": [
+              "In-App Purchases"
+            ]
+          },
+          {
+            "region": "South Korea",
+            "authority": "Google Play",
+            "rating": "12+",
+            "descriptors": [
+              "Parental Guidance Recommended"
+            ],
+            "interactiveElements": [
+              "In-App Purchases"
+            ]
+          }
+        ],
+        "publicAppReviewSubmitted": false,
+        "verifiedAt": "2026-11-01T14:37:20.988908+00:00"
+      },
+      "reviewAccess": {
+        "status": "instructions_prepared_credentials_and_brain_entitlement_pending",
+        "dedicatedSharedReviewerAccountFound": true,
+        "emailVerified": true,
+        "bannedOrDeleted": false,
+        "sharedProfileTier": "ultra",
+        "sharedSubscriptionRecords": 0,
+        "brainBillingAccountExists": false,
+        "brainPurchaseRecords": 0,
+        "brainAvailableSeconds": 0,
+        "brainAccessAfterBillingActivationVerified": false,
+        "credentialValuesStoredInRepository": false,
+        "reviewAccessDeclarationSubmitted": false,
+        "fullAccessCertificationChecked": false,
+        "note": "Read-only database checks only. Current legacy access was not device-tested; shared Ultra does not establish the separate Brain subscription/minute entitlement. No credentials, memberships or grants were changed."
       }
     },
     "androidSigning": {
