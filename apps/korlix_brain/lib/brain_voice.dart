@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
 import 'brain_api.dart';
+import 'brain_model.dart';
 import 'brain_voice_session.dart';
 import 'brain_voice_turns.dart';
 import 'voice_lifecycle.dart';
@@ -193,7 +194,7 @@ class BrainVoice {
                   for (final track in microphone.getAudioTracks()) {
                     track.enabled = true;
                   }
-                  _state('listening', 'Rici is listening · Astra Max');
+                  _state('listening', 'Rici is listening · $brainModelLabel');
                 }
               case BrainSessionAction.reject:
                 unawaited(
@@ -218,7 +219,7 @@ class BrainVoice {
             } else {
               _turns?.speechStopped(event['item_id']?.toString() ?? '');
             }
-            _state('thinking', 'Rici is thinking · Astra Max');
+            _state('thinking', 'Rici is thinking · $brainModelLabel');
           } else if (type == 'output_audio_buffer.started') {
             _state('speaking', 'Rici is speaking');
           } else if (type == 'output_audio_buffer.stopped' ||
@@ -287,7 +288,7 @@ class BrainVoice {
         headers: {
           'Content-Type': 'application/sdp',
           'Accept': 'application/sdp, application/json',
-          'x-korlix-brain-voice': 'astra-max-v1',
+          'x-korlix-brain-voice': brainProtocol,
           'x-korlix-character': 'jj',
           'x-korlix-language': 'English',
           'x-korlix-live-convo-agent': 'general',
@@ -309,11 +310,9 @@ class BrainVoice {
         check();
       }
       _usage = usage;
-      if (response.headers['x-korlix-brain-voice'] != 'astra-max-v1' ||
-          response.headers['x-korlix-brain-model'] != 'gpt-6-astra' ||
-          response.headers['x-korlix-brain-reasoning'] != 'max') {
+      if (!hasBrainVoiceContract(response.headers)) {
         throw const BrainApiException(
-          'Astra Max is not available on this server yet. Please reconnect later.',
+          '$brainModelLabel is not available on this server yet. Please reconnect later.',
         );
       }
       _turns = BrainVoiceTurns(

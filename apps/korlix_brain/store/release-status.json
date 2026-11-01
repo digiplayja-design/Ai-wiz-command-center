@@ -1,9 +1,9 @@
 {
-  "updatedAt": "2026-11-01T00:42:24.183241+00:00",
+  "updatedAt": "2026-11-01T01:00:57.282111+00:00",
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "version": "1.0.1",
-  "minimumSourceBuild": 7,
+  "minimumSourceBuild": 8,
   "appCodeCommit": "cbfe964b46d419abe67370dae80a5ecf6da7939b",
   "releasePipelineCommit": "bcb6a6da480602ac40fb8e138321f7544b2fd715",
   "signedIosCandidate": {
@@ -106,9 +106,9 @@
     "gold"
   ],
   "reasoning": {
-    "model": "gpt-6-astra",
+    "model": "gpt-6.1-sol",
     "effort": "max",
-    "liveProviderInference": "Production build-6 requests completed with verified Astra model; gpt-6-astra/max retained. Build-7 timing pending."
+    "liveProviderInference": "Build-8 Sol inference and device latency pending; prior live runs used Astra."
   },
   "voiceMemory": {
     "command": "Rici, remember this: ...",
@@ -213,5 +213,32 @@
     "appleBuildId": "90e1d36f-3483-4d0d-a9c5-d197cc2711f2",
     "completedAt": "2026-11-01T00:35:38Z",
     "processingVerifiedAt": "2026-11-01T00:42:24.183241+00:00"
+  },
+  "solMigration": {
+    "sourceBuild": 8,
+    "status": "Validated; server deployment and signed iOS delivery in progress",
+    "backendCommit": "986d9d21c12c32c015d01c7bcdd55c449ef5fc19",
+    "model": "gpt-6.1-sol",
+    "reasoningEffort": "max",
+    "protocol": "sol-6.1-max-v1",
+    "legacyProtocol": "astra-max-v1",
+    "legacyModel": "gpt-6-astra",
+    "speechVoice": "marin",
+    "flutterTests": 41,
+    "flutterAnalyze": "pass",
+    "brainBackendTests": 29,
+    "agentStudioTests": 20,
+    "sharedAgentChecks": 13,
+    "releaseIdentityTests": 23,
+    "uiViewports": [
+      320,
+      390,
+      768,
+      1024
+    ],
+    "modelAccess": "pending deployed metadata check",
+    "deviceLatencyVerification": "pending",
+    "automaticFallback": false,
+    "paidProcessingTierChanged": false
   }
 }

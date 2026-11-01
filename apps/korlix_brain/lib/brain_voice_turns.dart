@@ -1,8 +1,9 @@
 import 'dart:async';
 
 import 'brain_speech_queue.dart';
+import 'brain_model.dart';
 
-/// Routes completed user transcripts to the account-bound Astra Max backend.
+/// Routes completed user transcripts to the account-bound Sol 6.1 Max backend.
 /// Realtime delivers speech only; it is never asked to answer a user question.
 class BrainVoiceTurns {
   BrainVoiceTurns({
@@ -117,7 +118,7 @@ class BrainVoiceTurns {
           emit({
             'type': 'voice',
             'phase': 'thinking',
-            'message': 'Rici is thinking · Astra Max',
+            'message': 'Rici is thinking · $brainModelLabel',
           });
         }
         try {
@@ -169,12 +170,13 @@ class BrainVoiceTurns {
             _speech.interrupt(_epoch);
             emit({
               'type': 'voiceNotice',
-              'message': 'Rici could not finish that turn. Check My Brain before repeating a save. Your reasoning model is still Astra Max.',
+              'message':
+                  'Rici could not finish that turn. Check My Brain before repeating a save. Your reasoning model is still $brainModelLabel.',
             });
             emit({
               'type': 'voice',
               'phase': 'listening',
-              'message': 'Ready to try again · Astra Max',
+              'message': 'Ready to try again · $brainModelLabel',
             });
           }
         }
@@ -199,10 +201,9 @@ class BrainVoiceTurns {
   void _verifyModel(Map event, {bool required = false}) {
     final model = event['model'];
     if ((required || model != null) &&
-        (model is! String ||
-            !RegExp(r'^gpt-6-astra(?:-|$)').hasMatch(model) ||
-            event['reasoningEffort'] != 'max')) {
-      throw StateError('Astra Max was not verified');
+        (!isBrainReasoningModel(model) ||
+            event['reasoningEffort'] != brainReasoningEffort)) {
+      throw StateError('$brainModelLabel was not verified');
     }
   }
 }

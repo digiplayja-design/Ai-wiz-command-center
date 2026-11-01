@@ -1,6 +1,6 @@
 # KORLIX Brain+Voice
 
-Standalone iOS/Android app for the existing KORLIX account and `general` Rici agent. This app has its own `com.korlix.brain` identity and does not replace KORLIX AI. Version 1.0.1, build 7. Build 7 adds a persistent Stop conversation button, earlier first-sentence speech and a dedicated Rici identity with fast connection/name replies. Build 7 has completed Apple processing and is Testing in the existing KORLIX Brain Internal group. App Store review submission has not been performed.
+Standalone iOS/Android app for the existing KORLIX account and `general` Rici agent. This app has its own `com.korlix.brain` identity and does not replace KORLIX AI. Version 1.0.1, build 8. Build 8 switches reasoning to GPT-6.1 Sol with Max effort, preserving Rici identity, direct memory, streaming speech and the persistent Stop control. Build 7 remains Testing; build-8 signed delivery is being prepared. App Store review submission has not been performed.
 
 The approved Violet Eclipse / Champagne Precision interface is bundled offline in `assets/web`. It retains the Halo Capsule Talk button, Add Memory chip, Magnetic Key controls, Electric Cyan Precision Dial orbits, silent 3.1–3.6 second lightning and crystal twinkle ambience at 1%. Animation pause and reduced-motion support are preserved. The official KORLIX emblem now uses purple, red, green and gold. Apple, Google Play and device icon sizes are checked in.
 
@@ -9,11 +9,11 @@ The approved Violet Eclipse / Champagne Precision interface is bundled offline i
 - Native secure sign-in, refresh, password recovery, duplicate-account guidance, sign-out and shared-account deletion request.
 - Native authenticated memory and behavior loading, reviewed typed/document changes, direct command-authorized voice saves, selected-item deletion, session undo and stale-training checks.
 - Typed, OS dictation and selected-document inputs. A file produces a draft, never an automatic memory. Suggested memories are individually selected for review. Analysis uses the existing account allowance.
-- GPT-6 Astra (`gpt-6-astra`) with `reasoning.effort: max` generates substantive answers on the server; no automatic downgrade. Exact standalone connection/name checks use fixed app phrases without a reasoning call. Realtime supplies microphone transcription and spoken delivery with automatic responses disabled. Incremental spoken phrases begin before the full answer completes. Native WebRTC voice, usage limits, stop/reconnect, ephemeral transcript and response reporting. Credentials never cross the WebView bridge; remote navigation and network requests from the bundled page are blocked.
+- GPT-6.1 Sol (`gpt-6.1-sol`) with `reasoning.effort: max` generates substantive answers on the server; no automatic downgrade. Exact standalone connection/name checks use fixed app phrases without a reasoning call. Realtime supplies microphone transcription and spoken delivery with automatic responses disabled. Incremental spoken phrases begin before the full answer completes. Native WebRTC voice, usage limits, stop/reconnect, ephemeral transcript and response reporting. Credentials never cross the WebView bridge; remote navigation and network requests from the bundled page are blocked.
 - Voice keeps running while navigating within the app. A 58-pixel red Stop conversation button stays fixed above the bottom safe area on every screen, including connecting/thinking/speaking states. Stop bypasses pending account operations, cancels a pending voice start, and disables microphone and playback before cleanup. Android includes a microphone foreground service with a Stop notification; iOS declares background audio with a play-and-record session. Physical-device verification is required before claiming screen-lock reliability.
 - Existing service limits apply. No new prices, unlimited access or purchase flow are introduced in this first standalone build.
 
-Memory and behavior changes affect the shared general KORLIX agent. Astra reloads saved account memory and training before each reasoning turn. Say **“Rici, remember this: …”** or **“Rici, remember this instruction: …”** to save the exact spoken content without a separate password or review screen. Saying the command alone prompts for the next utterance, valid for 60 seconds; “cancel” or “never mind” discards it. Spoken instructions are saved as tagged, removable style memories in My Brain. Ordinary conversation is not automatically saved. Success is shown only after database acknowledgment. Duplicate transcript IDs are idempotent; interruptions suppress stale speech while preserving already-authorized saves. The backend limits memory listing to 250 entries. Training performs a fresh-content check before writing, but the existing API does not offer an atomic compare-and-swap operation.
+Memory and behavior changes affect the shared general KORLIX agent. Sol reloads saved account memory and training before each reasoning turn. Say **“Rici, remember this: …”** or **“Rici, remember this instruction: …”** to save the exact spoken content without a separate password or review screen. Saying the command alone prompts for the next utterance, valid for 60 seconds; “cancel” or “never mind” discards it. Spoken instructions are saved as tagged, removable style memories in My Brain. Ordinary conversation is not automatically saved. Success is shown only after database acknowledgment. Duplicate transcript IDs are idempotent; interruptions suppress stale speech while preserving already-authorized saves. The backend limits memory listing to 250 entries. Training performs a fresh-content check before writing, but the existing API does not offer an atomic compare-and-swap operation.
 
 ## Build and validate
 
@@ -38,7 +38,7 @@ The build-7 source passes Flutter analysis, 39 Dart tests and 23 Apple identity,
 
 The preceding build-4 code passed Android, simulator and iPhoneOS arm64 compilation in [GitHub validation run 41247985018](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41247985018). Build 7 was compiled in the signed iOS pipeline; an updated Android binary has not been delivered.
 
-The production backend is commit `c4fa44d14c35a65ecc4d11d0b5f850618645020b` on `release/signup-plan-intent-20261021`. Deploy that branch; this app branch retains its original backend snapshot. The app verifies `astra-max-v1` and exact model/effort headers before opening the microphone. Existing build 3 remains supported through JSON responses. New voice sessions use faster semantic turn detection. Fresh account memory and allowance are read concurrently before each permitted inference. Timing logs contain durations, streaming state and the response route, without transcripts. Reasoning tokens are metered on the server and combined with all speech tokens; chunked audio counts as one user turn. Ephemeral sessions require reconnect after a backend restart.
+The production backend is commit `986d9d21c12c32c015d01c7bcdd55c449ef5fc19` on `release/signup-plan-intent-20261021`. Deploy that branch; this app branch retains its original backend snapshot. Build 8 verifies `sol-6.1-max-v1` and exact `gpt-6.1-sol/max` headers before opening the microphone. Installed Astra builds remain supported by their original `astra-max-v1` protocol; sessions cannot change models mid-conversation. New voice sessions use faster semantic turn detection. Fresh account memory and allowance are read concurrently before each permitted inference. Timing logs contain durations, streaming state and the response route, without transcripts. Reasoning tokens are metered on the server and combined with all speech tokens; chunked audio counts as one user turn. Ephemeral sessions require reconnect after a backend restart.
 
 The user reported slow responses on build 3. Three server requests took 6,995, 7,930 and 10,951 ms before speech delivery. Streaming removes full-answer buffering but does not eliminate Astra Max reasoning time. A measured conversation with the latest build on the user's phone remains pending. Build 6 also fixes the startup check that rejected the provider's initial default settings: it waits for an explicit speech-only acknowledgement before enabling the microphone, with a bounded timeout.
 
@@ -55,7 +55,7 @@ shared profiles are preserved. The speech voice remains Marin; this fixes the
 spoken identity conflict rather than changing the acoustic voice arbitrarily.
 
 Exact “Rici, are you there?” and “What’s your name?” requests receive metered app
-phrases without an Astra request. Compound questions still use Astra Max.
+phrases without an Astra request. Build 8 uses Sol 6.1 Max for compound questions.
 Pending “remember this” capture takes precedence. First complete sentences no
 longer wait for 60 characters before entering the speech queue.
 
@@ -63,3 +63,17 @@ Build-6 production first-text measurements were 2,234, 5,363 and 7,955 ms, with
 50–59 ms preparation. Max reasoning remains a source of delay; no subsecond
 model-response claim is made. Post-update physical-device timing and spoken
 identity verification remain pending.
+
+## Build 8 Sol migration
+
+Requested target: `gpt-6.1-sol`; previous Max effort requirement is retained.
+The app checks the Sol protocol, model and effort before enabling its microphone
+and verifies each answer chunk. The server pins each authenticated session to
+its requested supported profile, keeping installed Astra builds functional.
+No automatic fallback or paid processing-tier upgrade is added.
+
+Validation: 41 Flutter tests, clean analysis, 29 Brain backend tests, 20 shared
+agent-studio tests, 13 legacy-agent checks, 23 release checks and four viewport
+UI checks passed. Live phone latency and spoken quality remain to be measured.
+Model metadata access will be checked by the deployed server; it is not a speed
+benchmark or a completed inference. Max effort can still add response delay.

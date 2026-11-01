@@ -27,7 +27,7 @@ replacements={
     'BRAIN':'BRAIN+VOICE',
     'Preview ready':'Your brain is ready',
     'Preview only · sample entries stay in this preview':'Your memories. Your voice. Your KORLIX account.',
-    'Scripted voice lighting · microphone off':'GPT-6 Astra · Max reasoning',
+    'Scripted voice lighting · microphone off':'GPT-6.1 Sol · Max reasoning',
     'Scripted example · microphone is off':'Rici can make mistakes. Review important information.',
     'Planned inputs: voice, typing, or document upload.':'Say “Rici, remember this…” to save directly. Type or upload for review.',
     'Sample data only · no account connection':'Shared with your KORLIX general voice agent.',
