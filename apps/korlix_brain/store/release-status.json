@@ -1,11 +1,11 @@
 {
-  "updatedAt": "2026-11-01T00:27:46.677153+00:00",
+  "updatedAt": "2026-11-01T00:42:24.183241+00:00",
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "version": "1.0.1",
   "minimumSourceBuild": 7,
-  "appCodeCommit": "a68df1fe69691896f7489fe7458d925055214f4b",
-  "releasePipelineCommit": "1ccc328733298d0aeed2330f11ad605e4ca84269",
+  "appCodeCommit": "cbfe964b46d419abe67370dae80a5ecf6da7939b",
+  "releasePipelineCommit": "bcb6a6da480602ac40fb8e138321f7544b2fd715",
   "signedIosCandidate": {
     "status": "success",
     "build": 4,
@@ -29,8 +29,8 @@
   },
   "testflight": {
     "status": "testing",
-    "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6700ba74da3772d1e02f4",
-    "sourceCommit": "1ccc328733298d0aeed2330f11ad605e4ca84269",
+    "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae68823a74da3772d1e5bed",
+    "sourceCommit": "bcb6a6da480602ac40fb8e138321f7544b2fd715",
     "uploadBranch": "release/korlix-brain-testflight-20261031",
     "workflow": "korlix-brain-ios-testflight",
     "betaInformation": "saved in App Store Connect",
@@ -40,16 +40,18 @@
       "id": "ae86d9a2-5bdf-4f3d-910b-aa532675951f",
       "automaticDistribution": false,
       "testerCount": 1,
-      "invitationStatus": "Existing tester retained; App Store Connect reports Installed 1.0.1 (6)",
-      "buildCount": 3,
+      "invitationStatus": "Existing tester retained; no new testers or invitations",
+      "buildCount": 4,
       "builds": [
+        "1.0.1 (7)",
         "1.0.1 (6)",
         "1.0.1 (5)",
         "1.0.1 (3)"
       ],
       "buildState": "Testing",
       "build5Assigned": true,
-      "build6Assigned": true
+      "build6Assigned": true,
+      "build7Assigned": true
     },
     "processingRejection": {
       "version": "1.0.1",
@@ -72,26 +74,26 @@
       "processingResult": "rejected ITMS-90683",
       "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6612f6a1999f83b5c5925"
     },
-    "build": 6,
+    "build": 7,
     "signedArtifactVerification": "pass",
     "flutterAnalyze": "pass",
-    "flutterTests": 37,
+    "flutterTests": 39,
     "releaseIdentityTests": 23,
-    "completedAt": "2026-10-31T22:58:49Z",
+    "completedAt": "2026-11-01T00:35:38Z",
     "processingResult": "complete",
     "console": "https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6829319523/testflight/groups/ae86d9a2-5bdf-4f3d-910b-aa532675951f/builds",
     "previousReadyBuild": {
-      "build": 5,
-      "appleBuildId": "3a95a0e0-40ba-41f3-bffc-34cbdcb57d89",
-      "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae66ba86a1999f83b5c8371",
-      "sourceCommit": "afb7eed81fd032e914f28d208801cff12aa5816a",
-      "completedAt": "2026-10-31T22:37:09Z",
+      "build": 6,
+      "appleBuildId": "62dfea86-1c40-4a05-90ce-1ab2c23dda60",
+      "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6700ba74da3772d1e02f4",
+      "sourceCommit": "1ccc328733298d0aeed2330f11ad605e4ca84269",
+      "completedAt": "2026-10-31T22:58:49Z",
       "processingResult": "complete",
       "groupState": "Testing"
     },
     "distributionApprovedByUser": true,
-    "appleBuildId": "62dfea86-1c40-4a05-90ce-1ab2c23dda60",
-    "processingVerifiedAt": "2026-10-31T23:03:28.985305+00:00"
+    "appleBuildId": "90e1d36f-3483-4d0d-a9c5-d197cc2711f2",
+    "processingVerifiedAt": "2026-11-01T00:42:24.183241+00:00"
   },
   "storeSubmission": "not performed",
   "authenticatedDeviceVoiceTest": "Build 6 conversation requests succeeded; user reported 2\u20138 second first-text delays and incorrect Kim identity. Build 7 device verification pending.",
@@ -160,7 +162,7 @@
     "sourceBuild": 6,
     "status": "Testing in KORLIX Brain Internal; Apple processing and group assignment verified",
     "change": "Send session.update after session.created, wait for session.updated to confirm no automatic responses and transcription before enabling microphone; bounded setup timeout; retain Astra Max checks",
-    "liveDeviceVerification": "pending",
+    "liveDeviceVerification": "Build-6 production conversation requests succeeded. Latest build-7 device verification pending.",
     "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6700ba74da3772d1e02f4",
     "sourceCommit": "a68df1fe69691896f7489fe7458d925055214f4b",
     "releaseCommit": "1ccc328733298d0aeed2330f11ad605e4ca84269",
@@ -172,9 +174,9 @@
   },
   "riciResponsivenessUpdate": {
     "sourceBuild": 7,
-    "status": "Backend live; local validation passed; signed iOS upload pending",
-    "backendCommit": "7df8f95489511f5be8486714b260252553ad8003",
-    "backendDeploy": "dep-dbj8dg6tlv9c73cgtem0",
+    "status": "Backend live; build 7 Testing in existing internal group; Apple processing and assignment verified",
+    "backendCommit": "c4fa44d14c35a65ecc4d11d0b5f850618645020b",
+    "backendDeploy": "dep-dbj8jfgae00c73dgpsug",
     "backendHealth": "200; spokenName Rici; identityPolicy brain-rici-v1; quickConnectionReplies true; anonymous turn 401",
     "baselineFirstTextMs": [
       2234,
@@ -193,7 +195,7 @@
       "Fixed 58px red Stop conversation button across screens and voice states",
       "Stop disables microphone and playback before cleanup; cancels pending start"
     ],
-    "backendTests": 44,
+    "backendTests": 45,
     "sharedAgentTests": 13,
     "uiViewports": [
       320,
@@ -204,6 +206,12 @@
     "deviceVerification": "pending",
     "flutterTests": 39,
     "flutterAnalyze": "pass",
-    "releaseIdentityTests": 23
+    "releaseIdentityTests": 23,
+    "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae68823a74da3772d1e5bed",
+    "appCodeCommit": "cbfe964b46d419abe67370dae80a5ecf6da7939b",
+    "releaseCommit": "bcb6a6da480602ac40fb8e138321f7544b2fd715",
+    "appleBuildId": "90e1d36f-3483-4d0d-a9c5-d197cc2711f2",
+    "completedAt": "2026-11-01T00:35:38Z",
+    "processingVerifiedAt": "2026-11-01T00:42:24.183241+00:00"
   }
 }
