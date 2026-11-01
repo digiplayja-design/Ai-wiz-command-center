@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-01T14:37:20.988908+00:00",
+  "updatedAt": "2026-11-01T15:03:33.449953+00:00",
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "version": "1.0.1",
@@ -453,7 +453,7 @@
       "sha256": "023761454a65f317e50252f9452e59d8b01fc66931a6d6f69ee55909f40c02f4",
       "voice": "marin",
       "pronunciation": "Ree-see",
-      "displayText": "Welcome to KORLIX Brain+Voice—built to be one of the world's most versatile conversation apps! I'm Rici. Talk, learn, train me, and save what matters. Your voice. Your brain. Let's go!",
+      "displayText": "Welcome to KORLIX Brain+Voice\u2014built to be one of the world's most versatile conversation apps! I'm Rici. Talk, learn, train me, and save what matters. Your voice. Your brain. Let's go!",
       "ttsModel": "gpt-4o-mini-tts",
       "speed": 1.12,
       "playback": "Bundled offline; once on first use, then manual Replay; Skip and capture stop immediately",
@@ -555,18 +555,20 @@
     "flutterTests": 75,
     "flutterAnalysis": "pass",
     "releaseIdentityTests": 23,
-    "backendBillingTests": 9,
+    "backendBillingTests": 14,
     "devicePurchaseTests": "not performed",
     "signedIosBuild": "uploaded and processed",
     "signedAndroidAab": "Verified signed AAB uploaded; internal release 1.0.1 (14) published, no testers assigned",
     "appleProductsConfigured": true,
     "googleProductsConfigured": true,
     "publicStoreSubmission": "not performed",
-    "accessBlockers": {
-      "apple": "Browser two-factor verification remains pending. Existing Codemagic integration is available for authorized Apple API operations.",
-      "google": "Content rating completed and saved. Data safety complete as a saved draft; final Save blocked by target audience, which requires reviewer Sign in details. Existing reviewer identity is verified, but credentials and separate Brain paid access are still needed. Native screenshots and foreground microphone demo video remain required.",
-      "devicePurchases": "Designated native store test accounts and purchase/restore/refund verification are still required."
-    },
+    "accessBlockers": [
+      "Native iPhone and Android store screenshots; Apple IAP review screenshots",
+      "Android microphone foreground-service demonstration video",
+      "Native subscription, restore, AI GAS verification/consumption, renewal/refund tests",
+      "Apple browser sign-in remains at two-factor verification; no further credential attempt made",
+      "Assign and verify build 14 with authorized testers; billing flags remain off until native verification"
+    ],
     "appCodeCommit": "76d7d0f9c26e56883913ca3b079397c6b109bb77",
     "mobileValidation": {
       "status": "success",
@@ -623,7 +625,7 @@
       "healthFeatures": false,
       "healthDeclarationSaved": true,
       "internalRelease": {
-        "name": "1.0.1 (14) — Brain+Voice billing candidate",
+        "name": "1.0.1 (14) \u2014 Brain+Voice billing candidate",
         "versionCode": 14,
         "status": "Available to internal testers",
         "testersAssigned": 0,
@@ -676,15 +678,15 @@
       "advertisingId": false,
       "advertisingIdDeclarationSaved": true,
       "targetAudienceDeclaration": {
-        "status": "blocked",
-        "reason": "Play requires completed Sign in details before starting target-audience questionnaire",
-        "intendedAgeGroups": [
+        "status": "completed_saved_in_publishing_overview",
+        "ageGroups": [
           "16-17",
-          "18+"
-        ]
+          "18 and over"
+        ],
+        "verifiedAt": "2026-11-01T15:03:33.449953+00:00"
       },
       "foregroundServiceDeclaration": {
-        "status": "required",
+        "status": "blocked_missing_native_android_demonstration_video",
         "serviceType": "microphone",
         "videoProvided": false
       },
@@ -693,13 +695,13 @@
         "result": "Automated full-page validation captures are not native store screenshots; not uploaded as store images"
       },
       "dataSafetyDeclaration": {
-        "status": "complete_draft_saved_not_submitted",
+        "status": "completed_saved_in_publishing_overview_not_sent_for_review",
         "dataTypesCompleted": 11,
         "encryptedInTransit": true,
         "accountDeletionUrl": "https://www.korlixdeveloper.com/delete-account.html",
         "report": "google-play/data-safety-declaration-20261101.json",
-        "reasonNotSubmitted": "Google disables final Save until target age group and content information are complete. Target audience is blocked by Sign in details.",
-        "verifiedAt": "2026-11-01T14:22:59.633835+00:00"
+        "reasonNotSubmitted": "Saved for review; public app review waits for native assets and purchase verification.",
+        "verifiedAt": "2026-11-01T15:03:33.449953+00:00"
       },
       "contentRatingDeclaration": {
         "status": "iarc_completed_saved_in_publishing_overview",
@@ -795,21 +797,23 @@
         "verifiedAt": "2026-11-01T14:37:20.988908+00:00"
       },
       "reviewAccess": {
-        "status": "instructions_prepared_credentials_and_brain_entitlement_pending",
+        "status": "google_login_saved_review_allowance_provisioned_native_flow_not_tested",
         "dedicatedSharedReviewerAccountFound": true,
         "emailVerified": true,
         "bannedOrDeleted": false,
         "sharedProfileTier": "ultra",
         "sharedSubscriptionRecords": 0,
-        "brainBillingAccountExists": false,
+        "brainBillingAccountExists": true,
         "brainPurchaseRecords": 0,
-        "brainAvailableSeconds": 0,
-        "brainAccessAfterBillingActivationVerified": false,
+        "brainAvailableSeconds": 3600,
+        "brainAccessAfterBillingActivationVerified": "ledger provisioned and tested; native reviewer session pending",
         "credentialValuesStoredInRepository": false,
-        "reviewAccessDeclarationSubmitted": false,
-        "fullAccessCertificationChecked": false,
-        "note": "Read-only database checks only. Current legacy access was not device-tested; shared Ultra does not establish the separate Brain subscription/minute entitlement. No credentials, memberships or grants were changed."
-      }
+        "reviewAccessDeclarationSubmitted": true,
+        "fullAccessCertificationChecked": "User saved the reviewer entry; checkbox not independently inspected",
+        "note": "Existing account-tier limits remain active while billing is disabled. The separate reviewer allowance is provisioned for billing activation. Full native-device reviewer flow still needs testing.",
+        "reviewAllowanceMigration": "20261101145830_brain_voice_review_allowance.sql"
+      },
+      "remainingAppContentDeclarations": 1
     },
     "androidSigning": {
       "workflow": "korlix-brain-android-release",
@@ -918,6 +922,7 @@
         "Native sandbox purchase tests",
         "First products with app-version review"
       ]
-    }
+    },
+    "reviewReadinessReport": "review-readiness-20261101.json"
   }
 }
