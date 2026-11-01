@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-01T02:15:46.552519+00:00",
+  "updatedAt": "2026-11-01T02:59:22.335504+00:00",
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "version": "1.0.1",
@@ -28,7 +28,7 @@
     "note": "Cross-platform compilation before the final cancellation-order fix. Final build 5 passed all 31 tests and the signed iPhone build; no updated Android artifact was delivered."
   },
   "testflight": {
-    "status": "processed_pending_distribution",
+    "status": "testing",
     "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae69eaca74da3772d1eab3a",
     "sourceCommit": "2803adee82ecde6798552efbcaef068426b9cf3c",
     "uploadBranch": "release/korlix-brain-testflight-20261031",
@@ -41,8 +41,9 @@
       "automaticDistribution": false,
       "testerCount": 1,
       "invitationStatus": "Existing tester retained; no new testers or invitations",
-      "buildCount": 5,
+      "buildCount": 6,
       "builds": [
+        "1.0.1 (9)",
         "1.0.1 (8)",
         "1.0.1 (7)",
         "1.0.1 (6)",
@@ -54,7 +55,7 @@
       "build6Assigned": true,
       "build7Assigned": true,
       "build8Assigned": true,
-      "build9Assigned": false
+      "build9Assigned": true
     },
     "processingRejection": {
       "version": "1.0.1",
@@ -95,7 +96,7 @@
       "groupState": "Testing",
       "distributionApprovedByUser": true
     },
-    "distributionApprovedByUser": false,
+    "distributionApprovedByUser": true,
     "appleBuildId": "d681aa25-898b-4d77-b1b1-f67f45c1a087",
     "processingVerifiedAt": "2026-11-01T02:15:46.552519+00:00",
     "signedArtifact": {
@@ -109,11 +110,13 @@
       "location": "Codemagic; not included in source archive"
     },
     "distributionApproval": {
-      "state": "blocked_by_automatic_approval_review",
+      "state": "approved_and_completed",
       "action": "Add build 1.0.1 (9) to existing KORLIX Brain Internal group for its one existing tester",
-      "reason": "Auto-review did not recognize explicit user authorization for this specific distribution change",
-      "nextStep": "Obtain explicit approval for build 9 group assignment; do not add testers or send invitations"
-    }
+      "source": "Explicit user Approve response to the build-9 internal distribution question",
+      "recordedAt": "2026-11-01T02:59:22.335504+00:00",
+      "previousBlock": "Automatic approval review required explicit build-9 distribution approval; resolved by the user approval"
+    },
+    "distributionVerifiedAt": "2026-11-01T02:59:22.335504+00:00"
   },
   "storeSubmission": "not performed",
   "authenticatedDeviceVoiceTest": "Build-8 Sol inference verified: first text 3,883 / 6,820 / 13,446 ms, preparation 47 / 64 / 82 ms. Build-9 native live audio, spoken identity and phone latency remain unverified.",
@@ -288,7 +291,7 @@
   },
   "liveConversationUpdate": {
     "sourceBuild": 9,
-    "status": "Backend live; build 9 upload and Apple processing complete; internal-group assignment blocked by automatic approval review pending explicit build-9 distribution approval",
+    "status": "Backend live; build 9 Testing in KORLIX Brain Internal; Apple processing and approved existing-group assignment verified",
     "userSelected": "Live + Deep Think",
     "baselineSolFirstTextMs": [
       3883,
@@ -325,6 +328,7 @@
     "buildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae69eaca74da3772d1eab3a",
     "appleBuildId": "d681aa25-898b-4d77-b1b1-f67f45c1a087",
     "completedAt": "2026-11-01T02:12:14Z",
-    "processingVerifiedAt": "2026-11-01T02:15:46.552519+00:00"
+    "processingVerifiedAt": "2026-11-01T02:15:46.552519+00:00",
+    "distributionVerifiedAt": "2026-11-01T02:59:22.335504+00:00"
   }
 }
