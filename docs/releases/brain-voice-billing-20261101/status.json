@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-01T15:09:47.897958+00:00",
+  "updatedAt": "2026-11-01T15:56:05.512211+00:00",
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "appleAppId": "6829319523",
@@ -49,9 +49,13 @@
       "USA"
     ],
     "nativePurchaseTests": "not performed",
-    "googleDeclarationsRemaining": 1,
-    "googleRemainingDeclaration": "Foreground service microphone demonstration video",
-    "publicReviewSubmitted": false
+    "googleDeclarationsRemaining": 0,
+    "googleRemainingDeclaration": null,
+    "publicReviewSubmitted": false,
+    "googleForegroundServiceVideo": "https://youtu.be/Tav4IIS9zOg",
+    "googleForegroundServiceVideoPlaybackVerified": false,
+    "googleAppContentStatus": "all_caught_up",
+    "googleRemainingDashboardTask": "Set up your store listing; at least 2 phone screenshots required"
   },
   "validation": {
     "billing": 14,
@@ -61,11 +65,11 @@
     "nativeStorePurchaseTestsPerformed": false
   },
   "next": [
-    "Native iPhone and Android store screenshots; Apple IAP review screenshots",
-    "Android microphone foreground-service demonstration video",
+    "Native iPhone and Android store screenshots (Google requires at least 2 phone screenshots); Apple IAP review screenshots",
+    "Independently verify the supplied Android microphone demonstration video shows a user-started Live conversation, background microphone notification, and Stop action; video is saved but playback buffered in this browser",
     "Native subscription, restore, AI GAS verification/consumption, renewal/refund tests",
     "Apple browser sign-in remains at two-factor verification; no further credential attempt made",
-    "Owner accepts Android build-14 test invite; assign iOS build 14 to the existing tester and verify native flows; billing flags remain off until native verification"
+    "Confirm Android build-14 installation and native flows; assign iOS build 14 to the existing tester; billing flags remain off until native purchase verification"
   ],
   "details": "review-readiness.json"
 }

@@ -1,5 +1,5 @@
 {
-  "recordedAt": "2026-11-01T15:09:47.897958+00:00",
+  "recordedAt": "2026-11-01T15:56:05.512211+00:00",
   "app": "KORLIX Brain+Voice",
   "build": 14,
   "publicReleaseSubmitted": false,
@@ -37,11 +37,9 @@
     "dataSafetySavedForReview": true,
     "dataTypesCompleted": 11,
     "contentRatingPreviouslyCompleted": true,
-    "remainingAppContentDeclarations": [
-      "Foreground service permissions"
-    ],
+    "remainingAppContentDeclarations": [],
     "foregroundService": "microphone",
-    "requiredEvidence": "Native Android screen recording of a user-started Live conversation, background microphone notification, and Stop action; provide a reviewer-accessible video URL.",
+    "requiredEvidence": "Supplied video URL saved in the microphone declaration. Actual Android behavior remains unverified because video playback buffered in this browser.",
     "appReviewSubmitted": false,
     "ownerInternalTesting": {
       "configuredAt": "2026-11-01T15:09:47.897958+00:00",
@@ -53,7 +51,21 @@
       "invitationPageVerified": true,
       "inviteAccepted": false,
       "note": "Current Google Play developer account only. Existing other tester lists remain unselected. Account owner must accept Google tester data-sharing notice and install on Android. No invitation email was sent by the agent."
-    }
+    },
+    "foregroundServiceDeclarationSaved": true,
+    "reviewVideo": {
+      "providedUrl": "https://youtu.be/Tav4IIS9zOg",
+      "resolvedUrl": "https://www.youtube.com/watch?v=Tav4IIS9zOg",
+      "title": "KORLIX Brain+Voice — Live Conversation & Microphone Demo",
+      "visibility": "unlisted",
+      "durationSeconds": 45,
+      "pageAccessibleWithoutSignIn": true,
+      "contentPlaybackVerified": false,
+      "limitation": "The public video page loaded, but playback remained buffering in this browser, including after one reload. Android foreground microphone and Stop behavior were not independently observed in the video."
+    },
+    "appContentStatus": "all_caught_up",
+    "remainingDashboardTask": "Set up your store listing; at least 2 phone screenshots required",
+    "sendAppForReviewEnabled": false
   },
   "tests": {
     "billing": 14,
@@ -63,11 +75,11 @@
     "nativeStorePurchaseTestsPerformed": false
   },
   "remainingReleaseRequirements": [
-    "Native iPhone and Android store screenshots; Apple IAP review screenshots",
-    "Android microphone foreground-service demonstration video",
+    "Native iPhone and Android store screenshots (Google requires at least 2 phone screenshots); Apple IAP review screenshots",
+    "Independently verify the supplied Android microphone demonstration video shows a user-started Live conversation, background microphone notification, and Stop action; video is saved but playback buffered in this browser",
     "Native subscription, restore, AI GAS verification/consumption, renewal/refund tests",
     "Apple browser sign-in remains at two-factor verification; no further credential attempt made",
-    "Owner accepts Android build-14 test invite; assign iOS build 14 to the existing tester and verify native flows; billing flags remain off until native verification"
+    "Confirm Android build-14 installation and native flows; assign iOS build 14 to the existing tester; billing flags remain off until native purchase verification"
   ],
-  "evidence": "google-play/review-evidence/declarations-20261101.jpg"
+  "evidence": "google-play/review-evidence/korlix-brain-app-content-complete-20261101.jpg"
 }
