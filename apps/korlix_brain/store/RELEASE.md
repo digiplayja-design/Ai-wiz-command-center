@@ -1,10 +1,12 @@
-## Spoken welcome and Risi pronunciation — build 12 candidate
+## Spoken welcome and Risi pronunciation — build 12
 
 The approved 14.378-second Marin welcome is bundled offline and plays once on first use. Skip and Replay are visible on Home. Navigation, account controls, microphone use and backgrounding stop it immediately; resuming the app does not restart it. Music ducks for the introduction. The clip opens no microphone and consumes no Live Conversation minutes.
 
 Brain's voice configuration previously returned before the shared pronunciation boundary. Both Live and Deep Think now receive the soft-s “Ree-see” rule. Deep Think speech text is phonetic while its written answer remains unchanged; Live memory readbacks reinforce the same pronunciation. The explicit memory command also accepts an ASR spelling of “Risi”, preserving the existing ownership and command gates. Native captions normalize only the spoken “Ree-see” form to the written brand Rici.
 
-Backend `20706bb385dc9658247e0ecbcea89bacc62d3e89` is live on the existing service (deploy `dep-dbjc7r7lk1mc738r8l0g`). All 41 targeted backend checks and 63 Flutter tests passed, with clean Flutter analysis. New browser checks cover the actual bundled WAV, first use, Skip/Replay, pause before voice/dictation, app backgrounding, delayed/blocked playback, offline playback and music ducking. Signed CI and physical iPhone listening remain pending. No model selection, voice identity, billing or public App Store submission change.
+**Version 1.0.1 (12) is Testing in KORLIX Brain Internal.** The [signed pipeline](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae6c73b6a1999f83b5dbed2) completed successfully, and Apple processing plus the existing-group assignment are verified. The group retains one tester and now has nine builds; no new testers, invitations or public App Store submission were made. Apple build ID: `42fa1e65-d106-4120-9e48-e1ed1d7deef4`. App code: `1f7ac625c734ec98b15a0b371eab461ff313116d`. Release commit: `6dca9ee30355df719e349f9170f24198e92a5901`.
+
+Backend `20706bb385dc9658247e0ecbcea89bacc62d3e89` is live on the existing service (deploy `dep-dbjc7r7lk1mc738r8l0g`). All 41 targeted backend checks, 63 Flutter tests, analysis, 23 iOS release checks, four viewport UI checks and the complete ambience/welcome playback checks passed. CI caught and fixed the Replay label after reopening before any upload. The signed IPA is 34,236,888 bytes, SHA-256 `c84484a21a8ee4ed1791fda781c7e4442cc828365b9ac49e0e1b48ae5a81f2f6`; its bundled welcome matches the tested asset SHA-256 in `welcome-audio.json`. Physical iPhone listening and pronunciation confirmation remain pending. Live/Deep Think models, the Marin voice and pricing are unchanged.
 
 ## iPhone ambience — build 11
 
