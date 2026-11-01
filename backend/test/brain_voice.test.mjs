@@ -2,13 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {createBrainVoice, rememberCommand, brainSpeechConfig} from '../brain_voice/core.mjs';
+import {brainRuntimeContext, brainQuickReply} from '../brain_voice/context.mjs';
 
 const sessionId = 'voice-session', userId = 'signed-in-user';
 function setup(overrides = {}) {
   const requests = [], saves = [], meters = [];
   let clock = 10000;
   const voice = createBrainVoice({now: () => clock, apiKey: () => 'test-only',
-    loadRuntime: async () => ({instructions: `Current account memories: ${saves.map(s => s.body.content).join(';')}`}),
+    loadRuntime: async () => ({context: `Current account memories: ${saves.map(s => s.body.content).join(';')}`}),
     saveMemory: async value => {saves.push(value); return {id: 'memory-1', ...value.body};},
     reportUsage: async value => {meters.push(value); return {allowed: true};},
     fetchImpl: async (url, options) => {requests.push({url, ...JSON.parse(options.body)}); return Response.json({model: 'gpt-6-astra-2026-10-01', status: 'completed',
@@ -37,7 +38,7 @@ test('explicit memory and instruction save exact content, without another passwo
   const b = await c.turn('Rici remember this instruction: Always use metric units.', 'item_2');
   assert.equal(b.kind, 'instruction'); assert.equal(c.saves[1].body.content, 'Always use metric units.');
   await c.turn('What units should you use?', 'item_3');
-  assert.match(c.requests[0].instructions, /Always use metric units/);
+  assert.match(c.requests[0].input[0].content, /Always use metric units/);
 });
 test('quoted, negated, hypothetical and ordinary statements never authorize saves', async () => {
   for (const text of ['Do not remember this.', 'What does Rici remember this mean?', 'If I say Rici remember this, will you save?', '“Rici remember this: x”', 'Rici, do not remember this: x', 'My favourite colour is purple.']) {
@@ -89,4 +90,57 @@ test('production routes authenticate first and register only scoped successful v
   assert.match(source, /app\.post\('\/api\/brain-voice\/turn', korlixLiveConvoAgentRouteV1/);
   assert.match(source, /brainVoice\.turn\(\{userId: user\.id, sessionId, turnId, transcript\}\)/);
   assert.match(source, /if \(isBrainVoice\(req\)\) \{\s*brainVoice\.register\(req\.korlixLiveConvoBuild129\)/);
+});
+
+test('Brain identity is protected from shared Kim training without changing saved data', async () => {
+  const profile = {active: true, memoryEnabled: true, mission: 'Help me plan.',
+    trainingInstructions: 'Your name is Kim. Always use metric units.'};
+  const memories = [{kind: 'style', label: 'Preference', content: 'Use short paragraphs.'}];
+  const original = structuredClone({profile, memories});
+  const c = setup({loadRuntime: async () => brainRuntimeContext({profile, memories})});
+  await c.turn('Explain how we should work together.');
+  const request = c.requests[0];
+  assert.match(request.instructions, /spoken name in this app is always Rici/);
+  assert.doesNotMatch(request.instructions, /Kim|Conversational name:|must be followed/);
+  assert.equal(request.input[0].role, 'user');
+  assert.match(request.input[0].content, /Kim/);
+  assert.match(request.input[0].content, /metric units/);
+  assert.match(request.input[0].content, /short paragraphs/);
+  assert.deepEqual({profile, memories}, original);
+  assert.deepEqual(request.reasoning, {effort: 'max'});
+  assert.deepEqual(JSON.parse(brainRuntimeContext({profile: {...profile, memoryEnabled: false}, memories}).context).memories, []);
+  assert.throws(() => brainRuntimeContext({profile: {...profile, active: false}}), {code: 'agent_unavailable'});
+});
+
+test('standalone presence and identity checks avoid inference and memory reads, but remain metered', async () => {
+  const c = setup({loadRuntime: async () => {throw Error('Must not load for a fixed phrase');}});
+  const presence = await c.turn('Rici, are you there?');
+  assert.equal(presence.source, 'app_phrase'); assert.equal(presence.kind, 'presence');
+  const identity = await c.turn("What's your name?", 'item_2');
+  assert.match(identity.answer, /I'm Rici/); assert.equal(identity.model, undefined);
+  assert.equal(c.requests.length, 0); assert.equal(c.saves.length, 0);
+  assert.equal(c.meters.at(-1).body.responseCount, 2);
+  assert.equal(c.meters.at(-1).body.totalTokens, 0);
+});
+
+test('quick replies never swallow a substantive, quoted, or compound request', () => {
+  for (const text of ['Rici, are you there? Explain gravity.', 'Who are you working with tomorrow?',
+    'What does "are you there" mean?', 'Do not say your name is Kim', 'Remember this: who are you',
+    'Can you hear me and translate this?', 'Hello Rici, tell me the time']) {
+    assert.equal(brainQuickReply(text), null, text);
+  }
+});
+
+test('a pending memory captures even a presence question instead of using a quick reply', async () => {
+  const c = setup(); await c.turn('Rici remember this');
+  const result = await c.turn('Are you there?', 'item_2');
+  assert.equal(result.saved, true); assert.equal(c.saves[0].body.content, 'Are you there?');
+});
+
+test('quick replies cannot bypass account ownership, allowance, or idempotency', async () => {
+  const c = setup(); await assert.rejects(c.turn('Who are you?', 'item_1', 'other'), {code: 'brain_session_ended'});
+  const a = await c.turn('Who are you?'); const b = await c.turn('Who are you?');
+  assert.deepEqual(a, b); assert.equal(c.meters.length, 2);
+  const limited = setup({reportUsage: async () => ({allowed: false})});
+  await assert.rejects(limited.turn('Are you there?'), {code: 'brain_allowance'});
 });

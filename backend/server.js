@@ -1,3 +1,4 @@
+import {brainRuntimeContext} from './brain_voice/context.mjs';
 import {createBrainVoice, brainSpeechConfig, isBrainVoice, BRAIN_MODEL, BRAIN_EFFORT, BRAIN_PROTOCOL} from './brain_voice/core.mjs';
 import {streamBrainTurn} from './brain_voice/stream.mjs';
 import {registerMagicApple} from './magic_camera/apple.mjs';
@@ -5867,6 +5868,7 @@ async function korlixLiveConvoBuildAgentRuntimeV1({
   characterName,
   language,
   memoryOptions = { maximumItems: 24, maximumCharacters: 12000 },
+  brainVoice = false,
 }) {
   const client =
     korlixLiveConvoAgentPersistenceClientV1();
@@ -5899,6 +5901,8 @@ async function korlixLiveConvoBuildAgentRuntimeV1({
         ...memoryOptions,
       })
     : [];
+
+  if (brainVoice) return brainRuntimeContext({profile, memories});
 
   return korlixAgentRuntimeView({
     profile,
@@ -9491,7 +9495,7 @@ app.use("/api/live-convo/session", async (req, res, next) => {
 const brainVoice = createBrainVoice({
   onTiming: timing => console.log('BRAIN_VOICE_TIMING', JSON.stringify(timing)),
   apiKey: () => korlixLiveConvoEnvStringV1('OPENAI_API_KEY'),
-  loadRuntime: userId => korlixLiveConvoBuildAgentRuntimeV1({req: {headers: {}}, user: {id: userId}, agentId: 'general', characterName: 'Rici', language: 'English', memoryOptions: {maximumItems: 100, maximumCharacters: 48000}}),
+  loadRuntime: userId => korlixLiveConvoBuildAgentRuntimeV1({req: {headers: {}}, user: {id: userId}, agentId: 'general', characterName: 'Rici', language: 'English', brainVoice: true, memoryOptions: {maximumItems: 100, maximumCharacters: 48000}}),
   saveMemory: ({userId, body}) => korlixAgentSaveMemoryV1({client: korlixLiveConvoAgentPersistenceClientV1(), userId, agentId: 'general', body}),
   reportUsage: ({userId, body, limits}) => korlixRecordVoiceUsage({user: {id: userId}, body, limits, entitlement: korlixLiveConvoBuild131EntitlementForUser({id: userId})}),
 });
@@ -9501,6 +9505,7 @@ app.get('/api/brain-voice/health', (_req, res) => res.json({ok: true,
   speechModel: korlixLiveConvoModelV1(), voice: korlixLiveConvoVoiceV1(),
   directVoiceMemory: true, requiresAuthentication: true, additionalMemoryPassword: false,
   streamingAnswers: true, turnDetection: 'semantic_vad_high',
+  spokenName: 'Rici', quickConnectionReplies: true, identityPolicy: 'brain-rici-v1',
   apiKeyConfigured: Boolean(korlixLiveConvoEnvStringV1('OPENAI_API_KEY')),
 }));
 app.post('/api/brain-voice/turn', korlixLiveConvoAgentRouteV1(

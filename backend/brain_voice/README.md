@@ -45,3 +45,23 @@ The isolated tests use fixture provider/database responses. An authenticated
 physical-device conversation remains necessary to verify provider access,
 microphone/transcript accuracy, spoken readback, interruptions, and real saved
 memory. Public health reports configuration, not a successful live model call.
+
+## Rici identity and responsiveness (build 7)
+
+Brain+Voice constructs a dedicated, stable Rici system prompt. Shared agent
+training and approved memories arrive as lower-priority JSON account context;
+custom names in another workspace no longer become a protected spoken alias in
+this app. The shared profile and stored records are not modified.
+
+Exact standalone connection/name checks (for example, “Rici, are you there?”)
+return a fixed app phrase after session and allowance validation, with no
+reasoning request. These replies identify `source: app_phrase`; they are not
+represented as model output. Compound or substantive questions continue to use
+`gpt-6-astra` with `reasoning.effort: max`. Pending voice-memory capture takes
+precedence over quick replies. Usage, deduplication and ownership checks apply.
+
+Observed pre-update build-6 first-text times were 2,234, 5,363 and 7,955 ms;
+preparation was 50–59 ms. New timing logs include a content-free route label.
+First-sentence speech starts without the previous 60-character minimum in build
+7. These changes remove avoidable waits; they do not guarantee subsecond Astra
+Max reasoning. Post-update device/audio timing must be checked separately.

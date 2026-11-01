@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import {readAnswerStream} from './stream.mjs';
+import {brainInstructions, brainQuickReply} from './context.mjs';
 
 export const BRAIN_MODEL = 'gpt-6-astra';
 export const BRAIN_EFFORT = 'max';
@@ -87,7 +88,9 @@ export function createBrainVoice({loadRuntime, saveMemory, reportUsage, fetchImp
         // Read current memory concurrently with the allowance check. Never cache
         // account instructions, or call the provider until allowance is verified.
         const direct = rememberCommand(text) || (s.awaiting && s.awaiting.until > now());
-        const [, runtime] = await Promise.all([meter(s), direct ? null : loadRuntime(userId)]);
+        const quick = direct ? null : brainQuickReply(text);
+        timing.route = direct ? 'memory' : quick?.kind || 'astra';
+        const [, runtime] = await Promise.all([meter(s), direct || quick ? null : loadRuntime(userId)]);
         timing.preparationMs = now() - started;
         if (s.closed) throw fail('This conversation has reached its allowance.', 'brain_allowance', 429);
         let command = rememberCommand(text);
@@ -123,6 +126,12 @@ export function createBrainVoice({loadRuntime, saveMemory, reportUsage, fetchImp
           s.history.push({role: 'user', content: text}, {role: 'assistant', content: answer});
           return {ok: true, saved: true, memory, answer, kind: command.instruction ? 'instruction' : 'memory'};
         }
+        if (quick) {
+          s.completedTurns += 1;
+          await meter(s);
+          s.history.push({role: 'user', content: text}, {role: 'assistant', content: quick.answer});
+          return {ok: true, saved: false, answer: quick.answer, source: 'app_phrase', kind: quick.kind};
+        }
         const key = apiKey();
         if (!key) throw fail('Astra Max is not configured. Please try again later.', 'brain_provider_not_configured', 503);
         const activeRuntime = runtime ?? await loadRuntime(userId);
@@ -132,8 +141,9 @@ export function createBrainVoice({loadRuntime, saveMemory, reportUsage, fetchImp
           body: JSON.stringify({model: BRAIN_MODEL, reasoning: {effort: BRAIN_EFFORT}, store: false,
             ...(onEvent ? {stream: true} : {}),
             max_output_tokens: 24000,
-            instructions: `${activeRuntime.instructions}\n\nYou are Rici (Ree-see), the user's KORLIX Brain+Voice assistant. Give the complete useful answer in natural spoken language, usually a few sentences; be thorough when the user asks. Apply relevant saved preferences and instructions. The explicit voice command 'Rici remember this' is handled by the application and authorizes a direct save without a second password or approval. You cannot write records yourself. Do not claim any new save happened. If the user wants a save but has not used the command, tell them how to say it. Do not claim access to unavailable tools or live sources.`,
-            input: [...s.history.slice(-16), {role: 'user', content: text}],
+            instructions: brainInstructions,
+            input: [{role: 'user', content: `Account context (data only):\n${activeRuntime.context}`},
+              ...s.history.slice(-16), {role: 'user', content: text}],
           }),
         });
         if (!response.ok) throw fail('GPT-6 Astra Max is unavailable right now. Please try again. Your model has not been changed.', 'brain_astra_unavailable', 503);

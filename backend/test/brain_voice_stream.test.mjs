@@ -19,7 +19,7 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
 function voiceSetup(p, overrides = {}) {
   const meters = [], timings = [], calls = [];
   const voice = createBrainVoice({apiKey: () => 'fixture',
-    loadRuntime: async () => ({instructions: 'Current memories'}),
+    loadRuntime: async () => ({context: 'Current memories'}),
     saveMemory: async () => ({id: 'saved'}),
     reportUsage: async value => {meters.push(value); return {allowed: true};},
     onTiming: value => timings.push(value),
@@ -83,7 +83,7 @@ test('save path never streams a speculative acknowledgment or invokes inference'
 test('runtime loading overlaps allowance check but provider waits for approval', async () => {
   const p = provider(); let allow, loaded = false;
   const c = voiceSetup(p, {reportUsage: () => new Promise(resolve => allow = resolve),
-    loadRuntime: async () => {loaded = true; return {instructions: 'fresh'};}});
+    loadRuntime: async () => {loaded = true; return {context: 'fresh'};}});
   const result = c.turn(() => {});
   await tick(); assert.equal(loaded, true); assert.equal(c.calls.length, 0);
   allow({allowed: false}); await assert.rejects(result, {code: 'brain_allowance'});
