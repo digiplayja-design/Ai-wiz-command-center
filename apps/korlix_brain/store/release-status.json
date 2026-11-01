@@ -1,9 +1,9 @@
 {
-  "updatedAt": "2026-11-01T05:11:04.644566+00:00",
+  "updatedAt": "2026-11-01T05:27:23.332451+00:00",
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "version": "1.0.1",
-  "minimumSourceBuild": 12,
+  "minimumSourceBuild": 13,
   "appCodeCommit": "1f7ac625c734ec98b15a0b371eab461ff313116d",
   "releasePipelineCommit": "6dca9ee30355df719e349f9170f24198e92a5901",
   "signedIosCandidate": {
@@ -449,7 +449,7 @@
       "sha256": "023761454a65f317e50252f9452e59d8b01fc66931a6d6f69ee55909f40c02f4",
       "voice": "marin",
       "pronunciation": "Ree-see",
-      "displayText": "Welcome to KORLIX Brain+Voice\u2014built to be one of the world's most versatile conversation apps! I'm Rici. Talk, learn, train me, and save what matters. Your voice. Your brain. Let's go!",
+      "displayText": "Welcome to KORLIX Brain+Voice—built to be one of the world's most versatile conversation apps! I'm Rici. Talk, learn, train me, and save what matters. Your voice. Your brain. Let's go!",
       "ttsModel": "gpt-4o-mini-tts",
       "speed": 1.12,
       "playback": "Bundled offline; once on first use, then manual Replay; Skip and capture stop immediately",
@@ -497,5 +497,21 @@
     "deployId": "dep-dbjc7r7lk1mc738r8l0g",
     "state": "live",
     "liveVerifiedAt": "2026-11-01T04:46:01.578855Z"
+  },
+  "automaticWelcomeFix": {
+    "sourceBuild": 13,
+    "status": "Local validation passed; signed pipeline and TestFlight distribution pending",
+    "reportedIssue": "Replay works on iPhone but the welcome does not play automatically on opening",
+    "changes": [
+      "Automatic once per app launch, independent of prior Replay and account syncing",
+      "Native iPhone AVAudioPlayer using the unchanged bundled Marin recording",
+      "Inactive startup waits for foreground; Skip and capture cancel pending playback",
+      "Native Stop completion is awaited before microphone use; stale events are ignored"
+    ],
+    "flutterTests": 71,
+    "flutterAnalysis": "pass",
+    "releaseChecks": 23,
+    "browserChecks": "pending CI",
+    "physicalDeviceValidation": "Pending user confirmation on build 13"
   }
 }

@@ -25,6 +25,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
           const m=JSON.parse(raw);window.testCommands.push({...m,audioType:window.testAudioType});
           const send=data=>window.KorlixBrainReceive(data);
           let result=null;
+          if(m.action==='welcomeState')result={native:false,automatic:false,foreground:true};
           if(m.action==='load')result={training:'',memories:[],canUndo:false};
           if(m.action==='listSavedTranscripts')result=[];
           if(m.action==='startVoice'){send({type:'voice',phase:'listening',message:'Rici is listening'});result={active:true};}

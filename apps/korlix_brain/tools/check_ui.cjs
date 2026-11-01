@@ -20,6 +20,7 @@ const app = path.resolve(__dirname,'..');
         const m=JSON.parse(raw);window.testCommands.push(m);
         const reply=(data,error)=>setTimeout(()=>window.KorlixBrainReceive({type:'reply',id:m.id,data,error}),0);
         switch(m.action){
+          case 'welcomeState':return reply({native:false,automatic:false,foreground:true});
           case 'load':return reply(window.testAccount);
           case 'listSavedTranscripts':return reply(Object.values(window.testSaved).reverse());
           case 'saveTranscript':

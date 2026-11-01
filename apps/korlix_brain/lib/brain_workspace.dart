@@ -18,6 +18,7 @@ import 'brain_voice.dart';
 import 'brain_model.dart';
 import 'brain_transcripts.dart';
 import 'brain_pronunciation.dart';
+import 'brain_welcome.dart';
 
 class BrainWorkspace extends StatefulWidget {
   const BrainWorkspace({super.key, required this.auth});
@@ -31,11 +32,13 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
   late final BrainApi _api;
   late final BrainRepository _repository;
   late final BrainVoice _voice;
+  late final BrainWelcome _welcome;
   late final WebViewController _web;
   final _speech = SpeechToText();
   final _inFlight = <String>{};
   bool _disposed = false, _pickerBusy = false, _dictating = false;
   int _voiceStartRequest = 0;
+  bool _captureStarting = false;
   String? _pageError;
   BrainTranscripts? _transcripts;
 
@@ -74,6 +77,17 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
         _repository.acceptVoiceMemory(memory);
         _emit({'type': 'brainSnapshot', 'snapshot': _repository.snapshot});
       },
+    );
+    _welcome = BrainWelcome(
+      canPlay: () =>
+          !_disposed &&
+          mounted &&
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed &&
+          !_voice.active &&
+          !_dictating &&
+          !_captureStarting &&
+          !_pickerBusy,
+      onEvent: _emit,
     );
     final params = WebViewPlatform.instance is WebKitWebViewPlatform
         ? WebKitWebViewControllerCreationParams(
@@ -119,6 +133,9 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) {
+      unawaited(_welcome.stop(dismiss: false).catchError((Object _) {}));
+    }
     _emit({
       'type': 'appLifecycle',
       'active': state == AppLifecycleState.resumed,
@@ -182,7 +199,9 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
       }
       id = value['id'] as String;
       if (!RegExp(r'^\d{1,10}$').hasMatch(id) || !_inFlight.add(id)) return;
-      if (_inFlight.length > 12 && value['action'] != 'stopVoice') {
+      if (_inFlight.length > 12 &&
+          value['action'] != 'stopVoice' &&
+          value['action'] != 'stopWelcome') {
         throw const BrainApiException(
           'Please wait for the current actions to finish.',
         );
@@ -209,10 +228,35 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
   }
 
   Future<Object?> _dispatch(String action, Map<String, dynamic> data) async {
+    // Welcome controls are local, available even when account syncing fails.
+    if (action == 'welcomeState') {
+      return {
+        'native': _welcome.nativePlayback,
+        'automatic': _welcome.automaticPending,
+        'foreground':
+            WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed,
+      };
+    }
+    if (action == 'playWelcome') {
+      final token = data['token'];
+      if (token is! int || token < 1) {
+        throw const BrainApiException('Please replay the welcome.');
+      }
+      return _welcome.play(token, automatic: data['automatic'] == true);
+    }
+    if (action == 'stopWelcome') {
+      await _welcome.stop(dismiss: data['dismiss'] != false);
+      return null;
+    }
+    if (action == 'welcomeHeard') {
+      _welcome.heard();
+      return null;
+    }
     // Stop is local hardware control. It must remain available while another
     // command or consent dialog is pending, even if the account expires.
     if (action == 'stopVoice') {
       ++_voiceStartRequest;
+      _captureStarting = false;
       await _voice.stop();
       return null;
     }
@@ -304,32 +348,46 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
           );
         }
         final startRequest = ++_voiceStartRequest;
-        await _stopDictation();
-        if (await _consent('Talk to Rici', {
-          KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts,
-          KorlixThirdPartyAiDataCategory.agentTrainingAndMemory,
-        })) {
-          if (!_disposed &&
-              mounted &&
-              startRequest == _voiceStartRequest &&
-              widget.auth.session != null) {
-            await _voice.start(
-              mode: modeValue == 'deep'
-                  ? BrainVoiceMode.deep
-                  : BrainVoiceMode.live,
-            );
+        _captureStarting = true;
+        try {
+          await _welcome.stop();
+          await _stopDictation();
+          if (await _consent('Talk to Rici', {
+            KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts,
+            KorlixThirdPartyAiDataCategory.agentTrainingAndMemory,
+          })) {
+            if (!_disposed &&
+                mounted &&
+                startRequest == _voiceStartRequest &&
+                widget.auth.session != null) {
+              await _voice.start(
+                mode: modeValue == 'deep'
+                    ? BrainVoiceMode.deep
+                    : BrainVoiceMode.live,
+              );
+            }
           }
+          return {'active': _voice.active};
+        } finally {
+          if (startRequest == _voiceStartRequest) _captureStarting = false;
         }
-        return {'active': _voice.active};
       case 'dictate':
-        await _dictate(_kind(data));
-        return null;
+        _captureStarting = true;
+        try {
+          await _welcome.stop();
+          await _dictate(_kind(data));
+          return null;
+        } finally {
+          _captureStarting = false;
+        }
       case 'stopDictation':
         await _stopDictation();
         return null;
       case 'pickFile':
+        await _welcome.stop();
         return _pickFile(_kind(data));
       case 'account':
+        await _welcome.stop();
         await _account();
         return null;
       case 'report':
@@ -565,7 +623,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
             ListTile(
               title: const Text('KORLIX Brain+Voice'),
               subtitle: Text(
-                '${widget.auth.session?.email ?? 'Your account'}\nVersion 1.0.1 · Build 12',
+                '${widget.auth.session?.email ?? 'Your account'}\nVersion 1.0.1 · Build 13',
               ),
             ),
             const Padding(
@@ -647,6 +705,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
   @override
   void dispose() {
     _disposed = true;
+    unawaited(_welcome.dispose().catchError((Object _) {}));
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_speech.cancel());
     unawaited(_voice.stop().whenComplete(_api.dispose));

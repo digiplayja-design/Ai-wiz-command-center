@@ -1,12 +1,12 @@
 # KORLIX Brain+Voice
 
-Standalone iOS/Android app for the existing KORLIX account and `general` Rici agent, with its own `com.korlix.brain` identity. Version 1.0.1, build 12 adds the approved offline welcome with Skip/Replay and soft-s Risi pronunciation, while keeping iPhone ambience and per-message Save, Share and Delete controls. The user confirmed that the build-9 Live Conversation works. Live remains the default native speech-to-speech mode; Deep Think retains GPT-6.1 Sol Max. Marin and both model selections remain unchanged; the backend applies the shared Risi pronunciation rule. Billing remains unchanged. See `store/release-status.json` for the verified delivery state. App Store review has not been submitted.
+Standalone iOS/Android app for the existing KORLIX account and `general` Rici agent, with its own `com.korlix.brain` identity. Version 1.0.1, build 13 fixes automatic startup of the approved offline welcome using native iPhone playback, with Skip/Replay and soft-s Risi pronunciation, while keeping iPhone ambience and per-message Save, Share and Delete controls. The user confirmed that the build-9 Live Conversation works. Live remains the default native speech-to-speech mode; Deep Think retains GPT-6.1 Sol Max. Marin and both model selections remain unchanged; the backend applies the shared Risi pronunciation rule. Billing remains unchanged. See `store/release-status.json` for the verified delivery state. App Store review has not been submitted.
 
 The approved Violet Eclipse / Champagne Precision interface is bundled offline in `assets/web`. It retains the Halo Capsule Talk button, Add Memory chip, Magnetic Key controls, Electric Cyan Precision Dial orbits, silent 3.1–3.6 second lightning and crystal twinkle ambience at 1%. Animation pause and reduced-motion support are preserved. The official KORLIX emblem now uses purple, red, green and gold. Apple, Google Play and device icon sizes are checked in.
 
 ## Approved monthly plan
 
-The user selected **USD $34.99 per month** for the personal Brain, training features and **60 minutes of Live Conversation per month**. This replaces the earlier $9.99 recommendation. This is an approved product decision, not active billing: store products, the purchase flow and the new monthly minute limit are not configured by build 12. Existing account allowances still apply. Trial, top-up and Deep Think caps need to be finalized before monetization.
+The user selected **USD $34.99 per month** for the personal Brain, training features and **60 minutes of Live Conversation per month**. This replaces the earlier $9.99 recommendation. This is an approved product decision, not active billing: store products, the purchase flow and the new monthly minute limit are not configured by build 13. Existing account allowances still apply. Trial, top-up and Deep Think caps need to be finalized before monetization.
 
 ## Connected behavior
 

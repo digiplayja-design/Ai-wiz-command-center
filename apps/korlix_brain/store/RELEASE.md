@@ -1,3 +1,11 @@
+## Automatic welcome on iPhone — build 13
+
+Fixes the reported startup failure where Replay worked but the welcome did not play automatically. The old persistent seen flag now controls only the Replay label; automatic playback is once per app launch, after Home is visible and the app is active. Local startup no longer waits for account/network syncing. An inactive startup remains eligible when the app becomes active.
+
+On iPhone the bundled recording uses AVAudioPlayer through a dedicated local Flutter channel. It explicitly owns and releases the playback audio session. Skip, navigation, account controls, backgrounding and microphone handoff stop the recording. A pending native Stop must finish before voice or dictation starts; stale completion events cannot interrupt Replay. WebView playback remains the non-iOS fallback. The exact approved Marin recording, pronunciation, voice models and billing are unchanged.
+
+Delivery and final checks pending. Build 12 remains the currently verified TestFlight build until build 13 is processed and assigned.
+
 ## Spoken welcome and Risi pronunciation — build 12
 
 The approved 14.378-second Marin welcome is bundled offline and plays once on first use. Skip and Replay are visible on Home. Navigation, account controls, microphone use and backgrounding stop it immediately; resuming the app does not restart it. Music ducks for the introduction. The clip opens no microphone and consumes no Live Conversation minutes.
@@ -99,7 +107,7 @@ Validation: 31 Flutter tests, including incremental UTF-8, truncation, account c
 | --- | --- |
 | App name | KORLIX Brain+Voice |
 | Apple bundle ID / Android package | `com.korlix.brain` |
-| Version / minimum source build | `1.0.1` / `11` |
+| Version / minimum source build | `1.0.1` / `13` |
 | Apple team | `FJKJ9MUDZ4` |
 | Apple app ID | `6829319523` |
 | Apple SKU | `KORLIX-BRAIN-VOICE-IOS` |
