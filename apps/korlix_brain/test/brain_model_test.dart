@@ -44,4 +44,15 @@ void main() {
       expect(isBrainReasoningModel(other), isFalse);
     }
   });
+  test('Live and Deep modes have truthful distinct contracts', () {
+    const live = {
+      'x-korlix-brain-voice': 'rici-live-v1',
+      'x-korlix-brain-model': 'gpt-realtime-2.1',
+      'x-korlix-brain-reasoning': 'low',
+    };
+    expect(BrainVoiceMode.live.accepts(live), isTrue);
+    expect(BrainVoiceMode.deep.accepts(live), isFalse);
+    expect(BrainVoiceMode.deep.accepts(headers), isTrue);
+    expect(BrainVoiceMode.live.accepts(headers), isFalse);
+  });
 }

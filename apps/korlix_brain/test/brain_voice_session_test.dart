@@ -1,10 +1,11 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:korlix_brain/brain_voice_session.dart';
+import 'package:korlix_brain/brain_model.dart';
 
 void main() {
   Map<String, dynamic> acknowledged({Object? automatic = false}) => {
     'type': 'session.updated',
-    'session': {
+    'session': <String, dynamic>{
       'audio': {
         'input': {
           'transcription': {'model': 'gpt-transcribe'},
@@ -115,5 +116,36 @@ void main() {
         BrainSessionAction.reject,
       );
     }
+  });
+  test('Live gates require the native reply mode, model, low effort and memory tool', () {
+    final gate = BrainVoiceSessionGate(mode: BrainVoiceMode.live)
+      ..observe({'type': 'session.created'});
+    final event = acknowledged(automatic: true);
+    (event['session'] as Map).addAll(<String, dynamic>{
+      'model': 'gpt-realtime-2.1',
+      'reasoning': {'effort': 'low'},
+      'tool_choice': 'auto',
+      'tools': [
+        {'name': 'remember_in_brain'},
+      ],
+    });
+    expect(gate.observe(event), BrainSessionAction.ready);
+    (event['session'] as Map)['tools'] = [];
+    expect(gate.observe(event), BrainSessionAction.reject);
+    expect(
+      (gate.configuration['session'] as Map).containsKey('tools'),
+      isFalse,
+      reason: 'Do not clear the server memory tool during handshake',
+    );
+  });
+  test('Live and Deep acknowledgments cannot be interchanged', () {
+    final live = BrainVoiceSessionGate(mode: BrainVoiceMode.live)
+      ..observe({'type': 'session.created'});
+    expect(live.observe(acknowledged()), BrainSessionAction.reject);
+    final deep = BrainVoiceSessionGate()..observe({'type': 'session.created'});
+    expect(
+      deep.observe(acknowledged(automatic: true)),
+      BrainSessionAction.reject,
+    );
   });
 }
