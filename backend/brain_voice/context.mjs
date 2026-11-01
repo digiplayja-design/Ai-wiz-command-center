@@ -26,7 +26,7 @@ export function brainQuickReply(text) {
   const bare = normalized.replace(/^(?:hey )?(?:rici|ricci|ree[ -]?see)\s+/, '').replace(/\s+(?:rici|ricci|ree[ -]?see)$/, '');
   if (['are you there', 'can you hear me', 'are you listening'].includes(bare))
     return {kind: 'presence', answer: "I'm here. What would you like to talk about?"};
-  if (["what's your name", 'what is your name', 'who are you', 'are you kim', 'are you rici', 'are you kim or rici'].includes(bare))
+  if (["what's your name", 'what is your name', 'who are you', 'are you kim', 'are you rici', 'are you kim or rici'].some(value => value === normalized || value === bare))
     return {kind: 'identity', answer: "I'm Rici, your KORLIX Brain and Voice assistant."};
   if (/^(?:(?:hi|hello|hey) )?(?:rici|ricci|ree[ -]?see)$/.test(normalized))
     return {kind: 'presence', answer: "I'm here. How can I help?"};

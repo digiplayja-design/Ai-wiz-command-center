@@ -144,3 +144,10 @@ test('quick replies cannot bypass account ownership, allowance, or idempotency',
   const limited = setup({reportUsage: async () => ({allowed: false})});
   await assert.rejects(limited.turn('Are you there?'), {code: 'brain_allowance'});
 });
+
+test('identity questions retain Rici when the name is the question object', () => {
+  for (const text of ['Are you Rici?', 'Are you Kim or Rici?', 'Rici, what is your name?', 'Who are you, Rici?']) {
+    assert.equal(brainQuickReply(text)?.kind, 'identity', text);
+    assert.match(brainQuickReply(text).answer, /I.m Rici/);
+  }
+});
