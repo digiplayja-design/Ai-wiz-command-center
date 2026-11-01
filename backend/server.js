@@ -23,7 +23,7 @@ import {createVideoAccess} from './security/video_access.mjs';
 import {hasUnlimitedAccess, authenticatedDeveloperUser, UNLIMITED_FEATURE_LIMITS, UNLIMITED_COMPATIBILITY_LIMIT} from './security/developer_access.mjs';
 import riciVoice from './voice/rici_pronunciation.cjs';
 const {riciRealtimeInstructions} = riciVoice;
-import {registerWelcomeAudio} from './welcome/audio.mjs';
+import {registerWelcomeAudio, registerBrainWelcomeAudio} from './welcome/audio.mjs';
 import {createCrmDirectorySync} from './contacts_crm/directory_sync.mjs';
 import {crmVoiceSessionGuard,crmVoiceInstructions} from './contacts_crm/voice.mjs';
 import { registerDirectory } from './directory/routes.mjs';
@@ -12628,6 +12628,7 @@ const fieldProofEmails = registerFieldProofEmails(app, {
 // Share the existing verified Resend webhook; its Agent Email handler runs next.
 registerFieldProofEmailWebhook(app,{emailService:fieldProofEmails,environment:process.env});
 const korlixWelcomeAudio=registerWelcomeAudio(app,{speak:(payload,options)=>new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0}).audio.speech.create(payload,options)});
+registerBrainWelcomeAudio(app,{speak:(payload,options)=>new OpenAI({apiKey:process.env.OPENAI_API_KEY,maxRetries:0}).audio.speech.create(payload,options)});
 const crmDirectorySync=createCrmDirectorySync({database:fieldProofEmailDatabase});
 crmDirectorySync.start();
 process.once('SIGTERM',()=>crmDirectorySync.stop());

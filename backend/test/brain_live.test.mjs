@@ -23,7 +23,7 @@ test('Live enables native audio replies with low effort and a single constrained
   assert.equal(c.audio.input.turn_detection.interrupt_response,true);assert.equal(c.audio.output.voice,'marin');
   assert.equal(c.tools.length,1);assert.equal(c.tools[0].name,'remember_in_brain');
   assert.deepEqual(c.tools[0].parameters.properties,{});assert.equal(c.tools[0].parameters.additionalProperties,false);
-  assert.match(c.instructions,/spoken name is always Rici/);assert.match(c.instructions,/Account data JSON:/);
+  assert.match(c.instructions,/spoken name is always Ree-see/);assert.match(c.instructions,/Account data JSON:/);
   assert.match(c.instructions,/Do not claim a save until the tool confirms saved:true/);
 });
 

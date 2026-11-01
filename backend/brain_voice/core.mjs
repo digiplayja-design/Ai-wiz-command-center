@@ -2,16 +2,21 @@ import {createHash} from 'node:crypto';
 import {readAnswerStream} from './stream.mjs';
 import {brainInstructions, brainQuickReply} from './context.mjs';
 import {brainLiveConfig} from './live.mjs';
+import riciVoice from '../voice/rici_pronunciation.cjs';
+const {riciRealtimeInstructions} = riciVoice;
 
 import {BRAIN_PROTOCOL, profileForProtocol, matchesBrainModel} from './models.mjs';
 export {BRAIN_MODEL, BRAIN_EFFORT, BRAIN_PROTOCOL, BRAIN_PROFILES, brainProfile, isBrainVoice} from './models.mjs';
 export const speechInstructions = 'You are the speech delivery layer for Rici, pronounced Ree-see. The application supplies the complete answer from its verified reasoning model. Speak only the supplied answer, verbatim, naturally. Never answer the microphone input yourself, add facts, call tools, or claim a save independently. Stop immediately when interrupted.';
 export function brainSpeechConfig(config, profile, context) {
-  if (profile?.live) return brainLiveConfig(config, context);
-  return {...config, instructions: speechInstructions, tools: [], tool_choice: 'none',
+  const result = profile?.live ? brainLiveConfig(config, context) : {...config, instructions: speechInstructions, tools: [], tool_choice: 'none',
     audio: {...config.audio, input: {...config.audio.input,
-      transcription: {model: 'gpt-transcribe', keywords: ['Rici', 'KORLIX', 'Rici remember this']},
+      transcription: {model: 'gpt-transcribe', keywords: ['Rici', 'Risi', 'KORLIX', 'Rici remember this']},
       turn_detection: {type: 'semantic_vad', eagerness: 'high', create_response: false, interrupt_response: true}}}};
+  // Brain returns before the shared server pronunciation boundary. Apply the
+  // same speech-only rule here for both Live and Deep Think, without changing
+  // the stored account data, written answers or tool authorization.
+  return {...result, instructions: riciRealtimeInstructions(result.instructions)};
 }
 const fail = (message, code, statusCode = 400) => Object.assign(new Error(message), {code, statusCode});
 const count = value => Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0;
@@ -19,7 +24,7 @@ const count = value => Number.isFinite(Number(value)) ? Math.max(0, Math.floor(N
 // Only an imperative at the beginning of the user's own utterance authorizes a
 // write. Quoted examples, assistant output and ordinary conversation never do.
 export function rememberCommand(text) {
-  const match = /^(?:hey\s+)?(?:rici|ricci|ree[ -]?see)[,!.:;\s]+(?:please\s+)?remember\s+this\b[,:;.\s—-]*(.*)$/isu.exec(text.trim());
+  const match = /^(?:hey\s+)?(?:rici|risi|ricci|ree[ -]?see)[,!.:;\s]+(?:please\s+)?remember\s+this\b[,:;.\s—-]*(.*)$/isu.exec(text.trim());
   if (!match) return null;
   let content = match[1].trim();
   const instruction = /^(?:(?:as\s+)?(?:an?\s+)?)instruction\b[,:;\s—-]*/iu.exec(content);

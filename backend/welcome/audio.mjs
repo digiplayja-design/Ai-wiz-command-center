@@ -2,6 +2,7 @@ import riciVoice from '../voice/rici_pronunciation.cjs';
 const {riciSpeechText, RICI_PRONUNCIATION} = riciVoice;
 // One public, fixed welcome clip. No user text, identity, microphone or AI GAS.
 export const WELCOME_TEXT = "Welcome to KORLIX! I'm Rici, your AI voice companion. You'll find me in CRM, Workforce, Inventory, Bookkeeping, Music Studio, and more. Look for Rici or the voice button, tap to start, and tell me what you need. I can guide you, help you find things, and make everyday tasks easier. Let's explore!";
+export const BRAIN_WELCOME_TEXT = "Welcome to KORLIX Brain+Voice—built to be one of the world's most versatile conversation apps! I'm Rici. Talk, learn, train me, and save what matters. Your voice. Your brain. Let's go!";
 const RATE = 24000, MAX_PCM = RATE * 2 * 40;
 
 function wav(pcm) {
@@ -15,7 +16,7 @@ function wav(pcm) {
   return Buffer.concat([header, pcm]);
 }
 
-export function createWelcomeAudio({speak, now = Date.now, timeoutMs = 45000} = {}) {
+export function createWelcomeAudio({speak, now = Date.now, timeoutMs = 45000, text = WELCOME_TEXT, speed = 1.06, tone = 'warm, confident and welcoming'} = {}) {
   let cached = null, pending = null, retryAt = 0;
   async function generate() {
     const abort = new AbortController();
@@ -23,9 +24,9 @@ export function createWelcomeAudio({speak, now = Date.now, timeoutMs = 45000} = 
     let reader;
     try {
       const response = await speak({
-        model: 'gpt-4o-mini-tts', voice: 'marin', input: riciSpeechText(WELCOME_TEXT),
-        response_format: 'pcm', speed: 1.06,
-        instructions: `${RICI_PRONUNCIATION} Speak as a warm, confident and welcoming female AI companion. Be bright and conversational, with natural pauses. Pronounce KORLIX as KOR-liks. Read only the supplied welcome, with no extra words or sound effects.`,
+        model: 'gpt-4o-mini-tts', voice: 'marin', input: riciSpeechText(text).replace('Brain+Voice', 'Brain and Voice'),
+        response_format: 'pcm', speed,
+        instructions: `${RICI_PRONUNCIATION} Speak as a ${tone} female AI companion. Be bright and conversational, with natural pauses. Pronounce KORLIX as KOR-liks. Read only the supplied welcome, with no extra words or sound effects.`,
       }, {signal: abort.signal, timeout: timeoutMs, maxRetries: 0});
       if (response?.ok === false || !response?.body?.getReader || /json|text|html/i.test(response.headers?.get('content-type') || '')) throw new Error('Invalid welcome audio');
       reader = response.body.getReader();
@@ -70,5 +71,23 @@ export function registerWelcomeAudio(app, options) {
   });
   // Warm before sign-in so the first greeting does not wait for generation.
   void audio.get().catch(() => console.warn('[Rici welcome] Audio warming is temporarily unavailable.'));
+  return audio;
+}
+
+// A separate fixed clip for the standalone Brain app. The release pipeline
+// bundles a verified copy, so installed apps need no network, microphone,
+// user data or inference call to play it. Requests cannot customize its text.
+export function registerBrainWelcomeAudio(app, options) {
+  const audio = createWelcomeAudio({...options, text: BRAIN_WELCOME_TEXT,
+    speed: 1.12, tone: 'excited, smiling, confident and welcoming'});
+  app.get('/api/welcome/brain-rici-v1.wav', async (_req, res) => {
+    try {
+      res.set({'Content-Type': 'audio/wav', 'Cache-Control': 'public, max-age=86400',
+        'X-Content-Type-Options': 'nosniff'}).send(await audio.get());
+    } catch {
+      res.set({'Cache-Control': 'no-store', 'Retry-After': '300'}).status(503)
+        .json({error: 'The welcome is temporarily unavailable. You can keep using KORLIX.'});
+    }
+  });
   return audio;
 }

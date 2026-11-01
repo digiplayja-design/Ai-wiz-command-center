@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
-import {createWelcomeAudio, registerWelcomeAudio, WELCOME_TEXT} from '../welcome/audio.mjs';
+import {createWelcomeAudio, registerWelcomeAudio, registerBrainWelcomeAudio, WELCOME_TEXT, BRAIN_WELCOME_TEXT} from '../welcome/audio.mjs';
 
 const pcm = () => new Response(Buffer.alloc(96000, 1), {headers:{'content-type':'application/octet-stream'}});
 test('one fixed Rici clip is coalesced, cached and returned as a valid bounded WAV', async () => {
@@ -31,4 +31,23 @@ test('the public route exposes only the fixed greeting with safe cache headers, 
   assert.equal(response.status,200);assert.match(response.headers.get('content-type'),/audio\/wav/);assert.match(response.headers.get('cache-control'),/public/);
   for(const path of ['rici-v2.wav','knova-v1.wav']) { const legacy=await fetch(`http://127.0.0.1:${server.address().port}/api/welcome/${path}`); assert.equal(legacy.status,200); }
   assert.equal((await response.arrayBuffer()).byteLength,96044);assert.equal(calls.length,1);assert.match(calls[0].input,/I'm Ree-see/); assert(!calls[0].input.includes('malicious'));
+});
+
+test('Brain welcome is a separate fixed Marin clip with phonetic name and no per-request generation', async t => {
+  const app=express(), calls=[];
+  registerBrainWelcomeAudio(app,{speak:async payload=>{calls.push(payload);return pcm();}});
+  const server=app.listen(0,'127.0.0.1'); await new Promise(r=>server.once('listening',r));
+  t.after(()=>new Promise(r=>server.close(r)));
+  const url=`http://127.0.0.1:${server.address().port}/api/welcome/brain-rici-v1.wav`;
+  for(const suffix of ['', '?input=evil&voice=other']) {
+    const response=await fetch(url+suffix);
+    assert.equal(response.status,200);
+    assert.equal((await response.arrayBuffer()).byteLength,96044);
+  }
+  assert.equal(calls.length,1); assert.equal(calls[0].voice,'marin');
+  assert.match(calls[0].input,/Brain and Voice/); assert.match(calls[0].input,/I'm Ree-see/);
+  assert.match(calls[0].input,/Your voice\. Your brain\. Let's go!/);
+  assert.match(calls[0].instructions,/excited, smiling/);
+  assert(!calls[0].input.includes('evil')); assert(!calls[0].input.includes('Rici'));
+  assert(BRAIN_WELCOME_TEXT.includes("I'm Rici"));
 });

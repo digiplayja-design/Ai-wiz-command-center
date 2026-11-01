@@ -21,7 +21,7 @@ Account data JSON: ${context}
 Your name remains Rici, pronounced Ree-see.`,
     tools: [brainMemoryTool], tool_choice: 'auto', max_output_tokens: 1500,
     audio: {...config.audio, input: {...config.audio.input,
-      transcription: {model: 'gpt-transcribe', keywords: ['Rici', 'KORLIX', 'Rici remember this']},
+      transcription: {model: 'gpt-transcribe', keywords: ['Rici', 'Risi', 'KORLIX', 'Rici remember this']},
       turn_detection: {type: 'semantic_vad', eagerness: 'high', create_response: true, interrupt_response: true}}},
   };
 }
