@@ -1,0 +1,201 @@
+{
+  "recordedAt": "2026-11-01T14:22:59.633835+00:00",
+  "app": "KORLIX Brain+Voice",
+  "packageName": "com.korlix.brain",
+  "version": "1.0.1",
+  "build": 14,
+  "developerAccountId": "4772708594176030332",
+  "googlePlayAppId": "4973840118435464131",
+  "status": "complete_draft_saved_not_submitted",
+  "consoleUrl": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4973840118435464131/app-content/data-privacy-security",
+  "saveEvidence": "Preview reached and Save as draft succeeded; UI displayed Change saved. Send for review in Publishing overview.",
+  "submissionBlocker": "Google disables final Save until target age group and content information are complete. Target audience is blocked by Sign in details.",
+  "collectsRequiredDataTypes": true,
+  "allCollectedDataEncryptedInTransit": true,
+  "accountCreationMethods": [
+    "Username and password"
+  ],
+  "accountDeletionUrl": "https://www.korlixdeveloper.com/delete-account.html",
+  "partialDataDeletionOffered": true,
+  "partialDeletionUrl": "https://www.korlixdeveloper.com/delete-account.html",
+  "independentSecurityReviewClaimed": false,
+  "upiPaymentsBadgeClaimed": false,
+  "dataTypes": [
+    {
+      "name": "Email address",
+      "collected": true,
+      "sharedUnderGoogleDefinition": false,
+      "processedEphemerally": false,
+      "collectionOptional": false,
+      "purposes": [
+        "App functionality",
+        "Fraud prevention, security, and compliance",
+        "Account management"
+      ]
+    },
+    {
+      "name": "User IDs",
+      "collected": true,
+      "sharedUnderGoogleDefinition": false,
+      "processedEphemerally": false,
+      "collectionOptional": false,
+      "purposes": [
+        "App functionality",
+        "Analytics",
+        "Fraud prevention, security, and compliance",
+        "Account management"
+      ]
+    },
+    {
+      "name": "Other info",
+      "collected": true,
+      "sharedUnderGoogleDefinition": false,
+      "processedEphemerally": false,
+      "collectionOptional": false,
+      "purposes": [
+        "App functionality",
+        "Fraud prevention, security, and compliance",
+        "Account management"
+      ]
+    },
+    {
+      "name": "Purchase history",
+      "collected": true,
+      "sharedUnderGoogleDefinition": false,
+      "processedEphemerally": false,
+      "collectionOptional": true,
+      "purposes": [
+        "App functionality",
+        "Fraud prevention, security, and compliance",
+        "Account management"
+      ]
+    },
+    {
+      "name": "Other in-app messages",
+      "collected": true,
+      "sharedUnderGoogleDefinition": false,
+      "processedEphemerally": false,
+      "collectionOptional": true,
+      "purposes": [
+        "App functionality",
+        "Fraud prevention, security, and compliance",
+        "Personalization"
+      ]
+    },
+    {
+      "name": "Voice or sound recordings",
+      "collected": true,
+      "sharedUnderGoogleDefinition": false,
+      "processedEphemerally": false,
+      "collectionOptional": true,
+      "purposes": [
+        "App functionality",
+        "Personalization"
+      ]
+    },
+    {
+      "name": "Diagnostics",
+      "collected": true,
+      "sharedUnderGoogleDefinition": false,
+      "processedEphemerally": false,
+      "collectionOptional": false,
+      "purposes": [
+        "Analytics"
+      ]
+    },
+    {
+      "name": "Files and docs",
+      "collected": true,
+      "sharedUnderGoogleDefinition": false,
+      "processedEphemerally": false,
+      "collectionOptional": true,
+      "purposes": [
+        "App functionality",
+        "Personalization"
+      ]
+    },
+    {
+      "name": "App interactions",
+      "collected": true,
+      "sharedUnderGoogleDefinition": false,
+      "processedEphemerally": false,
+      "collectionOptional": false,
+      "purposes": [
+        "App functionality",
+        "Analytics",
+        "Fraud prevention, security, and compliance"
+      ]
+    },
+    {
+      "name": "Other user-generated content",
+      "collected": true,
+      "sharedUnderGoogleDefinition": false,
+      "processedEphemerally": false,
+      "collectionOptional": true,
+      "purposes": [
+        "App functionality",
+        "Personalization"
+      ]
+    },
+    {
+      "name": "Device or other IDs",
+      "collected": true,
+      "sharedUnderGoogleDefinition": false,
+      "processedEphemerally": false,
+      "collectionOptional": false,
+      "purposes": [
+        "App functionality",
+        "Analytics",
+        "Fraud prevention, security, and compliance",
+        "Account management"
+      ]
+    }
+  ],
+  "interpretation": {
+    "sharing": "Transfers to service providers acting on KORLIX behalf and explicit user-initiated transfers/prominent consent use Google sharing exceptions. OpenAI still receives enabled AI requests. This is not a claim that no data leaves KORLIX.",
+    "ephemeral": "Account/saved data persists. No end-to-end zero-retention assertion was verified for every AI and platform speech provider. Raw call recording storage by KORLIX is not asserted.",
+    "optional": "Voice, AI content, files and purchases are user-initiated; required identity/security/operational event collection lacks an in-app opt-out.",
+    "otherInfo": "Age band, policy version, terms/privacy acknowledgement and parent-permission declaration; not health information.",
+    "deviceIdentifiers": "Installation identifier and server-side hash; not Advertising ID.",
+    "diagnostics": "Operational error codes and voice timing; no raw transcript or credentials logged by the audited timing endpoint.",
+    "location": "No device-location collection or location derivation from IP was identified in Brain features. Network IP used for rate limiting is not declared as location.",
+    "files": "Training/memory import supports PDF, TXT, MD, DOCX, CSV and JSON after explicit user action and AI consent.",
+    "photosCamera": "Shared iOS purpose strings do not establish active Brain camera/photo access; none identified in current Brain implementation.",
+    "transcripts": "Explicitly saved transcripts are account-scoped local secure storage. AI processing and selected cloud Brain memories remain disclosed separately."
+  },
+  "sourceEvidence": {
+    "appCodeCommit": "76d7d0f9c26e56883913ca3b079397c6b109bb77",
+    "backendCommit": "00894696f5371623adb827c7c5a77d0ecb60716b",
+    "appPaths": [
+      "apps/korlix_brain/lib/brain_auth.dart",
+      "apps/korlix_brain/lib/brain_api.dart",
+      "apps/korlix_brain/lib/brain_voice.dart",
+      "apps/korlix_brain/lib/brain_workspace.dart",
+      "apps/korlix_brain/lib/brain_transcripts.dart",
+      "apps/korlix_brain/pubspec.yaml",
+      "apps/korlix_brain/android/app/src/main/AndroidManifest.xml"
+    ],
+    "backendPaths": [
+      "backend/server.js",
+      "backend/onboarding/measurement.mjs",
+      "backend/brain_voice/core.mjs",
+      "backend/brain_voice/billing/routes.mjs"
+    ],
+    "privacyPolicyUrl": "https://www.korlixdeveloper.com/privacy-policy.html",
+    "accountDeletionUrl": "https://www.korlixdeveloper.com/delete-account.html",
+    "googleDefinitionsUrl": "https://support.google.com/googleplay/android-developer/answer/10787469?hl=en"
+  },
+  "nativePurchaseTests": "not performed",
+  "publicReleaseSubmitted": false,
+  "billingEnabled": false,
+  "proof": [
+    {
+      "path": "google-play/review-evidence/data-safety-draft-20261101.jpg",
+      "sha256": "39565900b39a34feb0820f42d3cfde05d2d4ccf62d69b7fc6edaf5d5841d4088"
+    },
+    {
+      "path": "google-play/review-evidence/iarc-terms-pending-20261101.jpg",
+      "sha256": "15cd5202855dcf1ffc3f1369b4f42aa69503c3b862ae7cc5da7ef29ccd9f45db"
+    }
+  ]
+}

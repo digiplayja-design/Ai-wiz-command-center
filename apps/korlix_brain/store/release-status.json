@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-01T13:56:36.626360+00:00",
+  "updatedAt": "2026-11-01T14:22:59.633835+00:00",
   "app": "KORLIX Brain+Voice",
   "bundleId": "com.korlix.brain",
   "version": "1.0.1",
@@ -453,7 +453,7 @@
       "sha256": "023761454a65f317e50252f9452e59d8b01fc66931a6d6f69ee55909f40c02f4",
       "voice": "marin",
       "pronunciation": "Ree-see",
-      "displayText": "Welcome to KORLIX Brain+Voice\u2014built to be one of the world's most versatile conversation apps! I'm Rici. Talk, learn, train me, and save what matters. Your voice. Your brain. Let's go!",
+      "displayText": "Welcome to KORLIX Brain+Voice—built to be one of the world's most versatile conversation apps! I'm Rici. Talk, learn, train me, and save what matters. Your voice. Your brain. Let's go!",
       "ttsModel": "gpt-4o-mini-tts",
       "speed": 1.12,
       "playback": "Bundled offline; once on first use, then manual Replay; Skip and capture stop immediately",
@@ -564,7 +564,7 @@
     "publicStoreSubmission": "not performed",
     "accessBlockers": {
       "apple": "Browser two-factor verification remains pending. Existing Codemagic integration is available for authorized Apple API operations.",
-      "google": "Public release requires review access, content/target declarations, Data safety, foreground-service declaration/video and store screenshots.",
+      "google": "Data safety complete as a saved draft; final Save blocked by target audience, which requires reviewer Sign in details. Content rating requires IARC Terms of Use acceptance. Review account, native screenshots and foreground microphone demo video remain required.",
       "devicePurchases": "Designated native store test accounts and purchase/restore/refund verification are still required."
     },
     "appCodeCommit": "76d7d0f9c26e56883913ca3b079397c6b109bb77",
@@ -623,7 +623,7 @@
       "healthFeatures": false,
       "healthDeclarationSaved": true,
       "internalRelease": {
-        "name": "1.0.1 (14) \u2014 Brain+Voice billing candidate",
+        "name": "1.0.1 (14) — Brain+Voice billing candidate",
         "versionCode": 14,
         "status": "Available to internal testers",
         "testersAssigned": 0,
@@ -691,6 +691,24 @@
       "screenshotsInspection": {
         "source": "Build 14 CI UI artifacts",
         "result": "Automated full-page validation captures are not native store screenshots; not uploaded as store images"
+      },
+      "dataSafetyDeclaration": {
+        "status": "complete_draft_saved_not_submitted",
+        "dataTypesCompleted": 11,
+        "encryptedInTransit": true,
+        "accountDeletionUrl": "https://www.korlixdeveloper.com/delete-account.html",
+        "report": "google-play/data-safety-declaration-20261101.json",
+        "reasonNotSubmitted": "Google disables final Save until target age group and content information are complete. Target audience is blocked by Sign in details.",
+        "verifiedAt": "2026-11-01T14:22:59.633835+00:00"
+      },
+      "contentRatingDeclaration": {
+        "status": "category_prepared_terms_not_accepted",
+        "category": "All Other App Types",
+        "contactEmail": "support@korlixdeveloper.com",
+        "termsUrl": "https://web.iarcservices.com/terms",
+        "termsAccepted": false,
+        "questionnaireCompleted": false,
+        "reason": "IARC Terms of Use checkbox requires explicit action-time confirmation before acceptance. Prepared fields are in the retained browser form, not a completed rating."
       }
     },
     "androidSigning": {
