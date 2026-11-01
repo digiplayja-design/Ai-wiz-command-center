@@ -1,6 +1,6 @@
 # KORLIX Brain+Voice
 
-Standalone iOS/Android app for the existing KORLIX account and `general` Rici agent. This app has its own `com.korlix.brain` identity and does not replace KORLIX AI. Version 1.0.1, build 8. Build 8 switches reasoning to GPT-6.1 Sol with Max effort, preserving Rici identity, direct memory, streaming speech and the persistent Stop control. Build 7 remains Testing; build-8 signed delivery is being prepared. App Store review submission has not been performed.
+Standalone iOS/Android app for the existing KORLIX account and `general` Rici agent. This app has its own `com.korlix.brain` identity and does not replace KORLIX AI. Version 1.0.1, build 8. Build 8 switches reasoning to GPT-6.1 Sol with Max effort, preserving Rici identity, direct memory, streaming speech and the persistent Stop control. Build 8 is Testing in the existing KORLIX Brain Internal group. App Store review submission has not been performed.
 
 The approved Violet Eclipse / Champagne Precision interface is bundled offline in `assets/web`. It retains the Halo Capsule Talk button, Add Memory chip, Magnetic Key controls, Electric Cyan Precision Dial orbits, silent 3.1–3.6 second lightning and crystal twinkle ambience at 1%. Animation pause and reduced-motion support are preserved. The official KORLIX emblem now uses purple, red, green and gold. Apple, Google Play and device icon sizes are checked in.
 
@@ -34,9 +34,9 @@ For browser view checks, install Playwright separately and run `node tools/check
 
 ## Release verification
 
-The build-7 source passes Flutter analysis, 39 Dart tests and 23 Apple identity, privacy-purpose and build-number checks. The updated backend passes 45 Brain/agent-studio tests and 13 shared-agent checks. Four viewport UI checks cover Stop visibility, scrolling, pending-stop feedback and stale events. The [signed build-7 pipeline](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae68823a74da3772d1e5bed) repeated the app tests and release checks, verified the signed IPA, and successfully uploaded version 1.0.1 (7). Apple processing is complete and build 7 is Testing in the existing internal group, alongside builds 6, 5 and 3. No testers were added or invitations resent. Public App Store review has not been submitted.
+The build-8 source passes Flutter analysis, 41 Dart tests and 23 Apple identity, privacy-purpose and build-number checks. The updated backend passes 49 Brain/agent-studio tests and 13 shared-agent checks. Four viewport UI checks cover Stop visibility, scrolling, pending-stop feedback and stale events. The [signed build-8 pipeline](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae68f72a74da3772d1e758e) repeated the app tests and release checks, verified the signed IPA, and successfully uploaded version 1.0.1 (8). Apple processing is complete and build 8 is Testing in the existing internal group, alongside builds 7, 6, 5 and 3. No testers were added or invitations resent. Public App Store review has not been submitted.
 
-The preceding build-4 code passed Android, simulator and iPhoneOS arm64 compilation in [GitHub validation run 41247985018](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41247985018). Build 7 was compiled in the signed iOS pipeline; an updated Android binary has not been delivered.
+The preceding build-4 code passed Android, simulator and iPhoneOS arm64 compilation in [GitHub validation run 41247985018](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41247985018). Build 8 was compiled in the signed iOS pipeline; an updated Android binary has not been delivered.
 
 The production backend is commit `986d9d21c12c32c015d01c7bcdd55c449ef5fc19` on `release/signup-plan-intent-20261021`. Deploy that branch; this app branch retains its original backend snapshot. Build 8 verifies `sol-6.1-max-v1` and exact `gpt-6.1-sol/max` headers before opening the microphone. Installed Astra builds remain supported by their original `astra-max-v1` protocol; sessions cannot change models mid-conversation. New voice sessions use faster semantic turn detection. Fresh account memory and allowance are read concurrently before each permitted inference. Timing logs contain durations, streaming state and the response route, without transcripts. Reasoning tokens are metered on the server and combined with all speech tokens; chunked audio counts as one user turn. Ephemeral sessions require reconnect after a backend restart.
 
@@ -75,5 +75,5 @@ No automatic fallback or paid processing-tier upgrade is added.
 Validation: 41 Flutter tests, clean analysis, 29 Brain backend tests, 20 shared
 agent-studio tests, 13 legacy-agent checks, 23 release checks and four viewport
 UI checks passed. Live phone latency and spoken quality remain to be measured.
-Model metadata access will be checked by the deployed server; it is not a speed
-benchmark or a completed inference. Max effort can still add response delay.
+The deployed server verified model metadata access (HTTP 200) using its existing
+key; that is not a speed benchmark or a completed inference. Max effort can still add response delay.

@@ -1,3 +1,30 @@
+## Sol 6.1 reasoning migration — build 8
+
+Build 8 selects GPT-6.1 Sol (`gpt-6.1-sol`) with the user's previously requested
+Max reasoning effort. Rici's Marin speech voice, protected identity, direct
+memory saves and the persistent red Stop button are preserved. Streaming and
+quick app phrases remain enabled. No automatic fallback or paid processing-tier
+upgrade is introduced.
+
+App code: `71af10143c640f614f01c22dd879f3c3332e894b`. Release commit:
+`df692ff2c868c2c589635c242f0cd611f21115c6`. [Build-8 pipeline](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae68f72a74da3772d1e758e).
+Production backend: `986d9d21c12c32c015d01c7bcdd55c449ef5fc19`, Render deploy
+`dep-dbj8ui0473hc739nu67g`, verified live. OpenAI's model metadata endpoint
+returned HTTP 200 with the exact Sol model for the existing server key. This is
+model discovery, not a completed inference or latency benchmark.
+
+Validation: 41 Flutter tests and clean analysis (also passed in signed CI),
+29 Brain backend tests, 20 agent-studio tests, 13 legacy-agent checks, 23 release
+checks and four viewport UI checks. The Sol protocol and output verification
+reject Astra or another model; installed Astra builds retain their original
+session profile. **Version 1.0.1 (8) is Testing in KORLIX Brain Internal.**
+The signed pipeline completed at 2026-11-01T01:06:49Z. Apple processing and
+existing-group assignment are verified; Apple build ID is
+`f7244993-e1fd-448d-8fef-3dc0f1dcb63c`. The group retains its one existing tester
+and builds 7, 6, 5 and 3. No invitations or public App Store submission were sent.
+Physical-device speed and spoken quality still require verification; Max
+reasoning can continue to add seconds.
+
 ## Rici identity, response startup and Stop — build 7
 
 **Version 1.0.1 (7) is Testing in KORLIX Brain Internal.** The signed pipeline completed at 2026-11-01T00:35:38Z, and Apple processing and existing-group assignment are verified. Apple build ID: `90e1d36f-3483-4d0d-a9c5-d197cc2711f2`. [Build-7 pipeline](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6ae68823a74da3772d1e5bed).
@@ -32,7 +59,7 @@ Validation: 31 Flutter tests, including incremental UTF-8, truncation, account c
 | --- | --- |
 | App name | KORLIX Brain+Voice |
 | Apple bundle ID / Android package | `com.korlix.brain` |
-| Version / minimum source build | `1.0.1` / `7` |
+| Version / minimum source build | `1.0.1` / `8` |
 | Apple team | `FJKJ9MUDZ4` |
 | Apple app ID | `6829319523` |
 | Apple SKU | `KORLIX-BRAIN-VOICE-IOS` |
@@ -40,7 +67,7 @@ Validation: 31 Flutter tests, including incremental UTF-8, truncation, account c
 | Platforms | iPhone and iPad |
 | Store icon | Purple, red, green and gold KORLIX emblem |
 
-The dedicated [Apple app record](https://appstoreconnect.apple.com/apps/6829319523/distribution/info) is created. **Version 1.0.1 (7) is Testing in [KORLIX Brain Internal](https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6829319523/testflight/groups/ae86d9a2-5bdf-4f3d-910b-aa532675951f/builds).** Builds 3, 5 and 6 remain available in that group. The group has one approved existing tester. Automatic distribution is disabled. App Store review has not been submitted. The user reported slow voice and a conflicting name on build 6; build-7 physical-device verification remains pending.
+The dedicated [Apple app record](https://appstoreconnect.apple.com/apps/6829319523/distribution/info) is created. **Version 1.0.1 (8) is Testing in [KORLIX Brain Internal](https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6829319523/testflight/groups/ae86d9a2-5bdf-4f3d-910b-aa532675951f/builds).** Builds 3, 5, 6 and 7 remain available in that group. The group has one approved existing tester. Automatic distribution is disabled. App Store review has not been submitted. The user reported slow voice and a conflicting name on build 6; build-8 Sol physical-device verification remains pending.
 
 Apple rejected build 2 during processing (ITMS-90683) for missing camera and photo-library descriptions and warned about a missing location description. Build 3 includes all three and checks the exported IPA before upload. Its four-color icon is visible in Apple's processed build. Apple listing text is saved in the version 1.0.1 draft. Google Play listing ID remains unverified. Never reuse another KORLIX app's store record or bundle identity.
 
@@ -53,7 +80,7 @@ The [final signed build-5 pipeline](https://codemagic.io/app/6a32198d2d0806059c3
 1. Run `korlix-brain-ios-candidate`. A push trigger is configured for this branch; it requires the repository's Codemagic webhook to be active. The workflow imports the existing managed KORLIX distribution certificate, registers/selects `com.korlix.brain`, and installs its dedicated App Store profile. The original KORLIX profile is only used to import the certificate and cannot pass Brain+Voice artifact verification. No store upload occurs in this workflow.
 2. Use the existing Apple app record `6829319523` with bundle `com.korlix.brain`. Keep its account access policy; do not create a duplicate record.
 3. Run `korlix-brain-ios-testflight`, or push the reviewed source to `release/korlix-brain-testflight-20261031`. That release branch alone triggers upload. It first queries Apple for the exact app record; a successful empty response produces a distinct “App Store Connect record is missing for com.korlix.brain” failed step. Authentication/API errors stop at the query step instead. With the app record present, it chooses a build number above existing builds, verifies the signed IPA, and uploads to App Store Connect. It does not submit for external beta or App Store review, assign testers, or send invitations.
-4. TestFlight beta information is saved. Builds 7, 6, 5 and 3 are assigned to the existing `KORLIX Brain Internal` group under the user's distribution approval, and Apple shows Testing. Do not add testers or resend invitations. Automatic distribution remains disabled. Verify an authenticated physical-device session before App Store submission.
+4. TestFlight beta information is saved. Builds 8, 7, 6, 5 and 3 are assigned to the existing `KORLIX Brain Internal` group under the user's distribution approval, and Apple shows Testing. Do not add testers or resend invitations. Automatic distribution remains disabled. Verify an authenticated physical-device session before App Store submission.
 
 The previous privacy correction shipped as build 3 from release commit `2a4d2737b14222fde1d407d0da6d3fc043d9119e` and passed Apple processing. Final streaming build 5 uses app-code commit `816eee71abfecd2ebe4989fb8ce901af16bec83a` and release commit `afb7eed81fd032e914f28d208801cff12aa5816a`. Its upload completed at 2026-10-31T22:37:09Z; Apple build ID is `3a95a0e0-40ba-41f3-bffc-34cbdcb57d89`. All privacy-purpose checks remain in place. The iOS flow still imports documents and requests audio for voice; adding purpose strings does not itself request camera, photos or location.
 
@@ -67,16 +94,16 @@ GitHub validation independently compiles an unsigned iPhoneOS arm64 release bina
 
 Reviewer instructions: sign in using a working review account supplied privately in each store console. Accept the third-party AI notice, start Talk with Rici, grant microphone permission, and ask a question. Say “Rici, remember this: My preferred example color is purple.” Wait for the save acknowledgment, open My Brain, confirm the item, then delete it. Say “Rici, remember this instruction: Use short answers.” Confirm it appears as a removable instruction. Stop voice before signing out. Verify that the review account has sufficient allowance; never put reviewer credentials in this repository.
 
-Before submission, capture real-device screenshots, verify the account review flow and live Astra access, and complete privacy, age-rating and microphone/background-audio declarations from the implemented data flows. The account offers age ranges starting at 16; store age-rating questionnaires must still be completed. Pricing and purchase arrangements are unchanged. Android store signing and a dedicated Play listing remain to be configured.
+Before submission, capture real-device screenshots, verify the account review flow and live Sol inference, and complete privacy, age-rating and microphone/background-audio declarations from the implemented data flows. The account offers age ranges starting at 16; store age-rating questionnaires must still be completed. Pricing and purchase arrangements are unchanged. Android store signing and a dedicated Play listing remain to be configured.
 
 ## Verification still requiring a signed-in device
 
-- A two-way Astra Max conversation and correct pronunciation of Rici (Ree-see).
+- A two-way Sol 6.1 Max conversation and correct pronunciation of Rici (Ree-see).
 - Direct save, persistence after reconnect, instruction use on the next turn, and deletion.
 - No duplicate saves after repeated transcript events; ordinary conversation is not saved.
 - Permission denial/recovery, interruption, Bluetooth output, quota errors, app switching, screen lock and Stop.
 - Account deletion request and AI-response report acknowledgment.
 
-Backend releases must use `release/signup-plan-intent-20261021`; this app branch retains an older backend snapshot. Do not deploy its backend. Production Brain voice protocol is `astra-max-v1`, model `gpt-6-astra`, reasoning effort `max`; public health verifies configuration, not authenticated model access.
+Backend releases must use `release/signup-plan-intent-20261021`; this app branch retains an older backend snapshot. Do not deploy its backend. Build-8 Brain voice protocol is `sol-6.1-max-v1`, model `gpt-6.1-sol`, reasoning effort `max`. Older app builds retain `astra-max-v1` / `gpt-6-astra`. Public health verifies configuration; the separate startup model-discovery check does not benchmark inference.
 
 References: [Codemagic automatic builds](https://docs.codemagic.io/yaml-running-builds/starting-builds-automatically/), [Codemagic App Store publishing](https://docs.codemagic.io/yaml-publishing/app-store-connect/), [Apple app record creation](https://developer.apple.com/help/app-store-connect/create-an-app-record/add-a-new-app/).
