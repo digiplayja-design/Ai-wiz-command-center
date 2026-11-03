@@ -1,12 +1,12 @@
 {
-  "updatedAt": "2026-11-03T04:14:06.339Z",
+  "updatedAt": "2026-11-03T07:21:53.977Z",
   "app": "KORLIX Brain+Voice",
   "appleAppId": "6829319523",
   "bundleId": "com.korlix.brain",
   "version": "1.0.1",
   "build": 14,
-  "appleStatus": "Prepare for Submission",
-  "publicSubmissionConfirmed": false,
+  "appleStatus": "Waiting for Review",
+  "publicSubmissionConfirmed": true,
   "appleConsole": "https://appstoreconnect.apple.com/apps/6829319523/distribution/ios/version/inflight",
   "completed": [
     "Authenticated App Store Connect",
@@ -19,7 +19,10 @@
     "Captured and inspected native billing screenshots for monthly and AI GAS products",
     "Uploaded and saved review screenshots and navigation notes for all four Apple purchase products",
     "Added monthly subscription, its subscription group, and all three AI GAS consumables to a single iOS draft submission; all five items show Ready for Review",
-    "Verified Magic Camera 1.0.0 and Receipt Wiz 1.2.0 are Ready for Distribution with all 175 countries or regions available, including the EU"
+    "Verified Magic Camera 1.0.0 and Receipt Wiz 1.2.0 are Ready for Distribution with all 175 countries or regions available, including the EU",
+    "Verified user-saved Apple reviewer password is present without reading its value",
+    "Apple accepted app version 1.0.1 build 14 into the existing draft",
+    "Submitted all six items to App Review; app, monthly subscription, subscription group and all three AI GAS consumables display Waiting for Review"
   ],
   "testFlight": {
     "appleBuildId": "5ad5cbef-679c-4ba2-a5e6-a3677c27d0d8",
@@ -56,10 +59,10 @@
     ]
   },
   "remaining": [
-    "Apple reviewer password field remains empty; enter the existing reviewer password directly in App Review Information and save",
-    "Add app version 1.0.1 build 14 to the existing five-item iOS draft after resolving app-version validation, then submit the combined draft",
+    "Apple review is pending; app is not live",
     "Native signed StoreKit checkout, verification, restore, and AI GAS consumption tests remain outstanding",
-    "Production billing remains disabled; Apple and Google readiness flags are false"
+    "Production billing remains disabled; Apple and Google readiness flags are false",
+    "Google Play production submission remains outstanding"
   ],
   "worldwide": {
     "selectedTerritories": 175,
@@ -104,7 +107,7 @@
       "euRestrictionCleared": true
     }
   },
-  "latestValidation": "After all four purchase products and subscription group were added to the iOS draft, Apple still refused to add the app version: Password - This field is required; also a generic unexpected submission error. Draft has five items and cannot be submitted without app version.",
+  "latestValidation": "Apple accepted the saved reviewer password and the six-item submission. All six items show Waiting for Review; prior missing-password and generic submission errors are no longer blocking.",
   "iapReviewCapture": {
     "workflowRun": 41564138315,
     "workflowResult": "success",
@@ -122,36 +125,51 @@
         "productId": "com.korlix.brain.monthly",
         "file": "brain-monthly-review.png",
         "assetId": "58d58e6c-f2d6-48e4-af2a-c4cbff3e9e5c",
-        "status": "Ready for Review"
+        "status": "Waiting for Review"
       },
       {
         "appleProductId": "6829446043",
         "productId": "com.korlix.brain.ai_gas.1h",
         "file": "brain-ai-gas-review.png",
         "assetId": "fff54cd6-0b0f-4460-ab56-e68f5ae8f4ba",
-        "status": "Ready for Review"
+        "status": "Waiting for Review"
       },
       {
         "appleProductId": "6829446044",
         "productId": "com.korlix.brain.ai_gas.2h",
         "file": "brain-ai-gas-review.png",
         "assetId": "bf61c8d6-3671-405b-84c7-720014cc92f1",
-        "status": "Ready for Review"
+        "status": "Waiting for Review"
       },
       {
         "appleProductId": "6829446235",
         "productId": "com.korlix.brain.ai_gas.3h",
         "file": "brain-ai-gas-review.png",
         "assetId": "36e5c3d6-637b-4801-939b-1ea033eba20d",
-        "status": "Ready for Review"
+        "status": "Waiting for Review"
       }
     ],
     "subscriptionGroup": {
       "id": "22534408",
-      "status": "Ready for Review"
+      "status": "Waiting for Review"
     },
-    "draftItemCount": 5,
+    "draftItemCount": 0,
     "draftPlatform": "iOS",
-    "publicReviewSubmitted": false
+    "publicReviewSubmitted": true,
+    "submittedItemCount": 6
+  },
+  "reviewerPasswordSaved": true,
+  "appleSubmission": {
+    "id": "26aa8560-5c1f-4c82-9a07-14b4778a90e0",
+    "status": "Waiting for Review",
+    "itemCount": 6,
+    "appVersion": "1.0.1",
+    "build": 14,
+    "submittedAtDisplay": "Nov 3, 2026 at 2:20 AM",
+    "timezone": "America/New_York",
+    "submittedBy": "Ricardo Bailey",
+    "url": "https://appstoreconnect.apple.com/apps/6829319523/distribution/reviewsubmissions/details/26aa8560-5c1f-4c82-9a07-14b4778a90e0",
+    "live": false,
+    "automaticReleaseAfterApproval": true
   }
 }
