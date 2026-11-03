@@ -74,35 +74,38 @@ void main() {
   ) async {
     _viewport(tester, const Size(320, 568));
     final semantics = tester.ensureSemantics();
-    addTearDown(semantics.dispose);
-    final title = List.filled(25, 'Project ').join().trim();
-    await tester.pumpWidget(
-      _app(
-        CopyBoxFocusEditor(title: title, text: 'Original draft'),
-        textScale: 2,
-      ),
-    );
-    await tester.pump();
+    try {
+      final title = List.filled(25, 'Project ').join().trim();
+      await tester.pumpWidget(
+        _app(
+          CopyBoxFocusEditor(title: title, text: 'Original draft'),
+          textScale: 2,
+        ),
+      );
+      await tester.pump();
 
-    expect(tester.widget<Text>(find.text(title)).maxLines, 2);
-    expect(find.bySemanticsLabel(title), findsOneWidget);
-    expect(find.byKey(const Key('focus-editor-scroll')), findsOneWidget);
-    expect(tester.takeException(), isNull);
+      expect(tester.widget<Text>(find.text(title)).maxLines, 2);
+      expect(find.bySemanticsLabel(title), findsOneWidget);
+      expect(find.byKey(const Key('focus-editor-scroll')), findsOneWidget);
+      expect(tester.takeException(), isNull);
 
-    tester.view.viewInsets = const FakeViewPadding(bottom: 280);
-    await tester.pump();
-    await tester.enterText(
-      find.byKey(const Key('focus-text')),
-      'The keyboard leaves this draft editable.',
-    );
-    await tester.pump();
-    expect(
-      tester.widget<TextField>(find.byKey(const Key('focus-text'))).controller!.text,
-      'The keyboard leaves this draft editable.',
-    );
-    expect(find.byKey(const Key('focus-save')).hitTestable(), findsOneWidget);
-    expect(find.byTooltip('Save & close'), findsOneWidget);
-    expect(tester.takeException(), isNull);
+      tester.view.viewInsets = const FakeViewPadding(bottom: 280);
+      await tester.pump();
+      await tester.enterText(
+        find.byKey(const Key('focus-text')),
+        'The keyboard leaves this draft editable.',
+      );
+      await tester.pump();
+      expect(
+        tester.widget<TextField>(find.byKey(const Key('focus-text'))).controller!.text,
+        'The keyboard leaves this draft editable.',
+      );
+      expect(find.byKey(const Key('focus-save')).hitTestable(), findsOneWidget);
+      expect(find.byTooltip('Save & close'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    } finally {
+      semantics.dispose();
+    }
   });
 
   testWidgets('short wide windows use navigation that fits their height', (

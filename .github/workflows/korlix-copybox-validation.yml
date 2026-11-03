@@ -88,6 +88,73 @@ jobs:
       - name: Build Android test APK
         working-directory: apps/korlix_copy_box
         run: flutter build apk --debug --no-pub
+      - name: Inspect compiled APK identity, SDKs, and permissions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import shutil
+          import subprocess
+
+          apk = Path('apps/korlix_copy_box/build/app/outputs/flutter-apk/app-debug.apk')
+          analyzer = shutil.which('apkanalyzer')
+          if analyzer is None:
+              for variable in ('ANDROID_SDK_ROOT', 'ANDROID_HOME'):
+                  sdk = os.environ.get(variable)
+                  if not sdk:
+                      continue
+                  tools = Path(sdk) / 'cmdline-tools'
+                  candidates = [tools / 'latest/bin/apkanalyzer']
+                  candidates.extend(sorted(tools.glob('*/bin/apkanalyzer'), reverse=True))
+                  analyzer = next((str(path) for path in candidates if os.access(path, os.X_OK)), None)
+                  if analyzer:
+                      break
+          if not analyzer:
+              raise SystemExit('Android SDK apkanalyzer was not found on this runner.')
+
+          # https://developer.android.com/tools/apkanalyzer
+          def manifest_value(verb):
+              return subprocess.check_output(
+                  [analyzer, 'manifest', verb, str(apk)], text=True,
+              ).strip()
+
+          permissions = sorted(set(manifest_value('permissions').splitlines()))
+          metadata = {
+              'application_id': manifest_value('application-id'),
+              'min_sdk': manifest_value('min-sdk'),
+              'target_sdk': manifest_value('target-sdk'),
+              'permissions': permissions,
+              'artifact_type': 'debug APK',
+          }
+          errors = []
+          if metadata['application_id'] != 'com.korlixdeveloper.copybox':
+              errors.append('Compiled APK has the wrong application ID.')
+          for permission in permissions:
+              name = permission.rsplit('.', 1)[-1]
+              if (any(part in name for part in ('CAMERA', 'MICROPHONE', 'AUDIO', 'MEDIA', 'STORAGE'))
+                      or name == 'AD_ID' or name.endswith('_AD_ID')):
+                  errors.append(f'Forbidden merged permission: {permission}')
+          metadata['validation_errors'] = errors
+          output = Path(os.environ['RUNNER_TEMP']) / 'copybox-apk-metadata'
+          output.mkdir(parents=True, exist_ok=True)
+          encoded = json.dumps(metadata, indent=2) + '\n'
+          (output / 'metadata.json').write_text(encoded)
+          (output / 'AndroidManifest.xml').write_text(manifest_value('print') + '\n')
+          print(encoded)
+          if errors:
+              raise SystemExit('\n'.join(errors))
+          PY
+      - name: Keep compiled APK metadata
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: korlix-copybox-android-metadata
+          path: ${{ runner.temp }}/copybox-apk-metadata
+          if-no-files-found: ignore
+          retention-days: 14
       - name: Keep Android APK
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

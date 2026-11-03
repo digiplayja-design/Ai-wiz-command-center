@@ -19,8 +19,6 @@ void main() {
   String clipboard = '';
   setUp(() {
     SharedPreferences.setMockInitialValues({});
-    debugDisableShadows = false;
-    addTearDown(() => debugDisableShadows = true);
     clipboard = '';
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, (call) async {
