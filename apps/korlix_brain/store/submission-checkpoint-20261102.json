@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-03T01:51:27.618Z",
+  "updatedAt": "2026-11-03T04:14:06.339Z",
   "app": "KORLIX Brain+Voice",
   "appleAppId": "6829319523",
   "bundleId": "com.korlix.brain",
@@ -15,7 +15,11 @@
     "Uploaded a native iPhone screenshot and a native 13-inch iPad screenshot",
     "Verified support@korlixdeveloper.com and approved phone through Apple's email and SMS codes",
     "Apple generated the iPad screenshot preview",
-    "Submitted approved EU trader declaration; Apple displays Digital Services Act Active for 27 countries or regions"
+    "Submitted approved EU trader declaration; Apple displays Digital Services Act Active for 27 countries or regions",
+    "Captured and inspected native billing screenshots for monthly and AI GAS products",
+    "Uploaded and saved review screenshots and navigation notes for all four Apple purchase products",
+    "Added monthly subscription, its subscription group, and all three AI GAS consumables to a single iOS draft submission; all five items show Ready for Review",
+    "Verified Magic Camera 1.0.0 and Receipt Wiz 1.2.0 are Ready for Distribution with all 175 countries or regions available, including the EU"
   ],
   "testFlight": {
     "appleBuildId": "5ad5cbef-679c-4ba2-a5e6-a3677c27d0d8",
@@ -52,9 +56,10 @@
     ]
   },
   "remaining": [
-    "Apple reviewer password field is empty; enter the existing reviewer password directly in App Review Information and save",
-    "Four IAP review screenshots and on-device purchase validation are outstanding",
-    "Production billing is disabled; Apple and Google readiness flags are false"
+    "Apple reviewer password field remains empty; enter the existing reviewer password directly in App Review Information and save",
+    "Add app version 1.0.1 build 14 to the existing five-item iOS draft after resolving app-version validation, then submit the combined draft",
+    "Native signed StoreKit checkout, verification, restore, and AI GAS consumption tests remain outstanding",
+    "Production billing remains disabled; Apple and Google readiness flags are false"
   ],
   "worldwide": {
     "selectedTerritories": 175,
@@ -84,12 +89,69 @@
   "otherApps": {
     "magicCamera": {
       "appleAppId": "6828697639",
-      "statusPreviouslyVerified": "live in 148 countries; 27 EU countries unavailable"
+      "version": "1.0.0",
+      "status": "Ready for Distribution",
+      "availableCountriesOrRegions": 175,
+      "consoleUrl": "https://appstoreconnect.apple.com/apps/6828697639/distribution/pricing",
+      "euRestrictionCleared": true
     },
     "receiptWiz": {
       "appleAppId": "6828593095",
-      "statusPreviouslyVerified": "live in 148 countries; 27 EU countries unavailable"
+      "version": "1.2.0",
+      "status": "Ready for Distribution",
+      "availableCountriesOrRegions": 175,
+      "consoleUrl": "https://appstoreconnect.apple.com/apps/6828593095/distribution/pricing",
+      "euRestrictionCleared": true
     }
   },
-  "latestValidation": "Apple screenshot-processing requirement no longer listed. Missing reviewer password remains; Apple also returned a generic unexpected submission error."
+  "latestValidation": "After all four purchase products and subscription group were added to the iOS draft, Apple still refused to add the app version: Password - This field is required; also a generic unexpected submission error. Draft has five items and cannot be submitted without app version.",
+  "iapReviewCapture": {
+    "workflowRun": 41564138315,
+    "workflowResult": "success",
+    "artifactId": 13197654313,
+    "captureCommit": "d6a8211ce8479f9f6acd9a710027268aa7308a33",
+    "productionSourceCommit": "f6d98bf5ced9df6d346ec5072df94c85d0a504cd",
+    "sourceUiChanged": false,
+    "catalogSource": "Approved USD display fixtures, not live StoreKit responses",
+    "realPurchaseTesting": false,
+    "archiveSha256": "2b80eaa73c62cb30a518c81094ab346eb8baa70efcda4e82eba367e72840f3af",
+    "libraryFileId": "libfile_9037bd33801481918f2b23c5de7a73cd",
+    "uploads": [
+      {
+        "appleProductId": "6829444906",
+        "productId": "com.korlix.brain.monthly",
+        "file": "brain-monthly-review.png",
+        "assetId": "58d58e6c-f2d6-48e4-af2a-c4cbff3e9e5c",
+        "status": "Ready for Review"
+      },
+      {
+        "appleProductId": "6829446043",
+        "productId": "com.korlix.brain.ai_gas.1h",
+        "file": "brain-ai-gas-review.png",
+        "assetId": "fff54cd6-0b0f-4460-ab56-e68f5ae8f4ba",
+        "status": "Ready for Review"
+      },
+      {
+        "appleProductId": "6829446044",
+        "productId": "com.korlix.brain.ai_gas.2h",
+        "file": "brain-ai-gas-review.png",
+        "assetId": "bf61c8d6-3671-405b-84c7-720014cc92f1",
+        "status": "Ready for Review"
+      },
+      {
+        "appleProductId": "6829446235",
+        "productId": "com.korlix.brain.ai_gas.3h",
+        "file": "brain-ai-gas-review.png",
+        "assetId": "36e5c3d6-637b-4801-939b-1ea033eba20d",
+        "status": "Ready for Review"
+      }
+    ],
+    "subscriptionGroup": {
+      "id": "22534408",
+      "status": "Ready for Review"
+    },
+    "draftItemCount": 5,
+    "draftPlatform": "iOS",
+    "publicReviewSubmitted": false
+  }
 }
