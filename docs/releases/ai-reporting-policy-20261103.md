@@ -59,33 +59,64 @@ Source is based on the last recorded CRM app branch at
 `37d629b7e24d4765e29c3276ac6a3ac1b027d578`, preserving the CRM and prior reporting
 changes. Pull request: https://github.com/digiplayja-design/Ai-wiz-command-center/pull/41
 
-Workflow: https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41633593786
+Workflow: https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41646037336
 
-The workflow completed successfully on November 3, 2026 against code commit
-`b9484c7d06b6a7be3edff5b548c802ba02757f1b`. Static analysis reported no issues,
-all **70 tests passed**, and Android debug compilation succeeded. Subsequent
-commits initially updated only this release record. The follow-up BabyBlend and
-Image-to-Video changes require a new validation run; earlier results do not certify
-those subsequent changes.
+Validation completed successfully on November 3, 2026 against code commit
+`240d45a96d00b990aa6d37bb8e45d1c56a83a685`. Static analysis reported no issues,
+all **96 tests passed**, and Android debug compilation succeeded. These results
+include the direct BabyBlend controls and the prominent Image-to-Video control.
 
-The dedicated workflow analyzes the support implementation, tests the new
+The dedicated workflow analyzes support and BabyBlend code, tests the new
 cross-route flow and existing reporting surfaces, and compiles the Android app.
-Tests cover cancellation, required context, receipts, unconfirmed responses,
-account changes during credential refresh, duplicate taps, and large text on a
-narrow screen. Existing generated-media reporting tests are included.
+Tests cover the selected older BabyBlend portrait and its creation options,
+exclusion of adult reference photo identifiers, cancellation, required context,
+durable receipts, unconfirmed responses, account changes during image retrieval,
+duplicate taps, and narrow-screen layout. Submission tests exercise real image
+decoding and the authenticated reporting transport with mocked HTTP responses.
 
 The live `/api/report-output/health` endpoint returned HTTP 200, `ok: true`, and
 `reportDeliveryVersion: v5`. This is a health check, not proof that a real report
 or email was delivered. No real support report was sent during this work.
 
 The saved workflow artifact, `korlix-ai-reporting-android-validation`
-(artifact ID `13229344644`), is a **debug validation APK**, not a signed Google
+(artifact ID `13235647044`), is a **debug validation APK**, not a signed Google
 Play release. Its archive SHA-256 is
-`f21cfbb58b9f04090fe87d5ce8b266276ff5797634a66d809d846ec122ea6854`;
+`b41ac63c9471d26ffdaf33892d08a1a83c2abc7ecb19c382cce8b24e7131e357`;
 GitHub retention expires November 17, 2026. Do not upload it or the source's
 iOS-derived build number to Play.
 The next signed Android version code must be verified against current uploaded
 bundles, and the existing main-app upload key must be reused.
+
+## Signed Android candidate
+
+`KORLIX-12.0.4-144-babyblend-video-reporting-CANDIDATE.aab` was built on
+November 3, 2026 from code commit `240d45a96d00b990aa6d37bb8e45d1c56a83a685`
+using Flutter 3.47.7, the original main-app upload key, and the existing public
+client configuration in an isolated Codespace checkout.
+
+- Package: `com.korlixdeveloper.korlixai`
+- Version: `12.0.4` / candidate version code `144`
+- Size: `164996865` bytes
+- SHA-256: `660d9e6a49e5204b5558928d0ff15511b20c293541fe00cbba74069646effad2`
+- Upload certificate SHA-256: `c1d051456057e6d813f0d4e82892b856c3e67852b05cd78d302adc5da8162f7f`
+- Android minimum SDK `24`, target SDK `36`, matching the previous main-app bundle 140.
+
+Google bundletool validation and JAR signature verification passed. The upload
+certificate matches the existing main-app bundle 140. The release is not
+debuggable. The compiled app contains the portrait, video, and general reporting
+controls, plus the existing Supabase and backend client settings. The downloaded
+file's SHA-256 matches the verified original exactly.
+
+Flutter's normal build migration changed the isolated checkout's Android minimum
+SDK declaration from `23` to `flutter.minSdkVersion` (`24`); the resulting minimum
+matches the previous release. The original working checkout and signing files
+were not modified. New download links were added under `release_uploads` only.
+
+**This is a signed candidate, not a submitted or published release.** Version code
+144 was selected from the earlier record of build 143; its availability must be
+checked against the current Play Console before uploading. The compiled source
+still has the separate iOS-derived pubspec build number; the Android candidate
+uses the explicit build-number override recorded above.
 
 The earlier conversation records a reporting fix in Android build 143, submitted
 after rejected build 142. Its current Play review/production status has not been
