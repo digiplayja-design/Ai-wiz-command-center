@@ -69,6 +69,7 @@ export 'auth/korlix_session_refresh.dart' show KorlixAuthSession;
 import 'ads/korlix_ad_consent.dart';
 import 'account/korlix_account_deletion_dialog.dart';
 import 'support/korlix_ai_report_client.dart';
+import 'support/korlix_ai_reporting_host.dart';
 import 'support/korlix_saved_output_report_dialog.dart';
 import 'reviews/korlix_app_feedback_dialog.dart';
 import 'reviews/korlix_review_host.dart';
@@ -564,7 +565,14 @@ class CheeChaiCheeApp extends StatelessWidget {
         routeObserver: _korlixSocialRouteObserver,
         beforeOpenCall: stopKorlixCharacterSpeechGlobally,
         child: KorlixSmokeScreensaver(sessionChanges: kKorlixAuthRevision,
-          child: child ?? const SizedBox.shrink()),
+          child: KorlixAiReportingHost(
+            navigatorKey: _korlixNavigatorKey,
+            sessionChanges: kKorlixAuthRevision,
+            accountScope: () => _korlixReviewAccountScope,
+            headersBuilder: () => korlixAuthenticatedBackendHeaders(),
+            endpoint: _assertValidKorlixBackendUri('$kKorlixBackendBaseUrl/api/report-output'),
+            child: child ?? const SizedBox.shrink(),
+          )),
       )))),
 
       routes: <String, WidgetBuilder>{

@@ -14,10 +14,12 @@ class KorlixSavedOutputReportDialog extends StatefulWidget {
     this.description =
         'Tell us what needs review. An excerpt of this saved prompt '
         'and response will be included with your report.',
+    this.detailsRequired = false,
   });
 
   final Listenable sessionChanges;
   final String title, description;
+  final bool detailsRequired;
   final bool Function() isSessionCurrent;
   final Future<String> Function(String reason, String details) submitReport;
 
@@ -133,15 +135,17 @@ class _KorlixSavedOutputReportDialogState
                     minLines: 3,
                     maxLines: 5,
                     maxLength: 1000,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'What happened?',
-                      helperText:
-                          'Optional unless you select Other. Avoid adding passwords or payment details.',
+                      helperText: widget.detailsRequired
+                          ? 'Include the feature and content to review. Avoid adding passwords or payment details.'
+                          : 'Optional unless you select Other. Avoid adding passwords or payment details.',
                       helperMaxLines: 4,
                       alignLabelWithHint: true,
                     ),
                     validator: (value) =>
-                        _reason == 'Other' && (value?.trim().isEmpty ?? true)
+                        (widget.detailsRequired || _reason == 'Other') &&
+                            (value?.trim().isEmpty ?? true)
                         ? 'Describe what needs review.'
                         : null,
                   ),
@@ -152,7 +156,7 @@ class _KorlixSavedOutputReportDialogState
                       child: Text(
                         current
                             ? _error!
-                            : 'Your sign-in changed. Close this dialog and reopen your saved output.',
+                            : 'Your sign-in changed. Close this dialog and open a new report.',
                         key: const Key('saved-report-feedback'),
                         style: TextStyle(color: skin.text, height: 1.4),
                       ),
