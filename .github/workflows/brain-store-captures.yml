@@ -1,0 +1,48 @@
+name: Brain store screenshot capture
+on:
+  workflow_dispatch:
+  push:
+    branches: [chore/brain-store-captures-20261102]
+permissions:
+  contents: read
+concurrency:
+  group: brain-store-capture-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  BOT: 'true'
+  CI: 'true'
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
+  DART_SUPPRESS_ANALYTICS: 'true'
+  COCOAPODS_DISABLE_STATS: 'true'
+jobs:
+  capture:
+    runs-on: macos-26
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.9'
+          channel: stable
+          cache: true
+      - name: Validate screenshot-only target
+        working-directory: apps/korlix_brain
+        run: |
+          flutter pub get --enforce-lockfile
+          dart analyze tools/store_capture/main.dart
+          python3 -m py_compile tools/store_capture/capture.py
+      - name: Build isolated debug simulator target
+        working-directory: apps/korlix_brain
+        run: flutter build ios --simulator --debug --no-pub --target tools/store_capture/main.dart
+      - name: Capture unchanged production UI on iPhone and iPad
+        working-directory: apps/korlix_brain
+        run: python3 tools/store_capture/capture.py
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: brain-store-native-captures
+          path: apps/korlix_brain/build/store-captures/
+          if-no-files-found: warn
+          retention-days: 14
