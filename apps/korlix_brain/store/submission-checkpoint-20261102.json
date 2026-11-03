@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-11-03T01:35:12.803Z",
+  "updatedAt": "2026-11-03T01:47:51.626Z",
   "app": "KORLIX Brain+Voice",
   "appleAppId": "6829319523",
   "bundleId": "com.korlix.brain",
@@ -12,7 +12,9 @@
     "Authenticated App Store Connect",
     "Assigned build 14 to the existing KORLIX Brain Internal TestFlight group",
     "Saved review notes for native monthly and AI GAS checkout",
-    "Uploaded a native iPhone screenshot and a native 13-inch iPad screenshot"
+    "Uploaded a native iPhone screenshot and a native 13-inch iPad screenshot",
+    "Verified support@korlixdeveloper.com and approved phone through Apple's email and SMS codes",
+    "Apple generated the iPad screenshot preview"
   ],
   "testFlight": {
     "appleBuildId": "5ad5cbef-679c-4ba2-a5e6-a3677c27d0d8",
@@ -44,22 +46,26 @@
         "width": 2064,
         "height": 2752,
         "appleAssetId": "33800019-70f2-8563-8f0d-ce37adee8375",
-        "previewReady": false
+        "previewReady": true
       }
     ]
   },
   "remaining": [
     "Apple reviewer password field is empty; enter the existing reviewer password directly in App Review Information and save",
-    "iPad image is uploaded but Apple processing is still pending",
     "Four IAP review screenshots and on-device purchase validation are outstanding",
     "Production billing is disabled; Apple and Google readiness flags are false",
-    "EU trader contact verification remains incomplete; proposed public contact details require user confirmation"
+    "EU trader contact confirmation is ready; final dialog includes a declaration of compliance with European Union law. Final Confirm has not been clicked."
   ],
   "worldwide": {
     "selectedTerritories": 175,
     "appAvailability": "Available on App Release",
     "euTraderVerification": "incomplete",
-    "traderContactForm": "open; no new phone/email entered or submitted"
+    "traderContactForm": "Email and phone verified; Confirm Contact Information dialog open",
+    "traderEmail": "support@korlixdeveloper.com",
+    "traderEmailVerified": true,
+    "traderPhoneVerified": true,
+    "publicContactDisclosureApproved": true,
+    "finalDeclarationSubmitted": false
   },
   "billing": {
     "healthObserved": {
@@ -84,5 +90,5 @@
       "statusPreviouslyVerified": "live in 148 countries; 27 EU countries unavailable"
     }
   },
-  "latestValidation": "Unable to Add for Review: screenshot processing and missing reviewer password"
+  "latestValidation": "Apple screenshot-processing requirement no longer listed. Missing reviewer password remains; Apple also returned a generic unexpected submission error."
 }
