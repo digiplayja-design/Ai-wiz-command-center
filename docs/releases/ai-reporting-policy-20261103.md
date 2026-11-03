@@ -109,8 +109,9 @@ file's SHA-256 matches the verified original exactly.
 
 Flutter's normal build migration changed the isolated checkout's Android minimum
 SDK declaration from `23` to `flutter.minSdkVersion` (`24`); the resulting minimum
-matches the previous release. The original working checkout and signing files
-were not modified. New download links were added under `release_uploads` only.
+matches the previous release. Existing source changes and signing files in the
+original checkout were preserved. Only new download links were added under
+`release_uploads`.
 
 **This is a signed candidate, not a submitted or published release.** Version code
 144 was selected from the earlier record of build 143; its availability must be
