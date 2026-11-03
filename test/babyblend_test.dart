@@ -51,8 +51,16 @@ Map<String, dynamic> makeJob(
 };
 
 class FakeBlend extends BabyBlendClient {
-  FakeBlend()
-    : super(backendBaseUrl: 'https://fixture.test', headersBuilder: () => {});
+  FakeBlend({
+    http.Client? transport,
+    Map<String, String> Function()? headersBuilder,
+    Listenable? sessionChanges,
+  }) : super(
+         backendBaseUrl: 'https://fixture.test',
+         headersBuilder: headersBuilder ?? () => {},
+         client: transport,
+         sessionChanges: sessionChanges,
+       );
   List<Map<String, dynamic>> assets = [asset('source-1'), asset('source-2')],
       jobs = [];
   List<String> uploadKeys = [], startKeys = [];
@@ -62,6 +70,8 @@ class FakeBlend extends BabyBlendClient {
       failRemove = false,
       finish = false;
   int starts = 0, polls = 0, deletes = 0, downloads = 0;
+  final downloadedIds = <String>[];
+  Future<Uint8List>? pendingImage;
   @override
   Future<Map<String, dynamic>> load() async => {
     'assets': assets.map((a) => Map<String, dynamic>.from(a)).toList(),
@@ -124,7 +134,8 @@ class FakeBlend extends BabyBlendClient {
   @override
   Future<Uint8List> imageBytes(String id) async {
     downloads++;
-    return photo;
+    downloadedIds.add(id);
+    return pendingImage == null ? photo : await pendingImage!;
   }
 }
 

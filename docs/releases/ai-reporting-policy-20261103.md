@@ -27,14 +27,27 @@ cannot report success under a new account. Submission is not retried
 automatically, and a success confirmation requires the existing durable receipt
 format. The footer reserves layout space and hides during keyboard input.
 
+The owner's follow-up evidence identifies **BabyBlend** and **Image-to-Video**.
+BabyBlend now has **Report portrait** beside the current result and on each
+saved portrait. It fetches the selected generated image through the authenticated
+API and attaches a bounded review copy plus that portrait's age/style options.
+Adult reference photos and their identifiers are excluded. Image-to-Video's
+existing **Report video** control is moved above the video preview to make it
+prominent before the download, copy, and share controls.
+
 ## Reviewer path
 
 1. Sign in using the existing review account.
-2. Open any feature, such as Live Convo or The Pod and You.
-3. Tap **Report AI content** at the bottom of the screen.
-4. Select a reason and describe the feature and offensive AI content.
-5. Tap **Submit report**. A successfully accepted report displays **Report
-   received** and a reference. Closing the dialog returns to the same feature.
+2. Open **BabyBlend**, create a portrait or open a saved portrait, and tap
+   **Report portrait**. The same action is available on each **My portraits** card.
+3. Choose a reason, optionally describe the problem, and tap **Submit report**.
+   Acceptance is shown only after the server returns a durable report reference.
+4. Open **Image-to-Video**, generate a video, and tap **Report video** directly
+   above the preview. Submit a reason; the selected clip and its original prompt
+   accompany the report without leaving the app.
+5. Other signed-in routes also have **Report AI content** at the bottom of the
+   screen. This general form requires a description identifying the feature and
+   content. Cancellation does not send a report.
 
 For generated images, logos, picture edits, portrait previews, music, or videos,
 the selected-result reporting button can additionally include that particular
@@ -51,7 +64,9 @@ Workflow: https://github.com/digiplayja-design/Ai-wiz-command-center/actions/run
 The workflow completed successfully on November 3, 2026 against code commit
 `b9484c7d06b6a7be3edff5b548c802ba02757f1b`. Static analysis reported no issues,
 all **70 tests passed**, and Android debug compilation succeeded. Subsequent
-commits only update this release record.
+commits initially updated only this release record. The follow-up BabyBlend and
+Image-to-Video changes require a new validation run; earlier results do not certify
+those subsequent changes.
 
 The dedicated workflow analyzes the support implementation, tests the new
 cross-route flow and existing reporting surfaces, and compiles the Android app.

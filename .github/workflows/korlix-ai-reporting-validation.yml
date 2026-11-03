@@ -6,6 +6,8 @@ on:
     paths:
       - lib/**
       - test/support/**
+      - test/babyblend*.dart
+      - test/image_to_video_reporting_test.dart
       - .github/workflows/korlix-ai-reporting-validation.yml
 permissions:
   contents: read
@@ -45,13 +47,14 @@ jobs:
       - name: Resolve pinned dependencies
         run: flutter pub get --enforce-lockfile
       - name: Analyze reporting implementation
-        run: flutter analyze --no-pub lib/support test/support
+        run: flutter analyze --no-pub lib/support lib/babyblend test/support test/babyblend_test.dart test/babyblend_reporting_test.dart
       - name: Exercise reporting across routes and generated media
         run: |
           flutter test --no-pub --reporter expanded \
             test/support test/imagine_studio_test.dart test/logo_studio_test.dart \
             test/picture_studio_report_test.dart test/portrait_preview_report_test.dart \
-            test/image_to_video_reporting_test.dart
+            test/image_to_video_reporting_test.dart \
+            test/babyblend_test.dart test/babyblend_reporting_test.dart
       - name: Compile Android integration
         run: flutter build apk --debug --no-pub
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

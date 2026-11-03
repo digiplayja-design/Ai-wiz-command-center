@@ -42,7 +42,7 @@ class VideoFixture {
   static const url = 'https://cdn.example.test/generated-video.mp4';
   http.Response output() =>
       http.Response(jsonEncode({'jobId': 'video-123', 'videoUrl': url}), 200);
-  Future<void> open(WidgetTester tester) async {
+  Future<void> open(WidgetTester tester, {double width = 390}) async {
     SharedPreferences.setMockInitialValues({});
     final picker = FilePicker.platform;
     final player = VideoPlayerPlatform.instance;
@@ -67,7 +67,7 @@ class VideoFixture {
         headersBuilder: () => {'Authorization': 'Bearer $token'},
         sessionChanges: revision,
       ),
-      width: 390,
+      width: width,
       height: 844,
     );
     addTearDown(() async {
@@ -123,6 +123,23 @@ class VideoFixture {
 
 void main() {
   setUpAll(() => FilePicker.platform = PhotoPicker());
+  testWidgets('report video is prominent above download controls on a narrow phone', (
+    tester,
+  ) async {
+    final f = VideoFixture();
+    await f.open(tester, width: 320);
+    final report = find.byKey(const Key('image-to-video-report'));
+    expect(report, findsOneWidget);
+    expect(
+      tester.getTopLeft(report).dy,
+      lessThan(tester.getTopLeft(find.text('Download / Open')).dy),
+    );
+    await f.report(tester);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(f.reports, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets(
     'generated video has an in-app report with exact video and prompt context',
     (tester) async {

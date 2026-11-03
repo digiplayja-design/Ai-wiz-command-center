@@ -1070,6 +1070,16 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
           ],
           if (videoUrl != null) ...[
             const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                key: const Key('image-to-video-report'),
+                onPressed: _reportOpen ? null : _reportVideo,
+                icon: const Icon(Icons.flag_outlined),
+                label: const Text('Report video'),
+              ),
+            ),
+            const SizedBox(height: 12),
             if (controller != null && _videoInitFuture != null)
               FutureBuilder<void>(
                 future: _videoInitFuture,
@@ -1148,12 +1158,6 @@ class _KorlixImageToVideoScreenState extends State<KorlixImageToVideoScreen> {
                   onPressed: _shareVideoUrl,
                   icon: const Icon(Icons.ios_share_rounded),
                   label: const Text('Share'),
-                ),
-                OutlinedButton.icon(
-                  key: const Key('image-to-video-report'),
-                  onPressed: _reportOpen ? null : _reportVideo,
-                  icon: const Icon(Icons.flag_outlined),
-                  label: const Text('Report video'),
                 ),
               ],
             ),
