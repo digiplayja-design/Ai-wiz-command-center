@@ -1,0 +1,88 @@
+{
+  "updatedAt": "2026-11-03T01:35:12.803Z",
+  "app": "KORLIX Brain+Voice",
+  "appleAppId": "6829319523",
+  "bundleId": "com.korlix.brain",
+  "version": "1.0.1",
+  "build": 14,
+  "appleStatus": "Prepare for Submission",
+  "publicSubmissionConfirmed": false,
+  "appleConsole": "https://appstoreconnect.apple.com/apps/6829319523/distribution/ios/version/inflight",
+  "completed": [
+    "Authenticated App Store Connect",
+    "Assigned build 14 to the existing KORLIX Brain Internal TestFlight group",
+    "Saved review notes for native monthly and AI GAS checkout",
+    "Uploaded a native iPhone screenshot and a native 13-inch iPad screenshot"
+  ],
+  "testFlight": {
+    "appleBuildId": "5ad5cbef-679c-4ba2-a5e6-a3677c27d0d8",
+    "groupId": "ae86d9a2-5bdf-4f3d-910b-aa532675951f",
+    "groupName": "KORLIX Brain Internal",
+    "buildAssigned": true,
+    "deviceInstallationVerified": false
+  },
+  "screenshotCapture": {
+    "workflowRun": 41555693687,
+    "workflowResult": "success",
+    "artifactId": 13195687284,
+    "productionSourceCommit": "f6d98bf5ced9df6d346ec5072df94c85d0a504cd",
+    "captureCommit": "302b192da33461b6547e3e9e5125111d1a01ea2e",
+    "accountData": "fictional empty account; loopback fixture",
+    "sourceUiChanged": false,
+    "realLoginOrPurchaseTesting": false,
+    "archiveSha256": "ddf39b66a9d25496c7ef94df605022b1ea54f8b0b91b3e4207a62e39ffe864db",
+    "uploaded": [
+      {
+        "file": "iphone-16-pro-home-2.png",
+        "width": 1206,
+        "height": 2622,
+        "appleAssetId": "0a000019-70f2-8563-8f3b-c868250e7e18",
+        "previewReady": true
+      },
+      {
+        "file": "ipad-pro-13-home-1.png",
+        "width": 2064,
+        "height": 2752,
+        "appleAssetId": "33800019-70f2-8563-8f0d-ce37adee8375",
+        "previewReady": false
+      }
+    ]
+  },
+  "remaining": [
+    "Apple reviewer password field is empty; enter the existing reviewer password directly in App Review Information and save",
+    "iPad image is uploaded but Apple processing is still pending",
+    "Four IAP review screenshots and on-device purchase validation are outstanding",
+    "Production billing is disabled; Apple and Google readiness flags are false",
+    "EU trader contact verification remains incomplete; proposed public contact details require user confirmation"
+  ],
+  "worldwide": {
+    "selectedTerritories": 175,
+    "appAvailability": "Available on App Release",
+    "euTraderVerification": "incomplete",
+    "traderContactForm": "open; no new phone/email entered or submitted"
+  },
+  "billing": {
+    "healthObserved": {
+      "enabled": false,
+      "appleReady": false,
+      "googleReady": false,
+      "catalogVersion": "brain_monthly_60_gas_60_120_180_v1"
+    },
+    "flagsChanged": false
+  },
+  "google": {
+    "productionLive": false,
+    "submissionThisTurn": false
+  },
+  "otherApps": {
+    "magicCamera": {
+      "appleAppId": "6828697639",
+      "statusPreviouslyVerified": "live in 148 countries; 27 EU countries unavailable"
+    },
+    "receiptWiz": {
+      "appleAppId": "6828593095",
+      "statusPreviouslyVerified": "live in 148 countries; 27 EU countries unavailable"
+    }
+  },
+  "latestValidation": "Unable to Add for Review: screenshot processing and missing reviewer password"
+}
