@@ -100,7 +100,8 @@ void main() {
       tester.widget<TextField>(find.byKey(const Key('focus-text'))).controller!.text,
       'The keyboard leaves this draft editable.',
     );
-    expect(find.text('Save & close').hitTestable(), findsOneWidget);
+    expect(find.byKey(const Key('focus-save')).hitTestable(), findsOneWidget);
+    expect(find.byTooltip('Save & close'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

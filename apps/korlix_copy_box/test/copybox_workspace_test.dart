@@ -19,6 +19,8 @@ void main() {
   String clipboard = '';
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    debugDisableShadows = false;
+    addTearDown(() => debugDisableShadows = true);
     clipboard = '';
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, (call) async {
@@ -127,6 +129,8 @@ void main() {
     final boundary = tester.renderObject<RenderRepaintBoundary>(
       find.byKey(const Key('preview')),
     );
+    boundary.markNeedsPaint();
+    await tester.pump();
     await tester.runAsync(() async {
       final image = await boundary.toImage(pixelRatio: 3);
       final bytes = await image.toByteData(format: ui.ImageByteFormat.png);
@@ -188,7 +192,7 @@ void main() {
       find.byKey(const Key('focus-text')),
       'Improved original',
     );
-    await click(tester, find.text('Save & close'));
+    await click(tester, find.byKey(const Key('focus-save')));
     final updated = CopyBoxStore(prefs, 'local').load().first;
     expect(updated.text, 'Improved original');
     expect(updated.history.first, 'Original');

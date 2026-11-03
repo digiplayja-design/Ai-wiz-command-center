@@ -160,6 +160,12 @@ class _CopyBoxFocusEditorState extends State<CopyBoxFocusEditor> {
     }
   }
 
+  void _saveAndClose() {
+    if (_leaving) return;
+    setState(() => _leaving = true);
+    Navigator.pop(context, _text.text);
+  }
+
   @override
   Widget build(BuildContext context) => PopScope(
     canPop: _leaving || _text.text == widget.text,
@@ -175,13 +181,20 @@ class _CopyBoxFocusEditorState extends State<CopyBoxFocusEditor> {
         ),
         title: const Text('Focus editor'),
         actions: [
-          TextButton(
-            onPressed: () {
-              setState(() => _leaving = true);
-              Navigator.pop(context, _text.text);
-            },
-            child: const Text('Save & close'),
-          ),
+          if (MediaQuery.sizeOf(context).width < 480 ||
+              MediaQuery.textScalerOf(context).scale(14) >= 21)
+            IconButton(
+              key: const Key('focus-save'),
+              tooltip: 'Save & close',
+              onPressed: _saveAndClose,
+              icon: const Icon(Icons.check),
+            )
+          else
+            TextButton(
+              key: const Key('focus-save'),
+              onPressed: _saveAndClose,
+              child: const Text('Save & close'),
+            ),
           const SizedBox(width: 8),
         ],
       ),

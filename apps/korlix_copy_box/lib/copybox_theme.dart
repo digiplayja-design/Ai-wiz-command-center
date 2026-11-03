@@ -72,7 +72,11 @@ ThemeData copyboxTheme(Brightness brightness) {
         foregroundColor: dark ? copyboxInk : Colors.white,
         minimumSize: const Size(48, 48),
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        textStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+        textStyle: const TextStyle(
+          fontFamily: 'Roboto',
+          fontWeight: FontWeight.w700,
+          fontSize: 14,
+        ),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
     ),

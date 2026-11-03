@@ -102,8 +102,10 @@ class _CopyBoxHomeState extends State<CopyBoxHome> with WidgetsBindingObserver {
 
   void _message(String value, {SnackBarAction? action}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(value), action: action));
+    final messenger = ScaffoldMessenger.of(context);
+    // Current actions, especially Undo, must not wait behind earlier copy notices.
+    messenger.clearSnackBars();
+    messenger.showSnackBar(SnackBar(content: Text(value), action: action));
   }
 
   void _changed() {
