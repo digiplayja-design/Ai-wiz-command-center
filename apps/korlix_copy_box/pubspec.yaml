@@ -1,0 +1,49 @@
+name: korlix_copy_box
+description: Independent KORLIX writing workspace for ideas, reusable snippets, and focused editing.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  korlix_receipt_core:
+    path: ../../packages/korlix_receipt_core
+  shared_preferences: 2.5.5
+  http: 1.6.0
+  file_picker: 10.3.8
+  share_plus: 12.0.2
+  cross_file: 0.3.5+2
+  package_info_plus: 9.0.1
+  url_launcher: 6.3.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: 6.0.0
+  flutter_launcher_icons: 0.14.4
+  shared_preferences_platform_interface: 2.4.2
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/copybox_icon.png
+    - assets/copybox_mark.png
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/copybox_icon.png
+  remove_alpha_ios: true
+  background_color_ios: '#000000'
+  min_sdk_android: 24
+  adaptive_icon_background: '#000000'
+  adaptive_icon_foreground: assets/copybox_mark.png
+  adaptive_icon_foreground_inset: 16
+  web:
+    generate: true
+    image_path: assets/copybox_icon.png
+    background_color: '#F7F6F2'
+    theme_color: '#111111'

@@ -1,0 +1,13 @@
+Welcome to KORLIX COPY Box.
+
+Save your ideas in independent colored boxes, find the right words quickly, and keep useful text ready to reuse.
+
+- Dedicated black-and-white KORLIX app identity.
+- Twelve starter boxes with Add Box, Save All, and Copy All Boxes.
+- Search, folders, favorites, box colors, and manual ordering.
+- Focus editor, template fields, and six reusable starters.
+- Recoverable trash and saved versions for replacements.
+- JSON backup, previewed imports, plain-text export, and native sharing.
+- Local editing without sign-in; connect your existing KORLIX account for AI refinement.
+- Review AI drafts before applying them and report an output directly in the app.
+- Light and dark appearance, device text scaling, and visible workspace scrollbar.

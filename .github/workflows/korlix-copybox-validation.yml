@@ -1,0 +1,144 @@
+name: KORLIX COPY Box validation
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/korlix-copybox-validation.yml
+      - apps/korlix_copy_box/**
+      - packages/korlix_receipt_core/**
+      - scripts/ci/validate-copybox-native.py
+  push:
+    branches:
+      - feature/korlix-copy-box-20261103
+      - main
+    paths:
+      - .github/workflows/korlix-copybox-validation.yml
+      - apps/korlix_copy_box/**
+      - packages/korlix_receipt_core/**
+      - scripts/ci/validate-copybox-native.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: korlix-copybox-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: 'true'
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
+  DART_SUPPRESS_ANALYTICS: 'true'
+  COCOAPODS_DISABLE_STATS: 'true'
+
+jobs:
+  android-and-web:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - name: Check independent app identity and platform assets
+        run: python3 scripts/ci/validate-copybox-native.py
+      - name: Resolve dependencies and validate app
+        working-directory: apps/korlix_copy_box
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter config --no-analytics
+          dart --disable-analytics
+          if [[ -f pubspec.lock ]]; then
+            flutter pub get --enforce-lockfile
+          else
+            flutter pub get
+          fi
+          dart format --output=none lib test
+          flutter analyze --no-pub
+          export COPYBOX_PREVIEWS="$RUNNER_TEMP/copybox-previews"
+          export KORLIX_FLUTTER_ROOT="$FLUTTER_ROOT"
+          mkdir -p "$COPYBOX_PREVIEWS"
+          flutter test --no-pub --reporter expanded
+      - name: Build web preview bundle
+        working-directory: apps/korlix_copy_box
+        run: flutter build web --release --no-pub
+      - name: Build Android test APK
+        working-directory: apps/korlix_copy_box
+        run: flutter build apk --debug --no-pub
+      - name: Keep Android APK
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: korlix-copybox-android-debug
+          path: apps/korlix_copy_box/build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+      - name: Keep web preview
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: korlix-copybox-web
+          path: apps/korlix_copy_box/build/web
+          if-no-files-found: error
+          retention-days: 14
+      - name: Keep app screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: korlix-copybox-previews
+          path: ${{ runner.temp }}/copybox-previews/*.png
+          if-no-files-found: warn
+          retention-days: 14
+      - name: Keep resolved lockfile for review
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: korlix-copybox-resolved-lockfile
+          path: apps/korlix_copy_box/pubspec.lock
+          if-no-files-found: ignore
+          retention-days: 14
+
+  ios-simulator:
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - name: Check independent app identity and platform assets
+        run: python3 scripts/ci/validate-copybox-native.py
+      - name: Build iOS simulator app
+        working-directory: apps/korlix_copy_box
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter config --no-analytics
+          dart --disable-analytics
+          xcodebuild -version
+          if [[ -f pubspec.lock ]]; then
+            flutter pub get --enforce-lockfile
+          else
+            flutter pub get
+          fi
+          flutter build ios --simulator --debug --no-pub
+          cd build/ios/iphonesimulator
+          ditto -c -k --sequesterRsrc --keepParent Runner.app KorlixCopyBox-Simulator.zip
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: korlix-copybox-ios-simulator
+          path: apps/korlix_copy_box/build/ios/iphonesimulator/KorlixCopyBox-Simulator.zip
+          if-no-files-found: error
+          retention-days: 14
