@@ -48,6 +48,11 @@ changes. Pull request: https://github.com/digiplayja-design/Ai-wiz-command-cente
 
 Workflow: https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41633593786
 
+The workflow completed successfully on November 3, 2026 against code commit
+`b9484c7d06b6a7be3edff5b548c802ba02757f1b`. Static analysis reported no issues,
+all **70 tests passed**, and Android debug compilation succeeded. Subsequent
+commits only update this release record.
+
 The dedicated workflow analyzes the support implementation, tests the new
 cross-route flow and existing reporting surfaces, and compiles the Android app.
 Tests cover cancellation, required context, receipts, unconfirmed responses,
@@ -58,8 +63,12 @@ The live `/api/report-output/health` endpoint returned HTTP 200, `ok: true`, and
 `reportDeliveryVersion: v5`. This is a health check, not proof that a real report
 or email was delivered. No real support report was sent during this work.
 
-The workflow artifact is a **debug validation APK**, not a signed Google Play
-release. Do not upload it or the source's iOS-derived build number to Play.
+The saved workflow artifact, `korlix-ai-reporting-android-validation`
+(artifact ID `13229344644`), is a **debug validation APK**, not a signed Google
+Play release. Its archive SHA-256 is
+`f21cfbb58b9f04090fe87d5ce8b266276ff5797634a66d809d846ec122ea6854`;
+GitHub retention expires November 17, 2026. Do not upload it or the source's
+iOS-derived build number to Play.
 The next signed Android version code must be verified against current uploaded
 bundles, and the existing main-app upload key must be reused.
 
