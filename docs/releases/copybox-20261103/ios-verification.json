@@ -1,0 +1,12 @@
+{
+  "CFBundleIdentifier": "com.korlixdeveloper.copybox",
+  "CFBundleDisplayName": "KORLIX COPY Box",
+  "CFBundleShortVersionString": "1.0.0",
+  "CFBundleVersion": "1",
+  "MinimumOSVersion": "15.0",
+  "CFBundleSupportedPlatforms": [
+    "iPhoneSimulator"
+  ],
+  "DTSDKName": "iphonesimulator26.5",
+  "DTXcode": "2660"
+}

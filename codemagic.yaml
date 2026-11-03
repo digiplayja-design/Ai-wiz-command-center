@@ -532,6 +532,58 @@ workflows:
       - apps/receipt_wiz/build/ios/iphonesimulator/ReceiptWiz-Simulator.zip
       - /tmp/xcodebuild_logs/*.log
 
+  korlix-copybox-android-candidate:
+    name: KORLIX COPY Box — signed Android candidate
+    instance_type: linux_x2
+    max_build_duration: 60
+    working_directory: apps/korlix_copy_box
+    # No triggering events or publishing configuration: start manually and
+    # retain the signed bundle for review before any Play Console upload.
+    environment:
+      flutter: 3.47.7
+      java: 17
+      android_signing:
+        - KORLIX_COPYBOX_ANDROID_UPLOAD_KEY
+    scripts:
+      - name: Require the dedicated COPY Box upload key
+        script: |
+          set -euo pipefail
+          : "${CM_KEYSTORE_PATH:?Configure KORLIX_COPYBOX_ANDROID_UPLOAD_KEY in Codemagic}"
+          : "${CM_KEYSTORE_PASSWORD:?The COPY Box keystore password is required}"
+          : "${CM_KEY_ALIAS:?The COPY Box key alias is required}"
+          : "${CM_KEY_PASSWORD:?The COPY Box key password is required}"
+          test -f "$CM_KEYSTORE_PATH"
+          if [ -e android/key.properties ]; then
+            printf '%s\n' 'Remove android/key.properties from this build; the dedicated Codemagic identity must supply COPY Box signing.' >&2
+            exit 1
+          fi
+      - name: Validate locked authentication package and COPY Box app
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/packages/korlix_auth_core"
+          flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
+          flutter analyze --no-pub
+          flutter test --no-pub --reporter expanded
+          cd "$CM_BUILD_DIR/apps/korlix_copy_box"
+          flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
+          flutter analyze --no-pub
+          export KORLIX_FLUTTER_ROOT="$(python3 -c 'from pathlib import Path; import shutil; print(Path(shutil.which("flutter")).resolve().parent.parent)')"
+          export COPYBOX_PREVIEWS="$CM_BUILD_DIR/.copybox-ui-previews"
+          flutter test --no-pub --reporter expanded
+      - name: Build signed COPY Box Android App Bundle
+        script: |
+          set -euo pipefail
+          export KORLIX_COPYBOX_ANDROID_STORE_FILE="${CM_KEYSTORE_PATH:?COPY Box keystore is required}"
+          export KORLIX_COPYBOX_ANDROID_STORE_PASSWORD="${CM_KEYSTORE_PASSWORD:?COPY Box keystore password is required}"
+          export KORLIX_COPYBOX_ANDROID_KEY_ALIAS="${CM_KEY_ALIAS:?COPY Box key alias is required}"
+          export KORLIX_COPYBOX_ANDROID_KEY_PASSWORD="${CM_KEY_PASSWORD:?COPY Box key password is required}"
+          flutter build appbundle --release --no-pub
+          test -s build/app/outputs/bundle/release/app-release.aab
+          mkdir -p artifacts
+          cp build/app/outputs/bundle/release/app-release.aab artifacts/KorlixCopyBox.aab
+    artifacts:
+      - $CM_BUILD_DIR/apps/korlix_copy_box/artifacts/KorlixCopyBox.aab
+
   korlix-copybox-ios-candidate: &copybox_ios_candidate
     name: KORLIX COPY Box — iOS release candidate
     instance_type: mac_mini_m2
@@ -567,6 +619,8 @@ workflows:
           set -euo pipefail
           flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
           flutter analyze --no-pub
+          export KORLIX_FLUTTER_ROOT="$(python3 -c 'from pathlib import Path; import shutil; print(Path(shutil.which("flutter")).resolve().parent.parent)')"
+          export COPYBOX_PREVIEWS="$CM_BUILD_DIR/.copybox-ui-previews"
           flutter test --no-pub --reporter expanded
       - name: Configure COPY Box and apply its own provisioning profile
         script: |

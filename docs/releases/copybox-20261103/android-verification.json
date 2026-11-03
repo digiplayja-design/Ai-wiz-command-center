@@ -1,0 +1,11 @@
+{
+  "application_id": "com.korlixdeveloper.copybox",
+  "min_sdk": "24",
+  "target_sdk": "36",
+  "permissions": [
+    "android.permission.INTERNET",
+    "com.korlixdeveloper.copybox.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+  ],
+  "artifact_type": "debug APK",
+  "validation_errors": []
+}

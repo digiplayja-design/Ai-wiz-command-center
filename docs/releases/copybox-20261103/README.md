@@ -12,20 +12,57 @@ The KORLIX AI hub and other standalone app identities were not changed.
 
 ## Verification
 
-Dart source syntax formatting was performed while creating the UI. Native
-manifest and build configuration inspection is recorded separately below when
-complete. Full analyzer, tests, native builds, and screen captures must be
-verified through the dedicated CI workflow before claiming a tested build.
+Validation commit: `de58d87d0277759db87d20abc048358e6ab4f89c`.
+[GitHub Actions run 41739349055](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41739349055)
+completed the checks below with Flutter 3.47.7 and the committed lockfiles.
+
+| Check | Result |
+| --- | --- |
+| Shared account/privacy analyzer | No issues |
+| Shared account/privacy tests | 59 passed |
+| Copy Box analyzer | No issues |
+| Copy Box tests | 73 passed |
+| Android debug APK | Built successfully |
+| Compiled Android identity and permissions | Passed; `com.korlixdeveloper.copybox`, minimum SDK 24, target SDK 36 |
+| iOS simulator application | Built successfully with Xcode 26.6; bundle `com.korlixdeveloper.copybox`, minimum iOS 15.0 |
+| Web release preview bundle | Built successfully |
+
+The 132 automated tests cover shared credentials and consent, account isolation,
+request races, data validation, write ordering, import limits, version recovery,
+templates, autosave, Copy All, Add Box, recoverable trash, and compact/large-text
+layouts. They use controlled network responses and do not establish live-account
+or physical-device acceptance.
+
+The compiled Android manifest contains Internet access and its own
+signature-protected `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`. It has no camera,
+microphone, broad media/storage, or advertising-ID permissions. The dependency
+lockfile uses the lean auth package and contains no `image_picker` dependency.
+
+See [Android metadata](android-verification.json),
+[iOS metadata](ios-verification.json), and
+[download checksums and build provenance](build-verification.json).
+The actual Flutter [interface previews](previews/README.md) were visually reviewed.
 
 Local Flutter setup was stopped by automatic approval review after setup
 attempted a cloud-instance metadata request. It was not retried or bypassed.
-Validation is being moved to an isolated GitHub Actions job with read-only
+Validation ran in isolated GitHub Actions jobs with read-only
 repository access, no persisted checkout credentials, and no signing secrets.
+
+## Test downloads
+
+- `KORLIX_COPY_Box_1.0.0_Android_test.apk`: an installable debug-signed Android
+  test build. It is not the Play upload bundle. Export a JSON backup before
+  uninstalling or changing signing identities; saved boxes are local to the app.
+- `KORLIX_COPY_Box_1.0.0_iOS_Simulator.zip`: the compiled `Runner.app` for an iOS
+  simulator on a Mac. It is not an iPhone installation package or a signed IPA.
+
+Both downloads come from validation commit
+`de58d87d0277759db87d20abc048358e6ab4f89c`; their hashes are recorded above.
+The source and release preparation are in
+[pull request 42](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/42).
 
 ## Release gates
 
-- Confirm successful Android test APK and iOS simulator CI builds and inspect the
-  actual app screens.
 - Test on physical Android and iPhone/iPad: clipboard/paste permission behavior,
   file picker/share sheets, local persistence, large text, offline launch, account
   switching, live sign-in, password reset, optional AI refinement, reporting, and
@@ -50,6 +87,11 @@ repository access, no persisted checkout credentials, and no signing secrets.
   this processing before testing with real text.
 - Upload signed builds for internal testing/TestFlight, obtain device acceptance,
   and then submit the completed listings for review.
+
+The signed-release workflows and store listing are prepared but have not been
+executed or submitted. See [Android release preparation](android-release.md) and
+the `korlix-copybox-ios-candidate` / `korlix-copybox-ios-testflight` workflows in
+the root `codemagic.yaml`. Public store availability remains pending.
 
 ## Current platform requirements consulted
 
