@@ -113,17 +113,92 @@ matches the previous release. Existing source changes and signing files in the
 original checkout were preserved. Only new download links were added under
 `release_uploads`.
 
-**This is a signed candidate, not a submitted or published release.** Version code
-144 was selected from the earlier record of build 143; its availability must be
-checked against the current Play Console before uploading. The compiled source
-still has the separate iOS-derived pubspec build number; the Android candidate
-uses the explicit build-number override recorded above.
+**Do not upload this version-144 candidate.** On November 3, authenticated Play
+Console inspection confirmed that version code 144 was already uploaded on
+October 30. It is the older 12.0.4 build available to internal testers; its
+production release was rejected on November 3. The saved candidate has been
+renamed `KORLIX-12.0.4-144-DO-NOT-UPLOAD-version-code-already-used.aab` to prevent
+accidental use. The compiled source still has the separate iOS-derived pubspec
+build number; Android bundles use an explicit build-number override.
 
-The earlier conversation records a reporting fix in Android build 143, submitted
-after rejected build 142. Its current Play review/production status has not been
-reconfirmed. Browser automatic approval review blocked console access because
-it reported the unexpected `google.play` origin instead of `play.google.com`.
-No further attempt was made through that blocked browser route after the
-owner's approval was also rejected. No new Google Play submission or approval
-is claimed here; the current warning remains unresolved until the corrected
-release is accepted by Google.
+## Authenticated Play Console follow-up
+
+On November 3, the owner approved continuing submission. The existing browser
+was on Google's public Play business page. Its visible **Go to Play Console**
+link led to Google Accounts, and secure authentication succeeded for the KORLIX
+developer account. The earlier navigation block is no longer preventing access.
+
+The Console state before replacing the releases was inspected directly:
+
+- Developer account: KORLIX, ID `4772708594176030332`.
+- Main app ID: `4974117289022654668`.
+- Production version 143 (12.0.2) is listed as available on Google Play.
+- Version 144 (12.0.4) was uploaded October 30 and is available to internal
+  testers. Its production release was rejected on November 3.
+- Both the rejection and November 6 removal warning cite the missing in-app
+  reporting feature under the AI-Generated Content policy.
+- The production track currently covers all 178 selected countries/regions;
+  managed publishing is off.
+
+A new production release, ID `13`, was created with the name
+`145 (12.0.5) AI content reporting`. Its saved English release notes describe
+BabyBlend reporting on current/saved portraits, the prominent Image-to-Video
+report action, and cross-route AI-content reporting.
+
+The tested code commit was rebuilt successfully as **12.0.5 (145)** using the
+same isolated toolchain, existing public client configuration, and original
+upload key. No application source changes were made for this version-number
+change. The release build completed in 382.7 seconds.
+
+An internal-testing release, ID `49`, was also created because the
+November 3 rejection cites version 144 on both production and internal testing.
+The previous bundle is excluded from both new releases.
+
+## Verified version 145 bundle
+
+- Filename: `KORLIX-12.0.5-145-babyblend-video-reporting.aab`
+- Package: `com.korlixdeveloper.korlixai`
+- Version name/code: `12.0.5` / `145`
+- Source commit: `240d45a96d00b990aa6d37bb8e45d1c56a83a685`
+- Size: `164996867` bytes
+- SHA-256: `16cf020092bc7ef1f27698dec8f702cc16ebef23bae366579ab2da25d01f6791`
+- Upload certificate SHA-256: `c1d051456057e6d813f0d4e82892b856c3e67852b05cd78d302adc5da8162f7f`
+- Minimum SDK `24`, target SDK `36`, non-debuggable.
+- Verified on November 3, 2026 at `14:35:15 UTC`.
+
+Bundletool validation and JAR signature verification passed. The compiled app
+contains **Report portrait**, **Report video**, and **Report AI content**, plus
+the existing public client settings. The downloaded copy matches the signed
+original byte for byte by SHA-256. The 96-test passing CI result applies to the
+unchanged app source in this bundle.
+
+## Submission confirmed on November 3, 2026
+
+Google Play accepted the signed version-145 bundle. The production release was
+saved and **Send changes for review** was confirmed with the owner's existing
+authorization. At `14:47 UTC`, Publishing overview lists
+**145 (12.0.5) AI content reporting** under **Changes in review**, with
+**Start full rollout**. Google's automatic quick checks are still running;
+the Console says the changes will proceed to review when those checks succeed.
+No further submit action is pending from the owner at this point.
+
+- Production: release ID `13`, version code `145` only, **100% rollout** across
+  all **178 selected countries/regions**. **Managed publishing is off**, so the
+  approved release is configured to publish automatically.
+- Internal testing: release ID `49` was saved and published. The track is active
+  and now explicitly shows **145 (12.0.5) AI content reporting — Available to
+  internal testers**. The older version 144 is no longer the latest release.
+- Device coverage is unchanged from the previous release. The release review
+  showed **Ready to release**, without upload errors or displayed warnings.
+- The November 6 policy warning remains visible while Google evaluates the
+  correction. Production approval, public availability of version 145, and
+  removal of that warning have **not** yet been confirmed.
+
+Verified Console pages:
+
+- [Production submission](https://play.google.com/console/u/0/developers/4772708594176030332/app/4974117289022654668/publishing)
+- [Internal testing release](https://play.google.com/console/u/0/developers/4772708594176030332/app/4974117289022654668/tracks/4701415604792469412?tab=releases)
+
+The verified signed bundle was saved as
+`KORLIX-12.0.5-145-babyblend-video-reporting.aab`. No real support report or
+email was sent during validation.
