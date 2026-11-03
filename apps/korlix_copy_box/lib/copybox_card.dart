@@ -49,11 +49,12 @@ class _CopyBoxCardState extends State<CopyBoxCard> {
       (_text, widget.box.text),
       (_folder, widget.box.folder),
     ]) {
-      if (pair.$1.text != pair.$2)
+      if (pair.$1.text != pair.$2) {
         pair.$1.value = TextEditingValue(
           text: pair.$2,
           selection: TextSelection.collapsed(offset: pair.$2.length),
         );
+      }
     }
   }
 
@@ -76,7 +77,7 @@ class _CopyBoxCardState extends State<CopyBoxCard> {
   Widget build(BuildContext context) {
     final dark = Theme.of(context).brightness == Brightness.dark;
     final ink = dark ? const Color(0xFFF5F5F2) : copyboxInk;
-    final colorIndex = widget.box.color.clamp(0, boxColors.length - 1);
+    final colorIndex = widget.box.color.clamp(0, boxColors.length - 1).toInt();
     final words = _text.text.trim().isEmpty
         ? 0
         : _text.text.trim().split(RegExp(r'\s+')).length;

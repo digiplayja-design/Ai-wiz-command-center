@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:korlix_copy_box/copybox_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
+import 'package:shared_preferences_platform_interface/types.dart';
 
 const _date = '2026-11-03T10:00:00.000Z';
 

@@ -42,6 +42,12 @@ repository access, no persisted checkout credentials, and no signing secrets.
   questionnaires, app support/deletion URLs, and actual native behavior. The
   optional AI endpoint uses existing account usage rules; no standalone purchase
   product or pricing has been introduced.
+- Include optional AI content linked to the signed-in account in the store data
+  disclosures: refinement sends the chosen box's full text and instruction to
+  KORLIX and OpenAI, and the backend saves the request and response in account
+  generation history. Keeping the original or deleting a local box does not
+  remove that online history. Verify that first-use consent and Settings show
+  this processing before testing with real text.
 - Upload signed builds for internal testing/TestFlight, obtain device acceptance,
   and then submit the completed listings for review.
 
@@ -53,3 +59,14 @@ repository access, no persisted checkout credentials, and no signing secrets.
 - Android page-size requirements: https://developer.android.com/guide/practices/page-sizes
 
 These sources inform implementation; they do not establish review approval.
+
+## AI data handling evidence
+
+The existing backend implementation was inspected on
+`origin/release/k135z-backend-render-20260919`. In `backend/server.js`,
+`POST /api/generate` calls `saveGenerationHistory` for authenticated requests.
+That helper stores the account ID, full request prompt, generated response,
+language, result type, search indicator, and credit usage. Copy Box disables
+account memory for refinements; this flag does not bypass generation-history
+storage. Local box deletion does not call an online history-deletion route.
+This is source verification, not a live authenticated processing test.

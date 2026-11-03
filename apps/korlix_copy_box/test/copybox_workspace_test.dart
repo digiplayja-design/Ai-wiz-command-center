@@ -8,7 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:korlix_receipt_core/auth/korlix_token_store.dart';
+import 'package:korlix_auth_core/auth/korlix_token_store.dart';
 import 'package:korlix_copy_box/copybox_auth.dart';
 import 'package:korlix_copy_box/copybox_card.dart';
 import 'package:korlix_copy_box/copybox_home.dart';
@@ -22,8 +22,9 @@ void main() {
     clipboard = '';
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(SystemChannels.platform, (call) async {
-          if (call.method == 'Clipboard.setData')
+          if (call.method == 'Clipboard.setData') {
             clipboard = (call.arguments as Map)['text'] as String;
+          }
           if (call.method == 'Clipboard.getData') return {'text': clipboard};
           return null;
         });

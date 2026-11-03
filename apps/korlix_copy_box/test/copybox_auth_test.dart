@@ -5,8 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:korlix_copy_box/copybox_auth.dart';
-import 'package:korlix_receipt_core/auth/korlix_session_refresh.dart';
-import 'package:korlix_receipt_core/auth/korlix_token_store.dart';
+import 'package:korlix_auth_core/auth/korlix_session_refresh.dart';
+import 'package:korlix_auth_core/auth/korlix_token_store.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 String token({
@@ -50,9 +50,26 @@ class MemorySecureBackend implements KorlixSecureTokenBackend {
     return value;
   }
   @override
-  Future<void> write(String next) async => value = next;
+  Future<void> write(String next) async {
+    value = next;
+  }
   @override
-  Future<void> delete() async => value = null;
+  Future<void> delete() async {
+    value = null;
+  }
+}
+
+class FailingClearTokenStore extends KorlixTokenStore {
+  FailingClearTokenStore()
+      : super(namespace: 'korlix_copybox', useSecureStorage: false);
+
+  bool failClear = true;
+
+  @override
+  Future<void> clear() async {
+    if (failClear) throw const KorlixTokenStorageException();
+    await super.clear();
+  }
 }
 
 void main() {
@@ -231,6 +248,9 @@ void main() {
   });
 
   test('sign-out invalidates a pending restore before it can publish', () async {
+    SharedPreferences.setMockInitialValues({
+      'korlix_copybox_tokens_signed_out_v1': false,
+    });
     final secure = MemorySecureBackend()
       ..delayedRead = Completer<String?>()
       ..readStarted = Completer<void>();
@@ -282,6 +302,35 @@ void main() {
     expect(prefs.getString('korlix_copybox_access_token'), isNull);
     expect(prefs.getString('korlix_copybox_refresh_token'), isNull);
     expect(prefs.getBool('korlix_copybox_tokens_signed_out_v1'), isTrue);
+  });
+
+  test('failed durable logout retains the account and a visible error', () async {
+    final tokens = FailingClearTokenStore();
+    var remoteLogouts = 0;
+    final auth = controller((request) async {
+      if (request.url.path.endsWith('/signout')) {
+        remoteLogouts++;
+        return response({'success': true});
+      }
+      return response(signedIn());
+    }, tokenStore: tokens);
+    await connect(auth);
+    final scope = auth.accountScope;
+    final revision = auth.revision;
+    var publishedGuest = false;
+    auth.addListener(() { if (auth.session == null) publishedGuest = true; });
+    await expectLater(auth.signOut(), throwsA(
+      isA<CopyBoxAuthException>().having((e) => e.code, 'code', 'local_signout_failed'),
+    ));
+    expect(auth.accountScope, scope);
+    expect(auth.revision, greaterThan(revision));
+    expect(publishedGuest, isFalse);
+    expect(remoteLogouts, 0);
+    tokens.failClear = false;
+    await auth.signOut();
+    expect(publishedGuest, isTrue);
+    expect(auth.session, isNull);
+    expect(remoteLogouts, 1);
   });
 
   test('an old remote logout finishes before the same device logs in again', () async {
@@ -433,6 +482,34 @@ void main() {
     await auth.signOut();
     result.complete(response({'content': 'Private result'}));
     await assertion;
+  });
+
+  test('work started during a pending account switch cannot publish afterward', () async {
+    final loginReply = Completer<http.Response>();
+    final loginStarted = Completer<void>();
+    final rewriteReply = Completer<http.Response>();
+    final rewriteStarted = Completer<void>();
+    var logins = 0;
+    final auth = controller((request) async {
+      if (request.url.path.endsWith('/signin')) {
+        if (logins++ == 0) return response(signedIn());
+        loginStarted.complete();
+        return loginReply.future;
+      }
+      rewriteStarted.complete();
+      return rewriteReply.future;
+    });
+    await connect(auth);
+    final switching = auth.authenticate(email: 'other@example.test', password: 'secure-password');
+    await loginStarted.future;
+    final rewrite = auth.rewrite('Polish', 'First account source');
+    final assertion = expectLater(rewrite, throwsA(isA<KorlixSessionChanged>()));
+    await rewriteStarted.future;
+    loginReply.complete(response(signedIn(access: token(user: 'second-user'))));
+    expect(await switching, isTrue);
+    rewriteReply.complete(response({'content': 'First account result'}));
+    await assertion;
+    expect(jsonDecode(auth.accountScope!)[1], 'second-user');
   });
 
   test('account deletion uses shared account route and requires an acknowledgement', () async {

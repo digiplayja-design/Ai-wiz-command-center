@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -9,7 +8,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:korlix_receipt_core/privacy/korlix_third_party_ai_consent.dart';
+import 'package:korlix_auth_core/privacy/korlix_third_party_ai_consent.dart';
 
 import 'copybox_auth.dart';
 import 'copybox_auth_screen.dart';
@@ -131,11 +130,12 @@ class _CopyBoxHomeState extends State<CopyBoxHome> with WidgetsBindingObserver {
       }
       return true;
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _status = 'Save failed. Export a backup or retry Save All.';
           _saveFailed = true;
         });
+      }
       return false;
     }
   }
@@ -249,8 +249,9 @@ class _CopyBoxHomeState extends State<CopyBoxHome> with WidgetsBindingObserver {
         allowedExtensions: [plainText ? 'txt' : 'json'],
         bytes: bytes,
       );
-      if (mounted && path != null)
+      if (mounted && path != null) {
         _message('Export saved. Keep your backup in a safe place.');
+      }
     } catch (_) {
       _message(
         'Export could not be saved. Try Share backup or copy your boxes.',
@@ -296,18 +297,20 @@ class _CopyBoxHomeState extends State<CopyBoxHome> with WidgetsBindingObserver {
       );
       if (!mounted || picked == null) return;
       final file = picked.files.single;
-      if (file.size > 5 * 1024 * 1024 || file.bytes == null)
+      if (file.size > 5 * 1024 * 1024 || file.bytes == null) {
         throw const FormatException(
           'Choose a readable file smaller than 5 MB.',
         );
+      }
       final imported = parseImport(
         utf8.decode(file.bytes!),
         plainText: plainText,
       );
-      if (_boxes.length + imported.length > 1000)
+      if (_boxes.length + imported.length > 1000) {
         throw const FormatException(
           'There is not enough room. The workspace limit is 1,000 boxes, including trash.',
         );
+      }
       // Validate the complete combined snapshot before offering an import.
       exportBackup([..._boxes, ...imported]);
       final approved = await showDialog<bool>(
@@ -403,8 +406,9 @@ class _CopyBoxHomeState extends State<CopyBoxHome> with WidgetsBindingObserver {
           if (!mounted ||
               clip?.text?.isNotEmpty != true ||
               !_boxes.contains(box) ||
-              box.trashed)
+              box.trashed) {
             return;
+          }
           final combined = box.text.isEmpty
               ? clip!.text!
               : '${box.text}\n${clip!.text!}';
@@ -557,6 +561,11 @@ class _CopyBoxHomeState extends State<CopyBoxHome> with WidgetsBindingObserver {
     final consent = await ensureKorlixThirdPartyAiConsent(
       context: context,
       featureName: 'COPY Box text refinement',
+      additionalDisclosure:
+          'This sends the full text of this box and your refinement instruction '
+          'to KORLIX and OpenAI. KORLIX saves the request and generated response '
+          'in your account’s AI history, even if you keep the original. '
+          'Deleting a local box does not remove that online history.',
       providers: const {KorlixThirdPartyAiProvider.openAi},
       dataCategories: const {
         KorlixThirdPartyAiDataCategory.typedTextAndPrompts,
@@ -566,8 +575,9 @@ class _CopyBoxHomeState extends State<CopyBoxHome> with WidgetsBindingObserver {
         !consent ||
         widget.auth.revision != revision ||
         box.text != original ||
-        box.trashed)
+        box.trashed) {
       return;
+    }
     setState(() => _busyId = box.id);
     try {
       final result = await widget.auth.rewrite(action, original);
@@ -585,8 +595,9 @@ class _CopyBoxHomeState extends State<CopyBoxHome> with WidgetsBindingObserver {
           ),
         ),
       );
-      if (!mounted || widget.auth.revision != revision || choice == null)
+      if (!mounted || widget.auth.revision != revision || choice == null) {
         return;
+      }
       if (choice == 'new') {
         await _newBox(
           title: '${box.title.isEmpty ? 'Refined text' : box.title} · $action',
@@ -741,6 +752,11 @@ class _CopyBoxHomeState extends State<CopyBoxHome> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final wide =
         MediaQuery.sizeOf(context).width >= 1000 &&
+        MediaQuery.sizeOf(context).height -
+                MediaQuery.viewInsetsOf(context).bottom -
+                MediaQuery.paddingOf(context).vertical -
+                80 >=
+            480 &&
         MediaQuery.textScalerOf(context).scale(16) < 24;
     return Scaffold(
       appBar: AppBar(
@@ -1365,7 +1381,13 @@ class _CopyBoxHomeState extends State<CopyBoxHome> with WidgetsBindingObserver {
     _panel(
       icon: Icons.privacy_tip_outlined,
       title: 'Your words, your choice',
-      description: 'Normal editing is saved locally in this app. AI refinement sends the chosen text to KORLIX and OpenAI after your permission. Export and sharing send only the file or text you choose. Local box storage and exported backups are not encrypted by COPY Box.',
+      description:
+          'Editing saves boxes on this device. With your permission, AI refinement '
+          'sends the selected box’s full text and instruction to KORLIX and OpenAI. '
+          'KORLIX saves the request and response in your account’s AI history, '
+          'even if you keep the original. Deleting a local box does not remove '
+          'this online history. Sharing and export send the content you choose. '
+          'Local boxes and backups are not encrypted by COPY Box.',
       actions: [
         TextButton(
           onPressed: () => _openUrl(

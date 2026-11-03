@@ -344,7 +344,7 @@ class CopyBoxStore {
       }
     });
     // Consume only the queue's error; the individual caller still receives it.
-    _pendingWrite = write.then<void>((_) {}, onError: (Object _, StackTrace __) {});
+    _pendingWrite = write.then<void>((_) {}, onError: (Object _, StackTrace _) {});
     await write;
   }
 }

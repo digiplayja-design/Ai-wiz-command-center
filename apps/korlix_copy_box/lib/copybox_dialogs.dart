@@ -186,52 +186,75 @@ class _CopyBoxFocusEditorState extends State<CopyBoxFocusEditor> {
         ],
       ),
       body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 860),
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    widget.title.isEmpty
-                        ? 'Just you and your words.'
-                        : widget.title,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final title = widget.title.isEmpty
+                ? 'Just you and your words.'
+                : widget.title;
+            final scrolls = constraints.maxHeight < 480 ||
+                MediaQuery.textScalerOf(context).scale(18) >= 27;
+            final editor = TextField(
+              key: const Key('focus-text'),
+              controller: _text,
+              expands: true,
+              minLines: null,
+              maxLines: null,
+              maxLength: 100000,
+              textCapitalization: TextCapitalization.sentences,
+              keyboardType: TextInputType.multiline,
+              style: const TextStyle(fontSize: 18, height: 1.7),
+              decoration: const InputDecoration(
+                hintText: 'Give your next idea some room.',
+                counterText: '',
+              ),
+              onChanged: (_) => setState(() {}),
+            );
+            final content = Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Semantics(
+                  header: true,
+                  label: title,
+                  excludeSemantics: true,
+                  child: Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
                       fontSize: 30,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -1,
                     ),
                   ),
-                  const SizedBox(height: 20),
-                  Expanded(
-                    child: TextField(
-                      key: const Key('focus-text'),
-                      controller: _text,
-                      expands: true,
-                      minLines: null,
-                      maxLines: null,
-                      maxLength: 100000,
-                      textCapitalization: TextCapitalization.sentences,
-                      keyboardType: TextInputType.multiline,
-                      style: const TextStyle(fontSize: 18, height: 1.7),
-                      decoration: const InputDecoration(
-                        hintText: 'Give your next idea some room.',
-                        counterText: '',
+                ),
+                const SizedBox(height: 20),
+                if (scrolls)
+                  SizedBox(height: 260, child: editor)
+                else
+                  Expanded(child: editor),
+                const SizedBox(height: 14),
+                Text(
+                  '${_text.text.length} characters · Changes are saved when you choose Save & close.',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ],
+            );
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 860),
+                child: scrolls
+                    ? SingleChildScrollView(
+                        key: const Key('focus-editor-scroll'),
+                        padding: const EdgeInsets.all(24),
+                        child: content,
+                      )
+                    : Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: content,
                       ),
-                      onChanged: (_) => setState(() {}),
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    '${_text.text.length} characters · Changes are saved when you choose Save & close.',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ],
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     ),
@@ -357,10 +380,11 @@ class _ReportDialogState extends State<_ReportDialog> {
       await widget.onReport(_reason!, _details.text.trim());
       if (mounted) Navigator.pop(context, true);
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () => _error = 'We could not confirm this report. It may already be saved. Contact support@korlixdeveloper.com before submitting it again.',
         );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

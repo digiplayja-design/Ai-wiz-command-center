@@ -4,9 +4,9 @@ import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:korlix_receipt_core/auth/korlix_session_refresh.dart';
-import 'package:korlix_receipt_core/auth/korlix_token_store.dart';
-import 'package:korlix_receipt_core/privacy/korlix_third_party_ai_consent.dart';
+import 'package:korlix_auth_core/auth/korlix_session_refresh.dart';
+import 'package:korlix_auth_core/auth/korlix_token_store.dart';
+import 'package:korlix_auth_core/privacy/korlix_third_party_ai_consent.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const copyBoxBackendUrl = String.fromEnvironment(
@@ -101,6 +101,7 @@ class CopyBoxAuthController extends ChangeNotifier {
   Future<void>? _initialization;
   Future<void>? _signingOut;
   Timer? _refreshTimer;
+  DateTime? _refreshRetryAfter;
   String? _deviceId;
   bool _disposed = false;
   bool _ready = false;
@@ -121,7 +122,7 @@ class CopyBoxAuthController extends ChangeNotifier {
   String get _deviceLabel => 'KORLIX Copy Box ($_platform)';
 
   Map<String, String> get deviceHeaders => {
-    if (_deviceId != null) 'X-Korlix-Device-Id': _deviceId!,
+    'X-Korlix-Device-Id': ?_deviceId,
     'X-Korlix-Device-Label': _deviceLabel,
     'X-Korlix-Platform': _platform,
     'X-Korlix-App': 'korlix_copybox',
@@ -273,6 +274,9 @@ class CopyBoxAuthController extends ChangeNotifier {
       _checkCurrent(epoch);
       restoreError = null;
       _lastReportId = null;
+      // Also invalidate work started against the old account while this login
+      // request was pending. The new session owns a fresh revision.
+      ++_revision;
       _publish(next);
       return true;
     } catch (_) {
@@ -347,6 +351,7 @@ class CopyBoxAuthController extends ChangeNotifier {
     if (_disposed) return;
     _validateSession(value);
     _session = value;
+    _refreshRetryAfter = null;
     KorlixThirdPartyAiConsent.setAccountScope(accountScope);
     _scheduleRefresh();
     notifyListeners();
@@ -355,18 +360,37 @@ class CopyBoxAuthController extends ChangeNotifier {
   void _scheduleRefresh() {
     _refreshTimer?.cancel();
     if (_disposed) return;
-    final delay = sessions.nextRefreshDelay();
+    var delay = sessions.nextRefreshDelay();
+    final retry = _refreshRetryAfter?.difference(DateTime.now());
+    if (delay != null && retry != null && retry > delay) delay = retry;
     if (delay != null) _refreshTimer = Timer(delay, resume);
   }
 
   Future<void> _clear() async {
-    ++_revision;
+    final epoch = ++_revision;
+    _refreshTimer?.cancel();
+    try {
+      // The token store persists a logout marker before deleting credentials.
+      // Keep the account screen alive if that marker cannot be saved, so the
+      // caller can show the failure and no successful logout is implied.
+      await _tokens.clear();
+    } catch (_) {
+      if (_isCurrent(epoch)) {
+        _refreshRetryAfter = DateTime.now().add(const Duration(seconds: 30));
+        _scheduleRefresh();
+      }
+      throw const CopyBoxAuthException(
+        "Copy Box could not finish clearing this device's saved sign-in. "
+        'Please try signing out again.',
+        code: 'local_signout_failed',
+      );
+    }
+    _checkCurrent(epoch);
     _session = null;
     _lastReportId = null;
-    _refreshTimer?.cancel();
+    _refreshRetryAfter = null;
     KorlixThirdPartyAiConsent.setAccountScope(null);
-    if (!_disposed) notifyListeners();
-    await _tokens.clear();
+    notifyListeners();
   }
 
   Future<void> signOut() {

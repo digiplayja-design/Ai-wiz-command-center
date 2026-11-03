@@ -6,16 +6,15 @@ on:
     paths:
       - .github/workflows/korlix-copybox-validation.yml
       - apps/korlix_copy_box/**
-      - packages/korlix_receipt_core/**
+      - packages/korlix_auth_core/**
       - scripts/ci/validate-copybox-native.py
   push:
     branches:
-      - feature/korlix-copy-box-20261103
       - main
     paths:
       - .github/workflows/korlix-copybox-validation.yml
       - apps/korlix_copy_box/**
-      - packages/korlix_receipt_core/**
+      - packages/korlix_auth_core/**
       - scripts/ci/validate-copybox-native.py
 
 permissions:
@@ -50,6 +49,21 @@ jobs:
           cache: true
       - name: Check independent app identity and platform assets
         run: python3 scripts/ci/validate-copybox-native.py
+      - name: Validate shared account and privacy package
+        working-directory: packages/korlix_auth_core
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter config --no-analytics
+          dart --disable-analytics
+          if [[ -f pubspec.lock ]]; then
+            flutter pub get --enforce-lockfile
+          else
+            flutter pub get
+          fi
+          dart format --output=none lib test
+          flutter analyze --no-pub
+          flutter test --no-pub --reporter expanded
       - name: Resolve dependencies and validate app
         working-directory: apps/korlix_copy_box
         shell: bash
@@ -82,7 +96,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Keep web preview
-        if: always()
+        if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: korlix-copybox-web
@@ -103,6 +117,14 @@ jobs:
         with:
           name: korlix-copybox-resolved-lockfile
           path: apps/korlix_copy_box/pubspec.lock
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Keep shared package lockfile for review
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: korlix-auth-core-resolved-lockfile
+          path: packages/korlix_auth_core/pubspec.lock
           if-no-files-found: ignore
           retention-days: 14
 

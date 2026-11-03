@@ -8,7 +8,7 @@ for KORLIX AI, Messenger, or Receipt Wiz.
 - Display name: **KORLIX COPY Box**
 - Initial source version: `1.0.0+1`
 - Flutter: `3.47.7`; existing shared authentication/privacy package:
-  `../../packages/korlix_receipt_core`
+  `../../packages/korlix_auth_core`
 
 ## Run and validate
 
@@ -63,9 +63,18 @@ new writes. The app reports save failures instead of claiming success. A sudden
 OS kill before a pending write completes can still lose recent keystrokes.
 
 Account changes rebuild the navigator and workspace, rejecting late AI results.
-The local editing view makes no AI requests. Selected text is transmitted only on
-an explicit AI action after consent. Report output sends the reason, details, and
-an excerpt of the output to the existing reporting endpoint.
+The local editing view makes no AI requests. An explicit refinement action sends
+the chosen box's full text and the refinement instruction to KORLIX and OpenAI
+after consent. The existing `/api/generate` route saves the complete request
+prompt and generated response in the shared account's generation history before
+returning the result. Keeping the original in draft review does not undo that
+server-side save; deleting a local box does not delete online generation history.
+This processing is disclosed in the first AI consent dialog and Settings.
+
+Rewrite requests disable account memory, but this does not disable generation
+history. Boxes, folders, trash, and local version history are not automatically
+uploaded or synchronized. Report output separately sends the reason, details,
+and an excerpt of the output to the existing reporting endpoint.
 
 ## Branding
 

@@ -60,7 +60,11 @@ your words.
 Local writing does not require sign-in. Local boxes and signed-in workspaces are
 separate. Boxes are stored on your device; automatic cross-device synchronization
 is not included. Exported backups contain readable text, including history and
-trash. AI refinement sends your chosen text to KORLIX and OpenAI after consent.
+trash. After consent, AI refinement sends the chosen box's full text and your
+refinement instruction to KORLIX and OpenAI.
+KORLIX saves the request and generated response in your account's AI history,
+even if you keep the original. Deleting a local box does not remove this online
+history.
 
 Support: support@korlixdeveloper.com
 Privacy: https://www.korlixdeveloper.com/privacy-policy.html

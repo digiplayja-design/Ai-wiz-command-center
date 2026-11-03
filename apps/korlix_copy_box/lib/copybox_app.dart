@@ -41,18 +41,20 @@ class _CopyBoxAppState extends State<CopyBoxApp> with WidgetsBindingObserver {
         _error = null;
       });
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(
           () =>
               _error = 'Your workspace could not be opened. Please try again.',
         );
+      }
     }
   }
 
   Future<void> _changeTheme(ThemeMode mode) async {
     final saved = await _prefs!.setString('copybox_theme', mode.name);
-    if (!saved)
+    if (!saved) {
       throw StateError('Appearance could not be saved. Please try again.');
+    }
     if (mounted) setState(() => _theme = mode);
   }
 
@@ -71,7 +73,7 @@ class _CopyBoxAppState extends State<CopyBoxApp> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: widget.auth,
-    builder: (_, __) => MaterialApp(
+    builder: (_, _) => MaterialApp(
       key: ValueKey(widget.auth.accountScope ?? 'local'),
       debugShowCheckedModeBanner: false,
       title: 'KORLIX COPY Box',
