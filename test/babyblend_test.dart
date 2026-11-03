@@ -12,7 +12,7 @@ import 'package:ai_wiz_command_center/babyblend/babyblend_client.dart';
 import 'package:ai_wiz_command_center/babyblend/babyblend_screen.dart';
 
 final photo = base64Decode(
-  'iVBORw0KGgoAAAANSUhEUgAAAHgAAABQCAIAAABd+SbeAAAAzElEQVR4nO3QQRHAIADAMEDxRKEBfVOx8liioNf57DP43rod8BdGR4yOGB0xOmJ0xOiI0RGjI0ZHjI4YHTE6YnTE6IjREaMjRkeMjhgdMTpidMToiNERoyNGR4yOGB0xOmJ0xOiI0RGjI0ZHjI4YHTE6YnTE6IjREaMjRkeMjhgdMTpidMToiNERoyNGR4yOGB0xOmJ0xOiI0RGjI0ZHjI4YHTE6YnTE6IjREaMjRkeMjhgdMTpidMToiNERoyNGR4yOGB0xOmJ0xOiI0RGjI0ZHjI4YHTE6YnTE6IjREaMjRkeMjhgdMTpidMToiNERoyNGR4yOGB0xOmJ0xOjIC4/5Amrf5r6wAAAAAElFTkSuQmCC',
+  'iVBORw0KGgoAAAANSUhEUgAAAHgAAABQCAIAAABd+SbeAAAAzElEQVR4nO3QQRHAIADAMEDxRKEBfVOx8liioNf57DP43rod8BdGR4yOGB0xOmJ0xOiI0RGjI0ZHjI4YHTE6YnTE6IjREaMjRkeMjhgdMTpidMToiNERoyNGR4yOGB0xOmJ0xOiI0RGjI0ZHjI4YHTE6YnTE6IjREaMjRkeMjhgdMTpidMToiNERoyNGR4yOGB0xOmJ0xOiI0RGjI0ZHjI4YHTE6YnTE6IjREaMjRkeMjhgdMTpidMToiNERoyNGR4yOGB0xOmJ0xOjIC4/5Amrf5r6wAAAAAElFTkSuQmCC',
 );
 Map<String, dynamic> asset(
   String id, {
@@ -51,8 +51,15 @@ Map<String, dynamic> makeJob(
 };
 
 class FakeBlend extends BabyBlendClient {
-  FakeBlend()
-    : super(backendBaseUrl: 'https://fixture.test', headersBuilder: () => {});
+  FakeBlend({
+    http.Client? transport,
+    Map<String, String> Function()? headersBuilder,
+    super.sessionChanges,
+  }) : super(
+         backendBaseUrl: 'https://fixture.test',
+         headersBuilder: headersBuilder ?? () => {},
+         client: transport,
+       );
   List<Map<String, dynamic>> assets = [asset('source-1'), asset('source-2')],
       jobs = [];
   List<String> uploadKeys = [], startKeys = [];
@@ -62,6 +69,8 @@ class FakeBlend extends BabyBlendClient {
       failRemove = false,
       finish = false;
   int starts = 0, polls = 0, deletes = 0, downloads = 0;
+  final downloadedIds = <String>[];
+  Future<Uint8List>? pendingImage;
   @override
   Future<Map<String, dynamic>> load() async => {
     'assets': assets.map((a) => Map<String, dynamic>.from(a)).toList(),
@@ -124,7 +133,8 @@ class FakeBlend extends BabyBlendClient {
   @override
   Future<Uint8List> imageBytes(String id) async {
     downloads++;
-    return photo;
+    downloadedIds.add(id);
+    return pendingImage == null ? photo : await pendingImage!;
   }
 }
 

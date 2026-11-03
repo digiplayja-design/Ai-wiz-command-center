@@ -1,0 +1,65 @@
+name: Korlix AI reporting policy validation
+on:
+  workflow_dispatch:
+  push:
+    branches: [fix/korlix-ai-policy-reporting-20261103]
+    paths:
+      - lib/**
+      - test/support/**
+      - test/babyblend*.dart
+      - test/image_to_video_reporting_test.dart
+      - .github/workflows/korlix-ai-reporting-validation.yml
+permissions:
+  contents: read
+concurrency:
+  group: korlix-ai-reporting-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CI: 'true'
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
+  DART_SUPPRESS_ANALYTICS: 'true'
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Block instance metadata
+        run: |
+          set -euo pipefail
+          for network in 169.254.0.0/16 100.100.100.200/32; do
+            sudo iptables -I OUTPUT 1 -d "$network" -j REJECT
+          done
+          for network in fe80::/10 fd00:ec2::254/128; do
+            sudo ip6tables -I OUTPUT 1 -d "$network" -j REJECT
+          done
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - name: Resolve pinned dependencies
+        run: flutter pub get --enforce-lockfile
+      - name: Analyze reporting implementation
+        run: flutter analyze --no-pub lib/support lib/babyblend test/support test/babyblend_test.dart test/babyblend_reporting_test.dart
+      - name: Exercise reporting across routes and generated media
+        run: |
+          flutter test --no-pub --reporter expanded \
+            test/support test/imagine_studio_test.dart test/logo_studio_test.dart \
+            test/picture_studio_report_test.dart test/portrait_preview_report_test.dart \
+            test/image_to_video_reporting_test.dart \
+            test/babyblend_test.dart test/babyblend_reporting_test.dart
+      - name: Compile Android integration
+        run: flutter build apk --debug --no-pub
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: korlix-ai-reporting-android-validation
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14

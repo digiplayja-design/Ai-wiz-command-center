@@ -5,6 +5,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart' as ip;
 import 'babyblend_client.dart';
 import 'babyblend_saver.dart';
+import '../support/korlix_saved_output_report_dialog.dart';
 
 const _ink = Color(0xFF152D46),
     _teal = Color(0xFF087E91),
@@ -49,6 +50,8 @@ class _BabyBlendScreenState extends State<BabyBlendScreen> {
       _locked = false,
       _permission = false,
       _dialogOpen = false;
+  bool _reporting = false;
+  final _reportSession = ValueNotifier(0);
   int _tab = 0;
   Timer? _timer;
   bool get _running => _job?['state'] == 'running';
@@ -89,13 +92,13 @@ class _BabyBlendScreenState extends State<BabyBlendScreen> {
   void dispose() {
     _timer?.cancel();
     widget.client.dispose();
+    _reportSession.dispose();
     super.dispose();
   }
 
   void _lock() {
     if (!mounted) return;
     _timer?.cancel();
-    if (_dialogOpen) Navigator.of(context).pop();
     setState(() {
       _locked = true;
       _assets = [];
@@ -103,6 +106,8 @@ class _BabyBlendScreenState extends State<BabyBlendScreen> {
       _job = null;
       _portrait = _error = _requestKey = null;
     });
+    _reportSession.value++;
+    if (_dialogOpen) Navigator.of(context).pop();
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
   }
 
@@ -391,6 +396,47 @@ class _BabyBlendScreenState extends State<BabyBlendScreen> {
       if (mounted && !_locked) setState(() => _error = '$e');
     } finally {
       if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _reportPortrait(String id) async {
+    final selected = _asset(id);
+    if (_locked || _reporting || selected?['kind'] != 'portrait') return;
+    final age = _ages[selected?['details']?['age']] ?? 'Portrait';
+    final style = _styles[selected?['details']?['style']] ?? 'AI imagining';
+    bool current() => mounted && !_locked && widget.client.isSessionCurrent;
+    setState(() => _reporting = true);
+    _dialogOpen = true;
+    try {
+      final receipt = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => KorlixSavedOutputReportDialog(
+          title: 'Report portrait',
+          description:
+              'Tell us what needs review. This generated portrait and its '
+              'creation options will be sent privately to KORLIX support. '
+              'The adult reference photos will not be attached.',
+          sessionChanges: Listenable.merge([
+            widget.client.sessionChanges,
+            _reportSession,
+          ]),
+          isSessionCurrent: current,
+          submitReport: (reason, details) => widget.client.reportPortrait(
+            id: id,
+            age: age,
+            style: style,
+            reason: reason,
+            details: details,
+          ),
+        ),
+      );
+      if (receipt != null && current()) {
+        _message('Report received. Reference: $receipt');
+      }
+    } finally {
+      _dialogOpen = false;
+      if (mounted) setState(() => _reporting = false);
     }
   }
 
@@ -704,6 +750,14 @@ class _BabyBlendScreenState extends State<BabyBlendScreen> {
                 label: const Text('Save portrait'),
               ),
               OutlinedButton.icon(
+                key: const Key('babyblend-result-report'),
+                onPressed: _reporting
+                    ? null
+                    : () => _reportPortrait(_portrait!),
+                icon: const Icon(Icons.flag_outlined),
+                label: const Text('Report portrait'),
+              ),
+              OutlinedButton.icon(
                 onPressed: _working || _disabledReason != null ? null : _start,
                 icon: const Icon(Icons.refresh),
                 label: const Text('Try another look'),
@@ -819,6 +873,17 @@ class _BabyBlendScreenState extends State<BabyBlendScreen> {
                                 ),
                               ),
                             ],
+                          ),
+                          OutlinedButton.icon(
+                            key: ValueKey('babyblend-gallery-report-${a['id']}'),
+                            onPressed: a['state'] == 'ready' && !_reporting
+                                ? () => _reportPortrait(a['id'])
+                                : null,
+                            icon: const Icon(Icons.flag_outlined, size: 18),
+                            label: const Text(
+                              'Report portrait',
+                              textAlign: TextAlign.center,
+                            ),
                           ),
                         ],
                       ),

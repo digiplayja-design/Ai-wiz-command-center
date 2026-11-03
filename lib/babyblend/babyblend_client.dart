@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
+import '../support/korlix_ai_report_client.dart';
 
 String babyBlendRequestKey() {
   final random = Random.secure();
@@ -40,6 +41,11 @@ class BabyBlendClient {
   String? _scope;
   bool _closed = false, _changed = false;
   VoidCallback? onAccessDenied;
+  bool get isSessionCurrent =>
+      !_closed &&
+      !_changed &&
+      (sessionChanges == null ||
+          (_scope != null && _scope == _readScope()));
   String? _readScope([Map<String, String>? headers]) {
     try {
       final value = (headers ?? headersBuilder()).entries
@@ -256,6 +262,41 @@ class BabyBlendClient {
     http.Request('GET', _uri('/assets/$id/file'))
       ..headers.addAll(headersBuilder()),
   )).bodyBytes;
+
+  Future<String> reportPortrait({
+    required String id,
+    required String age,
+    required String style,
+    required String reason,
+    required String details,
+  }) async {
+    _guard();
+    // Fetch the selected generated portrait through the authenticated API.
+    // Parent reference photos and their identifiers are not attached.
+    final image = await imageBytes(id);
+    _guard();
+    final headers = headersBuilder();
+    _guard(headers);
+    final receipt = await submitKorlixAiReport(
+      endpoint: Uri.parse(
+        '${backendBaseUrl.replaceFirst(RegExp(r'/+$'), '')}/api/report-output',
+      ),
+      headers: headers,
+      reason: reason,
+      details: details,
+      prompt: 'BabyBlend fictional portrait. Age: $age. Style: $style.',
+      outputSummary: 'Selected BabyBlend generated portrait',
+      contentId: id,
+      contentType: 'image',
+      appArea: 'babyblend',
+      imageDataUrl: 'data:image/png;base64,${base64Encode(image)}',
+      isCurrent: () => isSessionCurrent,
+      client: _http,
+    );
+    _guard();
+    return receipt;
+  }
+
   void dispose() {
     if (_closed) return;
     _closed = true;
