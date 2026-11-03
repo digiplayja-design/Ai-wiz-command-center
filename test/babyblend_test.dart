@@ -54,12 +54,11 @@ class FakeBlend extends BabyBlendClient {
   FakeBlend({
     http.Client? transport,
     Map<String, String> Function()? headersBuilder,
-    Listenable? sessionChanges,
+    super.sessionChanges,
   }) : super(
          backendBaseUrl: 'https://fixture.test',
          headersBuilder: headersBuilder ?? () => {},
          client: transport,
-         sessionChanges: sessionChanges,
        );
   List<Map<String, dynamic>> assets = [asset('source-1'), asset('source-2')],
       jobs = [];
