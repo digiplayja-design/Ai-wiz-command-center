@@ -210,6 +210,7 @@ class _CopyBoxFocusEditorState extends State<CopyBoxFocusEditor> {
               key: const Key('focus-text'),
               controller: _text,
               expands: true,
+              textAlignVertical: TextAlignVertical.top,
               minLines: null,
               maxLines: null,
               maxLength: 100000,
