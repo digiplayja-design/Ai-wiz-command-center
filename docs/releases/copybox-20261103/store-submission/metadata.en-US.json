@@ -206,7 +206,7 @@
         "data_usage_step_reached": true,
         "preview_step_reached": false,
         "draft_saved": true,
-        "save_confirmation": "Save draft succeeded",
+        "save_confirmation": "Your changes have been saved",
         "final_declaration_completed": false,
         "submitted_for_review": false,
         "published": false,
@@ -225,11 +225,11 @@
         ],
         "selected_data_type_count": 6,
         "data_type_selection_saved": true,
-        "data_usage_details_completed_count": 0,
+        "data_usage_details_completed_count": 5,
         "data_usage_details_required_count": 6,
-        "per_type_usage_answers_saved": false,
+        "per_type_usage_answers_saved": true,
         "latest_save_draft_succeeded": true,
-        "remaining_questions_scope": "All six per-type usage answers and final preview remain incomplete; processor-sharing classification, purposes, retention and deletion fulfilment must be reflected accurately. The saved data-only answer describes requesting deletion, not proof of completed erasure.",
+        "remaining_questions_scope": "Five of six usage rows are saved. Other user-generated content is Not started and Next is disabled pending the precise active OpenAI API inputs/outputs model-improvement opt-in for its sharing classification. Standard provider roles are resolved; operational deletion fulfilment is separate.",
         "analytics_purpose_required_for": [
           "User IDs",
           "Device or other IDs",
@@ -245,7 +245,147 @@
           "draft_saved": true,
           "save_confirmation": "Your changes have been saved",
           "scope": "Earlier bounded Step 2 draft before the later saved six-type/Step 4 update."
-        }
+        },
+        "provider_sharing_audit": {
+          "status": "standard_provider_roles_resolved_ugc_model_improvement_opt_in_unobserved",
+          "service_provider_exception_supported_for": [
+            "Supabase",
+            "Render",
+            "Resend",
+            "OpenAI API default processing"
+          ],
+          "explicit_os_share_export_user_initiated_exception_supported": true,
+          "additional_dpa_signing_required_by_this_audit": false,
+          "zero_data_retention_proof_required": false,
+          "collected_yes_shared_no_supported_for": [
+            "Email address",
+            "User IDs",
+            "Other info",
+            "App interactions",
+            "Device or other IDs"
+          ],
+          "non_ephemeral_for_all_six_selected_types": true,
+          "optional_collection_relative_to_guest_writing_for_all_six": true,
+          "ugc_sharing_classification_confirmed": false,
+          "openai_api_input_output_model_improvement_opt_in_observed": false,
+          "openai_api_input_output_model_improvement_opt_in_value": null,
+          "documented_default_opt_in_state": "Disabled; this is the official default, not an observation of the active API organization setting.",
+          "remaining_provider_question": "Whether the active OpenAI API organization has opted in to sharing API inputs and outputs for model improvement, which determines the remaining Other user-generated content sharing classification.",
+          "payload_scope": {
+            "native_client_sends_tier_profile_persona_fields": false,
+            "server_adds_existing_coarse_tier_persona_context": true,
+            "openai_payload_includes_prompt_and_coarse_context": true,
+            "structured_account_email_device_age_policy_event_fields_forwarded_to_openai": false,
+            "other_info_exemption_scope": "Native age/policy/parent declarations; not a claim that the API receives only raw text."
+          },
+          "official_sources": [
+            "https://support.google.com/googleplay/android-developer/answer/10787469?hl=en",
+            "https://supabase.com/legal/customer-resources/data-processing-addendum",
+            "https://render.com/dpa",
+            "https://resend.com/legal/dpa",
+            "https://resend.com/security/gdpr",
+            "https://openai.com/policies/data-processing-addendum/",
+            "https://openai.com/policies/services-agreement/",
+            "https://help.openai.com/en/articles/10306912-sharing-feedback-evaluation-and-fine-tuning-data-and-api-inputs-and-outputs-with-openai"
+          ]
+        },
+        "historical_step4_zero_usage_snapshot": {
+          "last_step_reached": 4,
+          "selected_data_type_count": 6,
+          "data_usage_details_completed_count": 0,
+          "per_type_usage_answers_saved": false,
+          "draft_saved": true,
+          "scope": "Earlier saved type selection before the provider audit and five supported usage rows were completed."
+        },
+        "saved_usage_details_by_data_type": {
+          "Email address": {
+            "collected": true,
+            "shared": false,
+            "sharing_basis": "Service-provider exception supported by the provider audit",
+            "processed_ephemerally": false,
+            "collection_optional": true,
+            "purposes": [
+              "App functionality",
+              "Account management",
+              "Fraud prevention, security, and compliance"
+            ],
+            "usage_status": "Completed",
+            "saved_in_outer_draft": true
+          },
+          "User IDs": {
+            "collected": true,
+            "shared": false,
+            "sharing_basis": "Service-provider exception supported by the provider audit",
+            "processed_ephemerally": false,
+            "collection_optional": true,
+            "purposes": [
+              "App functionality",
+              "Account management",
+              "Fraud prevention, security, and compliance",
+              "Analytics"
+            ],
+            "usage_status": "Completed",
+            "saved_in_outer_draft": true
+          },
+          "Other info": {
+            "collected": true,
+            "shared": false,
+            "sharing_basis": "Service-provider exception supported by the provider audit",
+            "processed_ephemerally": false,
+            "collection_optional": true,
+            "purposes": [
+              "App functionality",
+              "Account management",
+              "Fraud prevention, security, and compliance"
+            ],
+            "usage_status": "Completed",
+            "saved_in_outer_draft": true
+          },
+          "App interactions": {
+            "collected": true,
+            "shared": false,
+            "sharing_basis": "Service-provider exception supported by the provider audit",
+            "processed_ephemerally": false,
+            "collection_optional": true,
+            "purposes": [
+              "App functionality",
+              "Analytics",
+              "Fraud prevention, security, and compliance"
+            ],
+            "usage_status": "Completed",
+            "saved_in_outer_draft": true
+          },
+          "Device or other IDs": {
+            "collected": true,
+            "shared": false,
+            "sharing_basis": "Service-provider exception supported by the provider audit",
+            "processed_ephemerally": false,
+            "collection_optional": true,
+            "purposes": [
+              "App functionality",
+              "Account management",
+              "Fraud prevention, security, and compliance",
+              "Analytics"
+            ],
+            "usage_status": "Completed",
+            "saved_in_outer_draft": true
+          }
+        },
+        "other_user_generated_content_usage": {
+          "status": "Not started",
+          "usage_answers_entered": false,
+          "sharing_classification_confirmed": false,
+          "pending_fact": "Active OpenAI API organization/project inputs-and-outputs sharing opt-in for model improvement; default Disabled is documented but the active setting is unobserved."
+        },
+        "all_per_type_usage_answers_saved": false,
+        "per_type_usage_answers_saved_scope": "Five completed supported rows only; Other user-generated content usage remains wholly unanswered.",
+        "observed_section_progress": {
+          "Personal info": "3/3",
+          "App interactions": "Completed",
+          "Other user-generated content": "Not started",
+          "Device or other IDs": "1/1"
+        },
+        "next_enabled": false
       },
       "advertising_id": {
         "uses_advertising_id": false,
@@ -257,8 +397,8 @@
       },
       "remaining_declarations": [
         "Finish Google Sign in details with working reviewer access and truthful full-access confirmation; its fresh server page still has neither Yes nor No selected and no saved reviewer record. Apple credential fields are populated and saved, but end-to-end COPY Box login/AI testing is outstanding.",
-        "Complete all six Data safety per-type usage details and preview from the saved Step 4 draft (0 of 6 complete), including applicable Analytics purposes for User IDs, Device or other IDs, and App interactions.",
-        "Complete target audience after Sign in details; accept the IARC agreement only after approval, then complete the actual content-rating questionnaire and remaining applicable declarations."
+        "Complete Other user-generated content usage after confirming the active OpenAI API inputs/outputs model-improvement sharing opt-in, then reach preview and finalize Data safety. Five of six usage rows are saved; UGC is Not started and Next is disabled.",
+        "Complete target audience after Sign in details and any remaining applicable declarations. IARC agreement acceptance and the 27-question capability questionnaire are complete, with generated ratings and fresh Completed readback; this did not submit the app for review or release."
       ],
       "government_apps": {
         "is_government_app": false,
@@ -276,14 +416,109 @@
         "first_screen_prepared": true,
         "public_support_contact_prepared": true,
         "category_prepared": "All Other App Types",
-        "agreement_checked": false,
-        "agreement_acceptance_approval_pending": true,
-        "next_attempted_once": true,
-        "validation_error": "Terms must be accepted",
-        "progressed_beyond_step1": false,
-        "questionnaire_completed": false,
-        "rating_generated": false,
-        "submitted": false
+        "agreement_checked": true,
+        "agreement_acceptance_approval_pending": false,
+        "progressed_beyond_step1": true,
+        "questionnaire_completed": true,
+        "rating_generated": true,
+        "submitted": true,
+        "historical_preapproval_first_screen": {
+          "agreement_checked": false,
+          "next_attempted_once": true,
+          "validation_error": "Terms must be accepted",
+          "progressed_beyond_step1": false,
+          "scope": "Earlier first-screen validation before the user approved IARC agreement acceptance."
+        },
+        "agreement_accepted": true,
+        "agreement_user_approval_received": true,
+        "public_support_contact_saved": true,
+        "category_saved": "All Other App Types",
+        "questionnaire_question_count": 27,
+        "source_backed_capability_questions_reviewed": true,
+        "frequency_questions_present": false,
+        "questionnaire_save_submitted": true,
+        "completion_status": "Completed",
+        "fresh_result_readback_verified": true,
+        "submitted_at_console_display": "Nov 4, 2026, 3:17 PM",
+        "submitted_at_timezone_inferred": false,
+        "certificate_id_display": "-",
+        "certificate_id": null,
+        "ratings": [
+          {
+            "territory": "Brazil",
+            "authority": "ClassInd",
+            "rating": "14+"
+          },
+          {
+            "territory": "North America",
+            "authority": "ESRB",
+            "rating": "Teen"
+          },
+          {
+            "territory": "Europe",
+            "authority": "PEGI",
+            "rating": "Parental Guidance"
+          },
+          {
+            "territory": "Germany",
+            "authority": "USK",
+            "rating": "12+"
+          },
+          {
+            "territory": "Rest of world",
+            "authority": "IARC",
+            "rating": "12+"
+          },
+          {
+            "territory": "Russia",
+            "rating": "12+"
+          },
+          {
+            "territory": "South Korea",
+            "rating": "12+"
+          }
+        ],
+        "result_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4974456296219116192/app-content/content-rating-overview?source=dashboard&applied=true",
+        "app_review_submitted": false,
+        "release_submitted": false,
+        "capability_answers": {
+          "packaged_ratings_relevant_content": false,
+          "native_user_to_user_interaction": false,
+          "online_downloaded_or_ai_generated_content": true,
+          "violence": {
+            "can_contain": true,
+            "primary_purpose": false,
+            "visual": false,
+            "text_or_spoken": true
+          },
+          "sexual_content_or_nudity_excluding_natural_scientific": {
+            "can_contain": true,
+            "primary_purpose": false,
+            "visual": false,
+            "text_or_spoken": true
+          },
+          "offensive_language": {
+            "can_contain": true,
+            "app_focus": false,
+            "minor_profanity": true,
+            "moderate_or_significantly_offensive": true,
+            "discriminatory_language": true,
+            "sexual_expletives": true
+          },
+          "drugs": {
+            "can_contain": true,
+            "app_focus": false,
+            "visual": false,
+            "text_or_spoken": true
+          },
+          "age_restricted_promotion_or_sales_focus": false,
+          "precise_location_sharing": false,
+          "digital_goods_purchases": false,
+          "cash_gift_crypto_or_nft_rewards": false,
+          "web_browser_or_search_engine": false,
+          "primarily_news_or_educational": false
+        },
+        "capability_answer_basis": "Source-backed capabilities of arbitrary text transformation/quotation and plain-text output, with no mature-topic focus; all 27 questions reviewed before final Save. No frequency question was presented."
       }
     },
     "main_store_listing_console_state": {
@@ -423,20 +658,74 @@
     "primary_category_saved": true,
     "secondary_category_console_value": null,
     "privacy_policy_url_saved": true,
-    "privacy_declaration_status": "initial_answers_published_required_analytics_correction_not_saved_or_published",
+    "privacy_declaration_status": "published_with_corrected_analytics_purposes_fresh_page_verified",
     "privacy_saved_detail_summary": {
-      "data_type_count": 7,
-      "purpose": "App Functionality",
-      "linked_to_user": true,
-      "used_for_tracking": false,
-      "no_tracking_supported_by_deployed_source_review": true,
-      "published": true,
-      "published_by": "Ricardo Bailey",
-      "publication_observed_date": "2026-11-04",
-      "scope": "Initial currently published answers; Analytics must be added to User ID, Device ID, and Product Interaction after approval."
+      "published_details_by_data_type": {
+        "Email Address": {
+          "purposes": [
+            "App Functionality"
+          ],
+          "linked_to_user": true,
+          "used_for_tracking": false
+        },
+        "Customer Support": {
+          "purposes": [
+            "App Functionality"
+          ],
+          "linked_to_user": true,
+          "used_for_tracking": false
+        },
+        "Other User Content": {
+          "purposes": [
+            "App Functionality"
+          ],
+          "linked_to_user": true,
+          "used_for_tracking": false
+        },
+        "User ID": {
+          "purposes": [
+            "App Functionality",
+            "Analytics"
+          ],
+          "linked_to_user": true,
+          "used_for_tracking": false
+        },
+        "Device ID": {
+          "purposes": [
+            "App Functionality",
+            "Analytics"
+          ],
+          "linked_to_user": true,
+          "used_for_tracking": false
+        },
+        "Product Interaction": {
+          "purposes": [
+            "App Functionality",
+            "Analytics"
+          ],
+          "linked_to_user": true,
+          "used_for_tracking": false
+        },
+        "Other Data Types": {
+          "purposes": [
+            "App Functionality"
+          ],
+          "linked_to_user": true,
+          "used_for_tracking": false
+        }
+      },
+      "analytics_data_types": [
+        "User ID",
+        "Device ID",
+        "Product Interaction"
+      ],
+      "analytics_row_count": 3,
+      "all_seven_types_linked": true,
+      "tracking_used": false,
+      "fresh_published_page_verified": true
     },
     "age_questionnaire_status": "inspected_cancelled_without_save_ai_content_frequency_unresolved",
-    "content_rights_status": "Inspected latest modal: Yes and No both unselected, Done untouched; no answer submitted.",
+    "content_rights_status": "Saved: Yes, this app has the necessary rights to its third-party content. Selected after the user explicitly confirmed necessary rights; Done and main Save completed and the saved value was verified.",
     "private_console_contact_and_notes_saved": true,
     "private_console_review_section_complete": false,
     "private_console_review_verification": {
@@ -510,7 +799,7 @@
       "credential_fields_supplied_and_saved": true
     },
     "analytics_purpose_correction": {
-      "status": "required_local_user_id_edit_only_awaiting_publication_approval",
+      "status": "published_all_three_purpose_corrections_and_fresh_page_verified",
       "required_data_types": [
         "User ID",
         "Device ID",
@@ -529,17 +818,11 @@
       ],
       "live_database_schema_and_function_metadata_confirmed": true,
       "customer_event_rows_accessed": false,
-      "local_wizard_edit": {
-        "data_type": "User ID",
-        "analytics_checkbox_checked": true,
-        "scope": "Local unsaved wizard state only"
-      },
       "wizard_final_action_label": "Publish",
-      "server_draft_saved": false,
-      "published": false,
-      "publication_user_approval_received": false,
-      "publication_approval_pending": true,
-      "final_publish_confirmation_clicked": false,
+      "published": true,
+      "publication_user_approval_received": true,
+      "publication_approval_pending": false,
+      "final_publish_confirmation_clicked": true,
       "tracking_change_required": false,
       "evidence_summary": "COPY Box sign-up/sign-in events record a hashed installation identifier, platform, event time, authentication event/error category and account identifier after successful sign-in for authentication/onboarding/AI-conversion analytics.",
       "source_functions": {
@@ -565,15 +848,68 @@
         "summary_function": "korlix_onboarding_summary",
         "scope": "Table/column and function-definition metadata only; no customer event rows or mutating RPC invoked."
       },
-      "analytics_scope_limit": "This evidence supports the three identifier/interaction categories; it does not establish analytics use of email, age band, prompt/report text, advertising, tracking, guest editing or app-open telemetry."
+      "analytics_scope_limit": "This evidence supports the three identifier/interaction categories; it does not establish analytics use of email, age band, prompt/report text, advertising, tracking, guest editing or app-open telemetry.",
+      "historical_preapproval_state": {
+        "local_wizard_edit": {
+          "data_type": "User ID",
+          "analytics_checkbox_checked": true,
+          "scope": "Local unsaved wizard state only"
+        },
+        "server_draft_saved": false,
+        "published": false,
+        "scope": "Earlier state before explicit user approval and completed publication."
+      },
+      "published_data_types": [
+        "User ID",
+        "Device ID",
+        "Product Interaction"
+      ],
+      "published_purposes_for_each": [
+        "App Functionality",
+        "Analytics"
+      ],
+      "final_wizard_linked_to_user_verified": true,
+      "final_wizard_tracking_no_verified": true,
+      "fresh_published_page_verified": true,
+      "fresh_analytics_row_count": 3,
+      "fresh_all_seven_types_linked": true,
+      "fresh_data_not_linked_section_present": false,
+      "fresh_tracking_section_present": false,
+      "published_by": "Ricardo Bailey",
+      "publication_confirmation": "Published a few seconds ago by Ricardo Bailey",
+      "user_id_intermediate_linkage_correction": {
+        "initial_publish_new_purpose_linkage_mixed": true,
+        "detected_in_privacy_preview": true,
+        "explicit_linked_to_user_yes_selected": true,
+        "republished": true,
+        "final_fully_linked_state_verified": true,
+        "current_mixed_linkage": false,
+        "scope": "Resolved intermediate User ID state, not the current published declaration."
+      },
+      "new_purpose_linkage_explicitly_set_before_publish_for": [
+        "Device ID",
+        "Product Interaction"
+      ]
     },
     "content_rights_form_state": {
       "modal_opened": true,
-      "yes_selected": false,
+      "yes_selected": true,
       "no_selected": false,
-      "done_clicked": false,
-      "answer_submitted": false
-    }
+      "done_clicked": true,
+      "main_save_completed": true,
+      "answer_submitted": true,
+      "save_confirmation": "Saved",
+      "observed_saved_value": "Yes, this app has the necessary rights to its third-party content.",
+      "saved_value_verified": true,
+      "user_confirmed_necessary_rights": true
+    },
+    "historical_initial_privacy_summary": {
+      "purpose": "App Functionality",
+      "linked_to_user": true,
+      "used_for_tracking": false,
+      "scope": "Superseded initial uniform-purpose publication; the current per-type map below records the completed correction."
+    },
+    "content_rights_completed": true
   },
   "testflight": {
     "what_to_test_file": "testflight-what-to-test.txt",
@@ -591,9 +927,9 @@
     "trial": null,
     "standalone_purchase_products": null,
     "release_schedule": null,
-    "store_age_rating": null,
     "google_play_privacy_attestations": null,
-    "review_account": "Apple credential fields are populated and saved after fresh reload; no password value read, captured, or recorded. Existing account, verified email, effective Ultra entitlement and available AI/device capacity confirmed read-only. End-to-end COPY Box login/AI testing and Google reviewer setup remain incomplete; the fresh Google server page has no selected Yes/No answer or reviewer record."
+    "review_account": "Apple credential fields are populated and saved after fresh reload; no password value read, captured, or recorded. Existing account, verified email, effective Ultra entitlement and available AI/device capacity confirmed read-only. End-to-end COPY Box login/AI testing and Google reviewer setup remain incomplete; the fresh Google server page has no selected Yes/No answer or reviewer record.",
+    "apple_store_age_rating": null
   },
   "evidence_files": {
     "privacy": "privacy-evidence.md",
@@ -877,5 +1213,63 @@
       "source_tests_repeated_locally": false,
       "generated_apk_signer_role": "Dedicated upload certificate; Google Play delivered APKs use the separately managed app-signing certificate."
     }
+  },
+  "backend_rewrite_routing": {
+    "status": "reviewed_fix_merged_production_deployment_rejected_pending_specific_approval",
+    "observed_issue": "COPY Box rewrite requests containing certain keywords could be routed to web search instead of the requested text rewrite.",
+    "baseline_keyword_cases_reproduced": 3,
+    "request_markers": {
+      "source": "korlix_copybox",
+      "purpose": "copy_box_rewrite"
+    },
+    "native_client_markers_verified_at_source": "2c6544dba9afe2117181afabdc78a856ef4f249d",
+    "candidate_commit": "91496adc4eec8ba5523dd4c2c27813e84e5670d5",
+    "exact_parent_live_commit": "bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb",
+    "pull_request_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/pull/45",
+    "pull_request_state": "closed",
+    "draft": false,
+    "merged": true,
+    "merge_commit": "901ca58c95ba7a16abf56e20361f7f021924df3e",
+    "merge_tree_matches_reviewed_candidate": true,
+    "reviewed_candidate_to_merge_changed_files": [],
+    "changed_files": [
+      "backend/server.js",
+      "backend/test/copybox_rewrite_routing.test.mjs"
+    ],
+    "behavior_scope": "Exact COPY Box marker pair suppresses search and file routing; ordinary chat, Resume Studio, and requests with only partial markers retain prior routing in the focused tests.",
+    "validation": {
+      "focused_route_and_existing_resume_tests_passed": 9,
+      "failed": 0,
+      "new_copybox_checks_including_subtests": 7,
+      "existing_resume_studio_tests": 2,
+      "syntax_check_passed": true,
+      "diff_check_passed": true,
+      "remote_blobs_match_tested_bytes": true,
+      "app_binary_rebuilt": false,
+      "app_runtime_tested": false,
+      "device_tested": false
+    },
+    "render_service_id": "srv-d8csvkkp3tds73emfikg",
+    "configured_branch": "release/signup-plan-intent-20261021",
+    "automatic_deployments_enabled": false,
+    "configured_branch_matched_merge_immediately_before_trigger": true,
+    "existing_render_connector_read_only_access_verified": true,
+    "deployment": {
+      "exact_requested_commit": "901ca58c95ba7a16abf56e20361f7f021924df3e",
+      "trigger_attempted": true,
+      "trigger_accepted": false,
+      "automatic_approval_review_rejected": true,
+      "tool_reported_is_error": true,
+      "rejection_reason": "The new production backend mutation requires renewed explicit authorization for this specific reviewed fix; prior preparation authorization did not cover deployment.",
+      "specific_production_deployment_approval_pending": true,
+      "deployment_created": false,
+      "production_mutation_executed": false,
+      "bypass_attempted": false,
+      "browser_authentication_retried": false,
+      "latest_live_commit": "bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb",
+      "latest_live_deploy_id": "dep-dbksjk49v7es73f8krpg",
+      "live_state_verified_read_only_after_rejection": true
+    },
+    "remaining_scope": "Deploy the exact reviewed merged fix only after specific production approval, then complete actual COPY Box login/AI acceptance; the merged source and focused tests do not establish deployed or device behavior."
   }
 }

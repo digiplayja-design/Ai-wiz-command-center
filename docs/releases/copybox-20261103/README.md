@@ -63,27 +63,25 @@ countries. Both stores' saved settings are now verified:
 | Apple | Free; $0.00 and zero local-currency prices | All 175 countries/regions **Available on App Release**; future countries included | Manual release; **Prepare for Submission** |
 | Google Play | **Your app is Free**; Save changes disabled | **Targeted (178)**, including Rest of World | Production **Inactive**; no review or release submitted |
 
-The initial published privacy declaration contains seven categories: Email
+The published privacy declaration contains seven categories: Email
 Address, Customer Support, Other User Content, User ID, Device ID, Product
-Interaction, and Other Data Types. Each uses **App Functionality**, is **linked
-to the user**, and is **not used for tracking**. The exact deployed-source review
-supports the no-tracking conclusion. After the user explicitly approved the
-publication attestation, the final Publish confirmation was accepted. App Store
-Connect explicitly displayed **Published by Ricardo Bailey** for that initial
-publication. Those published answers remain in place.
+Interaction, and Other Data Types. After the user's explicit approval, the
+three source-supported Analytics corrections were **published**. **User ID,
+Device ID, and Product Interaction use App Functionality plus Analytics**;
+the other four categories use App Functionality. All seven are **linked to the
+user** and **not used for tracking**. Fresh published-page readback shows
+**Published by Ricardo Bailey**, exactly **three Analytics rows**, and no Data
+Not Linked or tracking preview sections. The earlier uniform-purpose
+publication and a resolved intermediate User ID linkage issue are retained as
+history in the [release status](release-status.json). See
+[privacy evidence](store-submission/privacy-evidence.md) for the source basis.
 
-Later source and live database-metadata checks established COPY Box
-authentication/onboarding analytics. **User ID, Device ID, and Product
-Interaction require Analytics alongside App Functionality**; linkage remains
-Yes and tracking remains No. Only the User ID Analytics checkbox has been
-staged in the local edit wizard. Its final action is **Publish**; no correction
-has been saved as a server draft or published. The three corrections await
-approval together. See [privacy evidence](store-submission/privacy-evidence.md).
-
-The age questionnaire was inspected and cancelled without saving. Actual AI
+The Apple age questionnaire was inspected and cancelled without saving. Actual AI
 content frequency remains unresolved: the general backend `/api/generate` path
 has no COPY Box topic/output filter and requires live-account evaluation for
-those answers. The content-rights form was inspected without submitting an answer.
+those answers. Following the user's explicit confirmation of necessary rights,
+content rights was set to **Yes**, Done and the main Save completed, and the
+saved page confirms the app has the necessary rights to its third-party content.
 
 Apple's processed Build Metadata independently reports **Binary State:
 Validated** and confirms the exact app identity, version/build, iOS 15.0 minimum,
@@ -226,12 +224,13 @@ establish store submission. The existing public support/privacy/deletion URLs re
 Box-specific HTML additions are merged through
 [pull request 43](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/43)
 as `da283a8dfe7b51f68ad7b581b8555f017cac3c54`, whose tree matches the reviewed
-source. The required onboarding-analytics paragraph is now in open Draft
-[PR 44](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/44), commit
-`a214334239b07875cef2818541e30a15d2271787`, based directly on that merge. It changes
-only `website/privacy-policy.html` and is not merged or deployed. The old base
-alone does not resolve the new analytics disclosure; the final complete
-deployment commit remains to be established. Render still serves the
+source. The required onboarding-analytics paragraph was reviewed in
+[PR 44](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/44), source
+`a214334239b07875cef2818541e30a15d2271787`, and merged as
+**`b95ce8390e03b4a31a43b592e0d3dd980823f292`**. The merge tree matches the reviewed
+source; this is the exact complete website deployment target. It is **not
+deployed**. The earlier da283 commit remains the original four-page base. No
+Render authentication retry or configuration change occurred. Render still serves the
 October 25 release. Render rejected the existing GitHub connection as a
 deployment connection rather than a sign-in method, and the alternative secure
 sign-in request was declined. Authentication attempts stopped without a
@@ -363,48 +362,97 @@ password**, and both **encryption in transit** and **data-only deletion requests
 are answered **Yes**. Account deletion and data-only requests use
 `https://www.korlixdeveloper.com/delete-account.html`. Six data types are selected
 and saved: **Email address, User IDs, Other info, App interactions, Other
-user-generated content, and Device or other IDs**. Usage details are **0 of 6
-complete**: no per-type usage answers are saved, and preview has not been
-reached. This remains a draft, not a final or published declaration.
+user-generated content, and Device or other IDs**. Usage details are now **5 of 6
+complete**, and outer Save draft confirmed **Your changes have been saved**.
+The five completed rows are Collected Yes, Shared No under the service-provider
+exception, non-ephemeral, and optional relative to guest writing. The exact
+purpose map is in [release-status.json](release-status.json).
 
-Google target audience is blocked by incomplete **Sign in details**. The IARC
-first screen has the public support contact and **All Other App Types** prepared.
-Its agreement is unchecked; one Next attempt returned **Terms must be accepted**.
-No questionnaire step beyond that first screen was reached. Agreement acceptance
-awaits approval, and the content questionnaire remains incomplete.
+**Other user-generated content remains Not started**, Next is disabled, and
+preview has not been reached. Its precise unresolved sharing fact is whether
+the active OpenAI API organization/project has enabled inputs-and-outputs
+sharing for model improvement. The documented default is Disabled; that default
+does not establish this account's setting. Standard provider roles are resolved
+and no new DPA-signing or zero-data-retention proof is required by this audit.
+This remains a draft, not a final or published declaration.
+
+Google target audience is blocked by incomplete **Sign in details**. The user-
+approved IARC agreement was accepted, all **27 source-backed capability questions**
+were reviewed, and questionnaire Save succeeded. Fresh
+[rating results](https://play.google.com/console/u/0/developers/4772708594176030332/app/4974456296219116192/app-content/content-rating-overview?source=dashboard&applied=true)
+show **Completed**. No frequency questions were presented. The console certificate
+ID is currently `-`; no identifier has been established. This submitted the rating
+questionnaire, not the app for review or release.
+
+| Territory | IARC result |
+| --- | --- |
+| Brazil | ClassInd 14+ |
+| North America | ESRB Teen |
+| Europe | PEGI Parental Guidance |
+| Germany | USK 12+ |
+| Rest of world | IARC 12+ |
+| Russia | 12+ |
+| South Korea | 12+ |
+
+## Reviewed backend fix and production deployment state
+
+Three focused keyword cases reproduced a shared-backend routing bug: an exact
+COPY Box rewrite request could take a web-search route. The already signed
+client sends `source=korlix_copybox` and `purpose=copy_box_rewrite`.
+[PR 45](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/45) changes
+only `backend/server.js` and its new routing test to suppress search/file routing
+for that exact pair. Ordinary chat, Resume Studio, and partial markers retain
+prior routing in the focused checks. The combined suite passed **9 checks**,
+including **7 new routing checks/subtests and 2 existing Resume Studio tests**.
+
+The reviewed candidate `91496adc4eec8ba5523dd4c2c27813e84e5670d5` was merged as
+**`901ca58c95ba7a16abf56e20361f7f021924df3e`**, with no tree difference. The
+configured backend branch matched that merge immediately before the attempted
+Render trigger; automatic deployments are off. **Automatic approval review
+rejected the production trigger**, requiring explicit authorization for this
+specific new live fix. No deployment was created, and no bypass or browser-auth
+retry was attempted. Read-only verification confirms the live backend remains
+`bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb`.
+
+The exact reviewed website target remains
+**`b95ce8390e03b4a31a43b592e0d3dd980823f292`**, while live remains
+`e38d6b73a37ff812a29da3b64027a35e01979c34`. A proposed four-page port to configured
+branch `1ecc4044…` was stopped: that branch has unrelated Messenger/Receipt Wiz
+policy regressions and different Flutter authentication/build inputs. The
+existing build script also rebuilds `website/app`, so porting only the pages
+would not isolate published output. No new website-port PR, settings change,
+or website deployment occurred. Existing Render read-only access works; the
+production actions await specific approval and exact reviewed-commit execution.
 
 ## Remaining release gates
 
-1. Complete end-to-end COPY Box login/AI testing and Google Sign in details with
+1. Obtain specific production approval for the merged backend rewrite fix
+   `901ca58c95ba7a16abf56e20361f7f021924df3e`, then complete end-to-end COPY Box
+   login/AI testing and Google Sign in details with
    truthful full-access confirmation. Apple credential fields are populated and
    saved; the fresh Google server page has neither a Yes/No selection nor a
    reviewer record. The earlier prepared Google form remains separate and unsaved.
    The account, email verification, Ultra entitlement, and available AI/device
    capacity have been confirmed through read-only checks.
-2. Approve and publish the three Apple Analytics-purpose corrections for User ID,
-   Device ID, and Product Interaction, retaining App Functionality, linked-to-user
-   Yes, and tracking No. Only a local User ID edit is staged; no correction is
-   saved or published.
-3. Evaluate actual AI content frequency through a live account, complete the
-   age/content questionnaire, and supply the content-rights declaration. Configure
+2. Evaluate actual AI content frequency through a live account and complete the
+   Apple age/content questionnaire. Apple content rights is saved after the user's
+   confirmation. Configure
    TestFlight testing and complete physical iPhone/iPad acceptance: clipboard and
    paste prompts, file picker/share sheets, local persistence, offline launch,
    large text, account switching, live sign-in/password reset, optional AI
    consent/refinement/report, and account-deletion confirmation.
-4. Configure deliberate Android testing and complete device/live-account
+3. Configure deliberate Android testing and complete device/live-account
    acceptance, including a 16 KB-page environment and Play-delivered APK checks.
    Static checks of the signed AAB and generated universal APK passed; the saved
    Play internal draft has no testers and has not been rolled out.
-5. Complete Google Play target audience after Sign in details, accept the IARC
-   agreement after approval, and complete the actual content questionnaire and
-   remaining declarations. Finish all six Data safety usage details and preview
-   from the saved Step 4 draft, including the source-supported Analytics purposes.
-6. Review the separate website onboarding-analytics addendum, then authenticate
-   Render and deploy only the exact reviewed complete source once its final
-   commit is established. The earlier reviewed four-page base
-   `da283a8dfe7b51f68ad7b581b8555f017cac3c54` remains undeployed. Verify all four
-   public pages; do not deploy the generic configured-branch head.
-7. Submit the completed store listings after the remaining release gates are
+4. Complete Google Play target audience after Sign in details and finish the UGC
+   Data safety row after confirming the active OpenAI API model-improvement opt-in,
+   then reach preview and finalize the declaration. Five usage rows and IARC are complete.
+5. Obtain specific production approval and deploy only the exact reviewed website commit
+   `b95ce8390e03b4a31a43b592e0d3dd980823f292`, then verify all four public pages.
+   PR 44 is merged with the reviewed tree; no website deployment or new Render
+   authentication attempt has occurred. Do not deploy the unsafe configured-branch head.
+6. Submit the completed store listings after the remaining release gates are
    satisfied. Neither public review nor public mobile availability is complete.
 
 The candidate and upload workflows remain in `codemagic.yaml`. The iOS upload

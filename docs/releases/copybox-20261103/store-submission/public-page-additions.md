@@ -5,17 +5,27 @@ with the currently live website source in
 [pull request 43](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/43),
 at commit `d810888cba620502e799a3022090e1a5f6748d9d`, merged as
 `da283a8dfe7b51f68ad7b581b8555f017cac3c54`, but have not been published.
-The required authentication/onboarding analytics paragraph below is prepared in
-open Draft [pull request 44](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/44),
+The required authentication/onboarding analytics paragraph below was reviewed in
+[pull request 44](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/44),
 source `a214334239b07875cef2818541e30a15d2271787`, whose exact parent is da283.
-That follow-up adds only one paragraph in `website/privacy-policy.html`; it has
-not been merged or deployed. The older base alone does not resolve the new
-analytics disclosure. Establish the final reviewed complete commit before
-publication; do not deploy a generic configured-branch head.
+That follow-up adds only one paragraph in `website/privacy-policy.html` and is
+merged as **`b95ce8390e03b4a31a43b592e0d3dd980823f292`**, with a tree verified
+identical to the reviewed source. PR 44 is closed/merged and no longer Draft.
+This is the exact complete website publication target. It is **not deployed**;
+no new Render authentication retry or configuration change occurred. Publish
+only that exact reviewed commit after specific production approval, not a generic
+configured-branch head. A proposed four-page port was stopped because the
+configured branch includes unrelated Messenger/Receipt Wiz policy regressions
+and different Flutter authentication/build inputs; its build also republishes
+`website/app`. No new website-port PR, branch change, settings change, or website
+deployment occurred. The separate backend trigger was rejected by automatic
+approval review and created no deployment.
 The HTML preserves existing provisions and global effective dates, with a
 proposed COPY Box coverage date of November 4, 2026. Confirm the actual publication
-date before deploying. Operational retention/provider practices still require
-confirmation before final store attestations.
+date before deploying. Standard service-provider roles are resolved in
+[privacy-evidence.md](privacy-evidence.md). The precise remaining UGC sharing
+fact is the active OpenAI API inputs/outputs model-improvement opt-in;
+operational deletion fulfilment remains a separate check.
 
 ## Privacy Policy
 

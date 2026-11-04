@@ -33,16 +33,16 @@ available AI/device capacity are confirmed read-only. After the user reported
 **Saved**, fresh reload confirmed User name and Password populated, Save
 disabled, and sign-in-required checked. No password value was read, printed,
 captured, or stored. End-to-end COPY Box login/AI testing remains pending, and the
-sign-in-required checkbox remains checked. All seven privacy categories are
-published with App Functionality, linked to user, and no tracking; the console
-explicitly said **Published by Ricardo Bailey** for that initial publication.
-Later source and live database-metadata checks require **Analytics** alongside
-**App Functionality** for **User ID, Device ID, and Product Interaction**.
-Only User ID Analytics is locally staged; no correction server draft or
-publication exists. The three-purpose correction awaits approval. The source
-review continues to support no tracking. Age/content and content-rights answers
-remain incomplete. This package does not establish that every required form is
-complete.
+sign-in-required checkbox remains checked. After explicit user approval, the
+Apple Analytics correction is published: **User ID, Device ID, and Product
+Interaction** use **App Functionality plus Analytics**, while the other four
+types retain App Functionality. All seven are linked to the user and tracking
+remains No. Fresh published-page readback confirms **Published by Ricardo Bailey**,
+exactly three Analytics rows, and no Data Not Linked or tracking preview sections.
+The intermediate User ID linkage issue was corrected and republished before
+that final verification. Content rights is also saved as **Yes** after the
+user's explicit confirmation, Done, and main Save. Apple age/content answers and
+other required forms remain incomplete.
 
 All sixteen store screenshots are generated, packaged and visually reviewed.
 The original twelve retain their final-app-source provenance; four additional
@@ -85,25 +85,36 @@ release status. The November 4 asset commit changes no app behavior or signing.
 The original backend inventory at `92cad91d290d4ac93d273960c1144798f3afd14f` was
 rechecked against the primary API's exact deployed revision,
 `bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb`, on November 4. This confirms the
-inspected source's data-flow behavior; operational retention, provider terms,
-live database migration state, and deletion fulfilment still require appropriate
-confirmation before final data-handling attestations.
+inspected source's data-flow behavior. The later provider audit resolves standard
+service-provider and user-initiated transfer roles. The precise remaining UGC
+sharing fact is the active OpenAI API inputs/outputs model-improvement opt-in;
+operational retention and deletion fulfilment are separate checks. Live metadata
+confirms the onboarding structures documented in the privacy evidence.
 
 The public privacy, terms, deletion, and support pages were retrievable on
 November 3, 2026. The retrieved versions principally named KORLIX AI and
 Messenger. The scoped additions were merged in PR 43 as
 `da283a8dfe7b51f68ad7b581b8555f017cac3c54`, with a tree matching reviewed source
 `d810888cba620502e799a3022090e1a5f6748d9d`, but that exact commit has not been
-deployed. Required onboarding-analytics wording is now prepared in open Draft
+deployed. Required onboarding-analytics wording was reviewed in
 [PR 44](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/44), source
 `a214334239b07875cef2818541e30a15d2271787`, with exact parent da283. It adds one
-paragraph to `website/privacy-policy.html` and remains unmerged and undeployed.
-The old four-page base alone would not resolve that new disclosure. The final
-complete deployment target remains pending. The November 4 Render check still
+paragraph to `website/privacy-policy.html` and is now merged as
+**`b95ce8390e03b4a31a43b592e0d3dd980823f292`**, with no tree difference from the
+reviewed source. PR 44 is closed/merged and no longer Draft. This exact complete
+website target remains **undeployed**, with no new Render authentication retry
+or configuration change. The November 4 Render check still
 shows the October 25 live release.
 Render rejected the existing GitHub connection as deployment-only, and the
 alternative secure sign-in request was declined. Authentication attempts
 stopped without triggering a deployment.
+
+The existing Render connector subsequently confirmed read-only access. A
+four-page port to configured branch `1ecc4044…` was stopped because it contains
+unrelated Messenger/Receipt Wiz policy regressions and different Flutter
+authentication/build inputs; the existing build also republishes `website/app`.
+No new website-port PR or settings change was made. The exact b95ce839… target
+remains pending specific production approval and deployment.
 
 ## Remaining form inputs
 
@@ -173,29 +184,41 @@ stopped without triggering a deployment.
   certificate matches. No billing plan was changed. Apple
   provisioning and the first signed upload are complete. Configure
   TestFlight testing and complete physical-device/live-account acceptance.
-- Complete the age/content questionnaire after evaluating actual AI content
+- Complete the Apple age/content questionnaire after evaluating actual AI content
   frequency through a live account. The inspected questionnaire was cancelled
   without saving; the general generation route has no COPY Box topic/output
   filter. The 16+ signup rule does not determine the store rating. The content-
-  rights form was inspected without submitting an answer.
-- Complete Google Play target audience, applicable content rating, remaining
+  rights answer is already saved as Yes after the user's explicit confirmation.
+- Complete Google Play target audience, remaining
   app-content declarations, and the operational privacy checks for Data safety.
-  Target audience is blocked by incomplete Sign in details. IARC's initial screen
-  has the public support contact and All Other App Types prepared; its agreement
-  remains unchecked and awaits approval. One Next attempt returned Terms must be
-  accepted; no questionnaire step beyond the first screen was reached.
+  Target audience is blocked by incomplete Sign in details. The approved IARC
+  agreement was accepted, all 27 source-backed capability questions were reviewed,
+  and questionnaire Save succeeded. Fresh results show Completed with generated
+  territorial ratings; no frequency questions were presented. The certificate
+  field is `-`. This did not submit the app for review or release.
   Data safety is saved at Step 4 with encryption in transit Yes, data-only deletion
   requests Yes, and the same public deletion URL for both request types. Six data
   types are saved: Email address, User IDs, Other info, App interactions, Other
-  user-generated content, and Device or other IDs. Usage details remain 0 of 6,
-  no per-type usage answers are saved, and preview is not reached. No final
+  user-generated content, and Device or other IDs. Five usage rows are saved:
+  Collected Yes, Shared No under the provider exception, non-ephemeral, and
+  optional, with the exact purpose map in the metadata JSON. UGC remains Not
+  started, Next is disabled, and preview is not reached. Its precise unresolved
+  sharing fact is the active OpenAI API inputs/outputs model-improvement opt-in.
+  The official default Disabled does not establish this account's setting. No final
   declaration or publication is complete.
-  The initial seven Apple categories remain published with App Functionality,
-  linked-to-user, no-tracking details. Approve and publish the newly required
-  Analytics additions for User ID, Device ID, and Product Interaction; the local
-  User ID edit has not been saved or published. Operational retention, processor
-  treatment, and deletion fulfilment remain
+  The corrected Apple declaration is published: User ID, Device ID, and Product
+  Interaction have App Functionality plus Analytics; the other four types retain
+  App Functionality. All seven are linked to the user with tracking No.
+  Standard processor roles are resolved; operational retention and deletion fulfilment remain
   separate evidence questions in [privacy-evidence.md](privacy-evidence.md).
+
+- Deploy the narrowly reviewed backend routing correction only after specific
+  production approval. [PR 45](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/45)
+  is merged as `901ca58c95ba7a16abf56e20361f7f021924df3e`, with the reviewed tree and
+  9 passing focused routing/Resume checks. The Render trigger was rejected by
+  automatic approval review because the new live production mutation lacked
+  specific renewed authorization. No deployment was created; the live backend
+  remains bf830fd… and actual COPY Box login/AI acceptance remains outstanding.
 
 This package introduces no subscription product, trial, paid price, or purchase
 promise.

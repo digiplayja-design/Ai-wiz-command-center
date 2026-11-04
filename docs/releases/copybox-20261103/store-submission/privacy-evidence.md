@@ -56,10 +56,11 @@ that exact deployed source confirmed the material COPY Box data flows:
   creates or returns a request with `status = 'requested'`; that function does
   not erase account data.
 
-This establishes agreement with deployed source, not successful live-account
-testing, operational retention periods, provider contract terms, the live
-database's applied migration state or completed deletion fulfilment. No customer
-records or secret values were accessed.
+That source inspection established the implemented flows without establishing
+successful live-account testing or completed operational deletion. The later
+metadata checks below verify the onboarding structures, and the provider audit
+resolves standard service-provider roles. No customer event rows or secret
+values were needed for this data-handling inventory.
 
 ### Later authentication/onboarding analytics verification
 
@@ -106,7 +107,7 @@ deadline or proof of completed operational erasure.
 | Installation/session management | A random persistent installation ID, app label and platform are sent in requests. Authenticated requests carry the account token. | Backend `device_sessions` associates the installation with user ID, active status and last-seen time. The ID is not an advertising ID. | Sent when using online account features; signing out clears local credentials and requests device-session revocation. |
 | Authentication/onboarding analytics | Sign-up/sign-in event names, hashed installation ID, platform, event time, applicable error category, and account ID after successful sign-in go to KORLIX. | Stored in `korlix_onboarding_events`; summary logic measures authentication completion and use of AI features. Opportunistic pruning does not establish a fixed erasure deadline. | Occurs with online authentication events; local writing remains available without an account. |
 | AI refinement | The selected box's full text, writing action and system instruction go to the KORLIX API and OpenAI. | The backend saves account ID, prompt, generated response, language, result type, search indicator and credits used in `generation_history`. This is not transient-only processing. | Explicit provider/content consent precedes the request. Keeping the original or deleting a local box does not remove account AI history. |
-| AI output report | Reason, optional details and an output excerpt go to KORLIX. The server adds account ID/email, installation ID, platform, IP address, user agent and timestamps. | Persisted support report; the backend can notify support through Resend. Exact retention and provider configuration require operational confirmation. | In-app report form explains the content submission; sending requires an explicit action. |
+| AI output report | Reason, optional details and an output excerpt go to KORLIX. The server adds account ID/email, installation ID, platform, IP address, user agent and timestamps. | Persisted support report; the backend can notify support through Resend as a service provider. Operational retention and deletion fulfilment remain separate from provider classification. | In-app report form explains the content submission; sending requires an explicit action. |
 | Account deletion request | Authenticated account identity and the request reason go to KORLIX. | A request row is inserted for processing. Source proves initiation, not completion of erasure. | Settings confirmation explains the shared account scope and remaining local copies. Public email route also exists. |
 
 The AI request sets `mainChatMemory: false` and `disableAccountMemory: true`.
@@ -150,44 +151,54 @@ See the official [Apple privacy guidance](https://developer.apple.com/app-store/
 and [Google Data safety guidance](https://support.google.com/googleplay/android-developer/answer/10787469?hl=en)
 for the category definitions and distinction between optional use and disclosure.
 
-## Initial Apple publication and required correction — November 4, 2026
+## Apple publication and completed Analytics correction — November 4, 2026
 
 App Store Connect app `6830765098` initially published details for seven data types:
 Email Address, Customer Support, Other User Content, User ID, Device ID,
-Product Interaction, and Other Data Types. The current published version has every data type configured for
+Product Interaction, and Other Data Types. That initial version had every data type configured for
 **App Functionality**, **linked to the user: Yes**, and **used for tracking: No**.
 The exact deployed-source review at
 `bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb` supports the no-tracking conclusion
 for the COPY Box data flows. The earlier generic request to verify tracking
 practices is resolved for this release scope; it is not a remaining gate.
-This does not change the separate retention/deletion and processor-contract
-questions below or support a blanket “no data collected” answer.
+This does not change the separate retention/deletion checks or the precise UGC
+sharing setting below, and does not support a blanket “no data collected” answer.
 
 The privacy policy URL is saved. The user explicitly approved the final
 publication attestation, which covers response accuracy, compliance, and prompt
 updates. The final Publish confirmation was then accepted. App Store Connect
 explicitly displayed **Published by Ricardo Bailey** for that initial publication.
-Those initial classifications remain published while the new correction is
-pending. The separately approved Paid Apps Agreement
+Those initial classifications are retained as historical evidence and have now
+been superseded by the approved Analytics correction below. The separately approved Paid Apps Agreement
 was accepted after secure second-factor verification, and Business Agreements
 shows **Active** for **November 4, 2026–June 22, 2027**.
 
-The later onboarding evidence requires **Analytics alongside App Functionality**
-for **User ID, Device ID, and Product Interaction**. All three remain linked to
-the user and not used for tracking. Only the **User ID Analytics checkbox** has
-been staged in a local wizard; the final action is **Publish**. No corrected
-server draft has been saved and no correction has been published. The three
-corrections await approval together; the earlier approval covered the initial
-publication, not this newly prepared correction.
+After explicit user approval, the source-supported correction was **published**
+for **User ID, Device ID, and Product Interaction**, each using **App Functionality
+plus Analytics**, linked to the user and not used for tracking. The remaining
+four types—Email Address, Customer Support, Other User Content, and Other Data
+Types—retain App Functionality. Fresh published-page readback confirms
+**Published by Ricardo Bailey**, exactly **three Analytics rows**, all **seven
+types linked**, and no Data Not Linked or tracking preview sections.
 
-The age questionnaire was inspected and cancelled without saving. Built-in app
+The first User ID publication exposed a mixed linkage default for the new
+purpose. It was reopened, explicitly set to linked-to-user Yes, republished,
+and verified. Device ID and Product Interaction had linkage applied explicitly
+to the added purpose before publication. This intermediate issue is resolved;
+the current per-type map in [release-status.json](../release-status.json)
+records the corrected declaration, while its initial snapshot preserves the
+earlier uniform-purpose publication.
+
+The Apple age questionnaire was inspected and cancelled without saving. Built-in app
 capability evidence does not establish the frequency of generated AI content:
 the deployed general `/api/generate` route has no COPY Box topic/output filter.
 Live-account evaluation is still needed for those content-frequency answers.
-The content-rights form was inspected without submitting an answer. The latest
-modal has both Yes and No unselected and Done untouched.
+The user explicitly confirmed the necessary third-party content rights. **Yes**
+was selected, Done and main Save completed, and the page confirmed the saved
+necessary-rights answer. The earlier unselected modal is historical; no further
+content-rights input is outstanding in this checkpoint.
 
-## Google Data safety and rating draft — later November 4 update
+## Google Data safety draft and completed IARC rating — later November 4 update
 
 The latest Data safety draft is saved at **Step 4**, with **Email address, User
 IDs, Other info, App interactions, Other user-generated content, and Device or
@@ -197,32 +208,86 @@ requests: Yes** are saved, with
 deletion and data-only request URLs. The combined collection/sharing answer
 remains Yes and account creation remains Username and password.
 
-Usage details are **0 of 6 complete**. No per-type collection/sharing, purpose or
-other usage answers have been entered, and preview has not been reached. Save
-draft succeeded; this is not a final or published declaration. The new Analytics
-purpose belongs in the three applicable types when these details are completed.
-The data-only answer describes an available request route; it does not establish
-completed deletion fulfilment.
+The latest outer Save draft confirmed **Your changes have been saved**, with
+**5 of 6 usage rows complete**: Personal info 3/3, App interactions Completed,
+and Device or other IDs 1/1. Each saved row is **Collected Yes**, **Shared No**
+under the service-provider exception, **non-ephemeral**, and **optional** relative
+to guest writing. Their saved purposes are:
+
+| Saved data type | Saved collection purposes |
+| --- | --- |
+| Email address | App functionality; Account management; Fraud prevention, security, and compliance |
+| User IDs | App functionality; Account management; Fraud prevention, security, and compliance; Analytics |
+| Other info | App functionality; Account management; Fraud prevention, security, and compliance |
+| App interactions | App functionality; Analytics; Fraud prevention, security, and compliance |
+| Device or other IDs | App functionality; Account management; Fraud prevention, security, and compliance; Analytics |
+
+**Other user-generated content remains Not started** with no usage answers
+entered. Next is disabled and preview has not been reached. Its precise
+remaining sharing fact is the OpenAI API inputs/outputs model-improvement opt-in
+described below. The earlier 0-of-6 snapshot is retained as history. No final
+Data safety declaration or publication is complete. The data-only deletion
+answer describes an available request route; it does not establish completed
+deletion fulfilment.
 
 Government apps was answered **No**, saved, and confirmed on a fresh page.
-Target audience is blocked by incomplete Google Sign in details. The IARC
-initial screen has the public support contact and **All Other App Types**
-prepared, with its agreement unchecked. One Next attempt returned **Terms must
-be accepted**. Agreement acceptance awaits approval; no questionnaire step
-beyond the first screen, completed rating, or submission is recorded.
+Target audience is blocked by incomplete Google Sign in details. After explicit
+user approval, the IARC agreement was accepted with the public support contact
+and **All Other App Types**. All **27 source-backed capability questions** were
+reviewed and questionnaire Save succeeded; no frequency questions were presented.
+Fresh results show **Completed**, with console display **Submitted Nov 4, 2026,
+3:17 PM**; no timezone is inferred. Certificate ID is `-`.
 
-## Answers that require operational confirmation
+The results are ClassInd 14+ (Brazil), ESRB Teen (North America), PEGI Parental
+Guidance (Europe), USK 12+ (Germany), IARC 12+ (rest of world), and 12+ for Russia
+and South Korea. The exact answers are retained in
+[release-status.json](../release-status.json). This completed the rating
+questionnaire, not app review or release. Apple content-frequency questions
+remain a separate incomplete form.
 
-- **Processor transfers and sharing:** KORLIX sends selected text to OpenAI and
-  support reports may pass through Resend and hosting/database services. Verify
-  current contracts and configuration before using Google's service-provider
-  or user-directed-transfer exclusions. Apple still requires relevant partner
-  collection to be considered. “No sharing” must not mean “no outbound transfer.”
+## Provider-role audit and the remaining UGC sharing setting
+
+The audit applies Google's service-provider exception to ordinary Supabase,
+Render, Resend, and default OpenAI API processing, based on the implemented flows
+and their standard processing terms. Explicit OS share/export actions fit the
+user-initiated-transfer exception. These exceptions classify the transfers for
+Google's Sharing answer; collected data still requires disclosure. See
+[Google Data safety guidance](https://support.google.com/googleplay/android-developer/answer/10787469?hl=en),
+the [Supabase DPA](https://supabase.com/legal/customer-resources/data-processing-addendum),
+[Render DPA](https://render.com/dpa), and
+[Resend DPA](https://resend.com/legal/dpa) / [GDPR account coverage](https://resend.com/security/gdpr).
+
+The [OpenAI DPA](https://openai.com/policies/data-processing-addendum/) and
+[Services Agreement, section 4.2](https://openai.com/policies/services-agreement/)
+support the ordinary API processor role. The API
+[inputs/outputs sharing controls](https://help.openai.com/en/articles/10306912-sharing-feedback-evaluation-and-fine-tuning-data-and-api-inputs-and-outputs-with-openai)
+document model-improvement opt-in as disabled by default. The active API
+organization/project setting has not been observed, so the default alone cannot
+settle the untouched UGC row's Sharing answer. That specific opt-in is the
+remaining provider-sharing fact; the audit introduces no new DPA-signing or
+zero-data-retention proof gate.
+
+The inspected native client does not send tier, profile, or persona fields. The
+server independently adds existing coarse tier/persona/language context to the
+OpenAI prompt payload. It does not forward structured account identity, email,
+device, age, policy-declaration or onboarding-event fields in that payload. The
+Other info conclusion is limited to native age/policy/parent declarations, not
+a claim that the API receives only raw text. On that basis the five supported
+identity/declaration/interaction rows can use Collected Yes and Shared No;
+all six selected types are non-ephemeral and optional relative to guest writing.
+UGC's usage row remains wholly unanswered pending the exact opt-in setting.
+
+## Remaining privacy facts and operational limits
+
+- **UGC sharing:** Confirm only the active OpenAI API inputs/outputs
+  model-improvement opt-in before completing this sharing classification.
+  Standard provider and user-initiated-transfer roles are resolved above;
+  relevant partner collection remains included in the inventory.
 - **Encryption in transit:** The saved Google draft answers Yes for the defined
   device-to-server transfer. The inspected release client uses HTTPS for its
   account/API requests, and the verified signed Android bundle disables cleartext
-  traffic. That source and artifact evidence supports this answer. Provider
-  roles/sharing and operational deletion remain separate questions; local writing
+  traffic. That source and artifact evidence supports this answer. The specific
+  UGC opt-in and operational deletion remain separate questions; local writing
   and exported backups remain unencrypted by COPY Box.
 - **Retention and deletion:** Verify actual history/report/session retention and
   deletion fulfilment with the operational service. Do not promise immediate
@@ -260,10 +325,17 @@ platform features. [public-page-additions.md](public-page-additions.md) supplies
 COPY Box wording so the local-only workspace, AI history retention, shared
 account deletion and correct Settings path are explicit. The original four-page
 base is merged as `da283a8dfe7b51f68ad7b581b8555f017cac3c54` but remains undeployed.
-The required analytics paragraph is prepared in open Draft
+The required analytics paragraph was reviewed in
 [PR 44](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/44), source
 `a214334239b07875cef2818541e30a15d2271787`, with exact parent da283. It changes
-only `website/privacy-policy.html` and has not been merged or deployed. The old
-base alone does not resolve this new disclosure; the final complete publication
-commit must be established after review. No new Render authentication or
-deployment attempt occurred. The wording introduces no fixed deletion deadline.
+only `website/privacy-policy.html` and is now merged as
+**`b95ce8390e03b4a31a43b592e0d3dd980823f292`**, with a tree matching the reviewed
+source. PR 44 is closed/merged, no longer Draft. This is the exact complete
+website publication target; it is **not deployed**. No website deployment,
+new browser-authentication attempt, or configuration change occurred. A separate
+backend trigger for reviewed routing fix `901ca58c95ba7a16abf56e20361f7f021924df3e`
+was attempted and rejected by automatic approval review; no deployment was
+created. Read-only verification confirms both live commits unchanged. The
+configured website branch was not altered or deployed because its unrelated
+policy/Flutter inputs would affect published output. The wording introduces no
+fixed deletion deadline.
