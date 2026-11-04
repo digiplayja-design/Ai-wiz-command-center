@@ -27,7 +27,27 @@
     "app_access_instructions_file": "google-app-access.txt",
     "release_notes_file": "release-notes.txt",
     "app_access_instruction_name": "KORLIX account for AI refinement",
-    "additional_access_instructions_file": "google-app-access-short.txt"
+    "additional_access_instructions_file": "google-app-access-short.txt",
+    "console_setup_status": "authenticated_organization_package_available_creation_form_staged_not_submitted",
+    "developer_account_id": "4772708594176030332",
+    "organization_account_confirmed": "KORLIX",
+    "exact_package_search_result": "No results found",
+    "create_app_form": {
+      "staged_fields_only": true,
+      "title": "KORLIX COPY Box",
+      "package_name": "com.korlixdeveloper.copybox",
+      "default_language": "English (United States)",
+      "locale": "en-US",
+      "application_type": "App",
+      "package_availability_check_result": "Package name available",
+      "free_or_paid": null,
+      "developer_program_policies_checked": false,
+      "us_export_declaration_checked": false,
+      "create_app_submitted": false
+    },
+    "copybox_record_created": false,
+    "play_upload_certificate_established": false,
+    "play_release_version_code": null
   },
   "apple_app_store": {
     "name": "KORLIX COPY Box",
@@ -50,24 +70,41 @@
     "first_version_whats_new_field": false,
     "release_option": "manual_after_approval",
     "release_option_saved": true,
-    "private_console_review_section_status": "all_contact_notes_and_credentials_blank_after_reload",
+    "private_console_review_section_status": "contact_and_complete_notes_accepted_and_saved_reviewer_username_password_unsupplied",
     "app_store_build_selection_saved": true,
     "selected_build_uuid": "ddd61c5d-982c-404c-9aaa-d280bd0495be",
     "subtitle_saved": true,
     "primary_category_saved": true,
     "secondary_category_console_value": null,
     "privacy_policy_url_saved": true,
-    "privacy_declaration_status": "seven_data_types_fully_configured_saved_draft_publication_awaits_user_attestation",
+    "privacy_declaration_status": "published_after_explicit_user_approval_seven_classifications_unchanged",
     "privacy_saved_detail_summary": {
       "data_type_count": 7,
       "purpose": "App Functionality",
       "linked_to_user": true,
       "used_for_tracking": false,
       "no_tracking_supported_by_deployed_source_review": true,
-      "published": false
+      "published": true,
+      "published_by": "Ricardo Bailey",
+      "publication_observed_date": "2026-11-04"
     },
     "age_questionnaire_status": "inspected_cancelled_without_save_ai_content_frequency_unresolved",
-    "content_rights_status": "inspected_no_answer_submitted"
+    "content_rights_status": "inspected_no_answer_submitted",
+    "private_console_contact_and_notes_saved": true,
+    "private_console_review_section_complete": false,
+    "private_console_review_verification": {
+      "reload_save_disabled": true,
+      "first_and_last_names_persisted": true,
+      "notes_character_count": 2606,
+      "phone_and_email_exact_value_comparison_available": false,
+      "phone_and_email_readback_limit": "The observation layer redacts these fields; Save succeeded, but exact-value readback comparison was unavailable.",
+      "actual_phone_recorded_in_repository": false
+    },
+    "paid_apps_agreement_status": "Active",
+    "paid_apps_agreement_displayed_term": {
+      "start": "2026-11-04",
+      "end": "2027-06-22"
+    }
   },
   "testflight": {
     "what_to_test_file": "testflight-what-to-test.txt",
@@ -88,7 +125,7 @@
     "country_availability": null,
     "release_schedule": null,
     "store_age_rating": null,
-    "privacy_attestations": null,
+    "google_play_privacy_attestations": null,
     "review_account": null
   },
   "evidence_files": {

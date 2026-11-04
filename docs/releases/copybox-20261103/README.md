@@ -35,21 +35,28 @@ installation has been recorded. The public App Store version remains
 All twelve Apple screenshots are uploaded and visible: four large iPhone,
 four medium iPhone, and four iPad images. A fresh listing tab confirms the public
 promotional text, description, keywords, support URL, copyright, version, and
-manual release option are saved. The review section remains blank after a save
-attempt failed for missing first name, last name, and phone. The selected build
-1.0.0 (1) persisted after reloading the version tab, with Save disabled. App
+manual release option are saved. App Review contact details and the complete
+prepared notes were accepted and saved. After reload, Save was disabled, the
+contact names persisted, and the notes contained 2,606 characters. Phone and
+email were redacted by the observation layer, so exact-value readback was not
+available; no actual phone value is stored here. Reviewer username/password
+remain unsupplied, and the sign-in-required checkbox remains checked. The selected
+build 1.0.0 (1) persisted after reloading the version tab, with Save disabled. App
 Information confirmed the subtitle and primary Productivity category saved;
 the secondary category is blank. The privacy policy URL is saved and visible.
-The updated Paid Apps Agreement awaits the account holder's decision; COPY
-Box-specific price and territories remain unresolved.
+After the user's explicit approval, the updated Paid Apps Agreement was accepted
+through secure second-factor verification. Business Agreements shows **Active**
+for **November 4, 2026–June 22, 2027**. COPY Box-specific price and territories
+remain unresolved.
 
-Seven privacy categories are fully configured in the saved draft: Email
+Seven privacy categories are published: Email
 Address, Customer Support, Other User Content, User ID, Device ID, Product
 Interaction, and Other Data Types. Each uses **App Functionality**, is **linked
 to the user**, and is **not used for tracking**. The exact deployed-source review
-supports the no-tracking conclusion. The final Publish confirmation was not clicked because its final
-accuracy/compliance/update attestation awaits action-time user approval; the
-privacy declaration remains unpublished.
+supports the no-tracking conclusion. After the user explicitly approved the
+publication attestation, the final Publish confirmation was accepted. App Store
+Connect now explicitly displays **Published by Ricardo Bailey**; all seven
+classifications remain unchanged.
 
 The age questionnaire was inspected and cancelled without saving. Actual AI
 content frequency remains unresolved: the general backend `/api/generate` path
@@ -174,9 +181,9 @@ its box/backup files or automatically synchronize them to other devices.
 The [submission package](store-submission/README.md) contains the English store
 name, subtitle, short/full descriptions, keywords, review/access notes, release
 notes, TestFlight testing notes, privacy evidence, and drafted public-page
-additions. Store field lengths were checked; reviewer credentials, personal
-contact details, price choices, and privacy attestations
-have not been invented or placed in source.
+additions. Store field lengths were checked. Reviewer credentials and actual
+phone values are excluded from source; COPY Box price and availability choices
+remain unresolved. The completed Apple approvals are recorded as status evidence.
 
 The [visual package](store-assets/README.md) contains the monochrome KORLIX app
 icons, Google Play feature graphic, and four screenshots each for Android phone
@@ -192,7 +199,10 @@ Box-specific HTML additions are merged through
 [pull request 43](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/43)
 as `da283a8dfe7b51f68ad7b581b8555f017cac3c54`, whose tree matches the reviewed
 source. That exact commit has not been deployed; Render still serves the
-October 25 release. See the [November 4 continuation](continuation-20261104.md)
+October 25 release. Render rejected the existing GitHub connection as a
+deployment connection rather than a sign-in method, and the alternative secure
+sign-in request was declined. Authentication attempts stopped without a
+deployment. See the [November 4 continuation](continuation-20261104.md)
 for the safe deployment target and remaining account steps.
 
 ## Account and signing state observed
@@ -215,38 +225,45 @@ team and app-private keychain entitlements; debugging is disabled and
 `beta-reports-active` is true.
 
 The dedicated Android key `KORLIX_COPYBOX_ANDROID_UPLOAD_KEY` remains
-unconfigured, and COPY Box's Google Play record remains unverified. The earlier
-available key belonged to KORLIX Brain and was not substituted for COPY Box.
+unconfigured. Google Play sign-in succeeded and the KORLIX organization account,
+developer ID `4772708594176030332`, was positively identified. Its homepage
+listed five apps, none COPY Box; the exact package search returned **No results
+found**. The Create app form was staged with **KORLIX COPY Box**,
+`com.korlixdeveloper.copybox`, **English (United States)**, and **App**. Check
+availability explicitly returned **Package name available**. Free/paid remains
+unset, the Developer Program Policies and US export declarations are unchecked,
+and **Create app was not submitted**. No COPY Box Play record, upload certificate,
+or store release version code has been established. The earlier available key
+belonged to KORLIX Brain and was not substituted for COPY Box.
 
 ## Remaining release gates
 
-1. Complete the blank App Review contact, email, notes, and credential fields
-   using authorized details and a dedicated working KORLIX account with
-   sufficient AI allowance and installation capacity.
+1. Supply and verify a dedicated working KORLIX reviewer login in the private
+   App Review fields, with sufficient AI allowance and installation capacity.
+   Contact details and prepared notes are saved, but reviewer username/password
+   remain unsupplied; the review section is not complete.
 2. Obtain COPY Box-specific price and country availability choices. The version
    is saved for manual release. The November 2 free/$0 and worldwide/all-175
    approvals concerned **Brain + Voice**; their exact antecedent was checked and
    they do not authorize COPY Box settings.
-3. Obtain the account holder's action-time approval for the App Privacy
-   publication attestation and the updated Paid Apps Agreement. All seven
-   privacy classifications are saved, and the no-tracking conclusion is supported
-   by the deployed-source review; the declaration is not yet published.
-4. Evaluate actual AI content frequency through a live account, complete the
+3. Evaluate actual AI content frequency through a live account, complete the
    age/content questionnaire, and supply the content-rights declaration. Configure
    TestFlight testing and complete physical iPhone/iPad acceptance: clipboard and
    paste prompts, file picker/share sheets, local persistence, offline launch,
    large text, account switching, live sign-in/password reset, optional AI
    consent/refinement/report, and account-deletion confirmation.
-5. Configure `KORLIX_COPYBOX_ANDROID_UPLOAD_KEY`, verify/create the Google Play
-   record, and run `korlix-copybox-android-candidate`. Verify the signed AAB,
+4. Complete the staged Google Play creation form after the COPY Box free/paid
+   choice and required declarations are settled. Configure
+   `KORLIX_COPYBOX_ANDROID_UPLOAD_KEY` and run
+   `korlix-copybox-android-candidate`. Verify the signed AAB,
    bundletool page-alignment configuration, and generated APKs; complete device
    acceptance including a 16 KB-page Android environment. Debug APK evidence does
    not establish release-bundle packaging or runtime behavior.
-6. Authenticate Render and deploy only the reviewed merge commit
+5. Authenticate Render and deploy only the reviewed merge commit
    `da283a8dfe7b51f68ad7b581b8555f017cac3c54`, then verify all four COPY Box
    public policy/support pages. A generic configured-branch deployment is not
    the reviewed publication target.
-7. Submit the completed store listings after the remaining release gates are
+6. Submit the completed store listings after the remaining release gates are
    satisfied. Neither public review nor public mobile availability is complete.
 
 The candidate and upload workflows remain in `codemagic.yaml`. The iOS upload

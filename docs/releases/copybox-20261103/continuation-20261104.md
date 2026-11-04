@@ -37,8 +37,12 @@ The final Render connector check still reports live deploy
 branch comparison showed unrelated differences from the live release, so a
 generic latest-branch deployment is not the reviewed publication target.
 
-Render authentication remains incomplete. No deployment was triggered and the
-service configuration was not changed. Publish only
+Render authentication remains incomplete. After the approved existing GitHub
+sign-in choice was tried, Render explicitly rejected that connection as being
+for deployment access only, not sign-in. The subsequent alternative secure
+sign-in request was declined. Further authentication attempts stopped. No
+deployment was triggered and the service configuration was not changed; the
+live commit remains `e38d6b73a37ff812a29da3b64027a35e01979c34`. Publish only
 `da283a8dfe7b51f68ad7b581b8555f017cac3c54` through the
 [existing Render service](https://dashboard.render.com/static/srv-d8ekf7t7vvec73dpar60)
 using **Manual Deploy → Deploy a specific commit**, or an authorized API/CLI
@@ -94,32 +98,42 @@ The iPad confirmation was accepted and each screenshot well shows 4 of 10.
 
 A fresh listing tab confirms the public promotional text, description, keywords,
 support URL, `2026 Korlix INC` copyright, version 1.0.0, and manual release option
-are saved. App Review email, notes, and contact fields remain blank because the
-whole review section failed validation for missing first name, last name, and
-phone. After reloading the version tab, selected build
+are saved. App Review contact first/last name, the previously user-provided
+phone, support email, and the complete prepared notes were subsequently
+entered and saved successfully. Reload showed Save disabled, the contact names
+persisted, and all 2,606 notes characters present. Phone and email were redacted
+by the observation layer, so exact-value readback could not be compared. The
+actual phone is not recorded in this repository. This establishes that the
+contact and notes save was accepted; reviewer username/password remain
+unsupplied and the review section is not complete. After reloading the version
+tab, selected build
 `ddd61c5d-982c-404c-9aaa-d280bd0495be` (1.0.0 build 1) persisted, Save was disabled,
-and manual release remained selected. Review contact/name/phone/email/notes and
-credentials remained blank, with the default sign-in-required checkbox checked.
+and manual release remained selected. The default sign-in-required checkbox
+remains checked.
 
 App Information confirmed **Saved** for subtitle “Save, organize, refine &
 reuse” and primary category **Productivity**; the secondary category is blank.
 The privacy policy URL, `https://www.korlixdeveloper.com/privacy-policy.html`, is
-saved and visible. All details are saved for seven draft privacy categories:
+saved and visible. All details are published for seven privacy categories:
 Email Address, Customer Support, Other User Content, User ID, Device ID, Product
 Interaction, and Other Data Types. Every category uses **App Functionality**,
 **linked to the user: Yes**, and **tracking: No**. The exact deployed-source
 review supports the no-tracking conclusion, resolving the earlier generic
 tracking-verification question for the COPY Box flows.
 
-The final Publish confirmation was not clicked. The final modal requires agreement that the responses
-are accurate and compliant and will be promptly updated; that action-time
-attestation awaits user approval alongside the updated Paid Apps Agreement.
+The user explicitly replied **Approve** for the two prepared Apple actions.
+The final privacy Publish confirmation was then accepted, and App Store Connect
+now explicitly displays **Published by Ricardo Bailey**. The seven data-type
+classifications were unchanged. The updated Paid Apps Agreement was also
+accepted after secure SMS second-factor verification; Business Agreements shows
+**Active**, with the displayed term **November 4, 2026–June 22, 2027**.
+
 The age questionnaire was inspected and cancelled without saving. Built-in app
 capabilities are documented, but actual AI content frequency needs live-account
 evaluation because the general `/api/generate` route has no COPY Box topic/output
 filter. The content-rights form was inspected without submitting an answer.
 The canonical [release status](release-status.json) records these remaining
-review, declaration, and approval requirements.
+review and declaration requirements.
 
 The four medium images come from focused capture run
 [41872257288](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41872257288),
@@ -128,26 +142,44 @@ commit `9eda2fb7254803b607dbfb69e88500b1ec42dc1a`. That commit changes screensho
 and documentation only; it does not change application behavior, native
 configuration, signing, lockfiles, or the workflow used by the signed build.
 
-The updated Paid Apps Agreement awaits the account holder's decision. COPY Box's
-price and country availability remain undecided. Exact prior-conversation
+COPY Box's price and country availability remain undecided. Exact prior-conversation
 antecedent retrieval established that the November 2 free/$0 and worldwide/all
 175 approvals concerned **Brain + Voice**, not the independent COPY Box app.
 Those settings were not transferred to COPY Box.
 
+## Google Play account and staged creation form
+
+Secure sign-in succeeded and the KORLIX organization account was positively
+identified as developer ID `4772708594176030332`. The homepage showed five apps,
+none COPY Box. Searching the exact package `com.korlixdeveloper.copybox` returned
+**No results found**.
+
+The Create app form was staged with **KORLIX COPY Box**, package
+`com.korlixdeveloper.copybox`, **English (United States)**, and application type
+**App**. Clicking Check availability returned **Package name available**.
+Free/paid remains unset; the Developer Program Policies and US export
+declarations remain unchecked. **Create app was not submitted.** This is a
+staged form and availability result, not a created app record. No Android upload
+certificate or store release version code has been established, and no signed
+Android release build or Play upload has occurred.
+
 ## Work still remaining
 
-- Complete the blank review contact/access section. The Apple version build
-  selection is saved and verified after reload.
-- Obtain COPY Box-specific price and availability choices and the account
-  holder's action-time approval for the privacy publication attestation and
-  updated Paid Apps Agreement. All seven privacy classifications are saved.
+- Supply and verify a dedicated working reviewer login with AI allowance and
+  available shared device capacity. App Review contact details and the complete
+  notes are saved, but reviewer username/password remain unsupplied. The Apple
+  version build selection is saved and verified after reload.
+- Obtain COPY Box-specific price and availability choices. The Apple privacy
+  declaration is published and the updated Paid Apps Agreement is Active after
+  the user's explicit approval.
 - Evaluate actual AI content frequency through a live account, complete the age
   questionnaire, and supply the content-rights declaration.
 - Configure deliberate TestFlight testing and complete physical-device and
   live-account acceptance before public submission.
-- Configure the dedicated `KORLIX_COPYBOX_ANDROID_UPLOAD_KEY`, verify/create the
-  separate Google Play record, and build/inspect its signed release AAB. No
-  Android release build or Play upload has occurred.
+- Complete the staged Google Play creation form after the COPY Box free/paid
+  choice and required declarations are settled. Configure the dedicated
+  `KORLIX_COPYBOX_ANDROID_UPLOAD_KEY` and build/inspect its signed release AAB.
+  No Android release build or Play upload has occurred.
 - Authenticate Render, deploy only the exact reviewed merge commit
   `da283a8dfe7b51f68ad7b581b8555f017cac3c54`, and verify the four public pages.
 - Submit completed listings for review after the release gates are satisfied.

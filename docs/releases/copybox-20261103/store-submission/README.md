@@ -5,8 +5,9 @@ Prepared November 3, 2026, for the independent app
 
 This package contains prepared text and evidence for the store forms. The
 November 4 release checkpoint records Apple app **6830765098** and the successful
-signed iOS 1.0.0 (1) upload. Public review, completed privacy declarations, and
-physical-device/live-account acceptance remain outstanding. No reviewer
+signed iOS 1.0.0 (1) upload. Apple privacy disclosures are published and the
+updated Paid Apps Agreement is Active after explicit user approval. Public
+review and physical-device/live-account acceptance remain outstanding. No reviewer
 credentials or personal contact values are stored here. COPY Box price and
 country availability have not been chosen.
 
@@ -14,11 +15,15 @@ See the [release status](../release-status.json) for verified console state and
 evidence limitations. All twelve Apple screenshots and the verified public
 listing fields are saved. The selected 1.0.0 (1) build persisted after reloading
 the version tab, and App Information confirmed the subtitle and Productivity
-category saved. The privacy URL is saved. The App Review section remains blank
-after contact validation errors. All seven privacy categories are fully
-configured in the saved draft: App Functionality, linked to user, and no tracking.
-The source review supports no tracking; publication awaits the user's final
-accuracy/compliance/update attestation. Age/content and content-rights answers
+category saved. The privacy URL is saved. App Review contact details and all
+2,606 prepared notes characters were accepted and saved. Reload confirmed Save
+disabled, the contact names, and the notes. Phone and email were redacted by the
+observation layer, so exact-value readback was unavailable; no actual phone
+value is stored here. Reviewer username/password remain unsupplied and the
+sign-in-required checkbox remains checked. All seven privacy categories are
+published with App Functionality, linked to user, and no tracking; the console
+explicitly says **Published by Ricardo Bailey**. The source review supports no
+tracking. Age/content and content-rights answers
 remain incomplete. This package does not establish that every required form is
 complete.
 
@@ -73,14 +78,26 @@ Messenger. The scoped additions were merged in PR 43 as
 `da283a8dfe7b51f68ad7b581b8555f017cac3c54`, with a tree matching reviewed source
 `d810888cba620502e799a3022090e1a5f6748d9d`, but that exact commit has not been
 deployed. The November 4 Render check still shows the October 25 live release.
+Render rejected the existing GitHub connection as deployment-only, and the
+alternative secure sign-in request was declined. Authentication attempts
+stopped without triggering a deployment.
 
 ## Remaining form inputs
 
-- Verify/create the Google Play app record for the exact package. The separate
-  Apple record is now verified as `6830765098`.
-- Complete the blank Apple review section. The version build selection is saved
-  and verified after reload. All twelve Apple screenshots are uploaded, with four images
-  visible in each large-iPhone, medium-iPhone, and iPad well. Upload the Play
+- Complete the staged Google Play creation form. The authenticated KORLIX
+  organization is developer ID `4772708594176030332`; its five-app list and exact
+  package search showed no COPY Box record. Check availability confirmed
+  `com.korlixdeveloper.copybox` is available. Title **KORLIX COPY Box**, package,
+  **English (United States)**, and **App** are staged, but free/paid is unset and
+  the Developer Program Policies and US export declarations are unchecked.
+  **Create app was not submitted**; no Play record, upload certificate, or store
+  release version code has been established. The separate Apple record is
+  verified as `6830765098`.
+- Complete the private reviewer access fields. Contact details and the prepared
+  notes are saved; reviewer username/password remain unsupplied. The version
+  build selection is saved and verified after reload. All twelve Apple screenshots
+  are uploaded, with four images visible in each large-iPhone, medium-iPhone, and
+  iPad well. Upload the Play
   screenshots, feature graphic, and icon after its app setup. The current Apple
   Media Manager requires the medium iPhone group; the large group is optional,
   and the prepared
@@ -89,8 +106,9 @@ deployed. The November 4 Render check still shows the October 25 live release.
   dimensions and checksums. The earlier interface previews are not the upload set.
 - Supply a dedicated, working KORLIX reviewer login with sufficient AI allowance
   and available device capacity through the consoles' private review fields. No
-  reviewer account was created by preparing these files. Supply the authorized
-  App Review business contact phone.
+  reviewer account was created by preparing these files. The authorized App
+  Review business contact phone was supplied privately and accepted by Save;
+  its actual value is not stored here.
 - Configure the COPY Box Android upload key and generate its signed candidate.
   Apple provisioning and the first signed upload are complete. Configure
   TestFlight testing and complete physical-device/live-account acceptance.
@@ -99,13 +117,14 @@ deployed. The November 4 Render check still shows the October 25 live release.
   without saving; the general generation route has no COPY Box topic/output
   filter. The 16+ signup rule does not determine the store rating. The content-
   rights form was inspected without submitting an answer.
-- Obtain action-time user approval for the privacy publication attestation.
-  All seven categories have saved App Functionality, linked-to-user, no-tracking
-  details; the exact deployed-source review supports that tracking conclusion.
-  Operational retention, processor treatment, and deletion fulfilment remain
+- Complete the remaining operational privacy checks for the Play declarations.
+  All seven Apple categories are published with App Functionality, linked-to-user,
+  no-tracking details after explicit user approval; the exact deployed-source
+  review supports that tracking conclusion. Operational retention, processor
+  treatment, and deletion fulfilment remain
   separate evidence questions in [privacy-evidence.md](privacy-evidence.md).
-- Obtain COPY Box-specific price and availability choices, and resolve
-  the updated Paid Apps Agreement with the account holder. Manual release is
+- Obtain COPY Box-specific price and availability choices. The updated Paid Apps
+  Agreement is Active for November 4, 2026–June 22, 2027. Manual release is
   already saved for the Apple version. The November 2 free and worldwide
   approvals concerned Brain + Voice and were not applied here.
   This package introduces no subscription product, trial, paid price, or

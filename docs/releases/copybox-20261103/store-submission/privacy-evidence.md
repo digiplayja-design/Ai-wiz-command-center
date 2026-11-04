@@ -109,9 +109,9 @@ See the official [Apple privacy guidance](https://developer.apple.com/app-store/
 and [Google Data safety guidance](https://support.google.com/googleplay/android-developer/answer/10787469?hl=en)
 for the category definitions and distinction between optional use and disclosure.
 
-## Saved Apple privacy draft and current conclusion — November 4, 2026
+## Published Apple privacy declaration and current conclusion — November 4, 2026
 
-App Store Connect app `6830765098` has saved details for seven data types:
+App Store Connect app `6830765098` has published details for seven data types:
 Email Address, Customer Support, Other User Content, User ID, Device ID,
 Product Interaction, and Other Data Types. Every data type is configured for
 **App Functionality**, **linked to the user: Yes**, and **used for tracking: No**.
@@ -122,10 +122,13 @@ practices is resolved for this release scope; it is not a remaining gate.
 This does not change the separate retention/deletion and processor-contract
 questions below or support a blanket “no data collected” answer.
 
-The privacy policy URL is saved. The declaration is still a draft. The final Publish confirmation was not clicked because the final modal asks the publisher to agree that the
-responses are accurate and compliant and will be promptly updated. That
-publication attestation awaits action-time user approval, alongside the updated
-Paid Apps Agreement.
+The privacy policy URL is saved. The user explicitly approved the final
+publication attestation, which covers response accuracy, compliance, and prompt
+updates. The final Publish confirmation was then accepted. App Store Connect
+now explicitly displays **Published by Ricardo Bailey**; the seven
+classifications remain unchanged. The separately approved Paid Apps Agreement
+was accepted after secure second-factor verification, and Business Agreements
+shows **Active** for **November 4, 2026–June 22, 2027**.
 
 The age questionnaire was inspected and cancelled without saving. Built-in app
 capability evidence does not establish the frequency of generated AI content:

@@ -1,7 +1,7 @@
 {
   "status": "ios_uploaded_store_setup_incomplete",
-  "recorded_at_utc": "2026-11-04T17:29:33Z",
-  "evidence_basis": "Authenticated Apple Developer, App Store Connect, and Codemagic console observations on November 4, 2026; no credential values are stored in this checkpoint.",
+  "recorded_at_utc": "2026-11-04T18:13:37Z",
+  "evidence_basis": "Authenticated Apple Developer, App Store Connect, Codemagic, Google Play, and Render observations on November 4, 2026, including user-approved final Apple actions, accepted review-contact/notes save, staged Google Play creation, and the blocked exact website deployment; no credential or actual phone values are stored in this checkpoint.",
   "identity": {
     "display_name": "KORLIX COPY Box",
     "bundle_id": "com.korlixdeveloper.copybox",
@@ -99,9 +99,9 @@
     "approved": false,
     "publicly_released": false,
     "build_selection_saved": true,
-    "listing_fields": "Public fields listed below were confirmed saved in a fresh listing tab; the review section remains blank.",
-    "review_section": "Contact first name, last name, phone, email, notes, and reviewer credentials remain blank after reload; the whole review section previously failed contact validation.",
-    "review_contact_complete": false,
+    "listing_fields": "Public fields listed below were confirmed saved in a fresh listing tab; App Review contact details and the complete prepared notes were subsequently accepted and saved.",
+    "review_section": "Contact first/last name, the previously user-provided phone, support email, and complete prepared notes were entered and Save succeeded. After reload, Save was disabled, names persisted, and notes contained 2606 characters. Phone/email were redacted by the observation layer, so exact-value readback was unavailable. Reviewer username/password remain unsupplied; the review section is incomplete.",
+    "review_contact_save_accepted": true,
     "reviewer_account_supplied": false,
     "screenshots": {
       "iphone_large": {
@@ -135,9 +135,9 @@
         "final_saved_state_verified": true
       }
     },
-    "privacy_declaration_completed": false,
+    "privacy_declaration_completed": true,
     "age_rating_completed": false,
-    "paid_apps_agreement": "new version awaits user approval",
+    "paid_apps_agreement": "Active",
     "price": null,
     "country_availability": null,
     "release_schedule": null,
@@ -157,7 +157,7 @@
     "selected_build_number": "1",
     "build_selection_verification": "The version tab was reloaded; the selected build row persisted and Save was disabled.",
     "review_sign_in_required_checked": true,
-    "review_sign_in_required_note": "Default checkbox remained checked on the otherwise blank review form.",
+    "review_sign_in_required_note": "The default checkbox remains checked; reviewer username/password have not been supplied.",
     "app_information": {
       "subtitle": "Save, organize, refine & reuse",
       "primary_category": "Productivity",
@@ -166,7 +166,7 @@
     },
     "privacy_policy_url": "https://www.korlixdeveloper.com/privacy-policy.html",
     "privacy_policy_url_saved": true,
-    "privacy_draft": {
+    "privacy_declaration": {
       "saved_data_categories": [
         "Email Address",
         "Customer Support",
@@ -177,22 +177,44 @@
         "Other Data Types"
       ],
       "purpose_linkage_tracking_setup": "saved_for_all_seven_data_types",
-      "published": false,
+      "published": true,
       "saved_details_for_each_data_type": {
         "purpose": "App Functionality",
         "linked_to_user": true,
         "used_for_tracking": false
       },
       "tracking_conclusion": "The exact deployed-source review supports no tracking for the COPY Box data flows; generic tracking verification is no longer an unresolved gate.",
-      "publication_approval_required": true,
-      "publication_confirmation": "The final modal requires agreement that responses are accurate and compliant and will be promptly updated; action-time user approval is still required.",
+      "publication_approval_pending": false,
+      "publication_confirmation": "After the user explicitly approved the accuracy/compliance/update attestation, the final Publish confirmation was accepted. The console explicitly displays Published by Ricardo Bailey.",
       "publish_confirmation_opened": true,
-      "final_publish_confirmation_clicked": false
+      "final_publish_confirmation_clicked": true,
+      "publication_user_approval_received": true,
+      "publication_user_approval_response": "Approve",
+      "published_by": "Ricardo Bailey",
+      "publication_observed_date": "2026-11-04"
     },
     "privacy_details_saved": true,
     "age_rating_status": "Questionnaire inspected and cancelled without saving. Actual AI content-frequency answers remain unresolved pending live-account evaluation of the general generation route.",
     "age_rating_evidence_limit": "The deployed /api/generate route has no COPY Box topic/output filter; built-in capability evidence alone does not establish generated-content frequency.",
-    "content_rights_status": "Form inspected; no answer submitted."
+    "content_rights_status": "Form inspected; no answer submitted.",
+    "review_section_complete": false,
+    "review_contact_verification": {
+      "reload_save_disabled": true,
+      "first_and_last_names_persisted": true,
+      "phone_and_email_redacted_by_observation_layer": true,
+      "phone_and_email_exact_readback_verified": false,
+      "actual_phone_recorded_in_repository": false
+    },
+    "review_notes_saved": true,
+    "review_notes_character_count": 2606,
+    "paid_apps_agreement_details": {
+      "user_approval_received": true,
+      "user_approval_response": "Approve",
+      "accepted_after_secure_sms_second_factor": true,
+      "business_agreements_observed_status": "Active",
+      "displayed_term_start": "2026-11-04",
+      "displayed_term_end": "2027-06-22"
+    }
   },
   "preference_scope": {
     "copybox_price_and_territories_confirmed": false,
@@ -205,7 +227,32 @@
     "play_record_verified": false,
     "play_upload_completed": false,
     "public_review_submitted": false,
-    "existing_debug_apk_evidence": "validation-run10/build-verification.json"
+    "existing_debug_apk_evidence": "validation-run10/build-verification.json",
+    "play_console": {
+      "secure_sign_in_succeeded": true,
+      "organization_account_confirmed": "KORLIX",
+      "developer_account_id": "4772708594176030332",
+      "homepage_app_count": 5,
+      "copybox_present_in_homepage_list": false,
+      "exact_package_search": "com.korlixdeveloper.copybox",
+      "exact_package_search_result": "No results found",
+      "create_app_form": {
+        "staged_fields_only": true,
+        "title": "KORLIX COPY Box",
+        "package_name": "com.korlixdeveloper.copybox",
+        "default_language": "English (United States)",
+        "locale": "en-US",
+        "application_type": "App",
+        "package_availability_check_result": "Package name available",
+        "free_or_paid": null,
+        "developer_program_policies_checked": false,
+        "us_export_declaration_checked": false,
+        "create_app_submitted": false
+      },
+      "copybox_record_created": false,
+      "play_upload_certificate_established": false,
+      "play_release_version_code": null
+    }
   },
   "public_policy_pages": {
     "reviewed_candidate_commit": "d810888cba620502e799a3022090e1a5f6748d9d",
@@ -215,22 +262,28 @@
     "pull_request_state": "merged",
     "safe_deployment_commit": "da283a8dfe7b51f68ad7b581b8555f017cac3c54",
     "merge_tree_matches_reviewed_source": true,
-    "deployment_blocker": "Render authentication is still required to deploy the exact safe commit.",
+    "deployment_blocker": "Render rejected the approved existing GitHub connection as deployment-only, not a sign-in method. The alternative secure sign-in request was declined. Authentication remains incomplete, further attempts stopped, and no deployment occurred.",
     "render_service_id": "srv-d8ekf7t7vvec73dpar60",
     "last_live_deploy_id": "dep-dbenft8m7kps73ef1td0",
     "last_live_commit": "e38d6b73a37ff812a29da3b64027a35e01979c34",
     "last_live_deploy_date": "2026-10-25",
     "configured_source_branch": "release/k135z-frontend-20260919",
     "automatic_deployments_enabled": false,
-    "deployment_instruction": "Deploy only da283a8dfe7b51f68ad7b581b8555f017cac3c54; do not deploy the generic configured-branch head."
+    "deployment_instruction": "Deploy only da283a8dfe7b51f68ad7b581b8555f017cac3c54; do not deploy the generic configured-branch head.",
+    "authentication_attempt_results": {
+      "existing_github_sign_in_choice_approved": true,
+      "existing_github_connection_result": "Render explicitly rejected the connection as deployment-only, not sign-in.",
+      "alternative_secure_sign_in_result": "declined",
+      "further_authentication_attempts_stopped": true,
+      "deployment_triggered": false
+    }
   },
   "remaining_gates": [
-    "Complete the blank App Review contact, email, notes, and credential fields using authorized details and a dedicated working account with AI allowance and installation capacity.",
+    "Supply and verify a dedicated working KORLIX reviewer login in the private App Review fields with sufficient AI allowance and installation capacity. Contact details and complete prepared notes are saved; reviewer username/password remain unsupplied.",
     "Obtain COPY Box-specific price and country-availability choices; the Apple version is already saved for manual release.",
-    "Obtain action-time user approval for the App Privacy publication attestation and the updated Paid Apps Agreement; the seven data-type classifications are saved and no-tracking is supported by the deployed-source review.",
     "Evaluate actual AI content frequency through a live account, complete the age/content questionnaire, and supply the content-rights declaration.",
     "Configure deliberate TestFlight testing and complete physical-device/live-account acceptance.",
-    "Configure the dedicated Android upload key, build/inspect the release AAB and generated APKs, and complete Play setup/testing.",
+    "Complete the staged Google Play creation form after the COPY Box free/paid choice and required declarations are settled; configure the dedicated Android upload key, build/inspect the release AAB and generated APKs, and complete Play setup/testing.",
     "Authenticate Render, deploy only the reviewed merge commit da283a8dfe7b51f68ad7b581b8555f017cac3c54, and verify all four public policy/support pages.",
     "Submit completed store listings for review after the remaining release gates are satisfied."
   ],
