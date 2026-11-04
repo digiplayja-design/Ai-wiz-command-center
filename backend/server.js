@@ -4576,10 +4576,15 @@ app.post("/api/generate", async (req, res) => {
       });
     }
 
-    const resumePolicy = resumeTextPolicy(req.body);
-    const liveSearchNeeded = resumePolicy?.liveSearchNeeded ??
+    // COPY Box edits private text; words in that text must not request tools.
+    const copyBoxRewrite = req.body.source === 'korlix_copybox' &&
+      req.body.purpose === 'copy_box_rewrite';
+    const textPolicy = copyBoxRewrite
+      ? { liveSearchNeeded: false, fileRequested: false }
+      : resumeTextPolicy(req.body);
+    const liveSearchNeeded = textPolicy?.liveSearchNeeded ??
       (needsOfficialSourceSearch(command, selectedHistory) || shouldUseLiveSearch(command));
-    const fileRequested = resumePolicy?.fileRequested ?? wantsFile(command);
+    const fileRequested = textPolicy?.fileRequested ?? wantsFile(command);
     const creditsNeeded = calculateCredits({
       liveSearchNeeded,
       fileRequested,
