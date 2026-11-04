@@ -2,7 +2,7 @@
   "app": "KORLIX COPY Box",
   "bundle_id": "com.korlixdeveloper.copybox",
   "locale": "en-US",
-  "capture_source_commit": null,
+  "capture_source_commit": "d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4",
   "capture_method": "Actual Flutter app widgets, controlled sample data, no network",
   "capture_fixture": "apps/korlix_copy_box/test/copybox_preview_test.dart",
   "native_device_acceptance": false,
@@ -17,7 +17,8 @@
         1080,
         1920
       ],
-      "status": "pending_capture"
+      "status": "packaged",
+      "raw_sha256": "98aa0ef664f2280859103a169c57491be31cd7974d76c53198ddd9953b354837"
     },
     {
       "file": "google-play/phone/02-templates.png",
@@ -26,7 +27,8 @@
         1080,
         1920
       ],
-      "status": "pending_capture"
+      "status": "packaged",
+      "raw_sha256": "d1d1ab90dfb8ecc6a02c7bf31875a9ee760364a69b904668f05a2f9b8ec4ae75"
     },
     {
       "file": "google-play/phone/03-focus-editor.png",
@@ -35,7 +37,8 @@
         1080,
         1920
       ],
-      "status": "pending_capture"
+      "status": "packaged",
+      "raw_sha256": "fd47dd0583f1b0fd4cf72f3f05f92e989d72a1641eefe714cd6119471a8adef2"
     },
     {
       "file": "google-play/phone/04-dark-workspace.png",
@@ -44,7 +47,8 @@
         1080,
         1920
       ],
-      "status": "pending_capture"
+      "status": "packaged",
+      "raw_sha256": "3b5849df8e19c8d334122da23410e867efd449dfd4825189997b08af82ce016d"
     },
     {
       "file": "app-store/iphone/01-workspace.png",
@@ -53,7 +57,8 @@
         1260,
         2736
       ],
-      "status": "pending_capture"
+      "status": "packaged",
+      "raw_sha256": "04cc891a5145b181a3e3e77e1c01cf3d6fe6f0e05344f44946bce33e318f61b8"
     },
     {
       "file": "app-store/iphone/02-templates.png",
@@ -62,7 +67,8 @@
         1260,
         2736
       ],
-      "status": "pending_capture"
+      "status": "packaged",
+      "raw_sha256": "f332c13b45deff89de7879b0cd8649c83337d2ccadd45a939d00f7569b584146"
     },
     {
       "file": "app-store/iphone/03-focus-editor.png",
@@ -71,7 +77,8 @@
         1260,
         2736
       ],
-      "status": "pending_capture"
+      "status": "packaged",
+      "raw_sha256": "53a7facff76983379b0781a7355f2c3600999fc000183fe850c416be49b27920"
     },
     {
       "file": "app-store/iphone/04-dark-workspace.png",
@@ -80,7 +87,8 @@
         1260,
         2736
       ],
-      "status": "pending_capture"
+      "status": "packaged",
+      "raw_sha256": "2efe161b2baa818f879357d2025d2047728608e701bc5deb51e35760369a80ee"
     },
     {
       "file": "app-store/ipad/01-workspace.png",
@@ -89,7 +97,8 @@
         2064,
         2752
       ],
-      "status": "pending_capture"
+      "status": "packaged",
+      "raw_sha256": "4368a18ffb1d566d5332bf810430a6263aebaf3cd05565a45eb2d07ccfef1a5f"
     },
     {
       "file": "app-store/ipad/02-templates.png",
@@ -98,7 +107,8 @@
         2064,
         2752
       ],
-      "status": "pending_capture"
+      "status": "packaged",
+      "raw_sha256": "43ea0b45a67e0c0b0c64d688de62e5e1b074bb8288d82d6ed8646f2e0e03772c"
     },
     {
       "file": "app-store/ipad/03-focus-editor.png",
@@ -107,7 +117,8 @@
         2064,
         2752
       ],
-      "status": "pending_capture"
+      "status": "packaged",
+      "raw_sha256": "53eecf37e50d77cd1903cdb2a25499f83df82ef429b5c7e5b2208822bcec0ec1"
     },
     {
       "file": "app-store/ipad/04-dark-workspace.png",
@@ -116,7 +127,8 @@
         2064,
         2752
       ],
-      "status": "pending_capture"
+      "status": "packaged",
+      "raw_sha256": "730eaf455d1c9dd0d690dafb88eca66aa010158a7a024a45020a95e7f0f7afc3"
     }
   ],
   "files": [
@@ -129,6 +141,86 @@
       "mode": "RGB",
       "bytes": 580545,
       "sha256": "655fc06c1337b25c2ecd9157ff596569832438acd487228c4879a5765665b466"
+    },
+    {
+      "file": "app-store/ipad/01-workspace.png",
+      "dimensions": [
+        2064,
+        2752
+      ],
+      "mode": "RGB",
+      "bytes": 284733,
+      "sha256": "67bd0edf4d3890b4ce597a034a6628eb5bebd3bfeb8e8cde22a44d75f7fe0a84"
+    },
+    {
+      "file": "app-store/ipad/02-templates.png",
+      "dimensions": [
+        2064,
+        2752
+      ],
+      "mode": "RGB",
+      "bytes": 208620,
+      "sha256": "a4950dda55fc63fc45b21d8c77c7ecec7229f2a2139eb99bfa95aed695fb3871"
+    },
+    {
+      "file": "app-store/ipad/03-focus-editor.png",
+      "dimensions": [
+        2064,
+        2752
+      ],
+      "mode": "RGB",
+      "bytes": 89968,
+      "sha256": "22b7751ca75e6eeeda2b2540ee7ef33917ea844dac4027a70958e5c1c188edff"
+    },
+    {
+      "file": "app-store/ipad/04-dark-workspace.png",
+      "dimensions": [
+        2064,
+        2752
+      ],
+      "mode": "RGB",
+      "bytes": 282264,
+      "sha256": "a0e578172119b044d5a652dc67a383c7a7d41acb682cbae8ab50c26dabde2a21"
+    },
+    {
+      "file": "app-store/iphone/01-workspace.png",
+      "dimensions": [
+        1260,
+        2736
+      ],
+      "mode": "RGB",
+      "bytes": 210056,
+      "sha256": "568af72832a753e40dd68627ae06bb0dea5b91e4e46ef0c64c55e4952b9b8a57"
+    },
+    {
+      "file": "app-store/iphone/02-templates.png",
+      "dimensions": [
+        1260,
+        2736
+      ],
+      "mode": "RGB",
+      "bytes": 188438,
+      "sha256": "3ce19216513eaf7c68517fcaa6f93798f1d211e951f93ac8545bcf165237e377"
+    },
+    {
+      "file": "app-store/iphone/03-focus-editor.png",
+      "dimensions": [
+        1260,
+        2736
+      ],
+      "mode": "RGB",
+      "bytes": 111885,
+      "sha256": "823bf6a9091f33de6aacdf6aa1076210c3dbdedcc00afb197ec46a54810d17a5"
+    },
+    {
+      "file": "app-store/iphone/04-dark-workspace.png",
+      "dimensions": [
+        1260,
+        2736
+      ],
+      "mode": "RGB",
+      "bytes": 208265,
+      "sha256": "ea658b7b89972e1f09b2d1e92483428eb5a926537a63a8b619c0fd57cbffdaa5"
     },
     {
       "file": "google-play/feature-graphic.png",
@@ -163,6 +255,46 @@
         255,
         255
       ]
+    },
+    {
+      "file": "google-play/phone/01-workspace.png",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "mode": "RGB",
+      "bytes": 151838,
+      "sha256": "fb4badb264cbc4529a6d20978fef3915a9f175b6f9c398cadf72f6987b264508"
+    },
+    {
+      "file": "google-play/phone/02-templates.png",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "mode": "RGB",
+      "bytes": 140695,
+      "sha256": "17e510b1ebb5b0912ecf21ff442c1ad6f7e4add6c5dee5b9f92d07f4b3382802"
+    },
+    {
+      "file": "google-play/phone/03-focus-editor.png",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "mode": "RGB",
+      "bytes": 108314,
+      "sha256": "bcfd2bc4786cc42a35ca38ce1dd9b066fa3b79498ad17c1d1eca1a14e62f8748"
+    },
+    {
+      "file": "google-play/phone/04-dark-workspace.png",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "mode": "RGB",
+      "bytes": 150718,
+      "sha256": "5ece7fc971fdfcef5c9a82a601eada9ffb638cbbae4d73e22f22f6b092ee99c0"
     }
   ],
   "official_specifications": [

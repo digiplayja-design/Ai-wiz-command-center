@@ -105,7 +105,7 @@ support before resubmitting it.
 ## Reconciliation evidence
 
 - App behavior: the source anchors in [privacy-evidence.md](privacy-evidence.md).
-- Current published pages: [Privacy](https://www.korlixdeveloper.com/privacy-policy.html),
+- Public pages consulted during preparation: [Privacy](https://www.korlixdeveloper.com/privacy-policy.html),
   [Terms](https://www.korlixdeveloper.com/terms.html),
   [Deletion](https://www.korlixdeveloper.com/delete-account.html),
   [Support](https://www.korlixdeveloper.com/support.html).

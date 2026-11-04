@@ -71,6 +71,13 @@ The source output is
 candidate before any separately authorized Play Console upload. This workflow
 has no Google Play publishing step or Play service-account integration.
 
+The native scanner checks the AAB's ELF load alignment, but an AAB is not the
+APK installed on a device. Before release, also inspect bundletool's
+`PAGE_ALIGNMENT_16K` configuration and the generated APK ZIP alignment, then
+exercise the signed build in a 16 KB-page Android environment. The successful
+debug APK check from run 41844773126 does not verify that later signed bundle's
+packaging or runtime behavior.
+
 ## Official configuration references
 
 Syntax was checked against Codemagic's current documentation:

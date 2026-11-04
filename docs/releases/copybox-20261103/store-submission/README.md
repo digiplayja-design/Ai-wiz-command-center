@@ -8,6 +8,16 @@ record a store upload, a completed privacy declaration, or approval. Store IDs,
 signing credentials, reviewer credentials, pricing, and distribution choices are
 not invented or stored here.
 
+The store text is complete. A signed store release and store submission have not
+been completed, and physical-device/live-account acceptance remains outstanding.
+The separate build and asset records document the verification that has actually
+run.
+
+All twelve store screenshots are generated, packaged and visually reviewed from
+the final app source. The Play feature graphic and upload icon are also prepared.
+Use the paths and checksums in the [asset manifest](../store-assets/manifest.json)
+when populating the store listings.
+
 ## Files
 
 | File | Use |
@@ -21,36 +31,43 @@ not invented or stored here.
 | [release-notes.txt](release-notes.txt) | Initial Android release notes; Apple does not request What's New for a first version |
 | [privacy-evidence.md](privacy-evidence.md) | Source-backed data inventory and proposed store mappings |
 | [public-page-additions.md](public-page-additions.md) | COPY Box-specific additions prepared for the existing public policy/support pages |
-| [screenshot-plan.md](screenshot-plan.md) | Required asset sizes, capture content, alt text, and existing-asset gaps |
+| [screenshot-plan.md](screenshot-plan.md) | Prepared upload assets, dimensions, alt text, and capture provenance |
 
 The JSON points to the exact plain-text files rather than duplicating their
 contents. Keep those files together when entering the forms.
 
 ## Evidence boundary
 
-The app source reviewed here is the validated COPY Box implementation described
-in the [release record](../README.md). The backend evidence is the locally
-available `origin/release/k135z-backend-render-20260919` snapshot at
+The final app source for this handoff is
+`d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4`, with verification recorded in
+[run 10](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41844773126)
+and the [release record](../README.md). That run passed 59 shared tests and 81 app
+tests (140 total), reported no analyzer issues, and built the Android debug APK,
+iOS simulator app and web preview. These are test/preview builds, not signed
+store candidates. The backend evidence was inspected from
+`origin/release/k135z-backend-render-20260919` at
 `92cad91d290d4ac93d273960c1144798f3afd14f`. Reading that snapshot does not prove the
 live server runs that commit. Confirm the deployed revision and actual provider
 configuration before submitting final data-handling attestations.
 
 The public privacy, terms, deletion, and support pages were retrievable on
-November 3, 2026. Their current wording principally names KORLIX AI and Messenger;
-the scoped additions in this folder have not been published.
+November 3, 2026. The retrieved versions principally named KORLIX AI and
+Messenger; the scoped additions in this folder have not been published.
 
 ## Remaining form inputs
 
 - Verify the new Apple app record and Google Play app record for the exact ID.
-- Attach store-valid screenshots, the Play feature graphic and Play icon from
-  the actual capture/export process. Do not upload the earlier interface previews
-  without addressing the size and alpha-channel issues in the screenshot plan.
-  The [asset manifest](../store-assets/manifest.json) records generated files
-  separately from pending screenshots.
+- Upload the twelve prepared screenshots, Play feature graphic and Play icon
+  to the corresponding listing slots. The
+  [asset manifest](../store-assets/manifest.json) records their exact paths,
+  dimensions and checksums. The earlier interface previews are not the upload set.
 - Supply a dedicated, working KORLIX reviewer login with sufficient AI allowance
-  through the consoles' private review fields. No reviewer account was created
-  by preparing these files. Fill Apple's reviewer contact phone with the
-  authorized account holder's actual number.
+  and available device capacity through the consoles' private review fields. No
+  reviewer account was created by preparing these files. Fill Apple's reviewer
+  contact phone with the authorized account holder's actual number.
+- Configure the COPY Box Android upload key and Apple provisioning profile,
+  generate signed candidates, and complete physical-device/live-account
+  acceptance before submitting the release.
 - Complete the age/content questionnaires against the signed app. The account
   signup rule is 16+, but it does not determine the store rating automatically.
 - Confirm operational retention, processor treatment, deletion fulfilment, and

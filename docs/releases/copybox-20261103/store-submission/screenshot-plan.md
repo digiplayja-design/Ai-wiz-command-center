@@ -1,13 +1,13 @@
 # COPY Box store assets
 
-## Required capture/export set
+## Prepared upload set
 
-Use the real Flutter UI with nonsensitive fixture text. Export screenshots as
-opaque RGB PNGs; retain native proportions and do not stretch the older previews
-into a different device layout. Pixel dimensions below describe final uploads,
-not logical Flutter viewports.
+The twelve screenshots render the real Flutter UI with nonsensitive fixture
+text. They are packaged as opaque RGB PNGs at the exact dimensions below, with
+native proportions and no stretched replacement layouts. Pixel dimensions below
+describe the prepared upload files, not logical Flutter viewports.
 
-| Destination | Final dimensions | Planned content |
+| Destination | Final dimensions | Content |
 | --- | --- | --- |
 | Google Play phone | 1080 × 1920 | Workspace, templates, focus editor, dark workspace |
 | Apple iPhone with Dynamic Island, large | 1260 × 2736 | Same four actual states in an iPhone layout |
@@ -20,7 +20,7 @@ Apple's required iPhone coverage is a large Dynamic Island set or a large Face
 ID set. This package uses the large Dynamic Island size of 1260 × 2736. Universal
 apps also require 13-inch iPad images; COPY Box targets both device families.
 Apple accepts 1–10 images per size. Four images per family keep the same feature
-sequence across all twelve planned captures.
+sequence across all twelve captures.
 [Apple screenshot specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications)
 
 Google requires at least two screenshots, with dimensions from 320 to 3840 and
@@ -31,8 +31,8 @@ format. The feature graphic is 1024 × 500.
 [Google preview assets](https://support.google.com/googleplay/android-developer/answer/9866151?hl=en)
 
 The console's available size wells and validation remain authoritative at upload.
-Render the iPhone layout at 420 × 912 logical pixels with a 3× output scale to
-produce the selected 1260 × 2736 upload size without resizing the UI.
+The iPhone layout was rendered at 420 × 912 logical pixels with a 3× output scale
+to produce the selected 1260 × 2736 upload size without resizing the UI.
 
 ## Image sequence and accessible descriptions
 
@@ -41,16 +41,15 @@ screenshots. Alt text is intentionally short and describes visible UI.
 
 | Order | State | Optional caption | Alt text |
 | --- | --- | --- | --- |
-| 1 | Workspace | Keep useful words close | Colored writing boxes with titles, folders, favorites and controls to save or copy text. |
-| 2 | Templates | Start with a useful draft | Reusable templates for client follow-ups, project updates, support replies and meeting notes. |
+| 1 | Workspace | Keep useful words close | Colored writing boxes with titles, folders, favorite stars and per-box text controls. |
+| 2 | Templates | Start with a useful draft | Reusable writing templates with named fields and Use template controls. |
 | 3 | Focus editor | Make room for the next thought | Expanded text editor with a draft, character count and Save & close control. |
-| 4 | Dark workspace | Choose your writing space | Dark appearance with organized writing boxes, search, favorites and copying controls. |
+| 4 | Dark workspace | Choose your writing space | Dark writing workspace with saved text, folder labels, favorite stars and copying controls. |
 
-Verify each description against the final pixels. Do not include an AI result
-that implies a live successful generation unless it was actually generated and
-reviewed; these four states do not need a live account or customer content.
+The prepared states use fixture writing and do not show invented live AI results,
+customer content or account credentials.
 
-The [asset manifest](../store-assets/manifest.json) uses these exact planned paths
+The [asset manifest](../store-assets/manifest.json) uses these exact packaged paths
 relative to `../store-assets/`:
 
 | Store group | Directory | Four image filenames |
@@ -81,13 +80,15 @@ as a 1024 × 1024 RGB image (601,158 bytes in the inspected source). The origina
 
 ## Provenance and acceptance
 
-Record the capture source commit, CI run, artifact IDs and final file hashes with
-the generated asset manifest. Widget-rendered captures show implemented layouts;
-they do not establish physical-device acceptance or system permission/share-sheet
-behavior. Inspect every generated image for clipping, visible fixtures, correct
-branding and the intended platform layout before using it in the store form.
+The final screenshot source is
+`d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4`, captured in
+[run 10](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41844773126).
+All twelve screenshots are packaged and visually reviewed; the three focus
+editor captures include the corrected top-aligned text. The manifest records
+each file's dimensions, color mode, byte size and SHA-256 checksum. The separate
+[asset record](../store-assets/README.md) describes reproduction and format checks.
 
-Status when this plan was prepared: icons and feature graphic were generated;
-the twelve dedicated store screenshots were pending the CI capture/export step.
-The asset manifest records the latest generated-versus-pending status. No listing
-media was uploaded by this documentation task.
+These widget-rendered captures establish the implemented layouts. They do not
+establish physical-device or live-account acceptance, native permission behavior,
+or system share-sheet behavior. The prepared media has not been uploaded to
+either store, and no signed release or store submission is claimed here.

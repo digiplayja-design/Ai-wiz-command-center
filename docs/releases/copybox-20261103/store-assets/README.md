@@ -2,10 +2,22 @@
 
 ## Current status
 
-The icons and feature graphic are generated. The twelve store screenshot files
-must be captured in CI and passed through `build_store_assets.py` before upload.
-`manifest.json` distinguishes pending captures from packaged screenshot files.
-These assets have not been uploaded to either store.
+The icons, feature graphic, and all twelve store screenshots are generated,
+format-checked, and visually reviewed. The final screenshots come from COPY Box
+validation run 10 at source commit
+`d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4`. `manifest.json` records that exact
+capture source, the raw capture hashes, and every packaged file's dimensions,
+color mode, byte count, and SHA-256 hash.
+
+All sixteen PNG files were fully decoded and checked after the atomic packaging
+process completed. Each screenshot preserves its raw capture's RGB pixels
+exactly, with no alpha channel, resizing, padding, or cropping. The three final
+focus-editor screenshots were inspected after the text alignment fix; the other
+nine screenshots are pixel-identical to the previously reviewed captures. The
+icon and feature-graphic hashes remain unchanged.
+
+These are actual Flutter widget renders with sample content, not physical-device
+acceptance. These assets have not been uploaded to either store.
 
 The feature graphic is a branded illustration built from the existing
 black-and-white KORLIX emblem and COPY Box's pastel card colors. Its editable SVG

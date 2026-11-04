@@ -24,10 +24,11 @@ relevant behavior without depending on changing line numbers.
 | Backend `korlix_signup_eligibility.mjs` at the same snapshot | Signup declaration saved in account user metadata |
 | Backend `security/report_submission.mjs` at the same snapshot | Server adds verified identity and request metadata to a support report |
 
-The backend snapshot is available as
+The backend snapshot was inspected under
 `origin/release/k135z-backend-render-20260919`. Confirm its relationship to the
-deployed API before finalizing any declaration. No customer records or production
-secrets were needed for this inventory.
+deployed API before finalizing any declaration. The final app source for this
+handoff is `d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4`. No customer records or
+production secrets were needed for this inventory.
 
 ## Data flow inventory
 
@@ -106,20 +107,26 @@ for the category definitions and distinction between optional use and disclosure
   processing. No native location permission does not prove that IP-derived
   location is never processed.
 - **Review access and age rating:** Confirm the supplied test login works and has
-  AI allowance. Complete content/age questions against actual behavior; signup
+  AI allowance and available device capacity. The inspected backend counts active
+  installation IDs across the shared account; ordinary Basic/Pro defaults allow
+  one, Ultra/Enterprise two, with existing override/unlimited exceptions. COPY
+  Box has its own installation ID, so an account already at its limit can reject
+  a new sign-in. Verify the dedicated review account's capacity for the intended
+  review devices. Complete content/age questions against actual behavior; signup
   eligibility alone does not supply a store rating.
 
 ## Public-page reconciliation
 
-The existing public pages were retrieved successfully:
+The public pages below were retrieved successfully during the November 3, 2026
+preparation:
 
 - [Privacy](https://www.korlixdeveloper.com/privacy-policy.html)
 - [Terms](https://www.korlixdeveloper.com/terms.html)
 - [Deletion](https://www.korlixdeveloper.com/delete-account.html)
 - [Support](https://www.korlixdeveloper.com/support.html)
 
-They principally name KORLIX AI and Messenger and describe broad platform
-features. [public-page-additions.md](public-page-additions.md) supplies scoped
+Those versions principally named KORLIX AI and Messenger and described broad
+platform features. [public-page-additions.md](public-page-additions.md) supplies scoped
 COPY Box wording so the local-only workspace, AI history retention, shared
 account deletion and correct Settings path are explicit. The draft does not
 replace the existing retention policy or assert that any public page was changed.

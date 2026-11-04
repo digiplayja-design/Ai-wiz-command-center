@@ -12,7 +12,10 @@ import argparse
 import base64
 import hashlib
 import html
+import io
 import json
+import os
+import tempfile
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
@@ -42,12 +45,31 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def save_png(image: Image.Image, path: Path, mode: str = "RGB") -> None:
+def atomic_write(path: Path, data: bytes) -> None:
+    """Keep a complete previous asset in place until its replacement is durable."""
     path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            prefix=f".{path.name}.", suffix=".tmp", dir=path.parent, delete=False
+        ) as stream:
+            temporary = Path(stream.name)
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def save_png(image: Image.Image, path: Path, mode: str = "RGB") -> None:
     if mode == "RGB" and image.mode == "RGBA":
         if image.getchannel("A").getextrema() != (255, 255):
             raise ValueError(f"Unexpected transparent pixels in {path.name}")
-    image.convert(mode).save(path, "PNG", optimize=True)
+    encoded = io.BytesIO()
+    image.convert(mode).save(encoded, "PNG", optimize=True)
+    atomic_write(path, encoded.getvalue())
 
 
 class FeatureGraphic:
@@ -140,8 +162,9 @@ class FeatureGraphic:
         feature = self.image.resize((1024, 500), Image.Resampling.LANCZOS)
         save_png(feature, output / "google-play/feature-graphic.png")
         source_path = output / "source/feature-graphic.svg"
-        source_path.parent.mkdir(parents=True, exist_ok=True)
-        source_path.write_text("\n".join(self.svg + ["</svg>"]) + "\n")
+        atomic_write(
+            source_path, ("\n".join(self.svg + ["</svg>"]) + "\n").encode("utf-8")
+        )
 
 
 def build(output: Path, captures: Path | None, font_dir: Path, source_commit: str | None):
@@ -209,7 +232,9 @@ def build(output: Path, captures: Path | None, font_dir: Path, source_commit: st
         ],
     }
     output.mkdir(parents=True, exist_ok=True)
-    (output / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    atomic_write(
+        output / "manifest.json", (json.dumps(manifest, indent=2) + "\n").encode("utf-8")
+    )
     print(json.dumps({"output": str(output), "pngs": len(inventory), "screenshots_packaged": captures is not None}))
 
 

@@ -121,5 +121,47 @@
       "characters": 390,
       "utf8_bytes": 390
     }
+  },
+  "handoff_provenance": {
+    "app_source_commit": "d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4",
+    "validation_run_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41844773126",
+    "asset_manifest": "../store-assets/manifest.json",
+    "signed_store_release_completed": false,
+    "store_submission_completed": false,
+    "physical_device_acceptance_completed": false,
+    "live_account_acceptance_completed": false,
+    "validation_status": "passed",
+    "validation_test_counts": {
+      "shared": 59,
+      "app": 81,
+      "total": 140
+    },
+    "analyzers": "no_issues",
+    "test_builds_completed": [
+      "android_debug_apk",
+      "ios_simulator_app",
+      "web_preview"
+    ],
+    "store_assets": {
+      "status": "generated_packaged_and_visually_reviewed",
+      "capture_source_commit": "d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4",
+      "screenshot_count": 12,
+      "screenshot_format": "RGB PNG",
+      "screenshot_dimensions": {
+        "google_play_phone": [
+          1080,
+          1920
+        ],
+        "apple_iphone_large_dynamic_island": [
+          1260,
+          2736
+        ],
+        "apple_ipad_13_inch": [
+          2064,
+          2752
+        ]
+      },
+      "uploaded_to_stores": false
+    }
   }
 }
