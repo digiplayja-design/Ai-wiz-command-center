@@ -556,3 +556,26 @@ historical source/run provenance. They were not rerun merely for this checkpoint
 The later successful Codemagic release workflow and medium-only capture run are
 recorded separately. No application code or signing configuration was changed
 by the checkpoint update itself.
+
+## November 4 follow-up: production approval and OpenAI sign-in
+
+Read-only checks reconfirmed that the backend branch matches reviewed merge
+`901ca58c95ba7a16abf56e20361f7f021924df3e`, with automatic deployments off.
+The backend service uses `rootDir=backend`; the website uses `rootDir=""`.
+
+The user replied **Continue** to the deployment proposal. Automatic approval
+review rejected the next backend trigger because it judged that wording
+insufficiently explicit to authorize this exact shared production deployment
+after the earlier rejection. No deployment was created, no alternate attempt
+followed, and no website deployment or Render authentication retry occurred.
+Live backend remains `bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb`;
+live website remains `e38d6b73a37ff812a29da3b64027a35e01979c34`.
+The exact reviewed website target remains `b95ce8390e03b4a31a43b592e0d3dd980823f292`.
+
+One secure OpenAI sign-in method-choice request did not complete; the root agent
+interrupted the prolonged pending input. No authenticated organization/project
+or input/output-sharing setting was verified, and no setting changed. Google
+Data safety remains a **5/6 draft**, with no final submission.
+
+Next, obtain direct approval naming both production deployments and complete
+the OpenAI account/sign-in selection to verify the sharing setting.
