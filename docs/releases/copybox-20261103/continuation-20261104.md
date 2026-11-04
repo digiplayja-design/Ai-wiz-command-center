@@ -8,7 +8,8 @@ Delete Account and Data, and Support and Reports pages are implemented in
 The reviewed source is `d810888cba620502e799a3022090e1a5f6748d9d` on
 `fix/copybox-public-pages-20261104`. PR 43 is merged as
 `da283a8dfe7b51f68ad7b581b8555f017cac3c54`, with a tree verified identical to the
-reviewed source. The safe deployment target is that exact merge commit. It
+reviewed source. That was the reviewed four-page deployment base before the
+later analytics follow-up below. It
 changes exactly four HTML files from the currently live website commit
 `e38d6b73a37ff812a29da3b64027a35e01979c34`.
 
@@ -42,8 +43,18 @@ sign-in choice was tried, Render explicitly rejected that connection as being
 for deployment access only, not sign-in. The subsequent alternative secure
 sign-in request was declined. Further authentication attempts stopped. No
 deployment was triggered and the service configuration was not changed; the
-live commit remains `e38d6b73a37ff812a29da3b64027a35e01979c34`. Publish only
-`da283a8dfe7b51f68ad7b581b8555f017cac3c54` through the
+live commit remains `e38d6b73a37ff812a29da3b64027a35e01979c34`. The subsequently
+required analytics paragraph is prepared in open **Draft
+[PR 44](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/44)**,
+source `a214334239b07875cef2818541e30a15d2271787`, whose exact parent is
+`da283a8dfe7b51f68ad7b581b8555f017cac3c54`. It adds one paragraph to
+`website/privacy-policy.html`, with one addition and no deletion; it is not merged
+or deployed. The reviewed patch is appropriate, but the final combined deployment
+commit has not been established. Publishing the old base alone would not resolve
+the current analytics disclosure. No Render authentication retry occurred.
+
+After the follow-up is approved and merged, publish only the exact reviewed
+complete commit through the
 [existing Render service](https://dashboard.render.com/static/srv-d8ekf7t7vvec73dpar60)
 using **Manual Deploy → Deploy a specific commit**, or an authorized API/CLI
 connection that supports `commitId`. Confirm the date in the scoped COPY Box
@@ -115,7 +126,7 @@ remains checked.
 App Information confirmed **Saved** for subtitle “Save, organize, refine &
 reuse” and primary category **Productivity**; the secondary category is blank.
 The privacy policy URL, `https://www.korlixdeveloper.com/privacy-policy.html`, is
-saved and visible. All details are published for seven privacy categories:
+saved and visible. The initial details were published for seven privacy categories:
 Email Address, Customer Support, Other User Content, User ID, Device ID, Product
 Interaction, and Other Data Types. Every category uses **App Functionality**,
 **linked to the user: Yes**, and **tracking: No**. The exact deployed-source
@@ -129,10 +140,24 @@ classifications were unchanged. The updated Paid Apps Agreement was also
 accepted after secure SMS second-factor verification; Business Agreements shows
 **Active**, with the displayed term **November 4, 2026–June 22, 2027**.
 
+Later inspection of the exact deployed authentication routes and onboarding
+measurement module, corroborated by live database schema/function metadata,
+established COPY Box authentication/onboarding analytics. **User ID, Device ID,
+and Product Interaction require Analytics alongside App Functionality**. Their
+linked-to-user Yes and tracking No answers remain appropriate. The initial
+published answers remain unchanged while that correction is pending.
+
+Only **User ID → Analytics** is checked in a local edit wizard. Its final action
+is **Publish**, not Save. No correction has been saved as a server draft or
+published. The three corrections are prepared for one approval request, separate
+from the already completed initial publication. See
+[privacy evidence](store-submission/privacy-evidence.md) for the exact anchors.
+
 The age questionnaire was inspected and cancelled without saving. Built-in app
 capabilities are documented, but actual AI content frequency needs live-account
 evaluation because the general `/api/generate` route has no COPY Box topic/output
-filter. The content-rights form was inspected without submitting an answer.
+filter. The content-rights form was inspected without submitting an answer. In
+the latest open modal, both Yes and No remain unselected and Done is untouched.
 The canonical [release status](release-status.json) records these remaining
 review and declaration requirements.
 
@@ -285,8 +310,9 @@ the entered canonical identifier. The private screenshot is not stored here.
 Scoped read-only connected-account checks, interpreted with exact live backend
 source `bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb`, confirm the existing enabled
 shared KORLIX reviewer account, verified email, effective Ultra entitlement, and
-available AI/device capacity. No mutating profile RPC or API was invoked. Password
-entry and end-to-end COPY Box login/AI testing remain outstanding. No identifier
+available AI/device capacity. No mutating profile RPC or API was invoked. At that
+observation password entry and end-to-end COPY Box login/AI testing remained
+outstanding. No identifier
 value, raw account counts, or credentials are recorded in this repository.
 
 Google's form is now labelled **Sign in details**. Restricted access was selected,
@@ -295,6 +321,17 @@ entered. The password remained blank and the full-access checkbox unchecked.
 Add returned **Your changes couldn’t be saved**, with validation at the full-access
 checkbox. The unsaved form was preserved. **No reviewer record or App access
 declaration was saved**, and no full-access verification is claimed.
+
+The user subsequently reported **Saved**. Fresh Apple reload now confirms both
+**User name and Password populated**, **Save disabled**, and **sign-in-required
+checked**. This presence check did not read, print, capture, or record a password
+value. Actual COPY Box login/AI testing remains outstanding.
+
+A freshly loaded Google Sign in details server page still shows **Yes and No
+both unselected**, **no reviewer record**, and **Save disabled**. The earlier
+prepared unsaved form is a separate stale client state; it does not establish
+a saved reviewer record or declaration. Target audience is blocked by this
+incomplete Sign in details step.
 
 The Ads declaration **No, my app does not contain ads** was selected and saved.
 The confirmation said **Change saved. Send for review in Publishing overview.**
@@ -316,7 +353,7 @@ was subsequently answered **No** and saved with **Change saved**, supported by
 the reviewed source and actual signed bundle's permission inventory. The earlier
 three-item snapshot is not treated as a later total declaration count.
 
-A bounded Data safety draft was saved from Step 2 at
+An earlier bounded Data safety draft was saved from Step 2 at
 `/app-content/data-privacy-security`. The combined question about collection or
 sharing of required data types is **Yes**, account creation is **Username and
 password**, and the deletion URL is
@@ -325,6 +362,25 @@ password**, and the deletion URL is
 deletion were left unanswered. The data-type, usage, and preview steps were not
 reached. This is a saved draft, not a final declaration or publication; the
 remaining operational questions in the privacy evidence are unchanged.
+
+That historical snapshot is superseded by the latest saved
+[Data safety draft](https://play.google.com/console/u/0/developers/4772708594176030332/app/4974456296219116192/app-content/data-privacy-security?source=dashboard).
+Encryption in transit is **Yes**, and data-only deletion requests are **Yes**.
+Both account-deletion and data-only request URLs are
+`https://www.korlixdeveloper.com/delete-account.html`. Six types were selected and
+saved: **Email address, User IDs, Other info, App interactions, Other
+user-generated content, and Device or other IDs**. The wizard reached **Step 4**,
+showing **0 of 6 usage details complete**. No per-type usage answers were entered,
+preview was not reached, and Save draft succeeded. No final declaration or
+publication is established. The new onboarding evidence requires Analytics
+purposes for User IDs, Device or other IDs, and App interactions when those usage
+answers are completed.
+
+**Government apps: No** was saved and confirmed on a fresh page. The IARC initial
+screen has the public support contact and **All Other App Types** prepared.
+The agreement is unchecked. One Next attempt returned **Terms must be accepted**;
+there was no progress beyond the first screen and no questionnaire or rating
+submission. Agreement acceptance awaits approval.
 
 ## Google main listing saved
 
@@ -374,13 +430,18 @@ claiming a separate certificate-registration observation.
 
 ## Work still remaining
 
-- Supply the dedicated reviewer password privately and complete end-to-end
-  COPY Box login/AI testing. The existing account, verified email, Ultra
+- Complete end-to-end COPY Box login/AI testing and Google Sign in details with
+  full-access confirmation. The existing account, verified email, Ultra
   entitlement, and available AI/device capacity are confirmed read-only. The supplied
-  identifier is saved in Apple User name; Google's identifier/instructions remain
-  in an unsaved form with the password and full-access confirmation incomplete.
+  identifier and password fields are populated and saved in Apple. Google's fresh
+  server page has no selected Yes/No answer or reviewer record; its earlier
+  prepared form remains separate and unsaved.
   App Review contact details and complete notes remain saved. The Apple
   version build selection is saved and verified after reload.
+- Approve and publish the three Apple Analytics-purpose corrections for User ID,
+  Device ID, and Product Interaction. Only a local User ID edit is staged; no
+  correction server draft or publication exists. Keep App Functionality, linkage
+  Yes, and tracking No.
 - Evaluate actual AI content frequency through a live account, complete the age
   questionnaire, and supply the content-rights declaration.
 - Configure deliberate TestFlight testing and complete physical-device and
@@ -390,11 +451,13 @@ claiming a separate certificate-registration observation.
   Static checks of the signed AAB and generated universal APK passed, and Play
   accepted version 1.0.0 (1) into the saved internal draft; it has no testers or
   rollout.
-- Complete Google Play target audience, applicable content rating, and remaining
-  app-content declarations. Complete Data safety beyond the bounded Step 2 draft,
-  including unanswered operational questions and data-type/usage/preview steps.
-- Authenticate Render, deploy only the exact reviewed merge commit
-  `da283a8dfe7b51f68ad7b581b8555f017cac3c54`, and verify the four public pages.
+- Complete Google Play target audience after Sign in details, accept the IARC
+  agreement after approval and complete the content questionnaire, and finish
+  remaining declarations. Data safety is saved at Step 4 with six selected types
+  and 0 of 6 usage details; complete those details and preview.
+- Complete the website analytics addendum's review and merge in Draft PR 44, establish the
+  exact reviewed complete deployment commit, authenticate Render, and verify the
+  four published pages. The older da283 base alone omits the new paragraph.
 - Submit completed listings for review after the release gates are satisfied.
 
 The earlier 140 passing automated tests and debug/simulator outputs retain their

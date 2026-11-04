@@ -1,7 +1,7 @@
 {
   "status": "ios_uploaded_android_play_draft_store_setup_incomplete",
-  "recorded_at_utc": "2026-11-04T19:34:13.057231Z",
-  "evidence_basis": "Authenticated Apple Developer, App Store Connect, Codemagic, Google Play, and Render observations on November 4, 2026, plus independent static verification of the downloaded signed Android candidate and a generated universal APK. Includes user-approved Apple actions and store setup, saved listing/declaration drafts, and the blocked exact website deployment; no credential or actual private phone values are stored in this checkpoint. Reviewer follow-up uses scoped read-only connected-account checks and exact deployed backend source bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb; no mutating account/profile RPC or API was invoked, and no reviewer identifier value is recorded.",
+  "recorded_at_utc": "2026-11-04T20:03:54.024224Z",
+  "evidence_basis": "Authenticated Apple Developer, App Store Connect, Codemagic, Google Play, and Render observations on November 4, 2026, plus independent static verification of the downloaded signed Android candidate and a generated universal APK. Includes user-approved Apple actions and store setup, saved listing/declaration drafts, and the blocked exact website deployment; no credential or actual private phone values are stored in this checkpoint. Reviewer follow-up uses scoped read-only connected-account checks and exact deployed backend source bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb; no mutating account/profile RPC or API was invoked, and no reviewer identifier value is recorded. Later fresh form checks verify populated Apple credential fields without reading password values, Google draft/declaration progress, and a required Apple Analytics correction supported by exact deployed source plus non-sensitive database schema/function metadata; no onboarding event/customer rows were accessed.",
   "identity": {
     "display_name": "KORLIX COPY Box",
     "bundle_id": "com.korlixdeveloper.copybox",
@@ -104,7 +104,7 @@
     "publicly_released": false,
     "build_selection_saved": true,
     "listing_fields": "Public fields listed below were confirmed saved in a fresh listing tab; App Review contact details and the complete prepared notes were subsequently accepted and saved.",
-    "review_section": "Contact first/last name, the previously user-provided phone, support email, and complete prepared notes were entered and Save succeeded. After reload, Save was disabled, names persisted, and notes contained 2606 characters. Phone/email were redacted by the observation layer, so exact-value readback was unavailable. The user later supplied the dedicated reviewer identifier. It was entered in Apple User name and Save succeeded with Save disabled. A fresh canonical version readback confirms the populated username and Save disabled. Accessibility text redacts the identifier, but direct visual inspection confirms the exact entered canonical value without recording it here. The reviewer password remains blank. The existing account, verified email, Ultra entitlement, and available AI/device capacity are confirmed read-only, but end-to-end COPY Box login/AI testing remains outstanding; the review section is incomplete.",
+    "review_section": "Contact first/last name, the previously user-provided phone, support email, and complete prepared notes were entered and Save succeeded. After reload, Save was disabled, names persisted, and notes contained 2606 characters. Phone/email were redacted by the observation layer, so exact-value readback was unavailable. The user later supplied the dedicated reviewer identifier. It was entered in Apple User name and Save succeeded with Save disabled. A fresh canonical version readback confirms the populated username and Save disabled. Accessibility text redacts the identifier, but direct visual inspection confirms the exact entered canonical value without recording it here. After the user reported Saved, a later fresh reload confirmed both User name and Password populated, Save disabled, and sign-in-required checked, without reading, printing, or capturing the password value. The existing account, verified email, Ultra entitlement, and available AI/device capacity are confirmed read-only, but end-to-end COPY Box login/AI testing remains outstanding; the review section is incomplete.",
     "review_contact_save_accepted": true,
     "screenshots": {
       "iphone_large": {
@@ -138,7 +138,7 @@
         "final_saved_state_verified": true
       }
     },
-    "privacy_declaration_completed": true,
+    "privacy_declaration_completed": false,
     "age_rating_completed": false,
     "paid_apps_agreement": "Active",
     "price": {
@@ -171,7 +171,7 @@
     "selected_build_number": "1",
     "build_selection_verification": "The version tab was reloaded; the selected build row persisted and Save was disabled.",
     "review_sign_in_required_checked": true,
-    "review_sign_in_required_note": "The default checkbox remains checked. Fresh canonical version readback visually confirms the exact entered username; accessibility text redacts it. Save is disabled and password blank; end-to-end COPY Box login/AI testing remains pending.",
+    "review_sign_in_required_note": "The checkbox remains checked. After the user reported Saved, fresh reload confirms User name and Password populated with Save disabled. No password value was read, printed, captured, or stored; end-to-end COPY Box login/AI testing remains pending.",
     "app_information": {
       "subtitle": "Save, organize, refine & reuse",
       "primary_category": "Productivity",
@@ -205,12 +205,72 @@
       "publication_user_approval_received": true,
       "publication_user_approval_response": "Approve",
       "published_by": "Ricardo Bailey",
-      "publication_observed_date": "2026-11-04"
+      "publication_observed_date": "2026-11-04",
+      "current_published_answers_require_correction": true,
+      "initial_publication_scope": "The published initial answers remain App Functionality for all seven data types, linked to the user and not used for tracking. The new Analytics correction below has not been saved or published.",
+      "analytics_purpose_correction": {
+        "status": "required_local_user_id_edit_only_awaiting_publication_approval",
+        "required_data_types": [
+          "User ID",
+          "Device ID",
+          "Product Interaction"
+        ],
+        "required_purposes_for_each": [
+          "App Functionality",
+          "Analytics"
+        ],
+        "linked_to_user_remains": true,
+        "used_for_tracking_remains": false,
+        "evidence_backend_commit": "bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb",
+        "evidence_source_paths": [
+          "backend/server.js",
+          "backend/onboarding/measurement.mjs"
+        ],
+        "live_database_schema_and_function_metadata_confirmed": true,
+        "customer_event_rows_accessed": false,
+        "local_wizard_edit": {
+          "data_type": "User ID",
+          "analytics_checkbox_checked": true,
+          "scope": "Local unsaved wizard state only"
+        },
+        "wizard_final_action_label": "Publish",
+        "server_draft_saved": false,
+        "published": false,
+        "publication_user_approval_received": false,
+        "publication_approval_pending": true,
+        "final_publish_confirmation_clicked": false,
+        "tracking_change_required": false,
+        "evidence_summary": "COPY Box sign-up/sign-in events record a hashed installation identifier, platform, event time, authentication event/error category and account identifier after successful sign-in for authentication/onboarding/AI-conversion analytics.",
+        "source_functions": {
+          "client_copybox_auth": [
+            "deviceHeaders",
+            "headers",
+            "_ensureDevice"
+          ],
+          "backend_server": [
+            "createOnboardingMeasurement",
+            "observeAuth"
+          ],
+          "backend_measurement": [
+            "installationContext",
+            "record",
+            "observeAuth",
+            "write",
+            "summary"
+          ]
+        },
+        "metadata_evidence": {
+          "event_table": "public.korlix_onboarding_events",
+          "summary_function": "korlix_onboarding_summary",
+          "scope": "Table/column and function-definition metadata only; no customer event rows or mutating RPC invoked."
+        },
+        "analytics_scope_limit": "This evidence supports the three identifier/interaction categories; it does not establish analytics use of email, age band, prompt/report text, advertising, tracking, guest editing or app-open telemetry."
+      }
     },
     "privacy_details_saved": true,
     "age_rating_status": "Questionnaire inspected and cancelled without saving. Actual AI content-frequency answers remain unresolved pending live-account evaluation of the general generation route.",
     "age_rating_evidence_limit": "The deployed /api/generate route has no COPY Box topic/output filter; built-in capability evidence alone does not establish generated-content frequency.",
-    "content_rights_status": "Form inspected; no answer submitted.",
+    "content_rights_status": "Inspected latest modal: Yes and No both unselected, Done untouched; no answer submitted.",
     "review_section_complete": false,
     "review_contact_verification": {
       "reload_save_disabled": true,
@@ -241,13 +301,12 @@
       "apple_user_name_entered": true,
       "apple_user_name_save_accepted": true,
       "apple_save_disabled_after_save": true,
-      "password_supplied": false,
-      "password_field_blank": true,
+      "password_supplied": true,
+      "password_field_blank": false,
       "current_ai_allowance_verified": true,
       "current_shared_device_capacity_verified": true,
-      "complete_working_credentials_supplied": false,
       "apple_user_name_fresh_reload_persistence_verified": true,
-      "apple_user_name_reload_evidence_status": "Fresh canonical version page shows Save disabled, populated username, blank password, and sign-in-required checked. Accessibility text redacts the username, but direct visual readback confirms it exactly matches the entered canonical identifier; the value and private screenshot are not stored in this repository.",
+      "apple_user_name_reload_evidence_status": "After the user reported Saved, a fresh canonical version page shows User name and Password populated, Save disabled, and sign-in-required checked. This presence check did not read, print, capture, or store the password value. End-to-end COPY Box login/AI testing remains outstanding.",
       "apple_user_name_fresh_reload_populated": true,
       "apple_user_name_exact_readback_available": true,
       "existing_shared_reviewer_account_confirmed_read_only": true,
@@ -262,7 +321,31 @@
       "account_enabled": true,
       "account_enabled_verified_read_only": true,
       "effective_ultra_entitlement_verified_read_only": true,
-      "account_verification_evidence_basis": "Scoped read-only connected-account checks and exact deployed backend source bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb; no mutating profile RPC or API invoked."
+      "account_verification_evidence_basis": "Scoped read-only connected-account checks and exact deployed backend source bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb; no mutating profile RPC or API invoked.",
+      "historical_identifier_only_save": {
+        "user_name_saved": true,
+        "password_field_blank": true,
+        "scope": "Earlier observation before the user completed the password field and reported Saved."
+      },
+      "password_field_populated": true,
+      "password_population_verified_after_fresh_reload": true,
+      "reviewer_credential_fields_saved": true,
+      "user_reported_saved": true,
+      "password_value_read": false,
+      "password_value_printed": false,
+      "password_value_captured": false,
+      "password_value_recorded_in_repository": false,
+      "complete_working_credentials_verified": false,
+      "credential_fields_supplied_and_saved": true
+    },
+    "review_section_status": "contact_notes_and_credential_fields_saved_end_to_end_copybox_login_ai_test_pending",
+    "privacy_details_saved_scope": "Initial published answers only; the required three-type Analytics correction is locally staged for User ID only, with no server draft or publication.",
+    "content_rights_form_state": {
+      "modal_opened": true,
+      "yes_selected": false,
+      "no_selected": false,
+      "done_clicked": false,
+      "answer_submitted": false
     }
   },
   "preference_scope": {
@@ -363,20 +446,7 @@
           "observed_form_label": "Sign in details",
           "dedicated_account_identifier_supplied_by_user": true,
           "identifier_value_recorded_in_repository": false,
-          "restricted_access_selected_in_unsaved_form": true,
-          "instruction_name_prepared": true,
-          "reviewer_identifier_prepared_in_form": true,
-          "prepared_short_instructions_characters": 390,
-          "prepared_short_instructions_match_repository_file": true,
-          "password_supplied": false,
-          "password_field_blank": true,
-          "full_access_including_premium_attestation_checked": false,
-          "add_attempted": true,
-          "add_save_succeeded": false,
-          "observed_save_error": "Your changes couldn’t be saved",
-          "validation_at_full_access_checkbox": true,
           "reviewer_record_saved": false,
-          "unsaved_form_preserved": true,
           "current_ai_allowance_verified": true,
           "current_shared_device_capacity_verified": true,
           "existing_shared_reviewer_account_confirmed_read_only": true,
@@ -388,7 +458,33 @@
           "account_enabled": true,
           "account_enabled_verified_read_only": true,
           "effective_ultra_entitlement_verified_read_only": true,
-          "account_verification_evidence_basis": "Scoped read-only connected-account checks and exact deployed backend source bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb; no mutating profile RPC or API invoked."
+          "account_verification_evidence_basis": "Scoped read-only connected-account checks and exact deployed backend source bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb; no mutating profile RPC or API invoked.",
+          "historical_prepared_unsaved_form": {
+            "restricted_access_selected_in_unsaved_form": true,
+            "instruction_name_prepared": true,
+            "reviewer_identifier_prepared_in_form": true,
+            "prepared_short_instructions_characters": 390,
+            "prepared_short_instructions_match_repository_file": true,
+            "password_supplied": false,
+            "password_field_blank": true,
+            "full_access_including_premium_attestation_checked": false,
+            "add_attempted": true,
+            "add_save_succeeded": false,
+            "observed_save_error": "Your changes couldn’t be saved",
+            "validation_at_full_access_checkbox": true,
+            "unsaved_form_preserved": true,
+            "scope": "Earlier prepared unsaved form, separate from the later freshly loaded server page."
+          },
+          "fresh_server_state": {
+            "yes_selected": false,
+            "no_selected": false,
+            "reviewer_record_present": false,
+            "save_disabled": true,
+            "verified_on_fresh_page": true
+          },
+          "server_restricted_access_answer": null,
+          "password_saved_in_google": false,
+          "stale_prepared_form_separate_from_saved_state": true
         },
         "ads": {
           "selection": "No, my app does not contain ads",
@@ -428,28 +524,65 @@
           ],
           "all_edited_date": "2026-11-04",
           "observed_on_actioned_tab": true,
-          "review_submitted": false
+          "review_submitted": false,
+          "snapshot_is_historical": true,
+          "scope": "Earlier three-declaration snapshot; later Advertising ID and Government answers are recorded separately without asserting a fresh overview count."
         },
         "data_safety_draft": {
           "observed_page_path": "/app-content/data-privacy-security",
-          "last_step_reached": 2,
+          "last_step_reached": 4,
           "collects_or_shares_required_data_types": true,
           "combined_collection_sharing_question_answer": "Yes",
           "account_creation_methods": [
             "Username and password"
           ],
           "account_deletion_url": "https://www.korlixdeveloper.com/delete-account.html",
-          "encryption_in_transit_answer": null,
-          "optional_data_only_deletion_answer": null,
-          "data_type_step_reached": false,
-          "data_usage_step_reached": false,
+          "encryption_in_transit_answer": "Yes",
+          "optional_data_only_deletion_answer": "Yes",
+          "data_type_step_reached": true,
+          "data_usage_step_reached": true,
           "preview_step_reached": false,
           "draft_saved": true,
-          "save_confirmation": "Your changes have been saved",
+          "save_confirmation": "Save draft succeeded",
           "final_declaration_completed": false,
           "submitted_for_review": false,
           "published": false,
-          "remaining_operational_questions_unchanged": true
+          "remaining_operational_questions_unchanged": false,
+          "observed_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4974456296219116192/app-content/data-privacy-security?source=dashboard",
+          "data_only_deletion_url": "https://www.korlixdeveloper.com/delete-account.html",
+          "account_deletion_url_saved": true,
+          "data_only_deletion_url_saved": true,
+          "selected_data_types": [
+            "Email address",
+            "User IDs",
+            "Other info",
+            "App interactions",
+            "Other user-generated content",
+            "Device or other IDs"
+          ],
+          "selected_data_type_count": 6,
+          "data_type_selection_saved": true,
+          "data_usage_details_completed_count": 0,
+          "data_usage_details_required_count": 6,
+          "per_type_usage_answers_saved": false,
+          "latest_save_draft_succeeded": true,
+          "remaining_questions_scope": "All six per-type usage answers and final preview remain incomplete; processor-sharing classification, purposes, retention and deletion fulfilment must be reflected accurately. The saved data-only answer describes requesting deletion, not proof of completed erasure.",
+          "analytics_purpose_required_for": [
+            "User IDs",
+            "Device or other IDs",
+            "App interactions"
+          ],
+          "historical_step2_snapshot": {
+            "last_step_reached": 2,
+            "encryption_in_transit_answer": null,
+            "optional_data_only_deletion_answer": null,
+            "data_type_step_reached": false,
+            "data_usage_step_reached": false,
+            "preview_step_reached": false,
+            "draft_saved": true,
+            "save_confirmation": "Your changes have been saved",
+            "scope": "Earlier bounded Step 2 draft before the later saved six-type/Step 4 update."
+          }
         },
         "advertising_id": {
           "uses_advertising_id": false,
@@ -460,10 +593,35 @@
           "review_submitted": false
         },
         "remaining_declarations": [
-          "App access reviewer password, end-to-end COPY Box login/AI verification, and full-access confirmation. Existing reviewer account, email verification, Ultra entitlement, and available AI/device capacity have been checked read-only.",
-          "Final Data safety declaration beyond the saved Step 2 draft, including operational answers and data-type, usage, and preview steps.",
-          "Target audience, applicable content rating, and remaining Google Play app-content declarations."
-        ]
+          "Finish Google Sign in details with working reviewer access and truthful full-access confirmation; its fresh server page still has neither Yes nor No selected and no saved reviewer record. Apple credential fields are populated and saved, but end-to-end COPY Box login/AI testing is outstanding.",
+          "Complete all six Data safety per-type usage details and preview from the saved Step 4 draft (0 of 6 complete), including applicable Analytics purposes for User IDs, Device or other IDs, and App interactions.",
+          "Complete target audience after Sign in details; accept the IARC agreement only after approval, then complete the actual content-rating questionnaire and remaining applicable declarations."
+        ],
+        "government_apps": {
+          "is_government_app": false,
+          "selection": "No",
+          "save_confirmed": true,
+          "fresh_readback_verified": true,
+          "review_submitted": false
+        },
+        "target_audience": {
+          "completed": false,
+          "saved": false,
+          "blocked_by": "Google Sign in details is incomplete"
+        },
+        "content_rating_iarc": {
+          "first_screen_prepared": true,
+          "public_support_contact_prepared": true,
+          "category_prepared": "All Other App Types",
+          "agreement_checked": false,
+          "agreement_acceptance_approval_pending": true,
+          "next_attempted_once": true,
+          "validation_error": "Terms must be accepted",
+          "progressed_beyond_step1": false,
+          "questionnaire_completed": false,
+          "rating_generated": false,
+          "submitted": false
+        }
       },
       "main_store_listing": {
         "locale": "en-US",
@@ -760,31 +918,57 @@
     "deployment_verified": false,
     "continuation_record": "continuation-20261104.md",
     "pull_request_state": "merged",
-    "safe_deployment_commit": "da283a8dfe7b51f68ad7b581b8555f017cac3c54",
+    "safe_deployment_commit": null,
     "merge_tree_matches_reviewed_source": true,
-    "deployment_blocker": "Render rejected the approved existing GitHub connection as deployment-only, not a sign-in method. The alternative secure sign-in request was declined. Authentication remains incomplete, further attempts stopped, and no deployment occurred.",
+    "deployment_blocker": "Render rejected the approved existing GitHub connection as deployment-only, not a sign-in method. The alternative secure sign-in request was declined. Authentication remains incomplete, further attempts stopped, and no deployment occurred. The required analytics follow-up is still open Draft PR 44, so no final complete deployment commit is established.",
     "render_service_id": "srv-d8ekf7t7vvec73dpar60",
     "last_live_deploy_id": "dep-dbenft8m7kps73ef1td0",
     "last_live_commit": "e38d6b73a37ff812a29da3b64027a35e01979c34",
     "last_live_deploy_date": "2026-10-25",
     "configured_source_branch": "release/k135z-frontend-20260919",
     "automatic_deployments_enabled": false,
-    "deployment_instruction": "Deploy only da283a8dfe7b51f68ad7b581b8555f017cac3c54; do not deploy the generic configured-branch head.",
+    "deployment_instruction": "Complete the PR 44 review/merge, verify the final complete source includes the reviewed four-page base and required analytics paragraph, then deploy only that exact reviewed commit. Do not deploy the generic configured-branch head or claim the old da283 base alone resolves all current disclosures.",
     "authentication_attempt_results": {
       "existing_github_sign_in_choice_approved": true,
       "existing_github_connection_result": "Render explicitly rejected the connection as deployment-only, not sign-in.",
       "alternative_secure_sign_in_result": "declined",
       "further_authentication_attempts_stopped": true,
       "deployment_triggered": false
-    }
+    },
+    "analytics_addendum_required": true,
+    "analytics_addendum_status": "Required matching privacy paragraph prepared in open Draft PR 44; patch reviewed as appropriate, not merged or deployed.",
+    "safe_deployment_commit_scope": "The previous four-page da283 base remains reviewed and undeployed; the required analytics follow-up is open Draft PR 44. Establish the final reviewed complete commit after that follow-up is merged.",
+    "previously_reviewed_deployment_commit": "da283a8dfe7b51f68ad7b581b8555f017cac3c54",
+    "final_complete_deployment_commit_established": false,
+    "analytics_addendum": {
+      "pull_request_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/pull/44",
+      "pull_request_state": "open",
+      "draft": true,
+      "branch": "fix/copybox-onboarding-privacy-20261104",
+      "source_commit": "a214334239b07875cef2818541e30a15d2271787",
+      "exact_parent_commit": "da283a8dfe7b51f68ad7b581b8555f017cac3c54",
+      "changed_files": [
+        "website/privacy-policy.html"
+      ],
+      "diff_additions": 1,
+      "diff_deletions": 0,
+      "reviewed_patch_appropriate": true,
+      "merged": false,
+      "deployment_triggered": false,
+      "deployment_verified": false,
+      "paragraph_record": "store-submission/public-page-additions.md",
+      "old_base_alone_resolves_current_disclosure": false
+    },
+    "render_authentication_retried_in_latest_followup": false
   },
   "remaining_gates": [
-    "Supply the dedicated reviewer password privately and complete end-to-end COPY Box login/AI testing, then finish both consoles’ private reviewer fields and Google full-access confirmation. The existing shared reviewer account, verified email, Ultra entitlement, and available AI/device capacity are confirmed read-only. Apple username persistence is verified as nonempty/redacted; Google identifier/instructions remain unsaved.",
-    "Evaluate actual AI content frequency through a live account, complete the age/content questionnaire, and supply the content-rights declaration.",
+    "Complete end-to-end COPY Box login/AI testing and Google Sign in details/full-access confirmation. Apple User name and Password are populated after fresh reload with Save disabled; no password values were read or captured. Google fresh server state still has no selected Yes/No answer or reviewer record.",
+    "Approve and publish the three Apple privacy-purpose corrections: add Analytics alongside App Functionality for User ID, Device ID, and Product Interaction, preserving linked-to-user Yes and tracking No. Only User ID Analytics is locally staged; no correction server draft or publication exists.",
+    "Evaluate actual AI content frequency through a live account, complete the age/content questionnaire, and supply the content-rights declaration. Google IARC is still at its first screen with the agreement unchecked and approval pending.",
     "Configure deliberate TestFlight testing and complete physical-device/live-account acceptance.",
     "Configure deliberate Android testing and complete physical-device/live-account acceptance, including a 16 KB-page environment and Play-delivered APK checks. The verified signed AAB is accepted as version 1.0.0 (1) in the saved internal draft, but the track is Inactive, no testers are selected, and Save and publish was not clicked.",
-    "Complete Google Play target audience, applicable content rating, and remaining app-content declarations. Complete Data safety beyond the saved Step 2 draft, resolving unanswered encryption-in-transit/data-only-deletion questions and the data-type, usage, and preview steps.",
-    "Authenticate Render, deploy only the reviewed merge commit da283a8dfe7b51f68ad7b581b8555f017cac3c54, and verify all four public policy/support pages.",
+    "Complete Google Play target audience after Sign in details, applicable content rating, and remaining app-content declarations. Data safety is a saved Step 4 draft with six selected types and zero of six usage details complete; finish those answers and preview.",
+    "Review the separate onboarding-analytics website addendum, then authenticate Render and publish only the exact reviewed complete source after its final commit is established. The earlier reviewed four-page base da283a8dfe7b51f68ad7b581b8555f017cac3c54 remains undeployed; do not deploy a generic configured-branch head.",
     "Submit completed store listings for review after the remaining release gates are satisfied."
   ],
   "draft_started_at_utc": "2026-11-04T17:11:49Z",

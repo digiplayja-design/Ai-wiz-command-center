@@ -29,12 +29,18 @@ value is stored here. The supplied reviewer identifier was subsequently saved in
 Apple User name; fresh visual readback confirms the exact entered identifier,
 although accessibility text redacts it.
 The existing enabled shared reviewer account, verified email, Ultra entitlement, and
-available AI/device capacity are confirmed read-only. Password entry and
-end-to-end COPY Box login/AI testing remain pending, and the
+available AI/device capacity are confirmed read-only. After the user reported
+**Saved**, fresh reload confirmed User name and Password populated, Save
+disabled, and sign-in-required checked. No password value was read, printed,
+captured, or stored. End-to-end COPY Box login/AI testing remains pending, and the
 sign-in-required checkbox remains checked. All seven privacy categories are
 published with App Functionality, linked to user, and no tracking; the console
-explicitly says **Published by Ricardo Bailey**. The source review supports no
-tracking. Age/content and content-rights answers
+explicitly said **Published by Ricardo Bailey** for that initial publication.
+Later source and live database-metadata checks require **Analytics** alongside
+**App Functionality** for **User ID, Device ID, and Product Interaction**.
+Only User ID Analytics is locally staged; no correction server draft or
+publication exists. The three-purpose correction awaits approval. The source
+review continues to support no tracking. Age/content and content-rights answers
 remain incomplete. This package does not establish that every required form is
 complete.
 
@@ -88,7 +94,13 @@ November 3, 2026. The retrieved versions principally named KORLIX AI and
 Messenger. The scoped additions were merged in PR 43 as
 `da283a8dfe7b51f68ad7b581b8555f017cac3c54`, with a tree matching reviewed source
 `d810888cba620502e799a3022090e1a5f6748d9d`, but that exact commit has not been
-deployed. The November 4 Render check still shows the October 25 live release.
+deployed. Required onboarding-analytics wording is now prepared in open Draft
+[PR 44](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/44), source
+`a214334239b07875cef2818541e30a15d2271787`, with exact parent da283. It adds one
+paragraph to `website/privacy-policy.html` and remains unmerged and undeployed.
+The old four-page base alone would not resolve that new disclosure. The final
+complete deployment target remains pending. The November 4 Render check still
+shows the October 25 live release.
 Render rejected the existing GitHub connection as deployment-only, and the
 alternative secure sign-in request was declined. Authentication attempts
 stopped without triggering a deployment.
@@ -114,11 +126,11 @@ stopped without triggering a deployment.
   exact package in Digital Asset Links; its public fingerprint is recorded in
   [Android release preparation](../android-release.md). That certificate does
   not establish registration of the dedicated upload key.
-- Complete the private reviewer access fields. Contact details, prepared notes,
-  and the user-supplied identifier are saved in Apple; the password remains blank
-  and end-to-end COPY Box login/AI testing remains outstanding. Fresh Apple
-  visual readback confirms the exact entered username, while accessibility text
-  redacts it. The version
+- Complete Google reviewer access and end-to-end COPY Box login/AI testing.
+  Apple contact details and prepared notes are saved; after the user reported
+  Saved, fresh reload confirms both credential fields populated with Save
+  disabled. Password values were not read or captured. Earlier visual readback
+  confirmed the entered username while accessibility text redacted it. The version
   build selection is saved and verified after reload. All twelve Apple screenshots
   are uploaded, with four images visible in each large-iPhone, medium-iPhone, and
   iPad well. The Play listing text, icon, feature graphic, and four screenshots
@@ -132,18 +144,19 @@ stopped without triggering a deployment.
   13-inch iPad group remains suitable. The
   [asset manifest](../store-assets/manifest.json) records their exact paths,
   dimensions and checksums. The earlier interface previews are not the upload set.
-- Supply the dedicated reviewer password through the consoles' private fields
-  and complete end-to-end COPY Box login/AI testing. The
+- Finish Google Sign in details through its private fields and complete
+  end-to-end COPY Box login/AI testing. The
   existing account, verified email, Ultra entitlement, and available AI/device
   capacity have been confirmed read-only. No
   reviewer account was created by preparing these files. The authorized App
   Review business contact phone was supplied privately and accepted by Save;
   its actual value is not stored here.
-  Google Sign in details has the supplied identifier and exact 390-character
-  instructions prepared, with password blank and full-access checkbox unchecked.
-  Add failed validation at that checkbox and the unsaved form was preserved;
-  no reviewer record or App access declaration is saved. The earlier empty form
-  cancellation predates this follow-up. No identifier value or password is
+  An earlier Google form had the identifier and exact 390-character instructions
+  prepared, but Add failed the unchecked full-access confirmation and that form
+  remained unsaved. The latest fresh server page has neither Yes nor No selected,
+  no reviewer record, and Save disabled. No App access declaration is saved.
+  The earlier empty-form cancellation and prepared form are historical states,
+  separate from that latest server readback. No identifier value or password is
   stored in this package.
 - Configure deliberate Android testing and complete physical-device/live-account
   acceptance, including 16 KB-page runtime behavior and Play-delivered APK checks. The
@@ -167,14 +180,20 @@ stopped without triggering a deployment.
   rights form was inspected without submitting an answer.
 - Complete Google Play target audience, applicable content rating, remaining
   app-content declarations, and the operational privacy checks for Data safety.
-  Only a bounded Data safety Step 2 draft is saved: collection/sharing question
-  Yes, Username and password account creation, and the deletion URL. Encryption
-  in transit and optional data-only deletion remain unanswered; data-type,
-  usage, and preview steps were not reached. No final declaration or publication
-  is complete.
-  All seven Apple categories are published with App Functionality, linked-to-user,
-  no-tracking details after explicit user approval; the exact deployed-source
-  review supports that tracking conclusion. Operational retention, processor
+  Target audience is blocked by incomplete Sign in details. IARC's initial screen
+  has the public support contact and All Other App Types prepared; its agreement
+  remains unchecked and awaits approval. One Next attempt returned Terms must be
+  accepted; no questionnaire step beyond the first screen was reached.
+  Data safety is saved at Step 4 with encryption in transit Yes, data-only deletion
+  requests Yes, and the same public deletion URL for both request types. Six data
+  types are saved: Email address, User IDs, Other info, App interactions, Other
+  user-generated content, and Device or other IDs. Usage details remain 0 of 6,
+  no per-type usage answers are saved, and preview is not reached. No final
+  declaration or publication is complete.
+  The initial seven Apple categories remain published with App Functionality,
+  linked-to-user, no-tracking details. Approve and publish the newly required
+  Analytics additions for User ID, Device ID, and Product Interaction; the local
+  User ID edit has not been saved or published. Operational retention, processor
   treatment, and deletion fulfilment remain
   separate evidence questions in [privacy-evidence.md](privacy-evidence.md).
 
@@ -187,7 +206,9 @@ saved answers are **No, my app does not contain ads**, **My app doesn't provide
 any financial features**, and **My app does not have any health features**.
 Financial documentation and regional health requirements were not required.
 Advertising ID was subsequently answered **No** and saved, supported by the
-source and verified signed bundle. No review was sent for these declarations.
+source and verified signed bundle. **Government apps: No** was later saved and
+confirmed on a fresh page. No review was sent for these declarations; the
+earlier three-item snapshot does not establish a current overview total.
 
 The saved internal draft **1.0.0 (1) - initial internal test** contains the
 accepted bundle and prepared English release notes. Preview showed one warning:

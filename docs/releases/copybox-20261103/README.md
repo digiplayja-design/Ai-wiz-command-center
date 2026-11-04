@@ -40,13 +40,14 @@ prepared notes were accepted and saved. After reload, Save was disabled, the
 contact names persisted, and the notes contained 2,606 characters. Phone and
 email were redacted by the observation layer, so exact-value readback was not
 available; no actual phone value is stored here. The user subsequently supplied
-the dedicated reviewer identifier, which was saved in Apple's User name field;
-Save succeeded and became disabled. A fresh canonical version page confirms the
-exact entered username visually and a blank password; the accessibility text
-redacts the identifier. The existing enabled shared reviewer account, verified email, Ultra
+the dedicated reviewer identifier, which was saved in Apple's User name field
+and visually verified. After the user reported **Saved**, a fresh reload
+confirmed **User name and Password populated**, **Save disabled**, and
+sign-in-required checked. No password value was read, printed, captured, or
+stored. The existing enabled shared reviewer account, verified email, Ultra
 entitlement, and available AI/device capacity are confirmed read-only.
-Password entry and end-to-end COPY Box login/AI testing remain outstanding.
-No reviewer identifier value or account counts are stored here, and
+End-to-end COPY Box login/AI testing remains outstanding.
+No reviewer identifier value or private account counts are stored here, and
 the sign-in-required checkbox remains checked. The selected
 build 1.0.0 (1) persisted after reloading the version tab, with Save disabled. App
 Information confirmed the subtitle and primary Productivity category saved;
@@ -62,14 +63,22 @@ countries. Both stores' saved settings are now verified:
 | Apple | Free; $0.00 and zero local-currency prices | All 175 countries/regions **Available on App Release**; future countries included | Manual release; **Prepare for Submission** |
 | Google Play | **Your app is Free**; Save changes disabled | **Targeted (178)**, including Rest of World | Production **Inactive**; no review or release submitted |
 
-Seven privacy categories are published: Email
+The initial published privacy declaration contains seven categories: Email
 Address, Customer Support, Other User Content, User ID, Device ID, Product
 Interaction, and Other Data Types. Each uses **App Functionality**, is **linked
 to the user**, and is **not used for tracking**. The exact deployed-source review
 supports the no-tracking conclusion. After the user explicitly approved the
 publication attestation, the final Publish confirmation was accepted. App Store
-Connect now explicitly displays **Published by Ricardo Bailey**; all seven
-classifications remain unchanged.
+Connect explicitly displayed **Published by Ricardo Bailey** for that initial
+publication. Those published answers remain in place.
+
+Later source and live database-metadata checks established COPY Box
+authentication/onboarding analytics. **User ID, Device ID, and Product
+Interaction require Analytics alongside App Functionality**; linkage remains
+Yes and tracking remains No. Only the User ID Analytics checkbox has been
+staged in the local edit wizard. Its final action is **Publish**; no correction
+has been saved as a server draft or published. The three corrections await
+approval together. See [privacy evidence](store-submission/privacy-evidence.md).
 
 The age questionnaire was inspected and cancelled without saving. Actual AI
 content frequency remains unresolved: the general backend `/api/generate` path
@@ -217,12 +226,17 @@ establish store submission. The existing public support/privacy/deletion URLs re
 Box-specific HTML additions are merged through
 [pull request 43](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/43)
 as `da283a8dfe7b51f68ad7b581b8555f017cac3c54`, whose tree matches the reviewed
-source. That exact commit has not been deployed; Render still serves the
+source. The required onboarding-analytics paragraph is now in open Draft
+[PR 44](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/44), commit
+`a214334239b07875cef2818541e30a15d2271787`, based directly on that merge. It changes
+only `website/privacy-policy.html` and is not merged or deployed. The old base
+alone does not resolve the new analytics disclosure; the final complete
+deployment commit remains to be established. Render still serves the
 October 25 release. Render rejected the existing GitHub connection as a
 deployment connection rather than a sign-in method, and the alternative secure
 sign-in request was declined. Authentication attempts stopped without a
 deployment. See the [November 4 continuation](continuation-20261104.md)
-for the safe deployment target and remaining account steps.
+for the required website follow-up, final deployment target, and remaining account steps.
 
 ## Account and signing state observed
 
@@ -311,13 +325,16 @@ features**, and **Health apps**, all edited November 4. The saved answers are no
 ads, no financial features, and no health features; financial documentation and
 regional health requirements were not required. No review was sent. The earlier
 empty App access form was cancelled before a reviewer identifier was supplied.
-After the user supplied that identifier, the Google Sign in details form was
-prepared with it and the exact 390-character short instructions. The password
-remains blank and the full-access checkbox unchecked. Add returned **Your changes
-couldn’t be saved**, with validation at that checkbox. The unsaved form is
-preserved; no reviewer record or App access declaration has been saved. The Advertising ID answer **No** was
+After the user supplied that identifier, an earlier Google Sign in details form
+was prepared with it and the exact 390-character short instructions. Add failed
+the unchecked full-access confirmation; that separate form remained unsaved.
+The latest freshly loaded server page has **neither Yes nor No selected**, **no
+reviewer record**, and **Save disabled**. No App access declaration is saved.
+The Advertising ID answer **No** was
 subsequently saved, supported by the source and signed bundle's permission
-inventory; no review was sent.
+inventory; no review was sent. **Government apps: No** was subsequently saved
+and confirmed on a fresh readback. The earlier three-item Actioned snapshot is
+not a current total declaration count.
 
 The Google [main store listing](https://play.google.com/console/u/0/developers/4772708594176030332/app/4974456296219116192/store-listings)
 is saved and shows **Ready to send for review** on both the overview and reopened
@@ -340,40 +357,54 @@ Final track readback confirms **Inactive**, **Draft**, and **1 of 3 complete**,
 with version code **1**, **178 countries**, and **19,573 supported Android
 devices** shown.
 
-A bounded Google Data safety draft is saved at Step 2: the combined
+The Google Data safety draft is now saved through **Step 4**. The combined
 collection/sharing question is **Yes**, account creation is **Username and
-password**, and the deletion URL is
-`https://www.korlixdeveloper.com/delete-account.html`. Encryption in transit and
-optional data-only deletion remain unanswered; data-type, usage, and preview
-steps were not reached. This is not a final or published declaration.
+password**, and both **encryption in transit** and **data-only deletion requests**
+are answered **Yes**. Account deletion and data-only requests use
+`https://www.korlixdeveloper.com/delete-account.html`. Six data types are selected
+and saved: **Email address, User IDs, Other info, App interactions, Other
+user-generated content, and Device or other IDs**. Usage details are **0 of 6
+complete**: no per-type usage answers are saved, and preview has not been
+reached. This remains a draft, not a final or published declaration.
+
+Google target audience is blocked by incomplete **Sign in details**. The IARC
+first screen has the public support contact and **All Other App Types** prepared.
+Its agreement is unchecked; one Next attempt returned **Terms must be accepted**.
+No questionnaire step beyond that first screen was reached. Agreement acceptance
+awaits approval, and the content questionnaire remains incomplete.
 
 ## Remaining release gates
 
-1. Supply the dedicated reviewer password privately and complete end-to-end
-   COPY Box login/AI testing, then complete both stores' reviewer
-   fields. The supplied identifier is saved in Apple User name alongside the
-   earlier contact details and notes. Google identifier/instructions remain in
-   an unsaved form; the password and full-access confirmation remain incomplete.
+1. Complete end-to-end COPY Box login/AI testing and Google Sign in details with
+   truthful full-access confirmation. Apple credential fields are populated and
+   saved; the fresh Google server page has neither a Yes/No selection nor a
+   reviewer record. The earlier prepared Google form remains separate and unsaved.
    The account, email verification, Ultra entitlement, and available AI/device
    capacity have been confirmed through read-only checks.
-2. Evaluate actual AI content frequency through a live account, complete the
+2. Approve and publish the three Apple Analytics-purpose corrections for User ID,
+   Device ID, and Product Interaction, retaining App Functionality, linked-to-user
+   Yes, and tracking No. Only a local User ID edit is staged; no correction is
+   saved or published.
+3. Evaluate actual AI content frequency through a live account, complete the
    age/content questionnaire, and supply the content-rights declaration. Configure
    TestFlight testing and complete physical iPhone/iPad acceptance: clipboard and
    paste prompts, file picker/share sheets, local persistence, offline launch,
    large text, account switching, live sign-in/password reset, optional AI
    consent/refinement/report, and account-deletion confirmation.
-3. Configure deliberate Android testing and complete device/live-account
+4. Configure deliberate Android testing and complete device/live-account
    acceptance, including a 16 KB-page environment and Play-delivered APK checks.
    Static checks of the signed AAB and generated universal APK passed; the saved
    Play internal draft has no testers and has not been rolled out.
-4. Complete Google Play target audience, applicable content rating, and remaining
-   app-content declarations. Complete Data safety beyond the saved Step 2 draft,
-   including the unanswered operational questions and data-type, usage, and preview steps.
-5. Authenticate Render and deploy only the reviewed merge commit
-   `da283a8dfe7b51f68ad7b581b8555f017cac3c54`, then verify all four COPY Box
-   public policy/support pages. A generic configured-branch deployment is not
-   the reviewed publication target.
-6. Submit the completed store listings after the remaining release gates are
+5. Complete Google Play target audience after Sign in details, accept the IARC
+   agreement after approval, and complete the actual content questionnaire and
+   remaining declarations. Finish all six Data safety usage details and preview
+   from the saved Step 4 draft, including the source-supported Analytics purposes.
+6. Review the separate website onboarding-analytics addendum, then authenticate
+   Render and deploy only the exact reviewed complete source once its final
+   commit is established. The earlier reviewed four-page base
+   `da283a8dfe7b51f68ad7b581b8555f017cac3c54` remains undeployed. Verify all four
+   public pages; do not deploy the generic configured-branch head.
+7. Submit the completed store listings after the remaining release gates are
    satisfied. Neither public review nor public mobile availability is complete.
 
 The candidate and upload workflows remain in `codemagic.yaml`. The iOS upload

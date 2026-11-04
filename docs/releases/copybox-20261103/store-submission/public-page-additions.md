@@ -3,7 +3,15 @@
 These scoped additions describe implemented behavior. They have been reconciled
 with the currently live website source in
 [pull request 43](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/43),
-at commit `d810888cba620502e799a3022090e1a5f6748d9d`, but have not been published.
+at commit `d810888cba620502e799a3022090e1a5f6748d9d`, merged as
+`da283a8dfe7b51f68ad7b581b8555f017cac3c54`, but have not been published.
+The required authentication/onboarding analytics paragraph below is prepared in
+open Draft [pull request 44](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/44),
+source `a214334239b07875cef2818541e30a15d2271787`, whose exact parent is da283.
+That follow-up adds only one paragraph in `website/privacy-policy.html`; it has
+not been merged or deployed. The older base alone does not resolve the new
+analytics disclosure. Establish the final reviewed complete commit before
+publication; do not deploy a generic configured-branch head.
 The HTML preserves existing provisions and global effective dates, with a
 proposed COPY Box coverage date of November 4, 2026. Confirm the actual publication
 date before deploying. Operational retention/provider practices still require
@@ -32,6 +40,12 @@ records the age range and policy/parent-permission declarations you provide.
 COPY Box sends an app-installation identifier, platform and app label for session
 and device management. Native sign-in tokens are kept in the platform's secure
 storage, separately from your written boxes.
+
+KORLIX records sign-up and sign-in events from COPY Box for analytics. These
+records include a hashed app installation identifier, platform, event time and
+authentication event, with an error category where relevant and your account
+identifier after successful sign-in. We use these records to measure
+authentication completion and use of AI features.
 
 AI refinement requires your permission to send the selected box's full text
 and your writing instruction to KORLIX and OpenAI. The backend stores the
@@ -108,6 +122,10 @@ support before resubmitting it.
 ## Reconciliation evidence
 
 - App behavior: the source anchors in [privacy-evidence.md](privacy-evidence.md).
+- The analytics paragraph follows the exact deployed authentication/onboarding
+  source and live database schema/function metadata; no customer event rows
+  were accessed. It does not add claims about email/content analytics, guest
+  writing telemetry, advertising, tracking, or a guaranteed deletion deadline.
 - Public pages consulted during preparation: [Privacy](https://www.korlixdeveloper.com/privacy-policy.html),
   [Terms](https://www.korlixdeveloper.com/terms.html),
   [Deletion](https://www.korlixdeveloper.com/delete-account.html),
