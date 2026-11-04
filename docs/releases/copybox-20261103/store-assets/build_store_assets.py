@@ -27,7 +27,7 @@ APPLE_ICON = (
 )
 CAPTURE_PROFILES = {
     "play-phone": ("google-play/phone", (1080, 1920)),
-    "apple-iphone": ("app-store/iphone", (1206, 2622)),
+    "apple-iphone": ("app-store/iphone", (1260, 2736)),
     "apple-ipad": ("app-store/ipad", (2064, 2752)),
 }
 STATES = (

@@ -27,7 +27,7 @@ const _profiles = [
   ),
   (
     name: 'apple-iphone',
-    size: Size(402, 874),
+    size: Size(420, 912),
     pixelRatio: 3.0,
     platform: TargetPlatform.iOS,
   ),

@@ -10,16 +10,17 @@ not logical Flutter viewports.
 | Destination | Final dimensions | Planned content |
 | --- | --- | --- |
 | Google Play phone | 1080 × 1920 | Workspace, templates, focus editor, dark workspace |
-| Apple iPhone with Dynamic Island, medium | 1206 × 2622 | Same four actual states in an iPhone layout |
+| Apple iPhone with Dynamic Island, large | 1260 × 2736 | Same four actual states in an iPhone layout |
 | Apple iPad 13-inch | 2064 × 2752 | Same four states in the tablet layout |
 | Google Play feature graphic | 1024 × 500 | Clean branded illustration with the KORLIX emblem and writing-card colors; no rank, price, download-count or availability claims |
 | Google Play icon | 512 × 512 | The approved black-and-white KORLIX emblem; 32-bit PNG with an opaque alpha channel, under 1 MiB |
 | Apple app icon | 1024 × 1024 | Existing opaque black-and-white icon in the iOS asset catalog |
 
-Current Apple guidance lists a Dynamic Island medium iPhone image and, for
-universal apps, a 13-inch iPad image. COPY Box targets both device families. The
-selected sizes above are accepted dimensions. Apple accepts 1–10 images per
-size; these four per family keep the same feature sequence.
+Apple's required iPhone coverage is a large Dynamic Island set or a large Face
+ID set. This package uses the large Dynamic Island size of 1260 × 2736. Universal
+apps also require 13-inch iPad images; COPY Box targets both device families.
+Apple accepts 1–10 images per size. Four images per family keep the same feature
+sequence across all twelve planned captures.
 [Apple screenshot specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications)
 
 Google requires at least two screenshots, with dimensions from 320 to 3840 and
@@ -30,8 +31,8 @@ format. The feature graphic is 1024 × 500.
 [Google preview assets](https://support.google.com/googleplay/android-developer/answer/9866151?hl=en)
 
 The console's available size wells and validation remain authoritative at upload.
-If a large Dynamic Island iPhone well is also being populated, capture an
-additional 1320 × 2868 set rather than resizing a medium layout.
+Render the iPhone layout at 420 × 912 logical pixels with a 3× output scale to
+produce the selected 1260 × 2736 upload size without resizing the UI.
 
 ## Image sequence and accessible descriptions
 
@@ -69,7 +70,7 @@ Measured existing files in `../previews/`:
 
 | File | Current properties | Gap |
 | --- | --- | --- |
-| `copybox-workspace.png` | 1170 × 2532, RGBA | Has an alpha channel; ratio exceeds Google's 2:1 limit; does not fill Apple's current required Dynamic Island medium well. |
+| `copybox-workspace.png` | 1170 × 2532, RGBA | Has an alpha channel; ratio exceeds Google's 2:1 limit; does not fill the required large iPhone screenshot well. |
 | `copybox-templates.png` | 1170 × 2532, RGBA | Same gaps as the workspace image. |
 | `copybox-desktop-dark.png` | 3840 × 2700, RGBA | A generic large-window layout, not a required iPad-size capture; has an alpha channel. |
 

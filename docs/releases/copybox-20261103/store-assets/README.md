@@ -24,7 +24,7 @@ operating-system status bars.
 | Google Play feature graphic | `google-play/feature-graphic.png` | 1024 × 500, 24-bit RGB PNG |
 | Google Play phone screenshots | `google-play/phone/*.png` | 1080 × 1920, 24-bit RGB PNG |
 | Apple app icon reference | `app-store/icon-1024.png` | 1024 × 1024, 24-bit RGB PNG; matches native app icon |
-| Apple iPhone with Dynamic Island, medium display | `app-store/iphone/*.png` | 1206 × 2622, 24-bit RGB PNG |
+| Apple iPhone with Dynamic Island, large display | `app-store/iphone/*.png` | 1260 × 2736, 24-bit RGB PNG |
 | Apple iPad 13-inch display | `app-store/ipad/*.png` | 2064 × 2752, 24-bit RGB PNG |
 
 Each device set has these four screenshots in order:
@@ -52,7 +52,7 @@ flutter test --no-pub --reporter expanded test/copybox_preview_test.dart
 
 The fixture emits `store-play-phone-*.png`, `store-apple-iphone-*.png`, and
 `store-apple-ipad-*.png` into `COPYBOX_PREVIEWS`. Its three capture sizes are
-360 × 640 at 3×, 402 × 874 at 3×, and 1032 × 1376 at 2×. It checks exact physical
+360 × 640 at 3×, 420 × 912 at 3×, and 1032 × 1376 at 2×. It checks exact physical
 pixel sizes and reports any Flutter layout exception. The raw PNGs have an alpha
 channel; packaging requires every pixel to be opaque and removes the channel.
 Screenshots are not stretched, resized, padded, or cropped during packaging.
@@ -74,7 +74,8 @@ checksums, and capture provenance. Visually review each output before uploading.
 ## Official specifications checked
 
 - [Apple screenshot specifications](https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications):
-  the current required iPhone size is the medium Dynamic Island display; iPad
+  this set supplies the large Dynamic Island display size; Apple requires the
+  large Face ID fallback when a large Dynamic Island set is not provided. iPad
   support also needs a 13-inch iPad capture. Images must have no alpha channel.
 - [Google Play preview assets](https://support.google.com/googleplay/android-developer/answer/9866151?hl=en):
   a 512 × 512 32-bit app icon; 1024 × 500 feature graphic without alpha; opaque

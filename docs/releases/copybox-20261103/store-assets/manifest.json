@@ -50,8 +50,8 @@
       "file": "app-store/iphone/01-workspace.png",
       "raw_capture": "store-apple-iphone-01-workspace.png",
       "required_dimensions": [
-        1206,
-        2622
+        1260,
+        2736
       ],
       "status": "pending_capture"
     },
@@ -59,8 +59,8 @@
       "file": "app-store/iphone/02-templates.png",
       "raw_capture": "store-apple-iphone-02-templates.png",
       "required_dimensions": [
-        1206,
-        2622
+        1260,
+        2736
       ],
       "status": "pending_capture"
     },
@@ -68,8 +68,8 @@
       "file": "app-store/iphone/03-focus-editor.png",
       "raw_capture": "store-apple-iphone-03-focus-editor.png",
       "required_dimensions": [
-        1206,
-        2622
+        1260,
+        2736
       ],
       "status": "pending_capture"
     },
@@ -77,8 +77,8 @@
       "file": "app-store/iphone/04-dark-workspace.png",
       "raw_capture": "store-apple-iphone-04-dark-workspace.png",
       "required_dimensions": [
-        1206,
-        2622
+        1260,
+        2736
       ],
       "status": "pending_capture"
     },
