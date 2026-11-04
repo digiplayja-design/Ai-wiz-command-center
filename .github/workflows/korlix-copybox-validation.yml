@@ -8,6 +8,7 @@ on:
       - apps/korlix_copy_box/**
       - packages/korlix_auth_core/**
       - scripts/ci/validate-copybox-native.py
+      - scripts/ci/inspect-copybox-artifact.py
   push:
     branches:
       - main
@@ -16,6 +17,7 @@ on:
       - apps/korlix_copy_box/**
       - packages/korlix_auth_core/**
       - scripts/ci/validate-copybox-native.py
+      - scripts/ci/inspect-copybox-artifact.py
 
 permissions:
   contents: read
@@ -147,6 +149,13 @@ jobs:
           if errors:
               raise SystemExit('\n'.join(errors))
           PY
+      - name: Inspect Android native library alignment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/ci/inspect-copybox-artifact.py android \
+            apps/korlix_copy_box/build/app/outputs/flutter-apk/app-debug.apk \
+            --output "$RUNNER_TEMP/copybox-apk-metadata/native-dependencies.json"
       - name: Keep compiled APK metadata
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -225,6 +234,29 @@ jobs:
           flutter build ios --simulator --debug --no-pub
           cd build/ios/iphonesimulator
           ditto -c -k --sequesterRsrc --keepParent Runner.app KorlixCopyBox-Simulator.zip
+      - name: Inspect compiled iOS native dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/ci/inspect-copybox-artifact.py ios \
+            apps/korlix_copy_box/build/ios/iphonesimulator/Runner.app \
+            --output "$RUNNER_TEMP/copybox-ios-native-dependencies.json"
+      - name: Keep compiled iOS native dependency report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: korlix-copybox-ios-native-dependencies
+          path: ${{ runner.temp }}/copybox-ios-native-dependencies.json
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Keep iOS resolved app lockfile for comparison
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: korlix-copybox-ios-resolved-lockfile
+          path: apps/korlix_copy_box/pubspec.lock
+          if-no-files-found: ignore
+          retention-days: 14
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: korlix-copybox-ios-simulator

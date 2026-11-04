@@ -1,0 +1,31 @@
+Good words. Always within reach.
+
+KORLIX COPY Box gives your ideas, useful replies, notes and reusable text a space of their own. Start with 12 independent colored boxes, add more as you need them, and find the right words when it is time to use them.
+
+WRITE YOUR WAY
+Edit several boxes in one scrolling workspace. Give each box a title and folder, choose its color, and keep favorites close. Search your writing, move boxes into the order you want, or open a focus editor for longer thoughts. Copy one box or all your active boxes in workspace order.
+
+START WITH SOMETHING USEFUL
+Choose a client follow-up, project update, customer support reply, meeting recap, social caption or proposal brief. Add reusable fields such as {{name}} and {{date}}, fill in the details, and preview the finished text before copying it. Your original template stays intact.
+
+KEEP A WAY BACK
+Autosave keeps ordinary edits on your device. Replacements can retain up to 20 earlier text versions per box, and deleted boxes go to recoverable trash. Restore previous wording or undo an accidental deletion.
+
+TAKE YOUR WORDS WITH YOU
+Save a JSON backup, preview an import before adding boxes, or export your current text. Use your device's sharing options to send the content you choose. Backups include text, folders, colors, favorites, version history and trash.
+
+REFINE WITH YOUR KORLIX ACCOUNT
+Use the same email and password you use for KORLIX AI to polish, shorten, summarize or reshape a selected box. Turn notes into action items or a professional email. Review a proposed draft before applying it, save it as a new box, keep the original, or report the output. AI requires an internet connection and is subject to your account's current usage limits.
+
+A SPACE THAT FEELS LIKE YOURS
+A black-and-white KORLIX emblem, softly colored writing cards, light and dark appearance, and device text scaling keep the focus on your words.
+
+YOUR WRITING AND YOUR CHOICES
+Local writing does not require sign-in. Guest and account workspaces are separate. Boxes are stored on your device; automatic cross-device synchronization is not included. Local boxes and exported backups are not encrypted by COPY Box.
+
+After your consent, AI refinement sends the selected box's full text and your refinement instruction to KORLIX and OpenAI. KORLIX saves the request and generated response in your account's AI history, even if you keep the original. Deleting a local box does not remove this online history.
+
+Support: support@korlixdeveloper.com
+Privacy: https://www.korlixdeveloper.com/privacy-policy.html
+Terms: https://www.korlixdeveloper.com/terms.html
+Account deletion: https://www.korlixdeveloper.com/delete-account.html

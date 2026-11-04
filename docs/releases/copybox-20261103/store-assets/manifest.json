@@ -1,0 +1,172 @@
+{
+  "app": "KORLIX COPY Box",
+  "bundle_id": "com.korlixdeveloper.copybox",
+  "locale": "en-US",
+  "capture_source_commit": null,
+  "capture_method": "Actual Flutter app widgets, controlled sample data, no network",
+  "capture_fixture": "apps/korlix_copy_box/test/copybox_preview_test.dart",
+  "native_device_acceptance": false,
+  "source_icon_sha256": "ee8c5b7a8cdae777917c626c797b7202a46cf3cbe303a09126d1c64e9f1cfe2c",
+  "source_apple_icon_sha256": "b0b9cb4fc2f5d42098751d565a4a0ca9475ab1d532e501c16a1b8ec9047543f7",
+  "feature_graphic_kind": "Branded illustration; not a screenshot or device mockup",
+  "screenshots": [
+    {
+      "file": "google-play/phone/01-workspace.png",
+      "raw_capture": "store-play-phone-01-workspace.png",
+      "required_dimensions": [
+        1080,
+        1920
+      ],
+      "status": "pending_capture"
+    },
+    {
+      "file": "google-play/phone/02-templates.png",
+      "raw_capture": "store-play-phone-02-templates.png",
+      "required_dimensions": [
+        1080,
+        1920
+      ],
+      "status": "pending_capture"
+    },
+    {
+      "file": "google-play/phone/03-focus-editor.png",
+      "raw_capture": "store-play-phone-03-focus-editor.png",
+      "required_dimensions": [
+        1080,
+        1920
+      ],
+      "status": "pending_capture"
+    },
+    {
+      "file": "google-play/phone/04-dark-workspace.png",
+      "raw_capture": "store-play-phone-04-dark-workspace.png",
+      "required_dimensions": [
+        1080,
+        1920
+      ],
+      "status": "pending_capture"
+    },
+    {
+      "file": "app-store/iphone/01-workspace.png",
+      "raw_capture": "store-apple-iphone-01-workspace.png",
+      "required_dimensions": [
+        1206,
+        2622
+      ],
+      "status": "pending_capture"
+    },
+    {
+      "file": "app-store/iphone/02-templates.png",
+      "raw_capture": "store-apple-iphone-02-templates.png",
+      "required_dimensions": [
+        1206,
+        2622
+      ],
+      "status": "pending_capture"
+    },
+    {
+      "file": "app-store/iphone/03-focus-editor.png",
+      "raw_capture": "store-apple-iphone-03-focus-editor.png",
+      "required_dimensions": [
+        1206,
+        2622
+      ],
+      "status": "pending_capture"
+    },
+    {
+      "file": "app-store/iphone/04-dark-workspace.png",
+      "raw_capture": "store-apple-iphone-04-dark-workspace.png",
+      "required_dimensions": [
+        1206,
+        2622
+      ],
+      "status": "pending_capture"
+    },
+    {
+      "file": "app-store/ipad/01-workspace.png",
+      "raw_capture": "store-apple-ipad-01-workspace.png",
+      "required_dimensions": [
+        2064,
+        2752
+      ],
+      "status": "pending_capture"
+    },
+    {
+      "file": "app-store/ipad/02-templates.png",
+      "raw_capture": "store-apple-ipad-02-templates.png",
+      "required_dimensions": [
+        2064,
+        2752
+      ],
+      "status": "pending_capture"
+    },
+    {
+      "file": "app-store/ipad/03-focus-editor.png",
+      "raw_capture": "store-apple-ipad-03-focus-editor.png",
+      "required_dimensions": [
+        2064,
+        2752
+      ],
+      "status": "pending_capture"
+    },
+    {
+      "file": "app-store/ipad/04-dark-workspace.png",
+      "raw_capture": "store-apple-ipad-04-dark-workspace.png",
+      "required_dimensions": [
+        2064,
+        2752
+      ],
+      "status": "pending_capture"
+    }
+  ],
+  "files": [
+    {
+      "file": "app-store/icon-1024.png",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "mode": "RGB",
+      "bytes": 580545,
+      "sha256": "655fc06c1337b25c2ecd9157ff596569832438acd487228c4879a5765665b466"
+    },
+    {
+      "file": "google-play/feature-graphic.png",
+      "dimensions": [
+        1024,
+        500
+      ],
+      "mode": "RGB",
+      "bytes": 70851,
+      "sha256": "c5ac362384bc26acd4056b540e51f86894c13c06331b21eb4daf850a4af6d6f5"
+    },
+    {
+      "file": "google-play/icon-512-rgb.png",
+      "dimensions": [
+        512,
+        512
+      ],
+      "mode": "RGB",
+      "bytes": 180275,
+      "sha256": "678123b7bbb102d53ed262e3a0d5f0a360ae1a3ef17a30a37cffe7757d7a6027"
+    },
+    {
+      "file": "google-play/icon-512.png",
+      "dimensions": [
+        512,
+        512
+      ],
+      "mode": "RGBA",
+      "bytes": 198632,
+      "sha256": "168fb3f31dcaaf9ad8d254aaa89a7545de33f29e03dbc74e688aa159253eb0e2",
+      "alpha_extrema": [
+        255,
+        255
+      ]
+    }
+  ],
+  "official_specifications": [
+    "https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications",
+    "https://support.google.com/googleplay/android-developer/answer/9866151?hl=en"
+  ]
+}

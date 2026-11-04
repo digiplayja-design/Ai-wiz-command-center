@@ -580,9 +580,13 @@ workflows:
           flutter build appbundle --release --no-pub
           test -s build/app/outputs/bundle/release/app-release.aab
           mkdir -p artifacts
+          python3 "$CM_BUILD_DIR/scripts/ci/inspect-copybox-artifact.py" android \
+            build/app/outputs/bundle/release/app-release.aab \
+            --output artifacts/CopyBox-native-dependencies.json
           cp build/app/outputs/bundle/release/app-release.aab artifacts/KorlixCopyBox.aab
     artifacts:
       - $CM_BUILD_DIR/apps/korlix_copy_box/artifacts/KorlixCopyBox.aab
+      - $CM_BUILD_DIR/apps/korlix_copy_box/artifacts/CopyBox-native-dependencies.json
 
   korlix-copybox-ios-candidate: &copybox_ios_candidate
     name: KORLIX COPY Box — iOS release candidate
@@ -642,6 +646,9 @@ workflows:
           python3 "$CM_BUILD_DIR/scripts/verify_ios_ipa.py" "${IPA_FILES[0]}" \
             --bundle-id com.korlixdeveloper.copybox --version "$KORLIX_IOS_VERSION" \
             --build "$KORLIX_IOS_BUILD_NUMBER" --output artifacts/CopyBox-verification.json
+          python3 "$CM_BUILD_DIR/scripts/ci/inspect-copybox-artifact.py" ios \
+            "${IPA_FILES[0]}" \
+            --output artifacts/CopyBox-native-dependencies.json
           cp "${IPA_FILES[0]}" artifacts/KorlixCopyBox.ipa
     artifacts:
       - $CM_BUILD_DIR/apps/korlix_copy_box/artifacts/*.ipa

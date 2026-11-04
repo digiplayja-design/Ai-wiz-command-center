@@ -1,0 +1,125 @@
+{
+  "status": "prepared_not_submitted",
+  "prepared_date": "2026-11-03",
+  "date_timezone": "America/Los_Angeles",
+  "locale": "en-US",
+  "identity": {
+    "display_name": "KORLIX COPY Box",
+    "android_package": "com.korlixdeveloper.copybox",
+    "apple_bundle_id": "com.korlixdeveloper.copybox",
+    "version": "1.0.0",
+    "store_app_ids": null,
+    "apple_sku_suggestion": "korlix-copy-box-ios"
+  },
+  "google_play": {
+    "title": "KORLIX COPY Box",
+    "short_description": "Organize notes, replies and reusable text in a focused writing workspace",
+    "full_description_file": "description.txt",
+    "category": "PRODUCTIVITY",
+    "support_email": "support@korlixdeveloper.com",
+    "website": "https://www.korlixdeveloper.com/support.html",
+    "privacy_policy_url": "https://www.korlixdeveloper.com/privacy-policy.html",
+    "account_deletion_url": "https://www.korlixdeveloper.com/delete-account.html",
+    "access": "some_functionality_restricted",
+    "app_access_instructions_file": "google-app-access.txt",
+    "release_notes_file": "release-notes.txt",
+    "app_access_instruction_name": "KORLIX account for AI refinement",
+    "additional_access_instructions_file": "google-app-access-short.txt"
+  },
+  "apple_app_store": {
+    "name": "KORLIX COPY Box",
+    "subtitle": "Save, organize, refine & reuse",
+    "promotional_text": "Keep useful words close with colored boxes, reusable templates, version recovery and optional AI refinement. Write locally, then copy or share when you are ready.",
+    "keywords": "notes,snippets,templates,drafts,writing,organizer,productivity,replies,editor,workspace",
+    "description_file": "description.txt",
+    "primary_category": "PRODUCTIVITY",
+    "secondary_category_suggestion": "UTILITIES",
+    "support_url": "https://www.korlixdeveloper.com/support.html",
+    "marketing_url": null,
+    "privacy_policy_url": "https://www.korlixdeveloper.com/privacy-policy.html",
+    "copyright": "2026 Korlix INC",
+    "review_notes_file": "apple-review-notes.txt",
+    "review_sign_in_required_for_optional_ai": true,
+    "review_contact_email": "support@korlixdeveloper.com",
+    "review_contact_name": null,
+    "review_contact_phone": null,
+    "reviewer_credentials": "Enter only in the private console fields; never in this package.",
+    "first_version_whats_new_field": false
+  },
+  "testflight": {
+    "what_to_test_file": "testflight-what-to-test.txt",
+    "feedback_email": "support@korlixdeveloper.com"
+  },
+  "not_configured_by_this_package": {
+    "price": null,
+    "trial": null,
+    "standalone_purchase_products": null,
+    "country_availability": null,
+    "release_schedule": null,
+    "store_age_rating": null,
+    "privacy_attestations": null,
+    "review_account": null
+  },
+  "evidence_files": {
+    "privacy": "privacy-evidence.md",
+    "public_page_additions": "public-page-additions.md",
+    "assets": "screenshot-plan.md",
+    "asset_manifest": "../store-assets/manifest.json"
+  },
+  "field_lengths": {
+    "name": {
+      "characters": 15,
+      "utf8_bytes": 15,
+      "limit": 30,
+      "limit_unit": "characters"
+    },
+    "apple_subtitle": {
+      "characters": 30,
+      "utf8_bytes": 30,
+      "limit": 30,
+      "limit_unit": "characters"
+    },
+    "google_short_description": {
+      "characters": 72,
+      "utf8_bytes": 72,
+      "limit": 80,
+      "limit_unit": "characters"
+    },
+    "apple_promotional_text": {
+      "characters": 162,
+      "utf8_bytes": 162,
+      "limit": 170,
+      "limit_unit": "characters"
+    },
+    "apple_keywords": {
+      "characters": 87,
+      "utf8_bytes": 87,
+      "limit": 100,
+      "limit_unit": "bytes"
+    },
+    "description.txt": {
+      "characters": 2685,
+      "utf8_bytes": 2685
+    },
+    "apple-review-notes.txt": {
+      "characters": 2605,
+      "utf8_bytes": 2605
+    },
+    "google-app-access.txt": {
+      "characters": 1404,
+      "utf8_bytes": 1404
+    },
+    "testflight-what-to-test.txt": {
+      "characters": 1895,
+      "utf8_bytes": 1897
+    },
+    "release-notes.txt": {
+      "characters": 216,
+      "utf8_bytes": 216
+    },
+    "google-app-access-short.txt": {
+      "characters": 390,
+      "utf8_bytes": 390
+    }
+  }
+}

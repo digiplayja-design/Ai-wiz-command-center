@@ -14,6 +14,7 @@ import 'copybox_auth.dart';
 import 'copybox_auth_screen.dart';
 import 'copybox_card.dart';
 import 'copybox_dialogs.dart';
+import 'copybox_files.dart';
 import 'copybox_store.dart';
 import 'copybox_theme.dart';
 
@@ -244,14 +245,13 @@ class _CopyBoxHomeState extends State<CopyBoxHome> with WidgetsBindingObserver {
       final bytes = Uint8List.fromList(utf8.encode(contents));
       final name =
           'KORLIX_COPY_Box_${DateTime.now().toIso8601String().substring(0, 10)}.${plainText ? 'txt' : 'json'}';
-      final path = await FilePicker.platform.saveFile(
+      final location = await FilePicker.saveFile(
         dialogTitle: 'Save COPY Box backup',
         fileName: name,
-        type: FileType.custom,
-        allowedExtensions: [plainText ? 'txt' : 'json'],
         bytes: bytes,
+        mimeType: plainText ? 'text/plain' : 'application/json',
       );
-      if (mounted && path != null) {
+      if (mounted && location != null) {
         _message('Export saved. Keep your backup in a safe place.');
       }
     } catch (_) {
@@ -292,20 +292,18 @@ class _CopyBoxHomeState extends State<CopyBoxHome> with WidgetsBindingObserver {
     if (_loadFailed || _working) return;
     setState(() => _working = true);
     try {
-      final picked = await FilePicker.platform.pickFiles(
+      final file = await FilePicker.pickFile(
         type: FileType.custom,
         allowedExtensions: plainText ? ['txt', 'md'] : ['json'],
-        withData: true,
       );
-      if (!mounted || picked == null) return;
-      final file = picked.files.single;
-      if (file.size > 5 * 1024 * 1024 || file.bytes == null) {
-        throw const FormatException(
-          'Choose a readable file smaller than 5 MB.',
-        );
-      }
+      if (!mounted || file == null) return;
+      final bytes = await readCopyBoxImportBytes(
+        file.readAsByteStream,
+        declaredLength: file.lengthSync(),
+      );
+      if (!mounted) return;
       final imported = parseImport(
-        utf8.decode(file.bytes!),
+        utf8.decode(bytes),
         plainText: plainText,
       );
       if (_boxes.length + imported.length > 1000) {
