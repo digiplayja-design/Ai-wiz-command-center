@@ -32,6 +32,12 @@ const _profiles = [
     platform: TargetPlatform.iOS,
   ),
   (
+    name: 'apple-iphone-medium',
+    size: Size(402, 874),
+    pixelRatio: 3.0,
+    platform: TargetPlatform.iOS,
+  ),
+  (
     name: 'apple-ipad',
     size: Size(1032, 1376),
     pixelRatio: 2.0,

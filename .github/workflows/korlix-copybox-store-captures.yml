@@ -1,0 +1,57 @@
+name: KORLIX COPY Box medium iPhone captures
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - capture/copybox-medium-20261104
+    paths:
+      - .github/workflows/korlix-copybox-store-captures.yml
+      - apps/korlix_copy_box/test/copybox_preview_test.dart
+
+permissions:
+  contents: read
+
+concurrency:
+  group: korlix-copybox-store-captures-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CI: 'true'
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
+  DART_SUPPRESS_ANALYTICS: 'true'
+
+jobs:
+  iphone-medium:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - name: Render the required medium iPhone screenshot set
+        working-directory: apps/korlix_copy_box
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter config --no-analytics
+          dart --disable-analytics
+          flutter pub get --enforce-lockfile
+          export COPYBOX_PREVIEWS="$RUNNER_TEMP/copybox-iphone-medium"
+          export KORLIX_FLUTTER_ROOT="$FLUTTER_ROOT"
+          mkdir -p "$COPYBOX_PREVIEWS"
+          flutter test --no-pub --reporter expanded \
+            test/copybox_preview_test.dart \
+            --plain-name 'apple-iphone-medium store screenshots'
+      - name: Keep medium iPhone captures
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: korlix-copybox-iphone-medium
+          path: ${{ runner.temp }}/copybox-iphone-medium/store-apple-iphone-medium-*.png
+          if-no-files-found: error
+          retention-days: 14
