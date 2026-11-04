@@ -1,7 +1,7 @@
 {
   "status": "ios_uploaded_android_play_draft_store_setup_incomplete",
-  "recorded_at_utc": "2026-11-04T19:18:25.934378Z",
-  "evidence_basis": "Authenticated Apple Developer, App Store Connect, Codemagic, Google Play, and Render observations on November 4, 2026, plus independent static verification of the downloaded signed Android candidate and a generated universal APK. Includes user-approved Apple actions and store setup, saved listing/declaration drafts, and the blocked exact website deployment; no credential or actual private phone values are stored in this checkpoint.",
+  "recorded_at_utc": "2026-11-04T19:34:13.057231Z",
+  "evidence_basis": "Authenticated Apple Developer, App Store Connect, Codemagic, Google Play, and Render observations on November 4, 2026, plus independent static verification of the downloaded signed Android candidate and a generated universal APK. Includes user-approved Apple actions and store setup, saved listing/declaration drafts, and the blocked exact website deployment; no credential or actual private phone values are stored in this checkpoint. Reviewer follow-up uses scoped read-only connected-account checks and exact deployed backend source bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb; no mutating account/profile RPC or API was invoked, and no reviewer identifier value is recorded.",
   "identity": {
     "display_name": "KORLIX COPY Box",
     "bundle_id": "com.korlixdeveloper.copybox",
@@ -104,9 +104,8 @@
     "publicly_released": false,
     "build_selection_saved": true,
     "listing_fields": "Public fields listed below were confirmed saved in a fresh listing tab; App Review contact details and the complete prepared notes were subsequently accepted and saved.",
-    "review_section": "Contact first/last name, the previously user-provided phone, support email, and complete prepared notes were entered and Save succeeded. After reload, Save was disabled, names persisted, and notes contained 2606 characters. Phone/email were redacted by the observation layer, so exact-value readback was unavailable. Reviewer username/password remain unsupplied; the review section is incomplete.",
+    "review_section": "Contact first/last name, the previously user-provided phone, support email, and complete prepared notes were entered and Save succeeded. After reload, Save was disabled, names persisted, and notes contained 2606 characters. Phone/email were redacted by the observation layer, so exact-value readback was unavailable. The user later supplied the dedicated reviewer identifier. It was entered in Apple User name and Save succeeded with Save disabled. A fresh canonical version readback confirms the populated username and Save disabled. Accessibility text redacts the identifier, but direct visual inspection confirms the exact entered canonical value without recording it here. The reviewer password remains blank. The existing account, verified email, Ultra entitlement, and available AI/device capacity are confirmed read-only, but end-to-end COPY Box login/AI testing remains outstanding; the review section is incomplete.",
     "review_contact_save_accepted": true,
-    "reviewer_account_supplied": false,
     "screenshots": {
       "iphone_large": {
         "count": 4,
@@ -172,7 +171,7 @@
     "selected_build_number": "1",
     "build_selection_verification": "The version tab was reloaded; the selected build row persisted and Save was disabled.",
     "review_sign_in_required_checked": true,
-    "review_sign_in_required_note": "The default checkbox remains checked; reviewer username/password have not been supplied.",
+    "review_sign_in_required_note": "The default checkbox remains checked. Fresh canonical version readback visually confirms the exact entered username; accessibility text redacts it. Save is disabled and password blank; end-to-end COPY Box login/AI testing remains pending.",
     "app_information": {
       "subtitle": "Save, organize, refine & reuse",
       "primary_category": "Productivity",
@@ -235,7 +234,36 @@
     "pricing_and_availability_console_verification": "saved_and_verified_after_reopening",
     "pricing_url": "https://appstoreconnect.apple.com/apps/6830765098/distribution/pricing",
     "availability_url": "https://appstoreconnect.apple.com/apps/6830765098/distribution/pricing/availability",
-    "manual_release_reconfirmed_after_pricing": true
+    "manual_release_reconfirmed_after_pricing": true,
+    "reviewer_access": {
+      "dedicated_account_identifier_supplied_by_user": true,
+      "identifier_value_recorded_in_repository": false,
+      "apple_user_name_entered": true,
+      "apple_user_name_save_accepted": true,
+      "apple_save_disabled_after_save": true,
+      "password_supplied": false,
+      "password_field_blank": true,
+      "current_ai_allowance_verified": true,
+      "current_shared_device_capacity_verified": true,
+      "complete_working_credentials_supplied": false,
+      "apple_user_name_fresh_reload_persistence_verified": true,
+      "apple_user_name_reload_evidence_status": "Fresh canonical version page shows Save disabled, populated username, blank password, and sign-in-required checked. Accessibility text redacts the username, but direct visual readback confirms it exactly matches the entered canonical identifier; the value and private screenshot are not stored in this repository.",
+      "apple_user_name_fresh_reload_populated": true,
+      "apple_user_name_exact_readback_available": true,
+      "existing_shared_reviewer_account_confirmed_read_only": true,
+      "email_verified_read_only": true,
+      "ultra_entitlement_verified_read_only": true,
+      "account_capacity_evidence_status": "Existing enabled shared KORLIX reviewer account, verified email, effective Ultra entitlement, and available AI/device capacity confirmed by scoped read-only account checks interpreted with exact live backend source; no account values or raw counts recorded.",
+      "account_enabled_status_check_complete": true,
+      "current_copybox_login_verified": false,
+      "end_to_end_copybox_login_ai_test_completed": false,
+      "apple_user_name_exact_visual_readback_verified": true,
+      "apple_user_name_accessibility_observation_redacted": true,
+      "account_enabled": true,
+      "account_enabled_verified_read_only": true,
+      "effective_ultra_entitlement_verified_read_only": true,
+      "account_verification_evidence_basis": "Scoped read-only connected-account checks and exact deployed backend source bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb; no mutating profile RPC or API invoked."
+    }
   },
   "preference_scope": {
     "copybox_price_and_territories_confirmed": true,
@@ -324,10 +352,43 @@
           "restricted_access_flow_inspected": true,
           "full_access_including_premium_attestation_required": true,
           "working_reviewer_credentials_supplied": false,
-          "empty_add_details_cancelled": true,
-          "selection_discarded": true,
           "declaration_saved": false,
-          "observed_page_path": "/app-content/testing-credentials?source=dashboard"
+          "observed_page_path": "/app-content/testing-credentials?source=dashboard",
+          "historical_empty_form_inspection": {
+            "empty_add_details_cancelled": true,
+            "restricted_selection_discarded": true,
+            "declaration_saved": false,
+            "scope": "Earlier inspection before the user supplied the dedicated reviewer identifier."
+          },
+          "observed_form_label": "Sign in details",
+          "dedicated_account_identifier_supplied_by_user": true,
+          "identifier_value_recorded_in_repository": false,
+          "restricted_access_selected_in_unsaved_form": true,
+          "instruction_name_prepared": true,
+          "reviewer_identifier_prepared_in_form": true,
+          "prepared_short_instructions_characters": 390,
+          "prepared_short_instructions_match_repository_file": true,
+          "password_supplied": false,
+          "password_field_blank": true,
+          "full_access_including_premium_attestation_checked": false,
+          "add_attempted": true,
+          "add_save_succeeded": false,
+          "observed_save_error": "Your changes couldn’t be saved",
+          "validation_at_full_access_checkbox": true,
+          "reviewer_record_saved": false,
+          "unsaved_form_preserved": true,
+          "current_ai_allowance_verified": true,
+          "current_shared_device_capacity_verified": true,
+          "existing_shared_reviewer_account_confirmed_read_only": true,
+          "email_verified_read_only": true,
+          "ultra_entitlement_verified_read_only": true,
+          "account_enabled_status_check_complete": true,
+          "current_copybox_login_verified": false,
+          "end_to_end_copybox_login_ai_test_completed": false,
+          "account_enabled": true,
+          "account_enabled_verified_read_only": true,
+          "effective_ultra_entitlement_verified_read_only": true,
+          "account_verification_evidence_basis": "Scoped read-only connected-account checks and exact deployed backend source bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb; no mutating profile RPC or API invoked."
         },
         "ads": {
           "selection": "No, my app does not contain ads",
@@ -399,7 +460,7 @@
           "review_submitted": false
         },
         "remaining_declarations": [
-          "App access reviewer instructions and full-access confirmation after verifying dedicated credentials and capacity.",
+          "App access reviewer password, end-to-end COPY Box login/AI verification, and full-access confirmation. Existing reviewer account, email verification, Ultra entitlement, and available AI/device capacity have been checked read-only.",
           "Final Data safety declaration beyond the saved Step 2 draft, including operational answers and data-type, usage, and preview steps.",
           "Target audience, applicable content rating, and remaining Google Play app-content declarations."
         ]
@@ -718,7 +779,7 @@
     }
   },
   "remaining_gates": [
-    "Supply and verify a dedicated working KORLIX reviewer login in Apple App Review and Google Play App access with sufficient AI allowance and installation capacity. Apple contact details/notes are saved; Google App access was inspected but not saved because the reviewer details/full-access attestation remain incomplete.",
+    "Supply the dedicated reviewer password privately and complete end-to-end COPY Box login/AI testing, then finish both consoles’ private reviewer fields and Google full-access confirmation. The existing shared reviewer account, verified email, Ultra entitlement, and available AI/device capacity are confirmed read-only. Apple username persistence is verified as nonempty/redacted; Google identifier/instructions remain unsaved.",
     "Evaluate actual AI content frequency through a live account, complete the age/content questionnaire, and supply the content-rights declaration.",
     "Configure deliberate TestFlight testing and complete physical-device/live-account acceptance.",
     "Configure deliberate Android testing and complete physical-device/live-account acceptance, including a 16 KB-page environment and Play-delivered APK checks. The verified signed AAB is accepted as version 1.0.0 (1) in the saved internal draft, but the track is Inactive, no testers are selected, and Save and publish was not clicked.",

@@ -39,8 +39,15 @@ manual release option are saved. App Review contact details and the complete
 prepared notes were accepted and saved. After reload, Save was disabled, the
 contact names persisted, and the notes contained 2,606 characters. Phone and
 email were redacted by the observation layer, so exact-value readback was not
-available; no actual phone value is stored here. Reviewer username/password
-remain unsupplied, and the sign-in-required checkbox remains checked. The selected
+available; no actual phone value is stored here. The user subsequently supplied
+the dedicated reviewer identifier, which was saved in Apple's User name field;
+Save succeeded and became disabled. A fresh canonical version page confirms the
+exact entered username visually and a blank password; the accessibility text
+redacts the identifier. The existing enabled shared reviewer account, verified email, Ultra
+entitlement, and available AI/device capacity are confirmed read-only.
+Password entry and end-to-end COPY Box login/AI testing remain outstanding.
+No reviewer identifier value or account counts are stored here, and
+the sign-in-required checkbox remains checked. The selected
 build 1.0.0 (1) persisted after reloading the version tab, with Save disabled. App
 Information confirmed the subtitle and primary Productivity category saved;
 the secondary category is blank. The privacy policy URL is saved and visible.
@@ -302,10 +309,13 @@ not refreshed.
 Google App content's observed Actioned snapshot showed **3 declarations**: **Ads**, **Financial
 features**, and **Health apps**, all edited November 4. The saved answers are no
 ads, no financial features, and no health features; financial documentation and
-regional health requirements were not required. No review was sent. App access was inspected but
-not saved: it requires a working restricted-feature reviewer account and an
-affirmation of full access, including premium features. The empty details form
-was cancelled and the selection discarded. The Advertising ID answer **No** was
+regional health requirements were not required. No review was sent. The earlier
+empty App access form was cancelled before a reviewer identifier was supplied.
+After the user supplied that identifier, the Google Sign in details form was
+prepared with it and the exact 390-character short instructions. The password
+remains blank and the full-access checkbox unchecked. Add returned **Your changes
+couldn’t be saved**, with validation at that checkbox. The unsaved form is
+preserved; no reviewer record or App access declaration has been saved. The Advertising ID answer **No** was
 subsequently saved, supported by the source and signed bundle's permission
 inventory; no review was sent.
 
@@ -339,11 +349,13 @@ steps were not reached. This is not a final or published declaration.
 
 ## Remaining release gates
 
-1. Supply and verify a dedicated working KORLIX reviewer login in Apple's private
-   App Review fields and Google Play App access, with sufficient AI allowance
-   and installation capacity.
-   Contact details and prepared notes are saved, but reviewer username/password
-   remain unsupplied; the review section is not complete.
+1. Supply the dedicated reviewer password privately and complete end-to-end
+   COPY Box login/AI testing, then complete both stores' reviewer
+   fields. The supplied identifier is saved in Apple User name alongside the
+   earlier contact details and notes. Google identifier/instructions remain in
+   an unsaved form; the password and full-access confirmation remain incomplete.
+   The account, email verification, Ultra entitlement, and available AI/device
+   capacity have been confirmed through read-only checks.
 2. Evaluate actual AI content frequency through a live account, complete the
    age/content questionnaire, and supply the content-rights declaration. Configure
    TestFlight testing and complete physical iPhone/iPad acceptance: clipboard and

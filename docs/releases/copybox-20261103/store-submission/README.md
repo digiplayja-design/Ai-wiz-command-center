@@ -25,7 +25,12 @@ category saved. The privacy URL is saved. App Review contact details and all
 2,606 prepared notes characters were accepted and saved. Reload confirmed Save
 disabled, the contact names, and the notes. Phone and email were redacted by the
 observation layer, so exact-value readback was unavailable; no actual phone
-value is stored here. Reviewer username/password remain unsupplied and the
+value is stored here. The supplied reviewer identifier was subsequently saved in
+Apple User name; fresh visual readback confirms the exact entered identifier,
+although accessibility text redacts it.
+The existing enabled shared reviewer account, verified email, Ultra entitlement, and
+available AI/device capacity are confirmed read-only. Password entry and
+end-to-end COPY Box login/AI testing remain pending, and the
 sign-in-required checkbox remains checked. All seven privacy categories are
 published with App Functionality, linked to user, and no tracking; the console
 explicitly says **Published by Ricardo Bailey**. The source review supports no
@@ -109,8 +114,11 @@ stopped without triggering a deployment.
   exact package in Digital Asset Links; its public fingerprint is recorded in
   [Android release preparation](../android-release.md). That certificate does
   not establish registration of the dedicated upload key.
-- Complete the private reviewer access fields. Contact details and the prepared
-  notes are saved; reviewer username/password remain unsupplied. The version
+- Complete the private reviewer access fields. Contact details, prepared notes,
+  and the user-supplied identifier are saved in Apple; the password remains blank
+  and end-to-end COPY Box login/AI testing remains outstanding. Fresh Apple
+  visual readback confirms the exact entered username, while accessibility text
+  redacts it. The version
   build selection is saved and verified after reload. All twelve Apple screenshots
   are uploaded, with four images visible in each large-iPhone, medium-iPhone, and
   iPad well. The Play listing text, icon, feature graphic, and four screenshots
@@ -124,14 +132,19 @@ stopped without triggering a deployment.
   13-inch iPad group remains suitable. The
   [asset manifest](../store-assets/manifest.json) records their exact paths,
   dimensions and checksums. The earlier interface previews are not the upload set.
-- Supply a dedicated, working KORLIX reviewer login with sufficient AI allowance
-  and available device capacity through the consoles' private review fields. No
+- Supply the dedicated reviewer password through the consoles' private fields
+  and complete end-to-end COPY Box login/AI testing. The
+  existing account, verified email, Ultra entitlement, and available AI/device
+  capacity have been confirmed read-only. No
   reviewer account was created by preparing these files. The authorized App
   Review business contact phone was supplied privately and accepted by Save;
   its actual value is not stored here.
-  Google App access was inspected but not saved: the full-access attestation
-  requires a working reviewer account; the empty details form was cancelled and
-  the selection discarded.
+  Google Sign in details has the supplied identifier and exact 390-character
+  instructions prepared, with password blank and full-access checkbox unchecked.
+  Add failed validation at that checkbox and the unsaved form was preserved;
+  no reviewer record or App access declaration is saved. The earlier empty form
+  cancellation predates this follow-up. No identifier value or password is
+  stored in this package.
 - Configure deliberate Android testing and complete physical-device/live-account
   acceptance, including 16 KB-page runtime behavior and Play-delivered APK checks. The
   dedicated COPY Box key, protected independent backup, and Codemagic import are

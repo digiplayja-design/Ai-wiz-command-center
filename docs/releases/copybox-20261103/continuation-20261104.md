@@ -104,8 +104,9 @@ entered and saved successfully. Reload showed Save disabled, the contact names
 persisted, and all 2,606 notes characters present. Phone and email were redacted
 by the observation layer, so exact-value readback could not be compared. The
 actual phone is not recorded in this repository. This establishes that the
-contact and notes save was accepted; reviewer username/password remain
-unsupplied and the review section is not complete. After reloading the version
+contact and notes save was accepted; at that observation reviewer username/password
+were unsupplied and the review section was incomplete. The later identifier
+update is recorded below. After reloading the version
 tab, selected build
 `ddd61c5d-982c-404c-9aaa-d280bd0495be` (1.0.0 build 1) persisted, Save was disabled,
 and manual release remained selected. The default sign-in-required checkbox
@@ -267,11 +268,33 @@ explicit upload-key registration UI evidence was not refreshed.
 
 ## Google App content checkpoint
 
-The restricted-access flow was inspected. It requires reviewer sign-in details
+The earlier restricted-access flow was inspected before a reviewer identifier
+was supplied. It requires reviewer sign-in details
 and a checkbox affirming full access, including premium features. No working
 dedicated reviewer credentials were available, so the empty Add details form
 was cancelled and the restricted-access selection discarded. **No App access
 declaration was saved.**
+
+In the later reviewer follow-up, the user supplied the dedicated account
+identifier. It was entered into Apple's User name field and Save succeeded,
+with Save then disabled. An initial reload showed only the signed-in app shell;
+the later canonical version page loaded and confirmed Save disabled, a populated
+username, blank password, and sign-in-required checked. Accessibility text
+redacts the identifier, but direct visual readback confirms it exactly matches
+the entered canonical identifier. The private screenshot is not stored here.
+Scoped read-only connected-account checks, interpreted with exact live backend
+source `bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb`, confirm the existing enabled
+shared KORLIX reviewer account, verified email, effective Ultra entitlement, and
+available AI/device capacity. No mutating profile RPC or API was invoked. Password
+entry and end-to-end COPY Box login/AI testing remain outstanding. No identifier
+value, raw account counts, or credentials are recorded in this repository.
+
+Google's form is now labelled **Sign in details**. Restricted access was selected,
+and the identifier plus exact **390-character** prepared short instructions were
+entered. The password remained blank and the full-access checkbox unchecked.
+Add returned **Your changes couldn’t be saved**, with validation at the full-access
+checkbox. The unsaved form was preserved. **No reviewer record or App access
+declaration was saved**, and no full-access verification is claimed.
 
 The Ads declaration **No, my app does not contain ads** was selected and saved.
 The confirmation said **Change saved. Send for review in Publishing overview.**
@@ -351,9 +374,12 @@ claiming a separate certificate-registration observation.
 
 ## Work still remaining
 
-- Supply and verify a dedicated working reviewer login with AI allowance and
-  available shared device capacity. App Review contact details and the complete
-  notes are saved, but reviewer username/password remain unsupplied. The Apple
+- Supply the dedicated reviewer password privately and complete end-to-end
+  COPY Box login/AI testing. The existing account, verified email, Ultra
+  entitlement, and available AI/device capacity are confirmed read-only. The supplied
+  identifier is saved in Apple User name; Google's identifier/instructions remain
+  in an unsaved form with the password and full-access confirmation incomplete.
+  App Review contact details and complete notes remain saved. The Apple
   version build selection is saved and verified after reload.
 - Evaluate actual AI content frequency through a live account, complete the age
   questionnaire, and supply the content-rights declaration.

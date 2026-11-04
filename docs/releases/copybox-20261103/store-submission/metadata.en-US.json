@@ -98,10 +98,43 @@
         "restricted_access_flow_inspected": true,
         "full_access_including_premium_attestation_required": true,
         "working_reviewer_credentials_supplied": false,
-        "empty_add_details_cancelled": true,
-        "selection_discarded": true,
         "declaration_saved": false,
-        "observed_page_path": "/app-content/testing-credentials?source=dashboard"
+        "observed_page_path": "/app-content/testing-credentials?source=dashboard",
+        "historical_empty_form_inspection": {
+          "empty_add_details_cancelled": true,
+          "restricted_selection_discarded": true,
+          "declaration_saved": false,
+          "scope": "Earlier inspection before the user supplied the dedicated reviewer identifier."
+        },
+        "observed_form_label": "Sign in details",
+        "dedicated_account_identifier_supplied_by_user": true,
+        "identifier_value_recorded_in_repository": false,
+        "restricted_access_selected_in_unsaved_form": true,
+        "instruction_name_prepared": true,
+        "reviewer_identifier_prepared_in_form": true,
+        "prepared_short_instructions_characters": 390,
+        "prepared_short_instructions_match_repository_file": true,
+        "password_supplied": false,
+        "password_field_blank": true,
+        "full_access_including_premium_attestation_checked": false,
+        "add_attempted": true,
+        "add_save_succeeded": false,
+        "observed_save_error": "Your changes couldn’t be saved",
+        "validation_at_full_access_checkbox": true,
+        "reviewer_record_saved": false,
+        "unsaved_form_preserved": true,
+        "current_ai_allowance_verified": true,
+        "current_shared_device_capacity_verified": true,
+        "existing_shared_reviewer_account_confirmed_read_only": true,
+        "email_verified_read_only": true,
+        "ultra_entitlement_verified_read_only": true,
+        "account_enabled_status_check_complete": true,
+        "current_copybox_login_verified": false,
+        "end_to_end_copybox_login_ai_test_completed": false,
+        "account_enabled": true,
+        "account_enabled_verified_read_only": true,
+        "effective_ultra_entitlement_verified_read_only": true,
+        "account_verification_evidence_basis": "Scoped read-only connected-account checks and exact deployed backend source bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb; no mutating profile RPC or API invoked."
       },
       "ads": {
         "selection": "No, my app does not contain ads",
@@ -173,7 +206,7 @@
         "review_submitted": false
       },
       "remaining_declarations": [
-        "App access reviewer instructions and full-access confirmation after verifying dedicated credentials and capacity.",
+        "App access reviewer password, end-to-end COPY Box login/AI verification, and full-access confirmation. Existing reviewer account, email verification, Ultra entitlement, and available AI/device capacity have been checked read-only.",
         "Final Data safety declaration beyond the saved Step 2 draft, including operational answers and data-type, usage, and preview steps.",
         "Target audience, applicable content rating, and remaining Google Play app-content declarations."
       ]
@@ -308,7 +341,7 @@
     "first_version_whats_new_field": false,
     "release_option": "manual_after_approval",
     "release_option_saved": true,
-    "private_console_review_section_status": "contact_and_complete_notes_accepted_and_saved_reviewer_username_password_unsupplied",
+    "private_console_review_section_status": "contact_notes_and_reviewer_identifier_saved_account_entitlement_capacity_verified_read_only_password_and_copybox_login_ai_test_pending",
     "app_store_build_selection_saved": true,
     "selected_build_uuid": "ddd61c5d-982c-404c-9aaa-d280bd0495be",
     "subtitle_saved": true,
@@ -356,7 +389,36 @@
       "future_countries_included": true,
       "saved_verified": true
     },
-    "manual_release_reconfirmed_after_pricing": true
+    "manual_release_reconfirmed_after_pricing": true,
+    "private_console_reviewer_access": {
+      "dedicated_account_identifier_supplied_by_user": true,
+      "identifier_value_recorded_in_repository": false,
+      "apple_user_name_entered": true,
+      "apple_user_name_save_accepted": true,
+      "apple_save_disabled_after_save": true,
+      "password_supplied": false,
+      "password_field_blank": true,
+      "current_ai_allowance_verified": true,
+      "current_shared_device_capacity_verified": true,
+      "complete_working_credentials_supplied": false,
+      "apple_user_name_fresh_reload_persistence_verified": true,
+      "apple_user_name_reload_evidence_status": "Fresh canonical version page shows Save disabled, populated username, blank password, and sign-in-required checked. Accessibility text redacts the username, but direct visual readback confirms it exactly matches the entered canonical identifier; the value and private screenshot are not stored in this repository.",
+      "apple_user_name_fresh_reload_populated": true,
+      "apple_user_name_exact_readback_available": true,
+      "existing_shared_reviewer_account_confirmed_read_only": true,
+      "email_verified_read_only": true,
+      "ultra_entitlement_verified_read_only": true,
+      "account_capacity_evidence_status": "Existing enabled shared KORLIX reviewer account, verified email, effective Ultra entitlement, and available AI/device capacity confirmed by scoped read-only account checks interpreted with exact live backend source; no account values or raw counts recorded.",
+      "account_enabled_status_check_complete": true,
+      "current_copybox_login_verified": false,
+      "end_to_end_copybox_login_ai_test_completed": false,
+      "apple_user_name_exact_visual_readback_verified": true,
+      "apple_user_name_accessibility_observation_redacted": true,
+      "account_enabled": true,
+      "account_enabled_verified_read_only": true,
+      "effective_ultra_entitlement_verified_read_only": true,
+      "account_verification_evidence_basis": "Scoped read-only connected-account checks and exact deployed backend source bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb; no mutating profile RPC or API invoked."
+    }
   },
   "testflight": {
     "what_to_test_file": "testflight-what-to-test.txt",
@@ -376,7 +438,7 @@
     "release_schedule": null,
     "store_age_rating": null,
     "google_play_privacy_attestations": null,
-    "review_account": null
+    "review_account": "User-supplied identifier saved in Apple and prepared in an unsaved Google form. Existing account, verified email, Ultra entitlement, and available AI/device capacity confirmed read-only; password and end-to-end COPY Box login/AI testing remain pending. No identifier value or credentials stored in this package."
   },
   "evidence_files": {
     "privacy": "privacy-evidence.md",
