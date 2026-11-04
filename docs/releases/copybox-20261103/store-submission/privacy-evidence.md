@@ -109,6 +109,30 @@ See the official [Apple privacy guidance](https://developer.apple.com/app-store/
 and [Google Data safety guidance](https://support.google.com/googleplay/android-developer/answer/10787469?hl=en)
 for the category definitions and distinction between optional use and disclosure.
 
+## Saved Apple privacy draft and current conclusion — November 4, 2026
+
+App Store Connect app `6830765098` has saved details for seven data types:
+Email Address, Customer Support, Other User Content, User ID, Device ID,
+Product Interaction, and Other Data Types. Every data type is configured for
+**App Functionality**, **linked to the user: Yes**, and **used for tracking: No**.
+The exact deployed-source review at
+`bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb` supports the no-tracking conclusion
+for the COPY Box data flows. The earlier generic request to verify tracking
+practices is resolved for this release scope; it is not a remaining gate.
+This does not change the separate retention/deletion and processor-contract
+questions below or support a blanket “no data collected” answer.
+
+The privacy policy URL is saved. The declaration is still a draft. The final Publish confirmation was not clicked because the final modal asks the publisher to agree that the
+responses are accurate and compliant and will be promptly updated. That
+publication attestation awaits action-time user approval, alongside the updated
+Paid Apps Agreement.
+
+The age questionnaire was inspected and cancelled without saving. Built-in app
+capability evidence does not establish the frequency of generated AI content:
+the deployed general `/api/generate` route has no COPY Box topic/output filter.
+Live-account evaluation is still needed for those content-frequency answers.
+The content-rights form was inspected without submitting an answer.
+
 ## Answers that require operational confirmation
 
 - **Processor transfers and sharing:** KORLIX sends selected text to OpenAI and
@@ -116,9 +140,6 @@ for the category definitions and distinction between optional use and disclosure
   current contracts and configuration before using Google's service-provider
   or user-directed-transfer exclusions. Apple still requires relevant partner
   collection to be considered. “No sharing” must not mean “no outbound transfer.”
-- **Tracking:** No tracking SDK or advertising-ID access is present in the COPY
-  Box client, and its iOS manifest declares no tracking. Verify backend/partner
-  practices before the final no-tracking attestation.
 - **Encryption in transit:** The default API and policy endpoints use HTTPS.
   Verify production transport and every applicable provider path before
   affirming that all collected data is encrypted in transit. This is separate

@@ -18,7 +18,57 @@ The source and release preparation are in
 on `feature/korlix-copy-box-20261103`. The branch originated from frontend
 policy/release commit `93253b767f6df1a8aec97bd29ce9cfbc09a34508`.
 
-## Latest verified app source
+## iOS upload checkpoint — November 4, 2026
+
+Apple App Store Connect now has the separate **KORLIX COPY Box** app
+**[6830765098](https://appstoreconnect.apple.com/apps/6830765098)** for
+`com.korlixdeveloper.copybox`, under Korlix LLC team `FJKJ9MUDZ4`.
+A signed **1.0.0 (1)** IPA was built and uploaded successfully by
+[Codemagic build 6aeb61e5004ce28f20edd5ba](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6aeb61e5004ce28f20edd5ba)
+from `4dd07806ff471263b1fb82d593f300cfe9693a4d`. The build finished in 5m 16s.
+
+Apple TestFlight shows build `ddd61c5d-982c-404c-9aaa-d280bd0495be` as
+**Ready to Submit**. No testing group, tester invitation, or verified device
+installation has been recorded. The public App Store version remains
+**Prepare for Submission**; it has not been submitted for review or released.
+
+All twelve Apple screenshots are uploaded and visible: four large iPhone,
+four medium iPhone, and four iPad images. A fresh listing tab confirms the public
+promotional text, description, keywords, support URL, copyright, version, and
+manual release option are saved. The review section remains blank after a save
+attempt failed for missing first name, last name, and phone. The selected build
+1.0.0 (1) persisted after reloading the version tab, with Save disabled. App
+Information confirmed the subtitle and primary Productivity category saved;
+the secondary category is blank. The privacy policy URL is saved and visible.
+The updated Paid Apps Agreement awaits the account holder's decision; COPY
+Box-specific price and territories remain unresolved.
+
+Seven privacy categories are fully configured in the saved draft: Email
+Address, Customer Support, Other User Content, User ID, Device ID, Product
+Interaction, and Other Data Types. Each uses **App Functionality**, is **linked
+to the user**, and is **not used for tracking**. The exact deployed-source review
+supports the no-tracking conclusion. The final Publish confirmation was not clicked because its final
+accuracy/compliance/update attestation awaits action-time user approval; the
+privacy declaration remains unpublished.
+
+The age questionnaire was inspected and cancelled without saving. Actual AI
+content frequency remains unresolved: the general backend `/api/generate` path
+has no COPY Box topic/output filter and requires live-account evaluation for
+those answers. The content-rights form was inspected without submitting an answer.
+
+Apple's processed Build Metadata independently reports **Binary State:
+Validated** and confirms the exact app identity, version/build, iOS 15.0 minimum,
+iPhone/iPad support, arm64 architecture, and the app-private keychain group
+`FJKJ9MUDZ4.com.korlixdeveloper.copybox`. TestFlight's device acceptance
+instructions are saved. This establishes processed-build metadata, not device
+installation or runtime acceptance.
+
+The [release status](release-status.json) records the exact app, profile, build,
+source, and evidence limitations. The latest asset commit, `9eda2fb7`, adds
+screenshots/documentation without changing the application code or signing from
+the signed build. Android signing and its release AAB remain pending.
+
+## Automated app validation and test downloads
 
 Validation commit: **`d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4`**.
 [GitHub Actions run 41844773126](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41844773126)
@@ -138,51 +188,72 @@ with sample writing and are packaged without resizing or compositing fake UI.
 
 The listing text and visual files are prepared; asset preparation does not
 establish store submission. The existing public support/privacy/deletion URLs resolve. COPY
-Box-specific HTML additions are now saved in
-[pull request 43](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/43),
-but have not been deployed. See the [November 4 continuation](continuation-20261104.md)
-for the exact publication candidate and remaining account steps.
+Box-specific HTML additions are merged through
+[pull request 43](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/43)
+as `da283a8dfe7b51f68ad7b581b8555f017cac3c54`, whose tree matches the reviewed
+source. That exact commit has not been deployed; Render still serves the
+October 25 release. See the [November 4 continuation](continuation-20261104.md)
+for the safe deployment target and remaining account steps.
 
 ## Account and signing state observed
 
-Codemagic was accessible under the KORLIX account. Its stored distribution
-certificate reference `KORLIX_APP_STORE_CERT` belongs to Korlix LLC and expires
-June 22, 2027. No COPY Box provisioning profile was present among the stored or
-fetched profiles. The available Android key was for KORLIX Brain; a dedicated
-`KORLIX_COPYBOX_ANDROID_UPLOAD_KEY` was not present.
+On November 4, the user authorized Cloud Browser access for Apple and Codemagic.
+The explicit bundle identifier and App Store Connect record were created, and
+App Store distribution profile `YG5PJS847P`, named
+`KORLIX_COPYBOX_APP_STORE_PROFILE`, was created with existing certificate
+`4635LCY72R`. The profile expires June 22, 2027 and was imported into Codemagic
+under the exact reference required by the workflow. The existing certificate
+reference remains `KORLIX_APP_STORE_CERT`; no replacement distribution certificate
+or private key was created.
 
-App Store Connect and Google Play Console required fresh sign-in. The Apple
-secure sign-in request timed out; a user authentication handoff is required.
-Consequently the existence/creation of COPY Box's own store records remains
-unverified. No signing credential was created, exported, rotated, or reused from
-another Android app. No store build was uploaded.
+The `korlix-copybox-ios-testflight` workflow completed its signed build and Apple
+upload. Codemagic displayed the IPA as 23.03 MB. Its browser download was not
+available for an independent local artifact inspection, so exact byte size,
+SHA-256, and embedded profile decoding are not claimed as locally verified.
+Apple's processed Build Metadata separately confirms the signed application,
+team and app-private keychain entitlements; debugging is disabled and
+`beta-reports-active` is true.
+
+The dedicated Android key `KORLIX_COPYBOX_ANDROID_UPLOAD_KEY` remains
+unconfigured, and COPY Box's Google Play record remains unverified. The earlier
+available key belonged to KORLIX Brain and was not substituted for COPY Box.
 
 ## Remaining release gates
 
-1. Sign in to App Store Connect and Google Play Console, verify/create the
-   independent app records, and confirm the publisher-controlled listing fields.
-2. Provision `KORLIX_COPYBOX_APP_STORE_PROFILE` for the exact bundle ID with the
-   existing authorized Apple certificate. Configure the dedicated COPY Box
-   Android upload keystore under `KORLIX_COPYBOX_ANDROID_UPLOAD_KEY`.
-3. Run the prepared signed candidate workflows. Verify the resulting AAB/IPA
-   identity and signing. For Android, additionally inspect the AAB's bundletool
-   page-alignment configuration and generated APKs; debug APK alignment is not
-   evidence for a future release AAB's packaging.
-4. Test on physical Android and iPhone/iPad: clipboard and paste prompts, file
-   picker/share sheets, local persistence, offline launch, large text, account
-   switching, live sign-in/password reset, optional AI consent/refinement/report,
-   and account-deletion confirmation. Include a 16 KB-page Android environment.
-5. Publish the reviewed COPY Box public-page additions, complete the store
-   privacy/age-rating declarations, and provide a reviewer account with both AI
-   allowance and available installation capacity under existing account limits.
-6. Distribute the signed builds for internal testing/TestFlight, record device
-   acceptance, and submit the completed listings for review.
+1. Complete the blank App Review contact, email, notes, and credential fields
+   using authorized details and a dedicated working KORLIX account with
+   sufficient AI allowance and installation capacity.
+2. Obtain COPY Box-specific price and country availability choices. The version
+   is saved for manual release. The November 2 free/$0 and worldwide/all-175
+   approvals concerned **Brain + Voice**; their exact antecedent was checked and
+   they do not authorize COPY Box settings.
+3. Obtain the account holder's action-time approval for the App Privacy
+   publication attestation and the updated Paid Apps Agreement. All seven
+   privacy classifications are saved, and the no-tracking conclusion is supported
+   by the deployed-source review; the declaration is not yet published.
+4. Evaluate actual AI content frequency through a live account, complete the
+   age/content questionnaire, and supply the content-rights declaration. Configure
+   TestFlight testing and complete physical iPhone/iPad acceptance: clipboard and
+   paste prompts, file picker/share sheets, local persistence, offline launch,
+   large text, account switching, live sign-in/password reset, optional AI
+   consent/refinement/report, and account-deletion confirmation.
+5. Configure `KORLIX_COPYBOX_ANDROID_UPLOAD_KEY`, verify/create the Google Play
+   record, and run `korlix-copybox-android-candidate`. Verify the signed AAB,
+   bundletool page-alignment configuration, and generated APKs; complete device
+   acceptance including a 16 KB-page Android environment. Debug APK evidence does
+   not establish release-bundle packaging or runtime behavior.
+6. Authenticate Render and deploy only the reviewed merge commit
+   `da283a8dfe7b51f68ad7b581b8555f017cac3c54`, then verify all four COPY Box
+   public policy/support pages. A generic configured-branch deployment is not
+   the reviewed publication target.
+7. Submit the completed store listings after the remaining release gates are
+   satisfied. Neither public review nor public mobile availability is complete.
 
-The `korlix-copybox-android-candidate`, `korlix-copybox-ios-candidate`, and
-`korlix-copybox-ios-testflight` workflows are prepared in `codemagic.yaml`.
-Candidate signing fails closed when required identities are absent. See
-[Android release preparation](android-release.md). Public store availability
-remains pending.
+The candidate and upload workflows remain in `codemagic.yaml`. The iOS upload
+workflow does not automatically submit beta/App Store review or assign tester
+groups. The Android candidate has no Play publishing step. See
+[Android release preparation](android-release.md) and the
+[November 4 continuation](continuation-20261104.md).
 
 ## AI data handling and review evidence
 
@@ -192,10 +263,12 @@ response in account generation history even when the user keeps the original.
 Deleting a local box does not delete that online history. COPY Box disables
 account memory for refinements; that does not bypass generation-history storage.
 
-The backend source was inspected at
-`92cad91d290d4ac93d273960c1144798f3afd14f`. Account/device identifiers, declarations,
-AI content/history, and report/support data need accurate disclosures. This is
-source verification, not a live authenticated processing test. See
+The original backend inventory at `92cad91d290d4ac93d273960c1144798f3afd14f`
+was checked again against the primary API's exact deployed source,
+`bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb`, on November 4. Account/device
+identifiers, declarations, AI content/history, and report/support data need
+accurate disclosures. This is deployed-source verification, not a live
+account-processing or deletion-fulfilment test. See
 [privacy evidence](store-submission/privacy-evidence.md) for data flows,
 retention uncertainties, and the private-console handoff.
 

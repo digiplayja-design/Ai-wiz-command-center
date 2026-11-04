@@ -1,0 +1,238 @@
+{
+  "status": "ios_uploaded_store_setup_incomplete",
+  "recorded_at_utc": "2026-11-04T17:29:33Z",
+  "evidence_basis": "Authenticated Apple Developer, App Store Connect, and Codemagic console observations on November 4, 2026; no credential values are stored in this checkpoint.",
+  "identity": {
+    "display_name": "KORLIX COPY Box",
+    "bundle_id": "com.korlixdeveloper.copybox",
+    "android_package": "com.korlixdeveloper.copybox",
+    "apple_app_id": "6830765098",
+    "apple_app_url": "https://appstoreconnect.apple.com/apps/6830765098",
+    "apple_team_name": "Korlix LLC",
+    "apple_team_id": "FJKJ9MUDZ4",
+    "version": "1.0.0",
+    "build": "1"
+  },
+  "source": {
+    "signed_ios_source_commit": "4dd07806ff471263b1fb82d593f300cfe9693a4d",
+    "asset_package_commit": "9eda2fb7254803b607dbfb69e88500b1ec42dc1a",
+    "asset_package_scope": "Four medium iPhone PNGs and asset/documentation updates only; application behavior, native configuration, signing, lockfiles, and workflows are unchanged from the signed source.",
+    "full_validation_source_commit": "d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4",
+    "full_validation_run_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41844773126",
+    "medium_capture_source_commit": "339e41f055882a24e35cd43ea39b273c1ff960a4",
+    "medium_capture_run_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41872257288"
+  },
+  "apple_signing": {
+    "explicit_bundle_id_registered": true,
+    "profile_id": "YG5PJS847P",
+    "profile_name": "KORLIX_COPYBOX_APP_STORE_PROFILE",
+    "profile_type": "App Store Connect distribution",
+    "profile_expiration_date": "2027-06-22",
+    "codemagic_profile_reference": "KORLIX_COPYBOX_APP_STORE_PROFILE",
+    "profile_imported_to_codemagic": true,
+    "existing_certificate_id": "4635LCY72R",
+    "codemagic_certificate_reference": "KORLIX_APP_STORE_CERT",
+    "new_distribution_certificate_or_private_key_created": false,
+    "integration_name": "Codemagic Korlix AI"
+  },
+  "ios_build": {
+    "provider": "Codemagic",
+    "project_id": "6a32198d2d0806059c3df062",
+    "workflow": "korlix-copybox-ios-testflight",
+    "build_id": "6aeb61e5004ce28f20edd5ba",
+    "build_url": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6aeb61e5004ce28f20edd5ba",
+    "status": "finished_successfully",
+    "displayed_duration": "5m 16s",
+    "signed_ipa": {
+      "name": "KorlixCopyBox.ipa",
+      "displayed_size": "23.03 MB",
+      "size_bytes": null,
+      "sha256": null,
+      "independent_local_inspection_completed": false,
+      "signed_keychain_entitlements_independently_verified": true,
+      "inspection_limitation": "The browser download was not available at corresponding local workspace paths; exact byte size, SHA-256, and embedded-profile decoding were not independently checked locally. Apple processed Build Metadata separately verified the signed application and keychain entitlements.",
+      "signed_keychain_verification_source": "Apple TestFlight processed Build Metadata"
+    },
+    "apple_upload_succeeded": true
+  },
+  "testflight": {
+    "apple_build_uuid": "ddd61c5d-982c-404c-9aaa-d280bd0495be",
+    "version": "1.0.0",
+    "build": "1",
+    "observed_status": "Ready to Submit",
+    "testing_groups_configured": false,
+    "tester_invitations_sent": false,
+    "installations_verified": false,
+    "beta_review_submitted": false,
+    "physical_device_acceptance_completed": false,
+    "live_account_acceptance_completed": false,
+    "what_to_test_saved": true,
+    "what_to_test_content": "Device acceptance instructions replaced the initial release notes; the console confirmed Saved.",
+    "processed_build_metadata": {
+      "source": "Apple TestFlight Build Metadata",
+      "binary_state": "Validated",
+      "bundle_id": "com.korlixdeveloper.copybox",
+      "version": "1.0.0",
+      "build": "1",
+      "minimum_ios_version": "15.0",
+      "device_families": [
+        "iPhone",
+        "iPad"
+      ],
+      "architecture": "arm64",
+      "uses_non_exempt_encryption": false,
+      "signed_entitlements": {
+        "application-identifier": "FJKJ9MUDZ4.com.korlixdeveloper.copybox",
+        "get-task-allow": false,
+        "beta-reports-active": true,
+        "keychain-access-groups": [
+          "FJKJ9MUDZ4.com.korlixdeveloper.copybox"
+        ],
+        "com.apple.developer.team-identifier": "FJKJ9MUDZ4"
+      }
+    }
+  },
+  "app_store": {
+    "version": "1.0.0",
+    "observed_state": "Prepare for Submission",
+    "public_review_submitted": false,
+    "approved": false,
+    "publicly_released": false,
+    "build_selection_saved": true,
+    "listing_fields": "Public fields listed below were confirmed saved in a fresh listing tab; the review section remains blank.",
+    "review_section": "Contact first name, last name, phone, email, notes, and reviewer credentials remain blank after reload; the whole review section previously failed contact validation.",
+    "review_contact_complete": false,
+    "reviewer_account_supplied": false,
+    "screenshots": {
+      "iphone_large": {
+        "count": 4,
+        "slot_capacity": 10,
+        "dimensions": [
+          1260,
+          2736
+        ],
+        "upload_observed": true,
+        "final_saved_state_verified": true
+      },
+      "iphone_medium": {
+        "count": 4,
+        "slot_capacity": 10,
+        "dimensions": [
+          1206,
+          2622
+        ],
+        "upload_observed": true,
+        "final_saved_state_verified": true
+      },
+      "ipad_13_inch": {
+        "count": 4,
+        "slot_capacity": 10,
+        "dimensions": [
+          2064,
+          2752
+        ],
+        "upload_observed": true,
+        "final_saved_state_verified": true
+      }
+    },
+    "privacy_declaration_completed": false,
+    "age_rating_completed": false,
+    "paid_apps_agreement": "new version awaits user approval",
+    "price": null,
+    "country_availability": null,
+    "release_schedule": null,
+    "public_listing_fields_saved": [
+      "promotional_text",
+      "description",
+      "keywords",
+      "support_url",
+      "copyright_2026_Korlix_INC",
+      "version_1.0.0",
+      "manual_release_option"
+    ],
+    "release_option": "Manually release this version",
+    "release_option_saved": true,
+    "selected_build_uuid": "ddd61c5d-982c-404c-9aaa-d280bd0495be",
+    "selected_build_version": "1.0.0",
+    "selected_build_number": "1",
+    "build_selection_verification": "The version tab was reloaded; the selected build row persisted and Save was disabled.",
+    "review_sign_in_required_checked": true,
+    "review_sign_in_required_note": "Default checkbox remained checked on the otherwise blank review form.",
+    "app_information": {
+      "subtitle": "Save, organize, refine & reuse",
+      "primary_category": "Productivity",
+      "secondary_category": null,
+      "saved_confirmation_observed": true
+    },
+    "privacy_policy_url": "https://www.korlixdeveloper.com/privacy-policy.html",
+    "privacy_policy_url_saved": true,
+    "privacy_draft": {
+      "saved_data_categories": [
+        "Email Address",
+        "Customer Support",
+        "Other User Content",
+        "User ID",
+        "Device ID",
+        "Product Interaction",
+        "Other Data Types"
+      ],
+      "purpose_linkage_tracking_setup": "saved_for_all_seven_data_types",
+      "published": false,
+      "saved_details_for_each_data_type": {
+        "purpose": "App Functionality",
+        "linked_to_user": true,
+        "used_for_tracking": false
+      },
+      "tracking_conclusion": "The exact deployed-source review supports no tracking for the COPY Box data flows; generic tracking verification is no longer an unresolved gate.",
+      "publication_approval_required": true,
+      "publication_confirmation": "The final modal requires agreement that responses are accurate and compliant and will be promptly updated; action-time user approval is still required.",
+      "publish_confirmation_opened": true,
+      "final_publish_confirmation_clicked": false
+    },
+    "privacy_details_saved": true,
+    "age_rating_status": "Questionnaire inspected and cancelled without saving. Actual AI content-frequency answers remain unresolved pending live-account evaluation of the general generation route.",
+    "age_rating_evidence_limit": "The deployed /api/generate route has no COPY Box topic/output filter; built-in capability evidence alone does not establish generated-content frequency.",
+    "content_rights_status": "Form inspected; no answer submitted."
+  },
+  "preference_scope": {
+    "copybox_price_and_territories_confirmed": false,
+    "note": "Exact antecedent retrieval established that the November 2 free/$0 and worldwide/all-175 approvals concerned Brain + Voice, not this separate COPY Box app. They were not applied to COPY Box."
+  },
+  "android": {
+    "dedicated_upload_key_reference": "KORLIX_COPYBOX_ANDROID_UPLOAD_KEY",
+    "dedicated_upload_key_configured": false,
+    "signed_release_aab_built": false,
+    "play_record_verified": false,
+    "play_upload_completed": false,
+    "public_review_submitted": false,
+    "existing_debug_apk_evidence": "validation-run10/build-verification.json"
+  },
+  "public_policy_pages": {
+    "reviewed_candidate_commit": "d810888cba620502e799a3022090e1a5f6748d9d",
+    "pull_request_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/pull/43",
+    "deployment_verified": false,
+    "continuation_record": "continuation-20261104.md",
+    "pull_request_state": "merged",
+    "safe_deployment_commit": "da283a8dfe7b51f68ad7b581b8555f017cac3c54",
+    "merge_tree_matches_reviewed_source": true,
+    "deployment_blocker": "Render authentication is still required to deploy the exact safe commit.",
+    "render_service_id": "srv-d8ekf7t7vvec73dpar60",
+    "last_live_deploy_id": "dep-dbenft8m7kps73ef1td0",
+    "last_live_commit": "e38d6b73a37ff812a29da3b64027a35e01979c34",
+    "last_live_deploy_date": "2026-10-25",
+    "configured_source_branch": "release/k135z-frontend-20260919",
+    "automatic_deployments_enabled": false,
+    "deployment_instruction": "Deploy only da283a8dfe7b51f68ad7b581b8555f017cac3c54; do not deploy the generic configured-branch head."
+  },
+  "remaining_gates": [
+    "Complete the blank App Review contact, email, notes, and credential fields using authorized details and a dedicated working account with AI allowance and installation capacity.",
+    "Obtain COPY Box-specific price and country-availability choices; the Apple version is already saved for manual release.",
+    "Obtain action-time user approval for the App Privacy publication attestation and the updated Paid Apps Agreement; the seven data-type classifications are saved and no-tracking is supported by the deployed-source review.",
+    "Evaluate actual AI content frequency through a live account, complete the age/content questionnaire, and supply the content-rights declaration.",
+    "Configure deliberate TestFlight testing and complete physical-device/live-account acceptance.",
+    "Configure the dedicated Android upload key, build/inspect the release AAB and generated APKs, and complete Play setup/testing.",
+    "Authenticate Render, deploy only the reviewed merge commit da283a8dfe7b51f68ad7b581b8555f017cac3c54, and verify all four public policy/support pages.",
+    "Submit completed store listings for review after the remaining release gates are satisfied."
+  ],
+  "draft_started_at_utc": "2026-11-04T17:11:49Z"
+}

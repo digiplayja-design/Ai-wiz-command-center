@@ -1,5 +1,5 @@
 {
-  "status": "prepared_not_submitted",
+  "status": "ios_uploaded_public_submission_pending",
   "prepared_date": "2026-11-03",
   "date_timezone": "America/Los_Angeles",
   "locale": "en-US",
@@ -8,7 +8,10 @@
     "android_package": "com.korlixdeveloper.copybox",
     "apple_bundle_id": "com.korlixdeveloper.copybox",
     "version": "1.0.0",
-    "store_app_ids": null,
+    "store_app_ids": {
+      "apple_app_store_connect": "6830765098",
+      "google_play": null
+    },
     "apple_sku_suggestion": "korlix-copy-box-ios"
   },
   "google_play": {
@@ -44,11 +47,39 @@
     "review_contact_name": null,
     "review_contact_phone": null,
     "reviewer_credentials": "Enter only in the private console fields; never in this package.",
-    "first_version_whats_new_field": false
+    "first_version_whats_new_field": false,
+    "release_option": "manual_after_approval",
+    "release_option_saved": true,
+    "private_console_review_section_status": "all_contact_notes_and_credentials_blank_after_reload",
+    "app_store_build_selection_saved": true,
+    "selected_build_uuid": "ddd61c5d-982c-404c-9aaa-d280bd0495be",
+    "subtitle_saved": true,
+    "primary_category_saved": true,
+    "secondary_category_console_value": null,
+    "privacy_policy_url_saved": true,
+    "privacy_declaration_status": "seven_data_types_fully_configured_saved_draft_publication_awaits_user_attestation",
+    "privacy_saved_detail_summary": {
+      "data_type_count": 7,
+      "purpose": "App Functionality",
+      "linked_to_user": true,
+      "used_for_tracking": false,
+      "no_tracking_supported_by_deployed_source_review": true,
+      "published": false
+    },
+    "age_questionnaire_status": "inspected_cancelled_without_save_ai_content_frequency_unresolved",
+    "content_rights_status": "inspected_no_answer_submitted"
   },
   "testflight": {
     "what_to_test_file": "testflight-what-to-test.txt",
-    "feedback_email": "support@korlixdeveloper.com"
+    "feedback_email": "support@korlixdeveloper.com",
+    "uploaded_version": "1.0.0",
+    "uploaded_build": "1",
+    "apple_build_uuid": "ddd61c5d-982c-404c-9aaa-d280bd0495be",
+    "observed_status": "Ready to Submit",
+    "testing_groups_configured": false,
+    "tester_invitations_sent": false,
+    "what_to_test_saved": true,
+    "binary_state": "Validated"
   },
   "not_configured_by_this_package": {
     "price": null,
@@ -64,7 +95,8 @@
     "privacy": "privacy-evidence.md",
     "public_page_additions": "public-page-additions.md",
     "assets": "screenshot-plan.md",
-    "asset_manifest": "../store-assets/manifest.json"
+    "asset_manifest": "../store-assets/manifest.json",
+    "release_status": "../release-status.json"
   },
   "field_lengths": {
     "name": {
@@ -126,7 +158,6 @@
     "app_source_commit": "d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4",
     "validation_run_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41844773126",
     "asset_manifest": "../store-assets/manifest.json",
-    "signed_store_release_completed": false,
     "store_submission_completed": false,
     "physical_device_acceptance_completed": false,
     "live_account_acceptance_completed": false,
@@ -165,7 +196,6 @@
           2622
         ]
       },
-      "uploaded_to_stores": false,
       "capture_source_scope": "Original twelve screenshots; additional capture runs are recorded separately.",
       "additional_capture_runs": [
         {
@@ -185,7 +215,20 @@
           ],
           "status": "packaged_and_visually_reviewed"
         }
-      ]
-    }
-  }
+      ],
+      "store_upload_status": {
+        "apple_iphone_large": "four_uploaded_and_visible",
+        "apple_iphone_medium": "four_uploaded_and_visible",
+        "apple_ipad_13_inch": "four_uploaded_and_visible",
+        "google_play": "not_uploaded"
+      }
+    },
+    "signed_ios_candidate_completed": true,
+    "signed_android_candidate_completed": false,
+    "ios_upload_completed": true,
+    "signed_ios_source_commit": "4dd07806ff471263b1fb82d593f300cfe9693a4d",
+    "codemagic_build_id": "6aeb61e5004ce28f20edd5ba",
+    "release_status_file": "../release-status.json"
+  },
+  "checkpoint_date": "2026-11-04"
 }
