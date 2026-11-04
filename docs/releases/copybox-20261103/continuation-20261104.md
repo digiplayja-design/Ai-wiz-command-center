@@ -142,26 +142,212 @@ commit `9eda2fb7254803b607dbfb69e88500b1ec42dc1a`. That commit changes screensho
 and documentation only; it does not change application behavior, native
 configuration, signing, lockfiles, or the workflow used by the signed build.
 
-COPY Box's price and country availability remain undecided. Exact prior-conversation
-antecedent retrieval established that the November 2 free/$0 and worldwide/all
-175 approvals concerned **Brain + Voice**, not the independent COPY Box app.
-Those settings were not transferred to COPY Box.
+Exact prior-conversation antecedent retrieval established that the November 2
+free/$0 and worldwide/all-175 approvals concerned **Brain + Voice**, not the
+independent COPY Box app. Those settings were not transferred on that basis.
+The user subsequently replied **Approve setup**, explicitly approving COPY Box
+as a free download on both stores and availability in all supported countries.
+The same response approved Google's Developer Program Policies and US export
+certification, app record creation, and a dedicated Android upload key with a
+protected independent backup, Codemagic import, and signed candidate build.
 
-## Google Play account and staged creation form
+Apple's pricing and availability pages were reopened and confirmed **$0.00**
+with zero local-currency prices in all **175 countries/regions**. Every
+availability row is **Available on App Release**, with future countries
+included. Reopening version 1.0.0 confirmed manual release remains selected and
+the version remains **Prepare for Submission**. No Apple review or release was
+submitted. Verified console pages:
+[pricing](https://appstoreconnect.apple.com/apps/6830765098/distribution/pricing)
+and [availability](https://appstoreconnect.apple.com/apps/6830765098/distribution/pricing/availability).
+
+## Google Play account and app creation
 
 Secure sign-in succeeded and the KORLIX organization account was positively
 identified as developer ID `4772708594176030332`. The homepage showed five apps,
 none COPY Box. Searching the exact package `com.korlixdeveloper.copybox` returned
 **No results found**.
 
-The Create app form was staged with **KORLIX COPY Box**, package
+Before creation, the form was staged with **KORLIX COPY Box**, package
 `com.korlixdeveloper.copybox`, **English (United States)**, and application type
 **App**. Clicking Check availability returned **Package name available**.
-Free/paid remains unset; the Developer Program Policies and US export
-declarations remain unchecked. **Create app was not submitted.** This is a
-staged form and availability result, not a created app record. No Android upload
-certificate or store release version code has been established, and no signed
-Android release build or Play upload has occurred.
+After **Approve setup**, **Free** was selected, the authorized Developer Program
+Policies and US export declarations were checked, and Create app was submitted
+successfully. A fresh dashboard explicitly shows **KORLIX COPY Box**, app ID
+**4974456296219116192**, under developer **4772708594176030332**:
+[Play app dashboard](https://play.google.com/console/u/0/developers/4772708594176030332/app/4974456296219116192/app-dashboard).
+Default automatic protection was displayed enabled and left unchanged. The signed
+Android candidate was subsequently built, verified, and accepted as version code
+1 in the saved internal testing draft as recorded below. No rollout or review
+was submitted. The separate upload-certificate registration UI was not rechecked.
+
+A fresh Google Play pricing page explicitly shows **Your app is Free**, with
+Save changes disabled. All production country rows were selected and saved;
+the fresh [availability page](https://play.google.com/console/u/0/developers/4772708594176030332/app/4974456296219116192/tracks/production?tab=countryAvailability)
+shows **Targeted (178)**, including Rest of World. Production is **Inactive**.
+No review or release submission occurred. The initial save confirmation referred
+to Publishing overview for review, but a later Test and release overview
+explicitly showed **You have no unpublished changes**. The verified conclusion
+is that the country targets are saved; that save does not establish a pending
+review queue. Subsequent listing work is tracked separately.
+
+## Android signing checkpoint
+
+The dedicated key has been generated with alias `korlix_copybox_upload`, RSA
+2048, and SHA256withRSA. Its certificate common name is **KORLIX COPY Box Upload**;
+validity is **2026-11-04T18:30:56Z–2054-03-22T18:30:56Z**. The public SHA-256
+fingerprint is
+`4E:92:04:B6:04:11:F4:F5:72:30:51:6E:E3:CD:E8:8D:27:B9:8A:72:FF:3E:72:97:4A:44:94:31:10:B9:3F:A7`.
+The protected independent backup is verified. No backup link, private path,
+password, or recovery content is stored here.
+
+Codemagic Add keystore completed successfully. The fresh list shows exact
+reference **KORLIX_COPYBOX_ANDROID_UPLOAD_KEY**, matching common name and issuer,
+and expiry **March 22, 2054**. This records the completed import, not the earlier
+Adding keystore progress state. The signed candidate and independent static
+artifact verification subsequently completed successfully.
+
+The first Android attempt, `6aeb7e24c89c60076c761c73`, targeted reviewed source
+`4dd07806ff471263b1fb82d593f300cfe9693a4d`. It failed before compilation with
+**The selected instance type is not available with the current billing plan.**
+Commit `2c6544dba9afe2117181afabdc78a856ef4f249d` changes the COPY Box Android
+workflow's single `instance_type` line from `linux_x2` to `mac_mini_m2`. Its exact
+YAML blob is `b51ace57dd3094da6c5a5b3246af6c3a2ad7c15d`. App code, key, version,
+and other workflows are unchanged; no billing plan was modified.
+
+[Retry build 6aeb7ea6004ce28f20ede0b2](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6aeb7ea6004ce28f20ede0b2),
+index 2, was first verified **Queued** on **Mac mini M2**, workflow
+`korlix-copybox-android-candidate`, branch `feature/korlix-copy-box-20261103`, at
+exact source `2c6544dba9afe2117181afabdc78a856ef4f249d`. SSH and VNC remained
+unchecked. The workflow has no automatic Google Play publishing step.
+
+A fresh reload then showed **Building**, started **November 4, 2026 at 13:56
+EST / 18:56 UTC**. The validation log confirms both analyzers reported no issues
+(shared 5.9 seconds; app 7.5 seconds) and all **59 shared + 81 app tests** passed.
+The final console result is **FINISHED**, total duration **7m 16s**, at exact
+source `2c6544dba9afe2117181afabdc78a856ef4f249d` on Mac mini M2. Packaging took
+**4m 29s**, publishing **6s**, and cleanup **less than 1s**. The artifact list
+shows `KorlixCopyBox.aab` (**53.28 MB**) and
+`Ai-wiz-command-center_2_artifacts.zip` (**793 B**). The actual AAB was downloaded
+and is nonempty at **55,864,103 bytes**, SHA-256
+`cc9e3b467fe3b4409db2ce93cc9ebc961cddd09333174bc9a82227c87f9bebaa`.
+
+CI's native scan has `validation_errors: []` and
+`apk_zip_layout_checked: false`; it explicitly requires bundletool and generated
+APK checks. Those additional checks passed on the actual downloaded bundle.
+The unchanged [verification report](android-artifact-verification.json) is
+**14,655 bytes**, SHA-256
+`9ea3e9c54fc6a95ea0799b7618c43050061e3e4e87dda9d46fa953b12d87249b`.
+Bundletool validation passed; the signature matches the dedicated upload
+certificate and all **406 payloads** have matching signed-manifest digests.
+The manifest confirms package `com.korlixdeveloper.copybox`, **1.0.0 / code 1**,
+minimum SDK **24**, target **36**, debugging/backup/cleartext disabled, and only
+INTERNET plus the app's own signature-protected dynamic-receiver permission.
+`PAGE_ALIGNMENT_16K` is requested and all **12 native libraries** pass ELF checks.
+
+The generated universal APK's v2/v3 signatures validate with the same upload
+certificate; all 12 native libraries are uncompressed and aligned in both ELF
+and APK ZIP layout. The report status is
+**passed_with_documented_jarsigner_warnings**: self-signed certificate, no JAR
+timestamp, POSIX attributes, and manifest-last streaming-reader warning.
+Random-access signature verification and additional signed-digest coverage
+checks passed; the AAB was not modified. These results do not establish device
+installation, 16 KB-page runtime behavior, or Play-delivered APK verification.
+
+The Google Play key-management page separately confirms **App signing key: In
+use**, with displayed install base **0.0%**. The Digital Asset Links JSON names
+exact package `com.korlixdeveloper.copybox` and Google-managed app-signing
+certificate SHA-256
+`C5:B8:82:D1:29:C8:46:A9:D6:36:06:75:11:B3:5D:AB:52:1B:DD:3C:9D:D0:0C:57:82:BC:4E:C3:25:07:C8:0A`.
+This certificate is distinct from the dedicated upload certificate
+`4E:92:04:B6:04:11:F4:F5:72:30:51:6E:E3:CD:E8:8D:27:B9:8A:72:FF:3E:72:97:4A:44:94:31:10:B9:3F:A7`.
+No separate enrollment/acceptance prompt appeared, and no signing settings were
+changed. This establishes Google's app-signing state separately from the local
+candidate build. The later bundle upload was accepted as recorded below;
+explicit upload-key registration UI evidence was not refreshed.
+
+## Google App content checkpoint
+
+The restricted-access flow was inspected. It requires reviewer sign-in details
+and a checkbox affirming full access, including premium features. No working
+dedicated reviewer credentials were available, so the empty Add details form
+was cancelled and the restricted-access selection discarded. **No App access
+declaration was saved.**
+
+The Ads declaration **No, my app does not contain ads** was selected and saved.
+The confirmation said **Change saved. Send for review in Publishing overview.**
+The dashboard showed Ads as a completed task, with **1/11** completed at that
+observation. No review was sent; the save confirmation does not by itself
+establish the current publishing queue.
+
+Financial features was set to **My app doesn't provide any financial features**.
+The documentation step said none was required. Save was clicked and both Save
+and Save as draft became disabled. Health apps was saved as **My app does not
+have any health features**, with no regional requirements; the save confirmation
+said **Change saved. Send for review in Publishing overview.**
+
+The later App content **Actioned** snapshot explicitly showed **3 actioned
+declarations**: **Health apps**, **Financial features**, and **Ads**, all edited
+**November 4**. This confirms Financial features and Health apps completion on
+the overview as well as their form saves. No review was sent. Advertising ID
+was subsequently answered **No** and saved with **Change saved**, supported by
+the reviewed source and actual signed bundle's permission inventory. The earlier
+three-item snapshot is not treated as a later total declaration count.
+
+A bounded Data safety draft was saved from Step 2 at
+`/app-content/data-privacy-security`. The combined question about collection or
+sharing of required data types is **Yes**, account creation is **Username and
+password**, and the deletion URL is
+`https://www.korlixdeveloper.com/delete-account.html`. The confirmation was
+**Your changes have been saved**. Encryption in transit and optional data-only
+deletion were left unanswered. The data-type, usage, and preview steps were not
+reached. This is a saved draft, not a final declaration or publication; the
+remaining operational questions in the privacy evidence are unchanged.
+
+## Google main listing saved
+
+The final save confirmed **Default store listing updated**. Both the
+[overview](https://play.google.com/console/u/0/developers/4772708594176030332/app/4974456296219116192/store-listings)
+and reopened edit show **Ready to send for review**. The English title is
+**KORLIX COPY Box**; the short description is **72 characters**, and the full
+description exactly matches the prepared file after trimming its trailing
+newline, **2,685 characters**. This status applies to the main listing; remaining
+app-content and release gates are still incomplete.
+
+One **512 × 512** icon, one **1024 × 500** feature graphic, and four
+**1080 × 1920** phone screenshots are saved, in workspace, templates, focus
+editor, and dark workspace order. Prepared hashes were checked and the assets
+were not modified. The AI asset label is saved only for `feature-graphic.png`;
+the icon and four actual Flutter screenshots remain unlabelled.
+
+Category **Productivity**, support email `support@korlixdeveloper.com`, support
+URL `https://www.korlixdeveloper.com/support.html`, and privacy URL
+`https://www.korlixdeveloper.com/privacy-policy.html` each saved successfully.
+The public phone is blank. No store review or release was submitted.
+
+## Google internal testing draft and accepted bundle
+
+The verified AAB was uploaded, processed, and accepted in internal track
+**4699672053930799570**, release **1**. A fresh saved Prepare page shows
+**App bundle 1 (1.0.0)**, API **24+**, target **36**, **4 screen layouts**,
+**3 ABIs**, and **1 required feature**, with ReTrace mapping and native debug
+symbols attached and the **Enhanced** label. The draft name is
+**1.0.0 (1) - initial internal test**, with the prepared **en-US** release notes.
+Save as draft confirmed **Changes saved. You can now preview your release before
+publishing it.**
+
+The [preview](https://play.google.com/console/u/0/developers/4772708594176030332/app/4974456296219116192/tracks/4699672053930799570/releases/1/review)
+showed **one warning**, that no testers are specified and the release is not
+available to any users; no error was displayed. Estimated download is **11 MB /
+6s**. **Save and publish was available but not clicked.** No testers,
+invitations, review submission, or rollout were configured.
+
+Final [internal-track readback](https://play.google.com/console/u/0/developers/4772708594176030332/app/4974456296219116192/tracks/internal-testing?releaseType=defaultReleases)
+shows **Inactive**, the named **Draft** release, and **1 of 3 complete** with
+Create a new release completed. The expanded saved draft confirms version code
+**1**, **178 countries**, **19,573 supported Android devices**, and bundle
+explorer artifact ID **4860247929005203987**. The upload-certificate registration
+page was not rechecked; acceptance of this verified bundle is established without
+claiming a separate certificate-registration observation.
 
 ## Work still remaining
 
@@ -169,17 +355,18 @@ Android release build or Play upload has occurred.
   available shared device capacity. App Review contact details and the complete
   notes are saved, but reviewer username/password remain unsupplied. The Apple
   version build selection is saved and verified after reload.
-- Obtain COPY Box-specific price and availability choices. The Apple privacy
-  declaration is published and the updated Paid Apps Agreement is Active after
-  the user's explicit approval.
 - Evaluate actual AI content frequency through a live account, complete the age
   questionnaire, and supply the content-rights declaration.
 - Configure deliberate TestFlight testing and complete physical-device and
   live-account acceptance before public submission.
-- Complete the staged Google Play creation form after the COPY Box free/paid
-  choice and required declarations are settled. Configure the dedicated
-  `KORLIX_COPYBOX_ANDROID_UPLOAD_KEY` and build/inspect its signed release AAB.
-  No Android release build or Play upload has occurred.
+- Configure deliberate Android testing and complete physical-device/live-account
+  acceptance, including a 16 KB-page environment and Play-delivered APK checks.
+  Static checks of the signed AAB and generated universal APK passed, and Play
+  accepted version 1.0.0 (1) into the saved internal draft; it has no testers or
+  rollout.
+- Complete Google Play target audience, applicable content rating, and remaining
+  app-content declarations. Complete Data safety beyond the bounded Step 2 draft,
+  including unanswered operational questions and data-type/usage/preview steps.
 - Authenticate Render, deploy only the exact reviewed merge commit
   `da283a8dfe7b51f68ad7b581b8555f017cac3c54`, and verify the four public pages.
 - Submit completed listings for review after the release gates are satisfied.

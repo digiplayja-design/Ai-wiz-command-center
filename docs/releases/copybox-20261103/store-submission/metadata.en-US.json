@@ -1,5 +1,5 @@
 {
-  "status": "ios_uploaded_public_submission_pending",
+  "status": "ios_uploaded_android_play_draft_public_submission_pending",
   "prepared_date": "2026-11-03",
   "date_timezone": "America/Los_Angeles",
   "locale": "en-US",
@@ -10,7 +10,7 @@
     "version": "1.0.0",
     "store_app_ids": {
       "apple_app_store_connect": "6830765098",
-      "google_play": null
+      "google_play": "4974456296219116192"
     },
     "apple_sku_suggestion": "korlix-copy-box-ios"
   },
@@ -28,26 +28,264 @@
     "release_notes_file": "release-notes.txt",
     "app_access_instruction_name": "KORLIX account for AI refinement",
     "additional_access_instructions_file": "google-app-access-short.txt",
-    "console_setup_status": "authenticated_organization_package_available_creation_form_staged_not_submitted",
+    "console_setup_status": "app_created_free_listing_saved_verified_bundle_accepted_internal_draft_no_rollout",
     "developer_account_id": "4772708594176030332",
     "organization_account_confirmed": "KORLIX",
-    "exact_package_search_result": "No results found",
+    "pre_creation_exact_package_search_result": "No results found",
     "create_app_form": {
-      "staged_fields_only": true,
+      "staged_fields_only": false,
       "title": "KORLIX COPY Box",
       "package_name": "com.korlixdeveloper.copybox",
       "default_language": "English (United States)",
       "locale": "en-US",
       "application_type": "App",
       "package_availability_check_result": "Package name available",
-      "free_or_paid": null,
-      "developer_program_policies_checked": false,
-      "us_export_declaration_checked": false,
-      "create_app_submitted": false
+      "free_or_paid": "Free",
+      "developer_program_policies_checked": true,
+      "us_export_declaration_checked": true,
+      "create_app_submitted": true
     },
-    "copybox_record_created": false,
+    "copybox_record_created": true,
     "play_upload_certificate_established": false,
-    "play_release_version_code": null
+    "play_release_version_code": 1,
+    "app_id": "4974456296219116192",
+    "dashboard_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4974456296219116192/app-dashboard",
+    "fresh_dashboard_creation_verified": true,
+    "automatic_protection": {
+      "displayed_enabled": true,
+      "changed_by_assistant": false
+    },
+    "country_availability_console_status": "saved_and_verified_on_fresh_page_no_review_or_release_submitted",
+    "free_download_price_verification": {
+      "observed_text": "Your app is Free",
+      "save_changes_disabled": true,
+      "fresh_page_verified": true
+    },
+    "country_availability": {
+      "targeted_count": 178,
+      "includes_rest_of_world": true,
+      "all_rows_selected": true,
+      "save_accepted": true,
+      "fresh_page_verified": true,
+      "observed_targeting_label": "Targeted (178)",
+      "production_status": "Inactive",
+      "submitted_for_review": false,
+      "release_submitted": false,
+      "url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4974456296219116192/tracks/production?tab=countryAvailability",
+      "initial_save_confirmation": "The save confirmation referred to Publishing overview for review.",
+      "later_test_and_release_overview_message": "You have no unpublished changes",
+      "publishing_status_evidence_limit": "These observations establish saved country targeting, not a pending review queue. Subsequent listing work is tracked separately."
+    },
+    "dedicated_android_upload_key_ready": true,
+    "dedicated_android_upload_key_certificate_sha256": "4E:92:04:B6:04:11:F4:F5:72:30:51:6E:E3:CD:E8:8D:27:B9:8A:72:FF:3E:72:97:4A:44:94:31:10:B9:3F:A7",
+    "codemagic_signing_reference": "KORLIX_COPYBOX_ANDROID_UPLOAD_KEY",
+    "protected_independent_backup_verified": true,
+    "app_signing": {
+      "managed_by": "Google Play",
+      "key_status": "In use",
+      "displayed_install_base": "0.0%",
+      "digital_asset_links_package_name": "com.korlixdeveloper.copybox",
+      "certificate_sha256": "C5:B8:82:D1:29:C8:46:A9:D6:36:06:75:11:B3:5D:AB:52:1B:DD:3C:9D:D0:0C:57:82:BC:4E:C3:25:07:C8:0A",
+      "certificate_role": "app signing, distinct from the dedicated upload key",
+      "separate_enrollment_or_acceptance_prompt_observed": false,
+      "signing_settings_changed": false,
+      "dedicated_upload_key_registration_verified": false,
+      "bundle_upload_verified": true,
+      "dedicated_upload_key_registration_evidence": "Explicit upload-certificate registration UI was not rechecked after the accepted bundle upload."
+    },
+    "app_content_console_state": {
+      "app_access": {
+        "restricted_access_flow_inspected": true,
+        "full_access_including_premium_attestation_required": true,
+        "working_reviewer_credentials_supplied": false,
+        "empty_add_details_cancelled": true,
+        "selection_discarded": true,
+        "declaration_saved": false,
+        "observed_page_path": "/app-content/testing-credentials?source=dashboard"
+      },
+      "ads": {
+        "selection": "No, my app does not contain ads",
+        "contains_ads": false,
+        "save_confirmed": true,
+        "save_confirmation": "Change saved. Send for review in Publishing overview.",
+        "dashboard_task_completed": true,
+        "dashboard_completed_progress_at_observation": "1/11",
+        "review_submitted": false,
+        "overview_completion_verified": true,
+        "edited_date": "2026-11-04"
+      },
+      "financial_features": {
+        "selection": "My app doesn't provide any financial features",
+        "documentation_required": false,
+        "form_save_accepted": true,
+        "save_and_save_as_draft_disabled_after_save": true,
+        "overview_completion_verified": true,
+        "review_submitted": false,
+        "edited_date": "2026-11-04"
+      },
+      "health_apps": {
+        "selection": "My app does not have any health features",
+        "regional_requirements": "none",
+        "form_save_accepted": true,
+        "save_confirmation": "Change saved. Send for review in Publishing overview.",
+        "overview_completion_verified": true,
+        "edited_date": "2026-11-04",
+        "review_submitted": false
+      },
+      "actioned_overview": {
+        "count": 3,
+        "declarations": [
+          "Health apps",
+          "Financial features",
+          "Ads"
+        ],
+        "all_edited_date": "2026-11-04",
+        "observed_on_actioned_tab": true,
+        "review_submitted": false
+      },
+      "data_safety_draft": {
+        "observed_page_path": "/app-content/data-privacy-security",
+        "last_step_reached": 2,
+        "collects_or_shares_required_data_types": true,
+        "combined_collection_sharing_question_answer": "Yes",
+        "account_creation_methods": [
+          "Username and password"
+        ],
+        "account_deletion_url": "https://www.korlixdeveloper.com/delete-account.html",
+        "encryption_in_transit_answer": null,
+        "optional_data_only_deletion_answer": null,
+        "data_type_step_reached": false,
+        "data_usage_step_reached": false,
+        "preview_step_reached": false,
+        "draft_saved": true,
+        "save_confirmation": "Your changes have been saved",
+        "final_declaration_completed": false,
+        "submitted_for_review": false,
+        "published": false,
+        "remaining_operational_questions_unchanged": true
+      },
+      "advertising_id": {
+        "uses_advertising_id": false,
+        "selection": "No",
+        "save_confirmed": true,
+        "save_confirmation": "Change saved",
+        "evidence_basis": "Reviewed source and manifest of the independently verified signed AAB",
+        "review_submitted": false
+      },
+      "remaining_declarations": [
+        "App access reviewer instructions and full-access confirmation after verifying dedicated credentials and capacity.",
+        "Final Data safety declaration beyond the saved Step 2 draft, including operational answers and data-type, usage, and preview steps.",
+        "Target audience, applicable content rating, and remaining Google Play app-content declarations."
+      ]
+    },
+    "main_store_listing_console_state": {
+      "locale": "en-US",
+      "title": "KORLIX COPY Box",
+      "short_description": "Organize notes, replies and reusable text in a focused writing workspace",
+      "short_description_characters": 72,
+      "full_description_characters": 2685,
+      "full_description_matches_prepared_trimmed_file": true,
+      "listing_text_entered": true,
+      "save_confirmed": true,
+      "save_confirmation": "Default store listing updated",
+      "observed_status": "Ready to send for review",
+      "status_verified_on_overview_and_reopened_edit": true,
+      "icon_uploaded": true,
+      "icon_count": 1,
+      "icon_dimensions": [
+        512,
+        512
+      ],
+      "feature_graphic_uploaded": true,
+      "feature_graphic_count": 1,
+      "feature_graphic_dimensions": [
+        1024,
+        500
+      ],
+      "screenshots_uploaded_count": 4,
+      "screenshot_dimensions": [
+        1080,
+        1920
+      ],
+      "screenshot_order": [
+        "01 workspace",
+        "02 templates",
+        "03 focus editor",
+        "04 dark workspace"
+      ],
+      "prepared_asset_hashes_checked": true,
+      "uploaded_assets_modified": false,
+      "ai_asset_label_saved": true,
+      "ai_labeled_assets": [
+        "feature-graphic.png"
+      ],
+      "unlabeled_assets": [
+        "icon",
+        "four actual Flutter screenshots"
+      ],
+      "category": "Productivity",
+      "category_saved": true,
+      "support_email": "support@korlixdeveloper.com",
+      "support_url": "https://www.korlixdeveloper.com/support.html",
+      "public_phone_blank": true,
+      "public_contact_saved": true,
+      "privacy_policy_url": "https://www.korlixdeveloper.com/privacy-policy.html",
+      "privacy_policy_url_saved": true,
+      "overview_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4974456296219116192/store-listings",
+      "pending_final_confirmation": [],
+      "review_submitted": false,
+      "release_submitted": false,
+      "scope": "Ready to send for review describes the saved main store listing only; required app-content and release gates remain incomplete."
+    },
+    "internal_testing_draft": {
+      "track_id": "4699672053930799570",
+      "release_id": "1",
+      "release_name": "1.0.0 (1) - initial internal test",
+      "release_notes_locale": "en-US",
+      "prepared_release_notes_entered": true,
+      "save_as_draft_confirmed": true,
+      "save_confirmation": "Changes saved. You can now preview your release before publishing it.",
+      "binary_uploaded": true,
+      "binary_processing_verified": true,
+      "review_submitted": false,
+      "rollout_submitted": false,
+      "tester_invitations_sent": false,
+      "uploaded_aab_bytes": 55864103,
+      "uploaded_aab_sha256": "cc9e3b467fe3b4409db2ce93cc9ebc961cddd09333174bc9a82227c87f9bebaa",
+      "processed_bundle_label": "App bundle 1 (1.0.0)",
+      "version_name": "1.0.0",
+      "version_code": 1,
+      "min_api_display": "24+",
+      "target_sdk": 36,
+      "screen_layouts_count": 4,
+      "abis_count": 3,
+      "required_features_count": 1,
+      "retrace_mapping_attached": true,
+      "native_debug_symbols_attached": true,
+      "observed_enhancement_label": "Enhanced",
+      "preview_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4974456296219116192/tracks/4699672053930799570/releases/1/review",
+      "preview_warning_count": 1,
+      "preview_warning": "No testers specified; the release is not available to any users.",
+      "preview_errors_displayed": false,
+      "download_size_estimate": "11 MB",
+      "download_time_estimate": "6s",
+      "save_and_publish_available": true,
+      "save_and_publish_clicked": false,
+      "testers_selected": false,
+      "track_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4974456296219116192/tracks/internal-testing?releaseType=defaultReleases",
+      "track_status": "Inactive",
+      "release_status": "Draft",
+      "final_track_readback_verified": true,
+      "setup_steps_completed": 1,
+      "setup_steps_total": 3,
+      "completed_step": "Create a new release",
+      "countries_count": 178,
+      "supported_android_devices": 19573,
+      "bundle_explorer_artifact_id": "4860247929005203987",
+      "upload_certificate_registration_ui_rechecked": false
+    },
+    "play_upload_certificate_evidence_status": "explicit_registration_ui_not_rechecked_after_accepted_bundle_upload",
+    "play_upload_completed": true
   },
   "apple_app_store": {
     "name": "KORLIX COPY Box",
@@ -104,7 +342,21 @@
     "paid_apps_agreement_displayed_term": {
       "start": "2026-11-04",
       "end": "2027-06-22"
-    }
+    },
+    "download_price": {
+      "kind": "Free",
+      "usd_price": "0.00",
+      "zero_local_currency_prices": true,
+      "country_count": 175,
+      "saved_verified": true
+    },
+    "country_availability": {
+      "country_region_count": 175,
+      "all_rows_status": "Available on App Release",
+      "future_countries_included": true,
+      "saved_verified": true
+    },
+    "manual_release_reconfirmed_after_pricing": true
   },
   "testflight": {
     "what_to_test_file": "testflight-what-to-test.txt",
@@ -119,10 +371,8 @@
     "binary_state": "Validated"
   },
   "not_configured_by_this_package": {
-    "price": null,
     "trial": null,
     "standalone_purchase_products": null,
-    "country_availability": null,
     "release_schedule": null,
     "store_age_rating": null,
     "google_play_privacy_attestations": null,
@@ -133,7 +383,8 @@
     "public_page_additions": "public-page-additions.md",
     "assets": "screenshot-plan.md",
     "asset_manifest": "../store-assets/manifest.json",
-    "release_status": "../release-status.json"
+    "release_status": "../release-status.json",
+    "android_artifact_verification": "../android-artifact-verification.json"
   },
   "field_lengths": {
     "name": {
@@ -257,15 +508,157 @@
         "apple_iphone_large": "four_uploaded_and_visible",
         "apple_iphone_medium": "four_uploaded_and_visible",
         "apple_ipad_13_inch": "four_uploaded_and_visible",
-        "google_play": "not_uploaded"
+        "google_play": "icon_feature_graphic_four_phone_screenshots_and_listing_fields_saved_ready_to_send_for_review"
       }
     },
     "signed_ios_candidate_completed": true,
-    "signed_android_candidate_completed": false,
+    "signed_android_candidate_completed": true,
     "ios_upload_completed": true,
     "signed_ios_source_commit": "4dd07806ff471263b1fb82d593f300cfe9693a4d",
     "codemagic_build_id": "6aeb61e5004ce28f20edd5ba",
-    "release_status_file": "../release-status.json"
+    "release_status_file": "../release-status.json",
+    "signed_android_artifact_verification_completed": true,
+    "signed_android_source_commit": "2c6544dba9afe2117181afabdc78a856ef4f249d",
+    "android_play_upload_completed": true,
+    "android_play_internal_draft_saved": true,
+    "android_play_rollout_submitted": false
   },
-  "checkpoint_date": "2026-11-04"
+  "checkpoint_date": "2026-11-04",
+  "approved_store_setup": {
+    "user_response": "Approve setup",
+    "free_download_both_stores": true,
+    "all_supported_countries": true,
+    "note": "Free download and all supported country availability are saved and verified in both stores; Apple availability begins on App Release and Google production remains Inactive. No review or release has been submitted.",
+    "saved_price_and_availability_verified_in_both_stores": true
+  },
+  "android_candidate": {
+    "build_id": "6aeb7ea6004ce28f20ede0b2",
+    "build_index": 2,
+    "url": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6aeb7ea6004ce28f20ede0b2",
+    "workflow": "korlix-copybox-android-candidate",
+    "branch": "feature/korlix-copy-box-20261103",
+    "source_commit": "2c6544dba9afe2117181afabdc78a856ef4f249d",
+    "instance_type": "mac_mini_m2",
+    "observed_worker": "Mac mini M2",
+    "status": "finished_successfully",
+    "ssh_enabled": false,
+    "vnc_enabled": false,
+    "automatic_google_play_publishing": false,
+    "successful_build_verified": true,
+    "actual_aab_verification_completed": true,
+    "started_at_utc_display": "2026-11-04 18:56 UTC",
+    "started_at_console_display": "Nov 4, 2026 13:56 EST",
+    "validation": {
+      "evidence_source": "Codemagic validation log",
+      "shared_analyzer_result": "No issues",
+      "shared_analyzer_duration_seconds": 5.9,
+      "app_analyzer_result": "No issues",
+      "app_analyzer_duration_seconds": 7.5,
+      "shared_tests_passed": 59,
+      "app_tests_passed": 81,
+      "total_tests_passed": 140,
+      "all_tests_passed": true
+    },
+    "observed_console_status": "FINISHED",
+    "duration": "7m 16s",
+    "duration_seconds": 436,
+    "packaging_duration": "4m 29s",
+    "publishing_duration": "6s",
+    "cleanup_duration": "<1s",
+    "ci_native_scan": {
+      "validation_errors": [],
+      "apk_zip_layout_checked": false,
+      "additional_checks_required": [
+        "bundletool packaging configuration",
+        "generated APK ZIP layout"
+      ],
+      "additional_checks_subsequently_completed": true,
+      "additional_checks_evidence": "android-artifact-verification.json; separate downloaded-AAB and generated-APK static verification"
+    },
+    "artifacts": [
+      {
+        "name": "KorlixCopyBox.aab",
+        "codemagic_displayed_size": "53.28 MB",
+        "downloaded": true,
+        "downloaded_nonempty": true,
+        "downloaded_bytes": 55864103,
+        "sha256": "cc9e3b467fe3b4409db2ce93cc9ebc961cddd09333174bc9a82227c87f9bebaa"
+      },
+      {
+        "name": "Ai-wiz-command-center_2_artifacts.zip",
+        "codemagic_displayed_bytes": 793
+      }
+    ],
+    "artifact_verification_report": "../android-artifact-verification.json",
+    "artifact_verification_status": "passed_with_documented_jarsigner_warnings"
+  },
+  "android_artifact_verification": {
+    "report_file": "../android-artifact-verification.json",
+    "report_bytes": 14655,
+    "report_sha256": "9ea3e9c54fc6a95ea0799b7618c43050061e3e4e87dda9d46fa953b12d87249b",
+    "status": "passed_with_documented_jarsigner_warnings",
+    "verified_at_utc": "2026-11-04T19:10:02.025979+00:00",
+    "actual_downloaded_aab_checked": true,
+    "bundletool_validate_passed": true,
+    "upload_certificate_matches": true,
+    "signed_payload_entries": 406,
+    "unsigned_payload_entries": 0,
+    "all_payload_sha256_digests_match": true,
+    "manifest": {
+      "package": "com.korlixdeveloper.copybox",
+      "version_name": "1.0.0",
+      "version_code": 1,
+      "compile_sdk": 36,
+      "min_sdk": 24,
+      "target_sdk": 36,
+      "debuggable_declared": null,
+      "debuggable_effective": false,
+      "allow_backup": false,
+      "uses_cleartext_traffic": false,
+      "extract_native_libs": false,
+      "permissions": [
+        "android.permission.INTERNET",
+        "com.korlixdeveloper.copybox.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+      ],
+      "native_library_alignment": "PAGE_ALIGNMENT_16K",
+      "uncompress_native_libraries": true,
+      "defined_permissions": [
+        {
+          "name": "com.korlixdeveloper.copybox.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
+          "protection_level": "0x00000002"
+        }
+      ],
+      "validation_errors": []
+    },
+    "aab_native_library_count": 12,
+    "aab_native_validation_errors": [],
+    "generated_universal_apk": {
+      "bytes": 57115896,
+      "sha256": "d4ccf6591dcdc0008e0f4c34316c9d9062b45c26d49ae9dad337924f2b571bab",
+      "signature_verified": true,
+      "v2_verified": true,
+      "v3_verified": true,
+      "upload_certificate_matches": true,
+      "native_library_count": 12,
+      "all_native_elf_loads_16k_aligned": true,
+      "all_native_libraries_uncompressed": true,
+      "all_native_zip_offsets_mod_16384_zero": true
+    },
+    "documented_jarsigner_warning_codes": [
+      "SELF_SIGNED_UPLOAD_CERTIFICATE",
+      "NO_JAR_SIGNATURE_TIMESTAMP",
+      "POSIX_ATTRIBUTES_NOT_SIGNED",
+      "JAR_STREAMING_MANIFEST_ORDER"
+    ],
+    "validation_errors": [],
+    "limits": {
+      "physical_device_runtime_tested": false,
+      "android_16k_page_runtime_tested": false,
+      "installation_tested": false,
+      "google_play_upload_or_acceptance_established_by_this_report": false,
+      "google_play_delivered_apk_checked": false,
+      "source_tests_repeated_locally": false,
+      "generated_apk_signer_role": "Dedicated upload certificate; Google Play delivered APKs use the separately managed app-signing certificate."
+    }
+  }
 }

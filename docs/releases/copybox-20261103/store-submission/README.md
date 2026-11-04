@@ -8,8 +8,14 @@ November 4 release checkpoint records Apple app **6830765098** and the successfu
 signed iOS 1.0.0 (1) upload. Apple privacy disclosures are published and the
 updated Paid Apps Agreement is Active after explicit user approval. Public
 review and physical-device/live-account acceptance remain outstanding. No reviewer
-credentials or personal contact values are stored here. COPY Box price and
-country availability have not been chosen.
+credentials or personal contact values are stored here. The user's **Approve
+setup** response explicitly authorizes free download on both stores and all
+supported countries. Google Play creation used Free; the remaining saved
+pricing and availability settings have been verified: Apple has zero prices in
+all 175 countries/regions, each **Available on App Release**, and includes future
+countries. Google Play explicitly says **Your app is Free**, with **Targeted
+(178)** including Rest of World. Apple remains on manual release and Google
+production remains Inactive; no review or release has been submitted.
 
 See the [release status](../release-status.json) for verified console state and
 evidence limitations. All twelve Apple screenshots and the verified public
@@ -84,21 +90,35 @@ stopped without triggering a deployment.
 
 ## Remaining form inputs
 
-- Complete the staged Google Play creation form. The authenticated KORLIX
-  organization is developer ID `4772708594176030332`; its five-app list and exact
-  package search showed no COPY Box record. Check availability confirmed
-  `com.korlixdeveloper.copybox` is available. Title **KORLIX COPY Box**, package,
-  **English (United States)**, and **App** are staged, but free/paid is unset and
-  the Developer Program Policies and US export declarations are unchecked.
-  **Create app was not submitted**; no Play record, upload certificate, or store
-  release version code has been established. The separate Apple record is
-  verified as `6830765098`.
+- Complete the new Google Play app's remaining content and release setup. The
+  authenticated KORLIX organization, developer
+  `4772708594176030332`, now has **KORLIX COPY Box**, app ID
+  **4974456296219116192**. Creation used the exact package
+  `com.korlixdeveloper.copybox`, **English (United States)**, **App**, **Free**, and
+  the expressly approved Developer Program Policies and US export declarations.
+  A fresh dashboard confirmed creation. Default automatic protection was
+  displayed enabled and left unchanged. Free pricing and all 178 production
+  targets, including Rest of World, are saved, with production Inactive and no
+  review/release submitted.
+  The verified signed AAB was uploaded and accepted as version **1.0.0 (1)** in
+  saved internal draft release **1**, track **4699672053930799570**. The track is
+  **Inactive**, no testers are selected, and Save and publish was not clicked.
+  Explicit upload-certificate registration UI evidence was not rechecked. The separate Apple record
+  is verified as `6830765098`.
+  Google Play's managed app-signing key separately shows **In use**, with the
+  exact package in Digital Asset Links; its public fingerprint is recorded in
+  [Android release preparation](../android-release.md). That certificate does
+  not establish registration of the dedicated upload key.
 - Complete the private reviewer access fields. Contact details and the prepared
   notes are saved; reviewer username/password remain unsupplied. The version
   build selection is saved and verified after reload. All twelve Apple screenshots
   are uploaded, with four images visible in each large-iPhone, medium-iPhone, and
-  iPad well. Upload the Play
-  screenshots, feature graphic, and icon after its app setup. The current Apple
+  iPad well. The Play listing text, icon, feature graphic, and four screenshots
+  are uploaded and the main listing is saved as **Ready to send for review**.
+  Exact prepared text, screenshot order, Productivity, support email/URL, blank
+  public phone, and privacy URL are confirmed saved. Only the assistant-designed
+  feature graphic has the AI asset label; the icon and actual Flutter screenshots
+  remain unlabelled. This is main-listing status, not completion of all app gates. The current Apple
   Media Manager requires the medium iPhone group; the large group is optional,
   and the prepared
   13-inch iPad group remains suitable. The
@@ -109,26 +129,60 @@ stopped without triggering a deployment.
   reviewer account was created by preparing these files. The authorized App
   Review business contact phone was supplied privately and accepted by Save;
   its actual value is not stored here.
-- Configure the COPY Box Android upload key and generate its signed candidate.
-  Apple provisioning and the first signed upload are complete. Configure
+  Google App access was inspected but not saved: the full-access attestation
+  requires a working reviewer account; the empty details form was cancelled and
+  the selection discarded.
+- Configure deliberate Android testing and complete physical-device/live-account
+  acceptance, including 16 KB-page runtime behavior and Play-delivered APK checks. The
+  dedicated COPY Box key, protected independent backup, and Codemagic import are
+  verified. The first attempt stopped before compilation because its Linux
+  worker was unavailable on the current billing plan. The single worker-line
+  fix in `2c6544dba9afe2117181afabdc78a856ef4f249d` uses the proven Mac mini M2;
+  retry `6aeb7ea6004ce28f20ede0b2` finished successfully in 7m 16s on that exact
+  commit after both analyzers and all 140 tests passed. Its downloaded AAB is
+  55,864,103 bytes. Independent AAB signature/manifest/configuration and generated
+  APK v2/v3 signature/ELF/ZIP alignment checks passed with documented jarsigner
+  warnings; see the unchanged [artifact verification report](../android-artifact-verification.json).
+  All 406 payloads have matching signed digests and the dedicated upload
+  certificate matches. No billing plan was changed. Apple
+  provisioning and the first signed upload are complete. Configure
   TestFlight testing and complete physical-device/live-account acceptance.
 - Complete the age/content questionnaire after evaluating actual AI content
   frequency through a live account. The inspected questionnaire was cancelled
   without saving; the general generation route has no COPY Box topic/output
   filter. The 16+ signup rule does not determine the store rating. The content-
   rights form was inspected without submitting an answer.
-- Complete the remaining operational privacy checks for the Play declarations.
+- Complete Google Play target audience, applicable content rating, remaining
+  app-content declarations, and the operational privacy checks for Data safety.
+  Only a bounded Data safety Step 2 draft is saved: collection/sharing question
+  Yes, Username and password account creation, and the deletion URL. Encryption
+  in transit and optional data-only deletion remain unanswered; data-type,
+  usage, and preview steps were not reached. No final declaration or publication
+  is complete.
   All seven Apple categories are published with App Functionality, linked-to-user,
   no-tracking details after explicit user approval; the exact deployed-source
   review supports that tracking conclusion. Operational retention, processor
   treatment, and deletion fulfilment remain
   separate evidence questions in [privacy-evidence.md](privacy-evidence.md).
-- Obtain COPY Box-specific price and availability choices. The updated Paid Apps
-  Agreement is Active for November 4, 2026–June 22, 2027. Manual release is
-  already saved for the Apple version. The November 2 free and worldwide
-  approvals concerned Brain + Voice and were not applied here.
-  This package introduces no subscription product, trial, paid price, or
-  purchase promise.
+
+This package introduces no subscription product, trial, paid price, or purchase
+promise.
+
+Google App content's observed **Actioned** snapshot confirmed **3 declarations**:
+**Ads**, **Financial features**, and **Health apps**, all edited November 4. The
+saved answers are **No, my app does not contain ads**, **My app doesn't provide
+any financial features**, and **My app does not have any health features**.
+Financial documentation and regional health requirements were not required.
+Advertising ID was subsequently answered **No** and saved, supported by the
+source and verified signed bundle. No review was sent for these declarations.
+
+The saved internal draft **1.0.0 (1) - initial internal test** contains the
+accepted bundle and prepared English release notes. Preview showed one warning:
+no testers are specified, so it is unavailable to users. No error was displayed.
+Final track readback shows **Inactive**, **Draft**, and **1 of 3 complete**;
+version code **1**, **178 countries**, and **19,573 supported Android devices**
+are shown. No testers, invitations, or rollout were configured, and **Save and
+publish was not clicked**.
 
 ## Official field references
 
