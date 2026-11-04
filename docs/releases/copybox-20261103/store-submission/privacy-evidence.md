@@ -30,6 +30,33 @@ deployed API before finalizing any declaration. The final app source for this
 handoff is `d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4`. No customer records or
 production secrets were needed for this inventory.
 
+### Deployed-source verification on November 4, 2026
+
+Render identified primary API service `srv-d8csvkkp3tds73emfikg` and live deploy
+`dep-dbksjk49v7es73f8krpg` at commit
+`bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb`. A separate read-only inspection of
+that exact deployed source confirmed the material COPY Box data flows:
+
+- `backend/server.js` uses OpenAI for `/api/generate` and calls
+  `saveGenerationHistory` after an authenticated text result. The saved record
+  includes account ID, character ID, prompt, response, language, result type,
+  search indicator and credits used.
+- `backend/chat_memory/memory.mjs` applies the COPY Box memory flags to long-term
+  memory, independently of generation-history persistence.
+- The authenticated report route, `backend/security/report_submission.mjs` and
+  `backend/security/ai_report_persistence.mjs` attach verified identity/request
+  metadata and persist the report before acknowledgment and optional Resend
+  delivery.
+- `korlix_request_account_deletion` in
+  `supabase/migrations/20261007113219_support_intake_and_default_privileges.sql`
+  creates or returns a request with `status = 'requested'`; that function does
+  not erase account data.
+
+This establishes agreement with deployed source, not successful live-account
+testing, operational retention periods, provider contract terms, the live
+database's applied migration state or completed deletion fulfilment. No customer
+records or secret values were accessed.
+
 ## Data flow inventory
 
 | Feature | Data and destination | Persistence or limit | User control |

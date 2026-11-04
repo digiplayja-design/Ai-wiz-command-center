@@ -113,8 +113,11 @@ dimensions, formats, and hashes. Screenshots show the shipping Flutter widgets
 with sample writing and are packaged without resizing or compositing fake UI.
 
 The listing text and visual files are prepared; they have not been uploaded or
-submitted. The existing public support/privacy/deletion URLs resolve, but the
-COPY Box-specific additions in `public-page-additions.md` are still drafts.
+submitted. The existing public support/privacy/deletion URLs resolve. COPY
+Box-specific HTML additions are now saved in
+[pull request 43](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/43),
+but have not been deployed. See the [November 4 continuation](continuation-20261104.md)
+for the exact publication candidate and remaining account steps.
 
 ## Account and signing state observed
 

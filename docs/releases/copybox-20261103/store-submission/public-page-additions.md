@@ -1,10 +1,13 @@
 # Prepared COPY Box additions to public pages
 
-These scoped additions describe implemented behavior and are ready to reconcile
-with the existing site source. They have not been published. Preserve existing
-policy provisions for other KORLIX apps and verify operational retention/provider
-practices before publishing the combined policy. Set an effective date when the
-actual public change is made; this preparation does not change an existing date.
+These scoped additions describe implemented behavior. They have been reconciled
+with the currently live website source in
+[pull request 43](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/43),
+at commit `d810888cba620502e799a3022090e1a5f6748d9d`, but have not been published.
+The HTML preserves existing provisions and global effective dates, with a
+proposed COPY Box coverage date of November 4, 2026. Confirm the actual publication
+date before deploying. Operational retention/provider practices still require
+confirmation before final store attestations.
 
 ## Privacy Policy
 
@@ -30,8 +33,8 @@ COPY Box sends an app-installation identifier, platform and app label for sessio
 and device management. Native sign-in tokens are kept in the platform's secure
 storage, separately from your written boxes.
 
-Before AI refinement, COPY Box asks permission to send the selected box's full
-text and your writing instruction to KORLIX and OpenAI. The backend stores the
+AI refinement requires your permission to send the selected box's full text
+and your writing instruction to KORLIX and OpenAI. The backend stores the
 request and generated result in your account's AI history, together with related
 usage information. Keeping the original draft, removing a local box, signing out
 or uninstalling COPY Box does not remove this online history. Declining the AI
@@ -61,7 +64,7 @@ and optional AI refinement through the shared KORLIX account service. AI access
 depends on an internet connection and the account's current allowances. Review
 AI output before applying or using it. Ordinary writing and the AI service have
 different storage behavior: boxes are stored on the device, while submitted AI
-requests and results may be retained in account history as explained in the
+requests and results are stored in account AI history as explained in the
 Privacy Policy. Export records you need before uninstalling the app or changing
 devices. Backups are readable text and should be stored and shared carefully.
 
