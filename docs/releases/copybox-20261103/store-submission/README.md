@@ -13,10 +13,12 @@ been completed, and physical-device/live-account acceptance remains outstanding.
 The separate build and asset records document the verification that has actually
 run.
 
-All twelve store screenshots are generated, packaged and visually reviewed from
-the final app source. The Play feature graphic and upload icon are also prepared.
-Use the paths and checksums in the [asset manifest](../store-assets/manifest.json)
-when populating the store listings.
+All sixteen store screenshots are generated, packaged and visually reviewed.
+The original twelve retain their final-app-source provenance; four additional
+medium iPhone captures were produced in a focused run on November 4, 2026.
+The Play feature graphic and upload icon are also prepared. Use the paths,
+per-record capture sources, and checksums in the
+[asset manifest](../store-assets/manifest.json) when populating the store listings.
 
 ## Files
 
@@ -57,8 +59,10 @@ Messenger; the scoped additions in this folder have not been published.
 ## Remaining form inputs
 
 - Verify the new Apple app record and Google Play app record for the exact ID.
-- Upload the twelve prepared screenshots, Play feature graphic and Play icon
-  to the corresponding listing slots. The
+- Upload the prepared screenshots, Play feature graphic and Play icon to the
+  corresponding listing slots. The current Apple Media Manager requires the
+  medium iPhone group; the large iPhone group is optional, and the prepared
+  13-inch iPad group remains suitable. The
   [asset manifest](../store-assets/manifest.json) records their exact paths,
   dimensions and checksums. The earlier interface previews are not the upload set.
 - Supply a dedicated, working KORLIX reviewer login with sufficient AI allowance

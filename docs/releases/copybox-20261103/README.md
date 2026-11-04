@@ -66,6 +66,29 @@ run 41739349055 on `de58d87d0277759db87d20abc048358e6ab4f89c`. They do not descr
 the refreshed downloads. Subsequent packaging/documentation changes leave the
 app source, native configuration, and lockfiles from `d611bc6a` unchanged.
 
+## Additional medium iPhone screenshots — November 4, 2026
+
+The live App Store Connect Media Manager for COPY Box app `6830765098` requires
+the medium Dynamic Island iPhone group. After the existing large images were
+uploaded, the medium well displayed “Using Existing Assets.” A dedicated medium
+set is also prepared: four genuine Flutter widget captures at
+1206 × 2622 were produced by
+[focused run 41872257288](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41872257288)
+from capture commit `339e41f055882a24e35cd43ea39b273c1ff960a4`. The fixture renders
+a 402 × 874 logical viewport at 3× using the shipping widgets, fonts, and sample
+content. The isolated capture commit adds only that profile and a focused
+workflow; it leaves app behavior and native configuration unchanged.
+
+The four new images are in `store-assets/app-store/iphone-medium/`, ordered as
+workspace, templates, focus editor, and dark workspace. They were visually
+checked, fully decoded, and packaged as RGB PNGs with identical RGB pixels to
+the raw captures. All original sixteen PNG files retain their prior hashes.
+The combined manifest now lists sixteen screenshots and twenty PNG assets, with
+separate provenance for the medium set. The original large iPhone group remains
+available as an optional group, and the 13-inch iPad set is unchanged. This
+focused capture run does not replace the full validation evidence above or
+establish physical-device acceptance or store submission.
+
 ## Changes in the refreshed build
 
 - Replaced the older file picker dependency with `file_picker` 13.3.2, removing
@@ -102,18 +125,19 @@ The [submission package](store-submission/README.md) contains the English store
 name, subtitle, short/full descriptions, keywords, review/access notes, release
 notes, TestFlight testing notes, privacy evidence, and drafted public-page
 additions. Store field lengths were checked; reviewer credentials, personal
-contact details, price choices, numeric Apple app IDs, and privacy attestations
+contact details, price choices, and privacy attestations
 have not been invented or placed in source.
 
 The [visual package](store-assets/README.md) contains the monochrome KORLIX app
 icons, Google Play feature graphic, and four screenshots each for Android phone
-(1080 × 1920), large Dynamic Island iPhone (1260 × 2736), and 13-inch iPad
+(1080 × 1920), medium Dynamic Island iPhone (1206 × 2622), optional large Dynamic
+Island iPhone (1260 × 2736), and 13-inch iPad
 (2064 × 2752). The [manifest](store-assets/manifest.json) records source commit,
 dimensions, formats, and hashes. Screenshots show the shipping Flutter widgets
 with sample writing and are packaged without resizing or compositing fake UI.
 
-The listing text and visual files are prepared; they have not been uploaded or
-submitted. The existing public support/privacy/deletion URLs resolve. COPY
+The listing text and visual files are prepared; asset preparation does not
+establish store submission. The existing public support/privacy/deletion URLs resolve. COPY
 Box-specific HTML additions are now saved in
 [pull request 43](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/43),
 but have not been deployed. See the [November 4 continuation](continuation-20261104.md)

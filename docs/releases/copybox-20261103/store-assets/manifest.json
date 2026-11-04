@@ -129,6 +129,54 @@
       ],
       "status": "packaged",
       "raw_sha256": "730eaf455d1c9dd0d690dafb88eca66aa010158a7a024a45020a95e7f0f7afc3"
+    },
+    {
+      "file": "app-store/iphone-medium/01-workspace.png",
+      "raw_capture": "store-apple-iphone-medium-01-workspace.png",
+      "required_dimensions": [
+        1206,
+        2622
+      ],
+      "status": "packaged",
+      "raw_sha256": "28157ec27fa45422cc7a2a2324b99e0652553462e6921a1d5bee78fb389027ce",
+      "capture_source_commit": "339e41f055882a24e35cd43ea39b273c1ff960a4",
+      "capture_run_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41872257288"
+    },
+    {
+      "file": "app-store/iphone-medium/02-templates.png",
+      "raw_capture": "store-apple-iphone-medium-02-templates.png",
+      "required_dimensions": [
+        1206,
+        2622
+      ],
+      "status": "packaged",
+      "raw_sha256": "21d2cb785d7180b55256e6d38a359cdd7ed794c3c5e43a681631471eabfd72da",
+      "capture_source_commit": "339e41f055882a24e35cd43ea39b273c1ff960a4",
+      "capture_run_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41872257288"
+    },
+    {
+      "file": "app-store/iphone-medium/03-focus-editor.png",
+      "raw_capture": "store-apple-iphone-medium-03-focus-editor.png",
+      "required_dimensions": [
+        1206,
+        2622
+      ],
+      "status": "packaged",
+      "raw_sha256": "3706ade85ca08223bcc0350c5fd182dc08d82ab195ad44d8399a24bcd7484e01",
+      "capture_source_commit": "339e41f055882a24e35cd43ea39b273c1ff960a4",
+      "capture_run_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41872257288"
+    },
+    {
+      "file": "app-store/iphone-medium/04-dark-workspace.png",
+      "raw_capture": "store-apple-iphone-medium-04-dark-workspace.png",
+      "required_dimensions": [
+        1206,
+        2622
+      ],
+      "status": "packaged",
+      "raw_sha256": "0016f6ecbeefd36afe5e46d89766e755a90ca985588e0bab647a72932afe78dd",
+      "capture_source_commit": "339e41f055882a24e35cd43ea39b273c1ff960a4",
+      "capture_run_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41872257288"
     }
   ],
   "files": [
@@ -181,6 +229,46 @@
       "mode": "RGB",
       "bytes": 282264,
       "sha256": "a0e578172119b044d5a652dc67a383c7a7d41acb682cbae8ab50c26dabde2a21"
+    },
+    {
+      "file": "app-store/iphone-medium/01-workspace.png",
+      "dimensions": [
+        1206,
+        2622
+      ],
+      "mode": "RGB",
+      "bytes": 205895,
+      "sha256": "081acb201811d0eb865f801ab92657035536756217f70f6de7443b53e9ec957d"
+    },
+    {
+      "file": "app-store/iphone-medium/02-templates.png",
+      "dimensions": [
+        1206,
+        2622
+      ],
+      "mode": "RGB",
+      "bytes": 183266,
+      "sha256": "0e73f397e13472634bfbdfa21f460f939ade7d2da18d2ebd05458e8029e4a0a4"
+    },
+    {
+      "file": "app-store/iphone-medium/03-focus-editor.png",
+      "dimensions": [
+        1206,
+        2622
+      ],
+      "mode": "RGB",
+      "bytes": 113505,
+      "sha256": "7caf5d820f422cb2478ec9de99ccf8cf1726ff1cb047acb1f46d2f1a4471b433"
+    },
+    {
+      "file": "app-store/iphone-medium/04-dark-workspace.png",
+      "dimensions": [
+        1206,
+        2622
+      ],
+      "mode": "RGB",
+      "bytes": 204164,
+      "sha256": "196d552d552f0e5934d8627ddf8d2d1aa3c3a656024d88a3368cba7394d7788d"
     },
     {
       "file": "app-store/iphone/01-workspace.png",
@@ -300,5 +388,27 @@
   "official_specifications": [
     "https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications",
     "https://support.google.com/googleplay/android-developer/answer/9866151?hl=en"
-  ]
+  ],
+  "capture_source_scope": "Default capture source for screenshot records without a capture_source_commit override.",
+  "store_requirement_observation": {
+    "date": "2026-11-04",
+    "source": "App Store Connect Media Manager for app 6830765098",
+    "required_iphone_group": "iPhone with Dynamic Island (medium display)",
+    "accepted_portrait_dimensions": [
+      [
+        1179,
+        2556
+      ],
+      [
+        1206,
+        2622
+      ]
+    ],
+    "existing_large_iphone_group": "optional",
+    "ipad_13_inch_dimensions": [
+      2064,
+      2752
+    ],
+    "fallback_after_large_upload": "A follow-up Media Manager check showed Using Existing Assets in the required medium well after the large screenshots were uploaded; dedicated medium files are additionally available."
+  }
 }

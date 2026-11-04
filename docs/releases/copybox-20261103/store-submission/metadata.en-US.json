@@ -145,7 +145,7 @@
     "store_assets": {
       "status": "generated_packaged_and_visually_reviewed",
       "capture_source_commit": "d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4",
-      "screenshot_count": 12,
+      "screenshot_count": 16,
       "screenshot_format": "RGB PNG",
       "screenshot_dimensions": {
         "google_play_phone": [
@@ -159,9 +159,33 @@
         "apple_ipad_13_inch": [
           2064,
           2752
+        ],
+        "apple_iphone_medium_dynamic_island": [
+          1206,
+          2622
         ]
       },
-      "uploaded_to_stores": false
+      "uploaded_to_stores": false,
+      "capture_source_scope": "Original twelve screenshots; additional capture runs are recorded separately.",
+      "additional_capture_runs": [
+        {
+          "capture_source_commit": "339e41f055882a24e35cd43ea39b273c1ff960a4",
+          "capture_run_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41872257288",
+          "profile": "apple-iphone-medium",
+          "directory": "app-store/iphone-medium",
+          "screenshot_count": 4,
+          "logical_viewport": [
+            402,
+            874
+          ],
+          "render_scale": 3,
+          "dimensions": [
+            1206,
+            2622
+          ],
+          "status": "packaged_and_visually_reviewed"
+        }
+      ]
     }
   }
 }
