@@ -11,21 +11,30 @@ source `a214334239b07875cef2818541e30a15d2271787`, whose exact parent is da283.
 That follow-up adds only one paragraph in `website/privacy-policy.html` and is
 merged as **`b95ce8390e03b4a31a43b592e0d3dd980823f292`**, with a tree verified
 identical to the reviewed source. PR 44 is closed/merged and no longer Draft.
-This is the exact complete website publication target. It is **not deployed**;
-no new Render authentication retry or configuration change occurred. Publish
-only that exact reviewed commit after specific production approval, not a generic
-configured-branch head. A proposed four-page port was stopped because the
-configured branch includes unrelated Messenger/Receipt Wiz policy regressions
-and different Flutter authentication/build inputs; its build also republishes
-`website/app`. No new website-port PR, branch change, settings change, or website
-deployment occurred. The separate backend trigger was rejected by automatic
-approval review and created no deployment.
-The HTML preserves existing provisions and global effective dates, with a
-proposed COPY Box coverage date of November 4, 2026. Confirm the actual publication
-date before deploying. Standard service-provider roles are resolved in
-[privacy-evidence.md](privacy-evidence.md). The precise remaining UGC sharing
-fact is the active OpenAI API inputs/outputs model-improvement opt-in;
-operational deletion fulfilment remains a separate check.
+This exact reviewed website candidate remains **not deployed**. Both proposed
+production deployments are now explicitly authorized, and the backend routing
+fix is live. Website publication is held for incomplete Render sign-in and the
+new OpenAI sharing/disclosure decision. The single secure method-choice request
+did not complete; the root agent interrupted prolonged pending input, with no
+success result or authenticated dashboard state verified. No website deployment
+or service-setting change occurred.
+
+The approved OpenAI account console shows input/output sharing **Enabled for all
+projects** and complimentary daily-token enrollment. The production API credential
+was not inspected or matched to that account; no setting changed or change was
+authorized. This candidate describes inference, account history, and provider
+terms without explicit general model-improvement sharing. Reconcile the exact
+reviewed source with the user's decision before publication; keep Google UGC
+unanswered in the 5/6 draft. See [privacy-evidence.md](privacy-evidence.md).
+
+The proposed four-page port remains stopped because the configured branch has
+unrelated Messenger/Receipt Wiz policy regressions and different Flutter inputs;
+its build republishes `website/app`. No new port PR or settings change was made.
+The prepared HTML below preserves existing provisions and global effective dates,
+with a proposed COPY Box coverage date of November 4, 2026. Confirm the actual
+publication date and preserve this text as the reviewed candidate until the
+sharing/disclosure decision is resolved. Operational deletion fulfilment remains
+separate from provider classification.
 
 ## Privacy Policy
 

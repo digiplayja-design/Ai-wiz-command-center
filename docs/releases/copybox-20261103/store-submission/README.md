@@ -83,13 +83,15 @@ builds. The later signed iOS candidate came from
 release status. The November 4 asset commit changes no app behavior or signing.
 
 The original backend inventory at `92cad91d290d4ac93d273960c1144798f3afd14f` was
-rechecked against the primary API's exact deployed revision,
-`bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb`, on November 4. This confirms the
-inspected source's data-flow behavior. The later provider audit resolves standard
-service-provider and user-initiated transfer roles. The precise remaining UGC
-sharing fact is the active OpenAI API inputs/outputs model-improvement opt-in;
-operational retention and deletion fulfilment are separate checks. Live metadata
-confirms the onboarding structures documented in the privacy evidence.
+rechecked against the primary API's then-deployed revision,
+`bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb`, on November 4. That source inspection
+remains evidence for the documented flows; the later reviewed routing merge
+`901ca58c95ba7a16abf56e20361f7f021924df3e` is now live and health-checked.
+The provider audit resolves ordinary service-provider and user-initiated roles.
+The approved account's OpenAI console now shows input/output sharing **Enabled
+for all projects**, but its production API credential association is unverified.
+No setting changed. Resolve that association and the user sharing/disclosure
+decision before completing UGC. Operational deletion fulfilment remains separate.
 
 The public privacy, terms, deletion, and support pages were retrievable on
 November 3, 2026. The retrieved versions principally named KORLIX AI and
@@ -101,20 +103,23 @@ deployed. Required onboarding-analytics wording was reviewed in
 `a214334239b07875cef2818541e30a15d2271787`, with exact parent da283. It adds one
 paragraph to `website/privacy-policy.html` and is now merged as
 **`b95ce8390e03b4a31a43b592e0d3dd980823f292`**, with no tree difference from the
-reviewed source. PR 44 is closed/merged and no longer Draft. This exact complete
-website target remains **undeployed**, with no new Render authentication retry
-or configuration change. The November 4 Render check still
-shows the October 25 live release.
-Render rejected the existing GitHub connection as deployment-only, and the
-alternative secure sign-in request was declined. Authentication attempts
-stopped without triggering a deployment.
+reviewed source. PR 44 is closed/merged and no longer Draft. This exact reviewed
+website candidate remains **undeployed**; Render still serves the October 25
+release at `e38d6b73a37ff812a29da3b64027a35e01979c34`. Both proposed deployments
+are explicitly authorized. The website is held for incomplete Render sign-in
+and the new OpenAI sharing/disclosure decision: b95 describes inference, stored
+history, and provider terms without explicit general model-improvement sharing.
+The single secure method-choice request did not complete; the root agent
+interrupted prolonged pending input, with no success result or authenticated
+dashboard state verified. No website deployment or setting change occurred.
 
 The existing Render connector subsequently confirmed read-only access. A
 four-page port to configured branch `1ecc4044…` was stopped because it contains
 unrelated Messenger/Receipt Wiz policy regressions and different Flutter
 authentication/build inputs; the existing build also republishes `website/app`.
-No new website-port PR or settings change was made. The exact b95ce839… target
-remains pending specific production approval and deployment.
+No new website-port PR or settings change was made. Complete Render sign-in and
+reconcile the exact reviewed candidate with the sharing/disclosure decision
+before publication; deployment approval itself is already in place.
 
 ## Remaining form inputs
 
@@ -202,23 +207,25 @@ remains pending specific production approval and deployment.
   user-generated content, and Device or other IDs. Five usage rows are saved:
   Collected Yes, Shared No under the provider exception, non-ephemeral, and
   optional, with the exact purpose map in the metadata JSON. UGC remains Not
-  started, Next is disabled, and preview is not reached. Its precise unresolved
-  sharing fact is the active OpenAI API inputs/outputs model-improvement opt-in.
-  The official default Disabled does not establish this account's setting. No final
-  declaration or publication is complete.
+  started and Next is disabled; preview has not been reached. The approved account
+  console shows input/output sharing Enabled for all projects and complimentary
+  daily-token enrollment. Production credential association is unverified, and no
+  setting change is authorized or made. Resolve that association and the user's
+  sharing/disclosure decision before finalizing UGC. No Google mutation or final
+  declaration/publication occurred in this follow-up.
   The corrected Apple declaration is published: User ID, Device ID, and Product
   Interaction have App Functionality plus Analytics; the other four types retain
   App Functionality. All seven are linked to the user with tracking No.
   Standard processor roles are resolved; operational retention and deletion fulfilment remain
   separate evidence questions in [privacy-evidence.md](privacy-evidence.md).
 
-- Deploy the narrowly reviewed backend routing correction only after specific
-  production approval. [PR 45](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/45)
-  is merged as `901ca58c95ba7a16abf56e20361f7f021924df3e`, with the reviewed tree and
-  9 passing focused routing/Resume checks. The Render trigger was rejected by
-  automatic approval review because the new live production mutation lacked
-  specific renewed authorization. No deployment was created; the live backend
-  remains bf830fd… and actual COPY Box login/AI acceptance remains outstanding.
+- Complete actual COPY Box login/AI acceptance against the deployed routing fix.
+  [PR 45](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/45) is live
+  at exact `901ca58c95ba7a16abf56e20361f7f021924df3e`, deployment
+  `dep-dbls9fajnfac73dbjbg0`, after explicit approval. Render build/deploy events
+  succeeded and direct unauthenticated `/api/health` returned HTTP 200/JSON.
+  The 9 focused routing/Resume checks retain their original provenance; no app
+  binary or actual COPY Box device/login/AI acceptance test was run for this update.
 
 This package introduces no subscription product, trial, paid price, or purchase
 promise.

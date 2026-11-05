@@ -229,7 +229,7 @@
         "data_usage_details_required_count": 6,
         "per_type_usage_answers_saved": true,
         "latest_save_draft_succeeded": true,
-        "remaining_questions_scope": "Five of six usage rows are saved. Other user-generated content is Not started and Next is disabled pending the precise active OpenAI API inputs/outputs model-improvement opt-in for its sharing classification. Standard provider roles are resolved; operational deletion fulfilment is separate.",
+        "remaining_questions_scope": "Five of six usage rows remain saved. Other user-generated content is Not started and Next is disabled. Resolve production credential association and the user sharing/disclosure decision before completing UGC and final preview; no Google mutation occurred in this follow-up.",
         "analytics_purpose_required_for": [
           "User IDs",
           "Device or other IDs",
@@ -247,7 +247,7 @@
           "scope": "Earlier bounded Step 2 draft before the later saved six-type/Step 4 update."
         },
         "provider_sharing_audit": {
-          "status": "standard_provider_roles_resolved_ugc_model_improvement_opt_in_unobserved",
+          "status": "standard_provider_roles_resolved_observed_console_sharing_enabled_production_association_unverified",
           "service_provider_exception_supported_for": [
             "Supabase",
             "Render",
@@ -267,10 +267,10 @@
           "non_ephemeral_for_all_six_selected_types": true,
           "optional_collection_relative_to_guest_writing_for_all_six": true,
           "ugc_sharing_classification_confirmed": false,
-          "openai_api_input_output_model_improvement_opt_in_observed": false,
-          "openai_api_input_output_model_improvement_opt_in_value": null,
-          "documented_default_opt_in_state": "Disabled; this is the official default, not an observation of the active API organization setting.",
-          "remaining_provider_question": "Whether the active OpenAI API organization has opted in to sharing API inputs and outputs for model improvement, which determines the remaining Other user-generated content sharing classification.",
+          "openai_api_input_output_model_improvement_opt_in_observed": true,
+          "openai_api_input_output_model_improvement_opt_in_value": "Enabled for all projects",
+          "documented_default_opt_in_state": "Disabled is the documented provider default. The approved account console was instead observed as Enabled for all projects; neither the default nor this console observation proves the production credential association.",
+          "remaining_provider_question": "Verify whether the production API credential is associated with the observed organization/project, and obtain the user decision on retaining enabled model-improvement sharing with matching disclosures or disabling it with possible complimentary-token eligibility impact. Do not finalize UGC Shared No from the default service-provider exception.",
           "payload_scope": {
             "native_client_sends_tier_profile_persona_fields": false,
             "server_adds_existing_coarse_tier_persona_context": true,
@@ -287,7 +287,27 @@
             "https://openai.com/policies/data-processing-addendum/",
             "https://openai.com/policies/services-agreement/",
             "https://help.openai.com/en/articles/10306912-sharing-feedback-evaluation-and-fine-tuning-data-and-api-inputs-and-outputs-with-openai"
-          ]
+          ],
+          "openai_observation_scope": "Approved account console only. Production API credential association with the observed organization/project has not been inspected or matched; the relation to the backend remains indirect.",
+          "openai_default_processing_exception_scope": "Applies to default service-provider processing; it does not settle the separate optional model-improvement sharing classification.",
+          "openai_console_observation": {
+            "approved_saved_account_sign_in_succeeded": true,
+            "organization_label": "Personal",
+            "only_one_organization_exposed": true,
+            "active_project_label": "Default project",
+            "only_one_active_project_exposed": true,
+            "inputs_and_outputs_sharing": "Enabled for all projects",
+            "complimentary_daily_tokens_enrolled": true,
+            "model_feedback_sharing": "Disabled",
+            "evaluation_and_fine_tuning_sharing": "Disabled",
+            "fresh_navigation_verified": true,
+            "settings_changed": false,
+            "production_api_credential_inspected": false,
+            "production_credential_org_project_association_verified": false,
+            "credential_values_accessed": false,
+            "raw_account_identifiers_recorded": false,
+            "setting_change_authorized": false
+          }
         },
         "historical_step4_zero_usage_snapshot": {
           "last_step_reached": 4,
@@ -375,7 +395,7 @@
           "status": "Not started",
           "usage_answers_entered": false,
           "sharing_classification_confirmed": false,
-          "pending_fact": "Active OpenAI API organization/project inputs-and-outputs sharing opt-in for model improvement; default Disabled is documented but the active setting is unobserved."
+          "pending_fact": "The approved account console has input/output sharing Enabled for all projects, but its association with the production API credential is unverified. A user decision on the sharing setting and consistent public disclosures is pending; no UGC usage answers have been entered."
         },
         "all_per_type_usage_answers_saved": false,
         "per_type_usage_answers_saved_scope": "Five completed supported rows only; Other user-generated content usage remains wholly unanswered.",
@@ -397,7 +417,7 @@
       },
       "remaining_declarations": [
         "Finish Google Sign in details with working reviewer access and truthful full-access confirmation; its fresh server page still has neither Yes nor No selected and no saved reviewer record. Apple credential fields are populated and saved, but end-to-end COPY Box login/AI testing is outstanding.",
-        "Complete Other user-generated content usage after confirming the active OpenAI API inputs/outputs model-improvement sharing opt-in, then reach preview and finalize Data safety. Five of six usage rows are saved; UGC is Not started and Next is disabled.",
+        "Complete Other user-generated content usage after verifying production API credential association and resolving the user sharing/disclosure decision. The approved account console shows input/output sharing Enabled for all projects; the untouched UGC row and final declaration remain incomplete.",
         "Complete target audience after Sign in details and any remaining applicable declarations. IARC agreement acceptance and the 27-question capability questionnaire are complete, with generated ratings and fresh Completed readback; this did not submit the app for review or release."
       ],
       "government_apps": {
@@ -1215,7 +1235,7 @@
     }
   },
   "backend_rewrite_routing": {
-    "status": "reviewed_fix_merged_production_deployment_rejected_pending_specific_approval",
+    "status": "reviewed_fix_deployed_live_health_verified_copybox_acceptance_pending",
     "observed_issue": "COPY Box rewrite requests containing certain keywords could be routed to web search instead of the requested text rewrite.",
     "baseline_keyword_cases_reproduced": 3,
     "request_markers": {
@@ -1257,19 +1277,54 @@
     "deployment": {
       "exact_requested_commit": "901ca58c95ba7a16abf56e20361f7f021924df3e",
       "trigger_attempted": true,
-      "trigger_accepted": false,
-      "automatic_approval_review_rejected": true,
-      "tool_reported_is_error": true,
-      "rejection_reason": "The new production backend mutation requires renewed explicit authorization for this specific reviewed fix; prior preparation authorization did not cover deployment.",
-      "specific_production_deployment_approval_pending": true,
-      "deployment_created": false,
-      "production_mutation_executed": false,
+      "trigger_accepted": true,
+      "automatic_approval_review_rejected": false,
+      "tool_reported_is_error": false,
+      "specific_production_deployment_approval_pending": false,
+      "deployment_created": true,
+      "production_mutation_executed": true,
       "bypass_attempted": false,
       "browser_authentication_retried": false,
-      "latest_live_commit": "bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb",
-      "latest_live_deploy_id": "dep-dbksjk49v7es73f8krpg",
-      "live_state_verified_read_only_after_rejection": true
+      "latest_live_commit": "901ca58c95ba7a16abf56e20361f7f021924df3e",
+      "latest_live_deploy_id": "dep-dbls9fajnfac73dbjbg0",
+      "specific_production_deployment_user_approval_received": true,
+      "deployment_id": "dep-dbls9fajnfac73dbjbg0",
+      "created_at_utc": "2026-11-04T23:50:21.918367Z",
+      "status": "live",
+      "finished_at_utc": "2026-11-04T23:51:07.079135Z",
+      "live_state_verified_read_only_after_deployment": true,
+      "render_build_event_succeeded": true,
+      "render_deploy_event_succeeded": true,
+      "previous_rejected_attempts": {
+        "count": 2,
+        "most_recent_user_reply": "Continue",
+        "most_recent_rejection_reason": "Automatic approval review judged that wording insufficiently explicit to authorize this exact shared production deployment after the earlier rejection.",
+        "neither_attempt_created_a_deployment": true,
+        "superseded_by_later_explicit_approval": true
+      },
+      "health_verification": {
+        "verified": true,
+        "method": "GET",
+        "url": "https://chee-chai-chee-backend.onrender.com/api/health",
+        "authenticated": false,
+        "request_method": "Direct Python HTTP request",
+        "http_status": 200,
+        "content_type_is_json": true,
+        "response_status": "Korlix AI backend is healthy",
+        "scope": "Deployment liveness only; no actual COPY Box device, login, or AI acceptance test."
+      },
+      "runtime_observation": {
+        "read_only": true,
+        "log_time_display": "23:54:19",
+        "discover_news_refresh_fallback_observed": true,
+        "fallback_reason": "provider_or_storage",
+        "error_class": "Error",
+        "previous_edition_retained": true,
+        "startup_or_deploy_failure_observed": false,
+        "scope": "Limited runtime-log inspection; this is not a claim that the runtime is error-free."
+      }
     },
-    "remaining_scope": "Deploy the exact reviewed merged fix only after specific production approval, then complete actual COPY Box login/AI acceptance; the merged source and focused tests do not establish deployed or device behavior."
+    "remaining_scope": "Complete actual COPY Box login/AI and device acceptance. The exact reviewed backend is deployed and its unauthenticated health endpoint responds successfully; those checks do not establish product-runtime acceptance or a new signed binary.",
+    "configured_root_directory": "backend"
   }
 }

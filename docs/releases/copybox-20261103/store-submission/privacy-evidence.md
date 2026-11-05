@@ -24,17 +24,17 @@ relevant behavior without depending on changing line numbers.
 | Backend `server.js` at `92cad91d290d4ac93d273960c1144798f3afd14f` | `device_sessions`, `saveGenerationHistory`, account deletion request route and report persistence/delivery |
 | Backend `korlix_signup_eligibility.mjs` at the same snapshot | Signup declaration saved in account user metadata |
 | Backend `security/report_submission.mjs` at the same snapshot | Server adds verified identity and request metadata to a support report |
-| `backend/server.js` at deployed `bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb` | `createOnboardingMeasurement`; `/api/auth/signup` and `/api/auth/signin` call `observeAuth('signup'/'signin')` |
-| `backend/onboarding/measurement.mjs` at that deployed commit | `installationContext`, `record`, `observeAuth`, `write`, and `summary` for authentication/onboarding analytics |
+| `backend/server.js` at then-deployed `bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb` | `createOnboardingMeasurement`; `/api/auth/signup` and `/api/auth/signin` call `observeAuth('signup'/'signin')` |
+| `backend/onboarding/measurement.mjs` at that then-deployed commit | `installationContext`, `record`, `observeAuth`, `write`, and `summary` for authentication/onboarding analytics |
 | Live database schema/function metadata, read-only inspection | `public.korlix_onboarding_events` columns and the `korlix_onboarding_summary` definition; no event rows or mutating RPC invoked |
 
-The backend snapshot was inspected under
-`origin/release/k135z-backend-render-20260919`. Confirm its relationship to the
-deployed API before finalizing any declaration. The final app source for this
+The initial backend snapshot was inspected under
+`origin/release/k135z-backend-render-20260919`; the subsequent exact deployed-source
+verification is recorded below. The final app source for this
 handoff is `d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4`. No customer records or
 production secrets were needed for this inventory.
 
-### Deployed-source verification on November 4, 2026
+### Deployed-source verification before the November 4 routing deployment
 
 Render identified primary API service `srv-d8csvkkp3tds73emfikg` and live deploy
 `dep-dbksjk49v7es73f8krpg` at commit
@@ -61,6 +61,14 @@ successful live-account testing or completed operational deletion. The later
 metadata checks below verify the onboarding structures, and the provider audit
 resolves standard service-provider roles. No customer event rows or secret
 values were needed for this data-handling inventory.
+
+After explicit approval, the reviewed routing merge
+`901ca58c95ba7a16abf56e20361f7f021924df3e` became LIVE as
+`dep-dbls9fajnfac73dbjbg0` at **2026-11-04T23:51:07.079135Z**. Direct unauthenticated
+`/api/health` returned HTTP 200/JSON. These source anchors retain the earlier
+inspection provenance; deployment liveness does not establish COPY Box device,
+login/AI, or deletion acceptance. The limited runtime observation and its
+Discover-news refresh fallback are recorded in the release status.
 
 ### Later authentication/onboarding analytics verification
 
@@ -224,8 +232,8 @@ to guest writing. Their saved purposes are:
 
 **Other user-generated content remains Not started** with no usage answers
 entered. Next is disabled and preview has not been reached. Its precise
-remaining sharing fact is the OpenAI API inputs/outputs model-improvement opt-in
-described below. The earlier 0-of-6 snapshot is retained as history. No final
+remaining issues are production API credential association and the user
+sharing/disclosure decision after the enabled console setting described below. The earlier 0-of-6 snapshot is retained as history. No final
 Data safety declaration or publication is complete. The data-only deletion
 answer describes an available request route; it does not establish completed
 deletion fulfilment.
@@ -245,13 +253,14 @@ and South Korea. The exact answers are retained in
 questionnaire, not app review or release. Apple content-frequency questions
 remain a separate incomplete form.
 
-## Provider-role audit and the remaining UGC sharing setting
+## Provider-role audit and observed OpenAI sharing
 
 The audit applies Google's service-provider exception to ordinary Supabase,
 Render, Resend, and default OpenAI API processing, based on the implemented flows
-and their standard processing terms. Explicit OS share/export actions fit the
-user-initiated-transfer exception. These exceptions classify the transfers for
-Google's Sharing answer; collected data still requires disclosure. See
+and standard processing terms. Explicit OS share/export actions fit the
+user-initiated-transfer exception. These exceptions classify ordinary transfers;
+optional model-improvement sharing needs its own assessment, and collected data
+still requires disclosure. See
 [Google Data safety guidance](https://support.google.com/googleplay/android-developer/answer/10787469?hl=en),
 the [Supabase DPA](https://supabase.com/legal/customer-resources/data-processing-addendum),
 [Render DPA](https://render.com/dpa), and
@@ -259,30 +268,43 @@ the [Supabase DPA](https://supabase.com/legal/customer-resources/data-processing
 
 The [OpenAI DPA](https://openai.com/policies/data-processing-addendum/) and
 [Services Agreement, section 4.2](https://openai.com/policies/services-agreement/)
-support the ordinary API processor role. The API
+support the ordinary API processor role. The documented default in the
 [inputs/outputs sharing controls](https://help.openai.com/en/articles/10306912-sharing-feedback-evaluation-and-fine-tuning-data-and-api-inputs-and-outputs-with-openai)
-document model-improvement opt-in as disabled by default. The active API
-organization/project setting has not been observed, so the default alone cannot
-settle the untouched UGC row's Sharing answer. That specific opt-in is the
-remaining provider-sharing fact; the audit introduces no new DPA-signing or
-zero-data-retention proof gate.
+does not substitute for the observed setting. Approved saved-account sign-in
+succeeded, exposing only the Personal organization and Default active project.
+Fresh navigation of the authenticated console verified:
+
+| Console item | Observed value |
+| --- | --- |
+| Share inputs and outputs with OpenAI | **Enabled for all projects** |
+| Complimentary daily tokens | **Enrolled** |
+| Model-feedback sharing | Disabled |
+| Evaluation/fine-tuning sharing | Disabled |
+
+No setting changed, and a setting change has not been authorized. The production
+API credential was not inspected or matched to this organization/project, so its
+association with the backend remains unverified. No private login email or raw
+organization/project identifiers are included here. Do not finalize UGC Shared No
+from the default processor exception. The user decision is whether to retain
+enabled sharing with matching disclosures or change it with possible loss of
+complimentary-token eligibility; production association must also be established.
+The audit introduces no new DPA-signing or zero-data-retention proof gate.
 
 The inspected native client does not send tier, profile, or persona fields. The
-server independently adds existing coarse tier/persona/language context to the
-OpenAI prompt payload. It does not forward structured account identity, email,
-device, age, policy-declaration or onboarding-event fields in that payload. The
-Other info conclusion is limited to native age/policy/parent declarations, not
-a claim that the API receives only raw text. On that basis the five supported
-identity/declaration/interaction rows can use Collected Yes and Shared No;
-all six selected types are non-ephemeral and optional relative to guest writing.
-UGC's usage row remains wholly unanswered pending the exact opt-in setting.
+server adds existing coarse tier/persona/language context to the prompt without
+structured account identity, email, device, age, policy-declaration, or onboarding
+event fields. The Other info conclusion concerns native age/policy/parent
+declarations. The five supported identity/declaration/interaction rows remain
+saved as Collected Yes and Shared No; all six types are non-ephemeral and optional
+relative to guest writing. UGC remains wholly unanswered. No Google mutation
+occurred in this follow-up; the saved draft is still **5/6**.
 
 ## Remaining privacy facts and operational limits
 
-- **UGC sharing:** Confirm only the active OpenAI API inputs/outputs
-  model-improvement opt-in before completing this sharing classification.
-  Standard provider and user-initiated-transfer roles are resolved above;
-  relevant partner collection remains included in the inventory.
+- **UGC sharing:** Verify production API credential association with the observed
+  account and resolve the user sharing/disclosure decision. The console setting
+  is Enabled for all projects, but production association is unverified. Keep UGC
+  unanswered until that decision and its disclosure implications are resolved.
 - **Encryption in transit:** The saved Google draft answers Yes for the defined
   device-to-server transfer. The inspected release client uses HTTPS for its
   account/API requests, and the verified signed Android bundle disables cleartext
@@ -330,12 +352,14 @@ The required analytics paragraph was reviewed in
 `a214334239b07875cef2818541e30a15d2271787`, with exact parent da283. It changes
 only `website/privacy-policy.html` and is now merged as
 **`b95ce8390e03b4a31a43b592e0d3dd980823f292`**, with a tree matching the reviewed
-source. PR 44 is closed/merged, no longer Draft. This is the exact complete
-website publication target; it is **not deployed**. No website deployment,
-new browser-authentication attempt, or configuration change occurred. A separate
-backend trigger for reviewed routing fix `901ca58c95ba7a16abf56e20361f7f021924df3e`
-was attempted and rejected by automatic approval review; no deployment was
-created. Read-only verification confirms both live commits unchanged. The
-configured website branch was not altered or deployed because its unrelated
-policy/Flutter inputs would affect published output. The wording introduces no
-fixed deletion deadline.
+source. PR 44 is closed/merged, no longer Draft. This reviewed website candidate
+is **not deployed**, and live remains `e38d6b73a37ff812a29da3b64027a35e01979c34`.
+Both proposed deployments are explicitly authorized; the backend routing fix is
+now live. Website publication is held for incomplete Render sign-in and the new
+OpenAI sharing/disclosure decision. The latest secure method-choice request was
+interrupted by the root agent after prolonged pending input, with no success
+result or authenticated dashboard verified. No website setting or deployment
+changed. The b95 candidate covers inference, account history, and provider terms
+without explicit general model-improvement sharing; reconcile it with the user's
+decision before publication. The unsafe configured branch remains unchanged.
+The wording introduces no fixed deletion deadline.

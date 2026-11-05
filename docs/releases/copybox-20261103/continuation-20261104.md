@@ -52,11 +52,17 @@ analytics paragraph was reviewed in
 head and base were verified before merge. PR 44 is now **closed and merged** as
 **`b95ce8390e03b4a31a43b592e0d3dd980823f292`**, no longer Draft. Comparison from
 reviewed source a214 to that merge has no changed files, confirming the reviewed
-tree. This is the final complete website deployment target; **it is not
-deployed**. No Render authentication retry or configuration change occurred.
-The existing Render connector subsequently confirmed read-only access; the
-historical browser-sign-in failure is separate from the current production-
-approval blocker described below.
+tree. This is the previously reviewed complete website candidate; **it is not
+deployed**. The later explicit **Approved** response authorized both proposed
+production deployments. Publication is now held for incomplete Render sign-in
+and the new OpenAI sharing/disclosure decision described below. Production
+approval is no longer a blocker. The existing Render connector works for
+read-only checks; the older browser-sign-in failure remains historical.
+
+The latest single secure Render method-choice request did not complete. The
+root agent interrupted the prolonged pending input; no structured submitted or
+success result or authenticated dashboard state was verified. No website
+deployment or service-setting change occurred.
 
 A proposed four-page port to configured website branch `1ecc4044…` was stopped.
 It has three unrelated policy regressions: omitted live Messenger coverage in
@@ -68,12 +74,13 @@ Flutter authentication and build inputs. The current build command,
 website-port PR, configured-branch change, service setting change, or deployment
 was made. The exact reviewed target remains b95ce839….
 
-After specific production approval, publish only that exact complete reviewed commit through the
-[existing Render service](https://dashboard.render.com/static/srv-d8ekf7t7vvec73dpar60)
-using **Manual Deploy → Deploy a specific commit**, or an authorized API/CLI
-connection that supports `commitId`. Confirm the date in the scoped COPY Box
-coverage notice if publication occurs after November 4. Verify that exact commit
-is live and fetch all four public URLs before marking this gate complete.
+Complete Render sign-in and resolve the OpenAI sharing/disclosure decision before
+publishing through the
+[existing Render service](https://dashboard.render.com/static/srv-d8ekf7t7vvec73dpar60).
+The b95ce839… candidate describes inference, stored history, and provider terms
+without explicit general model-improvement sharing; reconcile its exact reviewed
+source with the user's decision. Deployment is already authorized. Confirm the
+actual coverage date and verify all four public pages after publication.
 
 ## Mobile signing and account access — later November 4 update
 
@@ -413,13 +420,22 @@ prevention, security, and compliance.
 
 The provider audit resolves ordinary Supabase, Render, Resend, default OpenAI API,
 and explicit user-initiated export/share roles. It introduces no new DPA-signing
-or zero-data-retention proof requirement. The sole unobserved provider-sharing
-fact for the untouched UGC row is the active OpenAI API inputs-and-outputs
-model-improvement opt-in; the documented default Disabled is not proof of the
-active account setting. The native client does not send tier/profile/persona
-fields; the server adds existing coarse tier/persona context. The Other info
-conclusion concerns native age/policy/parent declarations, not an assertion that
-the API receives only raw text. See [privacy evidence](store-submission/privacy-evidence.md).
+or zero-data-retention proof requirement. After approved saved-account sign-in,
+the authenticated OpenAI console exposed only the Personal organization and
+Default active project. Fresh navigation verified **Share inputs and outputs
+with OpenAI: Enabled for all projects**, with **complimentary daily tokens
+enrolled**. Model-feedback and evaluation/fine-tuning sharing were Disabled.
+No setting changed; changing this setting has not been authorized.
+
+The production API credential was not inspected or matched to that organization
+or project, leaving the backend association unverified. Do not use the documented
+default Disabled or ordinary processor exception to finalize UGC Shared No.
+The user decision is whether to retain enabled sharing with matching disclosures
+or change it with possible complimentary-token eligibility impact. Google remains
+unchanged at **5/6**, with UGC unanswered. The native client sends no tier/profile/
+persona fields; the server adds existing coarse context. The Other info conclusion
+continues to concern native age/policy/parent declarations. See
+[privacy evidence](store-submission/privacy-evidence.md).
 
 **Government apps: No** was saved and confirmed on a fresh page. The historical
 IARC first-screen attempt stopped at unchecked terms. After explicit user
@@ -483,7 +499,7 @@ explorer artifact ID **4860247929005203987**. The upload-certificate registratio
 page was not rechecked; acceptance of this verified bundle is established without
 claiming a separate certificate-registration observation.
 
-## Backend rewrite fix and rejected production trigger
+## Backend rewrite fix and approved production deployment
 
 Three focused keyword cases reproduced web-search routing for COPY Box rewrite
 requests. The signed client already sends exact markers `source=korlix_copybox`
@@ -493,7 +509,7 @@ and `purpose=copy_box_rewrite`.
 search and file routing only for that exact pair. Ordinary chat, Resume Studio,
 and partial-marker requests retain prior routing in the focused checks.
 
-Candidate `91496adc4eec8ba5523dd4c2c27813e84e5670d5` has exact deployed parent
+Candidate `91496adc4eec8ba5523dd4c2c27813e84e5670d5` has exact then-live parent
 `bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb`. The focused routing plus existing
 Resume Studio run passed **9 checks**, comprising 7 new checks/subtests and 2
 existing Resume tests; syntax/diff checks passed and remote blobs matched the
@@ -502,30 +518,34 @@ tested bytes. PR 45 is now **closed/merged**, no longer Draft, at
 candidate to the merge has no changed files.
 
 Render backend service `srv-d8csvkkp3tds73emfikg` uses
-`release/signup-plan-intent-20261021`, with automatic deployments **No**. That
-configured branch was confirmed identical to the merged target immediately
-before the attempted trigger. **Automatic approval review rejected the
-production deployment**, because this consequential new live fix requires
-specific explicit authorization beyond preparation. The tool returned an error;
-no deployment was created, and no alternate production retry or browser-auth
-retry occurred.
+`release/signup-plan-intent-20261021`, root directory `backend`, and automatic
+deployments **No**. The configured branch was confirmed identical to the merged
+target. Two earlier production triggers were rejected by automatic approval
+review; neither created a deployment. The later explicit **Approved** response
+authorized the proposed backend and website deployments.
 
-The subsequent read-only check confirms latest live backend commit
-`bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb`, deploy
-`dep-dbksjk49v7es73f8krpg`. The website remains at
-`e38d6b73a37ff812a29da3b64027a35e01979c34`, deploy
-`dep-dbenft8m7kps73ef1td0`. The existing Render connection works for read-only
-checks; the backend rejection is a production-approval blocker, separate from
-the historical declined browser login. The merged fix and focused tests do not
-establish deployed behavior, app-runtime acceptance, or a new signed binary.
+The backend trigger was accepted for exact
+**`901ca58c95ba7a16abf56e20361f7f021924df3e`** as
+**`dep-dbls9fajnfac73dbjbg0`**, created **2026-11-04T23:50:21.918367Z**.
+It is now **LIVE**, finished **2026-11-04T23:51:07.079135Z**; both Render build
+and deployment events succeeded. A direct unauthenticated Python HTTP GET to
+`/api/health` returned **200**, JSON, and **Korlix AI backend is healthy**.
+
+A limited read-only runtime check observed one Discover-news refresh fallback at
+23:54:19 (`provider_or_storage`, generic `Error`), retaining the previous edition.
+No startup or deployment failure was observed. This is not an error-free-runtime
+claim, and no actual COPY Box device/login/AI acceptance test was performed.
+The prior bf830fd… source inspection remains historical evidence; the live
+backend is now the exact reviewed 901ca58… merge. No app binary was rebuilt.
+
+The website still serves `e38d6b73a37ff812a29da3b64027a35e01979c34`, deploy
+`dep-dbenft8m7kps73ef1td0`. Its reviewed b95ce839… candidate remains undeployed,
+held for incomplete Render sign-in and the newly observed OpenAI sharing decision.
 
 ## Work still remaining
 
-- Obtain specific production approval for the exact reviewed backend fix
-  `901ca58c95ba7a16abf56e20361f7f021924df3e`; the rejected trigger created no deployment.
-
-- Complete end-to-end COPY Box login/AI testing and Google Sign in details with
-  full-access confirmation. The existing account, verified email, Ultra
+- Complete end-to-end COPY Box login/AI testing against the now-live reviewed
+  backend and Google Sign in details with full-access confirmation. The existing account, verified email, Ultra
   entitlement, and available AI/device capacity are confirmed read-only. The supplied
   identifier and password fields are populated and saved in Apple. Google's fresh
   server page has no selected Yes/No answer or reviewer record; its earlier
@@ -542,13 +562,14 @@ establish deployed behavior, app-runtime acceptance, or a new signed binary.
   accepted version 1.0.0 (1) into the saved internal draft; it has no testers or
   rollout.
 - Complete Google Play target audience after Sign in details. IARC is Completed.
-  Data safety has five saved usage rows; complete the untouched UGC row after
-  confirming the precise OpenAI API model-improvement sharing opt-in, then preview
-  and finalize the declaration.
-- Obtain specific production approval and deploy only exact complete reviewed website commit
-  `b95ce8390e03b4a31a43b592e0d3dd980823f292`, and verify all four published pages.
-  PR 44 is merged with the reviewed tree; no website deployment or new Render
-  retry occurred. Do not substitute the unsafe configured branch.
+  Data safety has five saved usage rows; verify production OpenAI credential
+  association and resolve the user sharing/disclosure decision before completing
+  the untouched UGC row, preview, and final declaration.
+- Complete Render sign-in and reconcile website disclosures with that decision.
+  The existing exact reviewed candidate `b95ce8390e03b4a31a43b592e0d3dd980823f292`
+  is held, undeployed; publish the resulting exact reviewed source and verify all
+  four pages. Both deployments are already authorized. Do not substitute the
+  unsafe configured branch.
 - Submit completed listings for review after the release gates are satisfied.
 
 The earlier 140 passing automated tests and debug/simulator outputs retain their
@@ -557,9 +578,10 @@ The later successful Codemagic release workflow and medium-only capture run are
 recorded separately. No application code or signing configuration was changed
 by the checkpoint update itself.
 
-## November 4 follow-up: production approval and OpenAI sign-in
+## Historical November 4 follow-up before explicit approval
 
-Read-only checks reconfirmed that the backend branch matches reviewed merge
+This earlier checkpoint is superseded by the approved deployment and authenticated
+OpenAI observations above. At that time, read-only checks reconfirmed that the backend branch matches reviewed merge
 `901ca58c95ba7a16abf56e20361f7f021924df3e`, with automatic deployments off.
 The backend service uses `rootDir=backend`; the website uses `rootDir=""`.
 
@@ -577,5 +599,6 @@ interrupted the prolonged pending input. No authenticated organization/project
 or input/output-sharing setting was verified, and no setting changed. Google
 Data safety remains a **5/6 draft**, with no final submission.
 
-Next, obtain direct approval naming both production deployments and complete
-the OpenAI account/sign-in selection to verify the sharing setting.
+At that earlier checkpoint, the remaining steps were explicit deployment approval
+and completion of the OpenAI sign-in selection. Both were subsequently completed;
+the current website hold concerns Render sign-in and the sharing/disclosure decision.
