@@ -1,6 +1,6 @@
 {
   "status": "ios_uploaded_android_play_draft_store_setup_incomplete",
-  "recorded_at_utc": "2026-11-05T00:02:43Z",
+  "recorded_at_utc": "2026-11-05T13:36:03Z",
   "evidence_basis": "Authenticated Apple Developer, App Store Connect, Codemagic, Google Play, and Render observations on November 4, 2026, plus independent static verification of the downloaded signed Android candidate and a generated universal APK. Includes user-approved Apple actions and store setup, saved listing/declaration drafts, and the blocked exact website deployment; no credential or actual private phone values are stored in this checkpoint. Reviewer follow-up uses scoped read-only connected-account checks and exact deployed backend source bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb; no mutating account/profile RPC or API was invoked, and no reviewer identifier value is recorded. Later fresh form checks verify populated Apple credential fields without reading password values, Google draft/declaration progress, and a required Apple Analytics correction supported by exact deployed source plus non-sensitive database schema/function metadata; no onboarding event/customer rows were accessed. The later user-approved Apple privacy/content-rights and Google IARC results are verified; five Data safety rows are saved. After later explicit approval, exact backend merge 901ca58c95ba7a16abf56e20361f7f021924df3e is live and its direct unauthenticated health request returned HTTP 200; COPY Box runtime acceptance remains outstanding. The approved OpenAI account console shows input/output sharing Enabled for all projects, but production credential association is unverified. No OpenAI setting changed, Google remains a five-of-six draft, and website publication is held for the resulting sharing/disclosure decision.",
   "identity": {
     "display_name": "KORLIX COPY Box",
@@ -378,7 +378,7 @@
       "tracking_preview_section_present": false
     },
     "privacy_details_saved": true,
-    "age_rating_status": "Apple questionnaire inspected and cancelled without saving. Actual AI content-frequency answers remain unresolved pending live-account evaluation of existing behavior; Google IARC capability questionnaire is completed separately.",
+    "age_rating_status": "Unsubmitted. A source-backed draft is prepared in store-submission/apple-age-rating-draft.md; Age Assurance wording and sensitive-content frequencies remain unresolved. The fresh Apple session stopped at declined secure SMS verification, with no form edit or save.",
     "age_rating_evidence_limit": "The deployed /api/generate route has no COPY Box topic/output filter; built-in capability evidence alone does not establish generated-content frequency.",
     "content_rights_status": "Saved: Yes, this app has the necessary rights to its third-party content. Selected after the user explicitly confirmed necessary rights; Done and main Save completed and the saved value was verified.",
     "review_section_complete": false,
@@ -462,7 +462,42 @@
       "saved_value_verified": true,
       "user_confirmed_necessary_rights": true
     },
-    "content_rights_completed": true
+    "content_rights_completed": true,
+    "age_rating_source_draft": {
+      "record": "store-submission/apple-age-rating-draft.md",
+      "prepared_date": "2026-11-05",
+      "app_source_commit": "35459c62b07ea8d10dd21b85ddd920eabcb5a623",
+      "backend_source_commit": "901ca58c95ba7a16abf56e20361f7f021924df3e",
+      "saved_to_apple": false,
+      "draft_capability_answers": {
+        "messaging_and_chat": false,
+        "social_media": false,
+        "broad_distribution_user_generated_content": false,
+        "unrestricted_web_access": false,
+        "advertising": false,
+        "parental_controls": false,
+        "age_assurance": null
+      },
+      "age_assurance_scope": "Self-declared signup age bands only; no independently verified age or guardian identity. Do not infer an affirmative assurance claim without reviewing the exact control wording.",
+      "ai_generated_text_present": true,
+      "sensitive_content_frequency_answers": null,
+      "default_frequency_none_applied": false,
+      "ai_frequency_consideration_required": true,
+      "copybox_specific_mature_content_filter_established": false,
+      "reporting_occurs_after_output_display": true,
+      "minimum_age_policy": 16,
+      "parent_permission_self_declaration_for_ages": [
+        16,
+        17
+      ],
+      "guest_and_existing_signin_use_signup_gate": false,
+      "higher_age_override_review_after_calculated_rating": true,
+      "calculated_rating": null,
+      "override_saved": false,
+      "age_rating_ugc_no_is_not_app_review_1_2_exemption": true,
+      "compliance_claim_made": false,
+      "new_runtime_tests_completed": false
+    }
   },
   "preference_scope": {
     "copybox_price_and_territories_confirmed": true,
@@ -1291,7 +1326,7 @@
     "pull_request_state": "merged",
     "safe_deployment_commit": "b95ce8390e03b4a31a43b592e0d3dd980823f292",
     "merge_tree_matches_reviewed_source": true,
-    "deployment_blocker": "Both proposed production deployments are explicitly authorized. Website publication remains held for incomplete Render sign-in and the OpenAI sharing/disclosure decision. The latest single secure method-choice request was interrupted by the root agent after prolonged pending input; no submitted/success result or authenticated dashboard was verified. The approved OpenAI account shows input/output sharing Enabled for all projects, but production credential association is unverified; reviewed candidate b95ce839 does not explicitly describe general model-improvement sharing. No website deployment or service-setting change occurred.",
+    "deployment_blocker": "Website publication remains held for authenticated Render dashboard access and the unchanged OpenAI sharing/disclosure decision. The currently exposed deploy tool cannot select the exact reviewed website commit; no generic configured-branch deployment was substituted. The approved account sharing observation and unresolved production credential association are unchanged. Both production deployments remain authorized; no website deployment or service-setting change occurred.",
     "render_service_id": "srv-d8ekf7t7vvec73dpar60",
     "last_live_deploy_id": "dep-dbenft8m7kps73ef1td0",
     "last_live_commit": "e38d6b73a37ff812a29da3b64027a35e01979c34",
@@ -1394,6 +1429,14 @@
       "disabling_may_affect_complimentary_token_eligibility": true,
       "settings_changed": false,
       "setting_change_authorized": false
+    },
+    "latest_console_access_check": {
+      "observed_date": "2026-11-05",
+      "dashboard_sign_in_required": true,
+      "exact_website_commit_selection_supported_by_exposed_deploy_tool": false,
+      "website_live_commit": "e38d6b73a37ff812a29da3b64027a35e01979c34",
+      "deployment_created": false,
+      "service_settings_changed": false
     }
   },
   "remaining_gates": [
@@ -1509,5 +1552,40 @@
     },
     "remaining_scope": "Complete actual COPY Box login/AI and device acceptance. The exact reviewed backend is deployed and its unauthenticated health endpoint responds successfully; those checks do not establish product-runtime acceptance or a new signed binary.",
     "configured_root_directory": "backend"
+  },
+  "latest_console_access_checkpoint": {
+    "observed_date": "2026-11-05",
+    "apple": {
+      "fresh_sign_in_required": true,
+      "secure_account_password_step_accepted": true,
+      "sms_fallback_selected": true,
+      "sms_sent_confirmation_observed": true,
+      "secure_sms_code_request_result": "declined",
+      "authenticated_session_established": false,
+      "form_changed": false,
+      "form_saved": false,
+      "retry_planned": false,
+      "private_values_recorded": false
+    },
+    "google_play": {
+      "sign_in_page_observed": true,
+      "authentication_request_started": false,
+      "form_changed": false
+    },
+    "render": {
+      "dashboard_sign_in_required": true,
+      "native_read_only_live_check_succeeded": true,
+      "backend_live_commit": "901ca58c95ba7a16abf56e20361f7f021924df3e",
+      "website_live_commit": "e38d6b73a37ff812a29da3b64027a35e01979c34",
+      "exact_website_commit_selection_supported_by_exposed_deploy_tool": false,
+      "exact_website_dashboard_route_requires_authentication": true,
+      "deployment_created": false,
+      "service_settings_changed": false
+    },
+    "openai_sharing_changed": false,
+    "production_openai_credential_association_verified": false,
+    "google_data_safety_completed_usage_rows": 5,
+    "new_store_submission": false,
+    "new_device_tests_completed": false
   }
 }

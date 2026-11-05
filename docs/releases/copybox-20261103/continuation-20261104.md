@@ -602,3 +602,32 @@ Data safety remains a **5/6 draft**, with no final submission.
 At that earlier checkpoint, the remaining steps were explicit deployment approval
 and completion of the OpenAI sign-in selection. Both were subsequently completed;
 the current website hold concerns Render sign-in and the sharing/disclosure decision.
+
+## November 5 continuation: store sign-in and age-rating draft
+
+Fresh Apple, Google Play, and Render pages require sign-in. Apple's secure
+account/password step was accepted, the SMS fallback was selected, and the page
+confirmed a code was sent. The secure SMS-code request returned **declined**.
+No authenticated Apple session, questionnaire edit, or save was completed; no
+verification retry is planned. No account identifier, password, code, or phone
+value is recorded here. Google Play was only viewed at sign-in; no authentication
+request or form change was started.
+
+The [Apple age-rating draft](store-submission/apple-age-rating-draft.md) records
+source-backed No answers for user messaging, social media, broad-distribution
+UGC, unrestricted web access, advertising, and parental controls. Age Assurance
+remains a conservative wording check because the implemented signup gate is
+self-declared. AI-generated text is present; sensitive-content frequencies are
+unanswered and must not default to None. Review the existing 16+ minimum using
+Apple's override step after obtaining the calculated rating. This is a document
+draft, not saved Apple answers or a compliance determination.
+
+Read-only Render checks reconfirmed backend `901ca58c95ba7a16abf56e20361f7f021924df3e`
+Live and website `e38d6b73a37ff812a29da3b64027a35e01979c34` unchanged. The exposed
+deploy tool does not support selecting exact website commit b95ce839…; that
+route needs authenticated dashboard access. Website publication remains held for
+Render sign-in and the unchanged OpenAI sharing/disclosure decision. Production
+sharing association remains unverified; Google Data safety stays at 5/6. No new
+deployment, sharing-setting change, app/build change, store submission, or device
+test occurred. Both production deployments remain authorized; no repeat deployment
+approval is required by this checkpoint.
