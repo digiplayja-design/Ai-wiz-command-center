@@ -1,0 +1,414 @@
+{
+  "app": "KORLIX COPY Box",
+  "bundle_id": "com.korlixdeveloper.copybox",
+  "locale": "en-US",
+  "capture_source_commit": "d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4",
+  "capture_method": "Actual Flutter app widgets, controlled sample data, no network",
+  "capture_fixture": "apps/korlix_copy_box/test/copybox_preview_test.dart",
+  "native_device_acceptance": false,
+  "source_icon_sha256": "ee8c5b7a8cdae777917c626c797b7202a46cf3cbe303a09126d1c64e9f1cfe2c",
+  "source_apple_icon_sha256": "b0b9cb4fc2f5d42098751d565a4a0ca9475ab1d532e501c16a1b8ec9047543f7",
+  "feature_graphic_kind": "Branded illustration; not a screenshot or device mockup",
+  "screenshots": [
+    {
+      "file": "google-play/phone/01-workspace.png",
+      "raw_capture": "store-play-phone-01-workspace.png",
+      "required_dimensions": [
+        1080,
+        1920
+      ],
+      "status": "packaged",
+      "raw_sha256": "98aa0ef664f2280859103a169c57491be31cd7974d76c53198ddd9953b354837"
+    },
+    {
+      "file": "google-play/phone/02-templates.png",
+      "raw_capture": "store-play-phone-02-templates.png",
+      "required_dimensions": [
+        1080,
+        1920
+      ],
+      "status": "packaged",
+      "raw_sha256": "d1d1ab90dfb8ecc6a02c7bf31875a9ee760364a69b904668f05a2f9b8ec4ae75"
+    },
+    {
+      "file": "google-play/phone/03-focus-editor.png",
+      "raw_capture": "store-play-phone-03-focus-editor.png",
+      "required_dimensions": [
+        1080,
+        1920
+      ],
+      "status": "packaged",
+      "raw_sha256": "fd47dd0583f1b0fd4cf72f3f05f92e989d72a1641eefe714cd6119471a8adef2"
+    },
+    {
+      "file": "google-play/phone/04-dark-workspace.png",
+      "raw_capture": "store-play-phone-04-dark-workspace.png",
+      "required_dimensions": [
+        1080,
+        1920
+      ],
+      "status": "packaged",
+      "raw_sha256": "3b5849df8e19c8d334122da23410e867efd449dfd4825189997b08af82ce016d"
+    },
+    {
+      "file": "app-store/iphone/01-workspace.png",
+      "raw_capture": "store-apple-iphone-01-workspace.png",
+      "required_dimensions": [
+        1260,
+        2736
+      ],
+      "status": "packaged",
+      "raw_sha256": "04cc891a5145b181a3e3e77e1c01cf3d6fe6f0e05344f44946bce33e318f61b8"
+    },
+    {
+      "file": "app-store/iphone/02-templates.png",
+      "raw_capture": "store-apple-iphone-02-templates.png",
+      "required_dimensions": [
+        1260,
+        2736
+      ],
+      "status": "packaged",
+      "raw_sha256": "f332c13b45deff89de7879b0cd8649c83337d2ccadd45a939d00f7569b584146"
+    },
+    {
+      "file": "app-store/iphone/03-focus-editor.png",
+      "raw_capture": "store-apple-iphone-03-focus-editor.png",
+      "required_dimensions": [
+        1260,
+        2736
+      ],
+      "status": "packaged",
+      "raw_sha256": "53a7facff76983379b0781a7355f2c3600999fc000183fe850c416be49b27920"
+    },
+    {
+      "file": "app-store/iphone/04-dark-workspace.png",
+      "raw_capture": "store-apple-iphone-04-dark-workspace.png",
+      "required_dimensions": [
+        1260,
+        2736
+      ],
+      "status": "packaged",
+      "raw_sha256": "2efe161b2baa818f879357d2025d2047728608e701bc5deb51e35760369a80ee"
+    },
+    {
+      "file": "app-store/ipad/01-workspace.png",
+      "raw_capture": "store-apple-ipad-01-workspace.png",
+      "required_dimensions": [
+        2064,
+        2752
+      ],
+      "status": "packaged",
+      "raw_sha256": "4368a18ffb1d566d5332bf810430a6263aebaf3cd05565a45eb2d07ccfef1a5f"
+    },
+    {
+      "file": "app-store/ipad/02-templates.png",
+      "raw_capture": "store-apple-ipad-02-templates.png",
+      "required_dimensions": [
+        2064,
+        2752
+      ],
+      "status": "packaged",
+      "raw_sha256": "43ea0b45a67e0c0b0c64d688de62e5e1b074bb8288d82d6ed8646f2e0e03772c"
+    },
+    {
+      "file": "app-store/ipad/03-focus-editor.png",
+      "raw_capture": "store-apple-ipad-03-focus-editor.png",
+      "required_dimensions": [
+        2064,
+        2752
+      ],
+      "status": "packaged",
+      "raw_sha256": "53eecf37e50d77cd1903cdb2a25499f83df82ef429b5c7e5b2208822bcec0ec1"
+    },
+    {
+      "file": "app-store/ipad/04-dark-workspace.png",
+      "raw_capture": "store-apple-ipad-04-dark-workspace.png",
+      "required_dimensions": [
+        2064,
+        2752
+      ],
+      "status": "packaged",
+      "raw_sha256": "730eaf455d1c9dd0d690dafb88eca66aa010158a7a024a45020a95e7f0f7afc3"
+    },
+    {
+      "file": "app-store/iphone-medium/01-workspace.png",
+      "raw_capture": "store-apple-iphone-medium-01-workspace.png",
+      "required_dimensions": [
+        1206,
+        2622
+      ],
+      "status": "packaged",
+      "raw_sha256": "28157ec27fa45422cc7a2a2324b99e0652553462e6921a1d5bee78fb389027ce",
+      "capture_source_commit": "339e41f055882a24e35cd43ea39b273c1ff960a4",
+      "capture_run_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41872257288"
+    },
+    {
+      "file": "app-store/iphone-medium/02-templates.png",
+      "raw_capture": "store-apple-iphone-medium-02-templates.png",
+      "required_dimensions": [
+        1206,
+        2622
+      ],
+      "status": "packaged",
+      "raw_sha256": "21d2cb785d7180b55256e6d38a359cdd7ed794c3c5e43a681631471eabfd72da",
+      "capture_source_commit": "339e41f055882a24e35cd43ea39b273c1ff960a4",
+      "capture_run_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41872257288"
+    },
+    {
+      "file": "app-store/iphone-medium/03-focus-editor.png",
+      "raw_capture": "store-apple-iphone-medium-03-focus-editor.png",
+      "required_dimensions": [
+        1206,
+        2622
+      ],
+      "status": "packaged",
+      "raw_sha256": "3706ade85ca08223bcc0350c5fd182dc08d82ab195ad44d8399a24bcd7484e01",
+      "capture_source_commit": "339e41f055882a24e35cd43ea39b273c1ff960a4",
+      "capture_run_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41872257288"
+    },
+    {
+      "file": "app-store/iphone-medium/04-dark-workspace.png",
+      "raw_capture": "store-apple-iphone-medium-04-dark-workspace.png",
+      "required_dimensions": [
+        1206,
+        2622
+      ],
+      "status": "packaged",
+      "raw_sha256": "0016f6ecbeefd36afe5e46d89766e755a90ca985588e0bab647a72932afe78dd",
+      "capture_source_commit": "339e41f055882a24e35cd43ea39b273c1ff960a4",
+      "capture_run_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41872257288"
+    }
+  ],
+  "files": [
+    {
+      "file": "app-store/icon-1024.png",
+      "dimensions": [
+        1024,
+        1024
+      ],
+      "mode": "RGB",
+      "bytes": 580545,
+      "sha256": "655fc06c1337b25c2ecd9157ff596569832438acd487228c4879a5765665b466"
+    },
+    {
+      "file": "app-store/ipad/01-workspace.png",
+      "dimensions": [
+        2064,
+        2752
+      ],
+      "mode": "RGB",
+      "bytes": 284733,
+      "sha256": "67bd0edf4d3890b4ce597a034a6628eb5bebd3bfeb8e8cde22a44d75f7fe0a84"
+    },
+    {
+      "file": "app-store/ipad/02-templates.png",
+      "dimensions": [
+        2064,
+        2752
+      ],
+      "mode": "RGB",
+      "bytes": 208620,
+      "sha256": "a4950dda55fc63fc45b21d8c77c7ecec7229f2a2139eb99bfa95aed695fb3871"
+    },
+    {
+      "file": "app-store/ipad/03-focus-editor.png",
+      "dimensions": [
+        2064,
+        2752
+      ],
+      "mode": "RGB",
+      "bytes": 89968,
+      "sha256": "22b7751ca75e6eeeda2b2540ee7ef33917ea844dac4027a70958e5c1c188edff"
+    },
+    {
+      "file": "app-store/ipad/04-dark-workspace.png",
+      "dimensions": [
+        2064,
+        2752
+      ],
+      "mode": "RGB",
+      "bytes": 282264,
+      "sha256": "a0e578172119b044d5a652dc67a383c7a7d41acb682cbae8ab50c26dabde2a21"
+    },
+    {
+      "file": "app-store/iphone-medium/01-workspace.png",
+      "dimensions": [
+        1206,
+        2622
+      ],
+      "mode": "RGB",
+      "bytes": 205895,
+      "sha256": "081acb201811d0eb865f801ab92657035536756217f70f6de7443b53e9ec957d"
+    },
+    {
+      "file": "app-store/iphone-medium/02-templates.png",
+      "dimensions": [
+        1206,
+        2622
+      ],
+      "mode": "RGB",
+      "bytes": 183266,
+      "sha256": "0e73f397e13472634bfbdfa21f460f939ade7d2da18d2ebd05458e8029e4a0a4"
+    },
+    {
+      "file": "app-store/iphone-medium/03-focus-editor.png",
+      "dimensions": [
+        1206,
+        2622
+      ],
+      "mode": "RGB",
+      "bytes": 113505,
+      "sha256": "7caf5d820f422cb2478ec9de99ccf8cf1726ff1cb047acb1f46d2f1a4471b433"
+    },
+    {
+      "file": "app-store/iphone-medium/04-dark-workspace.png",
+      "dimensions": [
+        1206,
+        2622
+      ],
+      "mode": "RGB",
+      "bytes": 204164,
+      "sha256": "196d552d552f0e5934d8627ddf8d2d1aa3c3a656024d88a3368cba7394d7788d"
+    },
+    {
+      "file": "app-store/iphone/01-workspace.png",
+      "dimensions": [
+        1260,
+        2736
+      ],
+      "mode": "RGB",
+      "bytes": 210056,
+      "sha256": "568af72832a753e40dd68627ae06bb0dea5b91e4e46ef0c64c55e4952b9b8a57"
+    },
+    {
+      "file": "app-store/iphone/02-templates.png",
+      "dimensions": [
+        1260,
+        2736
+      ],
+      "mode": "RGB",
+      "bytes": 188438,
+      "sha256": "3ce19216513eaf7c68517fcaa6f93798f1d211e951f93ac8545bcf165237e377"
+    },
+    {
+      "file": "app-store/iphone/03-focus-editor.png",
+      "dimensions": [
+        1260,
+        2736
+      ],
+      "mode": "RGB",
+      "bytes": 111885,
+      "sha256": "823bf6a9091f33de6aacdf6aa1076210c3dbdedcc00afb197ec46a54810d17a5"
+    },
+    {
+      "file": "app-store/iphone/04-dark-workspace.png",
+      "dimensions": [
+        1260,
+        2736
+      ],
+      "mode": "RGB",
+      "bytes": 208265,
+      "sha256": "ea658b7b89972e1f09b2d1e92483428eb5a926537a63a8b619c0fd57cbffdaa5"
+    },
+    {
+      "file": "google-play/feature-graphic.png",
+      "dimensions": [
+        1024,
+        500
+      ],
+      "mode": "RGB",
+      "bytes": 70851,
+      "sha256": "c5ac362384bc26acd4056b540e51f86894c13c06331b21eb4daf850a4af6d6f5"
+    },
+    {
+      "file": "google-play/icon-512-rgb.png",
+      "dimensions": [
+        512,
+        512
+      ],
+      "mode": "RGB",
+      "bytes": 180275,
+      "sha256": "678123b7bbb102d53ed262e3a0d5f0a360ae1a3ef17a30a37cffe7757d7a6027"
+    },
+    {
+      "file": "google-play/icon-512.png",
+      "dimensions": [
+        512,
+        512
+      ],
+      "mode": "RGBA",
+      "bytes": 198632,
+      "sha256": "168fb3f31dcaaf9ad8d254aaa89a7545de33f29e03dbc74e688aa159253eb0e2",
+      "alpha_extrema": [
+        255,
+        255
+      ]
+    },
+    {
+      "file": "google-play/phone/01-workspace.png",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "mode": "RGB",
+      "bytes": 151838,
+      "sha256": "fb4badb264cbc4529a6d20978fef3915a9f175b6f9c398cadf72f6987b264508"
+    },
+    {
+      "file": "google-play/phone/02-templates.png",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "mode": "RGB",
+      "bytes": 140695,
+      "sha256": "17e510b1ebb5b0912ecf21ff442c1ad6f7e4add6c5dee5b9f92d07f4b3382802"
+    },
+    {
+      "file": "google-play/phone/03-focus-editor.png",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "mode": "RGB",
+      "bytes": 108314,
+      "sha256": "bcfd2bc4786cc42a35ca38ce1dd9b066fa3b79498ad17c1d1eca1a14e62f8748"
+    },
+    {
+      "file": "google-play/phone/04-dark-workspace.png",
+      "dimensions": [
+        1080,
+        1920
+      ],
+      "mode": "RGB",
+      "bytes": 150718,
+      "sha256": "5ece7fc971fdfcef5c9a82a601eada9ffb638cbbae4d73e22f22f6b092ee99c0"
+    }
+  ],
+  "official_specifications": [
+    "https://developer.apple.com/help/app-store-connect/reference/app-information/screenshot-specifications",
+    "https://support.google.com/googleplay/android-developer/answer/9866151?hl=en"
+  ],
+  "capture_source_scope": "Default capture source for screenshot records without a capture_source_commit override.",
+  "store_requirement_observation": {
+    "date": "2026-11-04",
+    "source": "App Store Connect Media Manager for app 6830765098",
+    "required_iphone_group": "iPhone with Dynamic Island (medium display)",
+    "accepted_portrait_dimensions": [
+      [
+        1179,
+        2556
+      ],
+      [
+        1206,
+        2622
+      ]
+    ],
+    "existing_large_iphone_group": "optional",
+    "ipad_13_inch_dimensions": [
+      2064,
+      2752
+    ],
+    "fallback_after_large_upload": "A follow-up Media Manager check showed Using Existing Assets in the required medium well after the large screenshots were uploaded; dedicated medium files are additionally available."
+  }
+}

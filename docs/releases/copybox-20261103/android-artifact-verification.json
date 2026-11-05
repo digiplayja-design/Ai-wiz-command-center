@@ -1,0 +1,442 @@
+{
+  "schema_version": 1,
+  "verified_at_utc": "2026-11-04T19:10:02.025979+00:00",
+  "status": "passed_with_documented_jarsigner_warnings",
+  "scope": "Static verification of the actual downloaded signed AAB and a universal APK generated from that exact AAB.",
+  "build": {
+    "provider": "Codemagic",
+    "id": "6aeb7ea6004ce28f20ede0b2",
+    "source_commit": "2c6544dba9afe2117181afabdc78a856ef4f249d",
+    "source_provenance_basis": "Parent-observed completed Codemagic build; artifact downloaded from that build.",
+    "reported_status": "FINISHED",
+    "reported_duration": "7m16s"
+  },
+  "aab": {
+    "filename": "KorlixCopyBox-1.0.0-build1.aab",
+    "bytes": 55864103,
+    "sha256": "cc9e3b467fe3b4409db2ce93cc9ebc961cddd09333174bc9a82227c87f9bebaa",
+    "copy_identical_to_download": true,
+    "bundletool_validate_passed": true,
+    "signature": {
+      "jarsigner_exit_code": 0,
+      "jar_verified": true,
+      "unsigned_payload_entries": 0,
+      "public_signer_sha256": "4E:92:04:B6:04:11:F4:F5:72:30:51:6E:E3:CD:E8:8D:27:B9:8A:72:FF:3E:72:97:4A:44:94:31:10:B9:3F:A7",
+      "expected_upload_certificate_matches": true,
+      "payload_coverage": {
+        "total_zip_entries": 409,
+        "payload_entries": 406,
+        "manifest_digest_entries": 406,
+        "all_payload_sha256_digests_match": true,
+        "manifest_digest_covered_by_signature_file": true,
+        "manifest_zip_index_zero_based": 408,
+        "manifest_is_last_zip_entry": true,
+        "explanation": "JAR streaming-reader warning corresponds to the signing manifest occurring last. Random-access jarsigner verifies the signature; each payload has a matching signed-manifest SHA-256 digest. Artifact was not modified.",
+        "validation_errors": []
+      },
+      "warnings": [
+        {
+          "code": "SELF_SIGNED_UPLOAD_CERTIFICATE",
+          "description": "Java cannot build a public CA chain for the self-signed Android upload certificate. The signer fingerprint matches the authorized dedicated COPY Box upload certificate."
+        },
+        {
+          "code": "NO_JAR_SIGNATURE_TIMESTAMP",
+          "description": "The AAB JAR signature has no timestamp. The matched public certificate is valid from 2026-11-04T18:30:56Z through 2054-03-22T18:30:56Z."
+        },
+        {
+          "code": "POSIX_ATTRIBUTES_NOT_SIGNED",
+          "description": "Java reports that POSIX file permissions or symlink attributes are not covered by JAR signatures. All 406 file payloads are covered by matching signed-manifest SHA-256 digests."
+        },
+        {
+          "code": "JAR_STREAMING_MANIFEST_ORDER",
+          "description": "META-INF/MANIFEST.MF is the final ZIP entry (zero-based index 408 of 409). Java reports it missing through JarInputStream, while random-access JarFile verification succeeds. Additional inspection found all 406 payloads represented with matching SHA-256 digests in the signed manifest, a matching whole-manifest digest in the signature file, and no duplicate ZIP names or local/central filename mismatch. The original AAB was not modified."
+        }
+      ]
+    },
+    "manifest": {
+      "package": "com.korlixdeveloper.copybox",
+      "version_name": "1.0.0",
+      "version_code": 1,
+      "compile_sdk": 36,
+      "min_sdk": 24,
+      "target_sdk": 36,
+      "debuggable_declared": null,
+      "debuggable_effective": false,
+      "allow_backup": false,
+      "uses_cleartext_traffic": false,
+      "extract_native_libs": false,
+      "permissions": [
+        "android.permission.INTERNET",
+        "com.korlixdeveloper.copybox.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+      ],
+      "native_library_alignment": "PAGE_ALIGNMENT_16K",
+      "uncompress_native_libraries": true,
+      "defined_permissions": [
+        {
+          "name": "com.korlixdeveloper.copybox.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
+          "protection_level": "0x00000002"
+        }
+      ],
+      "validation_errors": []
+    },
+    "native_libraries": {
+      "artifact": "KorlixCopyBox-1.0.0-build1.aab",
+      "artifact_type": "AAB",
+      "libraries": [
+        {
+          "library": "base/lib/arm64-v8a/libapp.so",
+          "elf_class": 64,
+          "load_segment_alignments": [
+            65536,
+            65536,
+            65536
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": true
+        },
+        {
+          "library": "base/lib/arm64-v8a/libdartjni.so",
+          "elf_class": 64,
+          "load_segment_alignments": [
+            16384,
+            16384,
+            16384
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": true
+        },
+        {
+          "library": "base/lib/arm64-v8a/libdatastore_shared_counter.so",
+          "elf_class": 64,
+          "load_segment_alignments": [
+            16384,
+            16384,
+            16384,
+            16384
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": true
+        },
+        {
+          "library": "base/lib/arm64-v8a/libflutter.so",
+          "elf_class": 64,
+          "load_segment_alignments": [
+            65536,
+            65536,
+            65536
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": true
+        },
+        {
+          "library": "base/lib/armeabi-v7a/libapp.so",
+          "elf_class": 32,
+          "load_segment_alignments": [
+            16384,
+            16384,
+            16384
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": true
+        },
+        {
+          "library": "base/lib/armeabi-v7a/libdartjni.so",
+          "elf_class": 32,
+          "load_segment_alignments": [
+            16384,
+            16384,
+            16384
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": true
+        },
+        {
+          "library": "base/lib/armeabi-v7a/libdatastore_shared_counter.so",
+          "elf_class": 32,
+          "load_segment_alignments": [
+            16384,
+            16384,
+            16384,
+            16384
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": true
+        },
+        {
+          "library": "base/lib/armeabi-v7a/libflutter.so",
+          "elf_class": 32,
+          "load_segment_alignments": [
+            65536,
+            65536,
+            65536
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": true
+        },
+        {
+          "library": "base/lib/x86_64/libapp.so",
+          "elf_class": 64,
+          "load_segment_alignments": [
+            65536,
+            65536,
+            65536
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": true
+        },
+        {
+          "library": "base/lib/x86_64/libdartjni.so",
+          "elf_class": 64,
+          "load_segment_alignments": [
+            16384,
+            16384,
+            16384
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": true
+        },
+        {
+          "library": "base/lib/x86_64/libdatastore_shared_counter.so",
+          "elf_class": 64,
+          "load_segment_alignments": [
+            16384,
+            16384,
+            16384,
+            16384
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": true
+        },
+        {
+          "library": "base/lib/x86_64/libflutter.so",
+          "elf_class": 64,
+          "load_segment_alignments": [
+            65536,
+            65536,
+            65536
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": true
+        }
+      ],
+      "apk_zip_layout_checked": false,
+      "additional_check": "Check bundletool dump config for PAGE_ALIGNMENT_16K and verify a generated APK; AAB ZIP offsets are not APK offsets.",
+      "validation_errors": []
+    }
+  },
+  "generated_apk_set": {
+    "filename": "KorlixCopyBox-1.0.0-build1-universal.apks",
+    "bytes": 57116208,
+    "sha256": "da74338d36fd17cc04eaf91879e3ca62dc547482d8c98917179661a167685d05",
+    "mode": "universal",
+    "generation_passed": true,
+    "explicit_approved_upload_key_used": true,
+    "password_values_recorded": false
+  },
+  "generated_apk": {
+    "filename": "KorlixCopyBox-1.0.0-build1-universal.apk",
+    "bytes": 57115896,
+    "sha256": "d4ccf6591dcdc0008e0f4c34316c9d9062b45c26d49ae9dad337924f2b571bab",
+    "signature": {
+      "verified": true,
+      "min_checked_platform": 24,
+      "max_checked_platform": 36,
+      "v1_verified": false,
+      "v2_verified": true,
+      "v3_verified": true,
+      "signer_certificate_sha256": [
+        "4E:92:04:B6:04:11:F4:F5:72:30:51:6E:E3:CD:E8:8D:27:B9:8A:72:FF:3E:72:97:4A:44:94:31:10:B9:3F:A7"
+      ],
+      "public_certificate_details": [
+        "subject=CN=KORLIX COPY Box Upload;not_before=2026-11-04T18:30:56Z;not_after=2054-03-22T18:30:56Z"
+      ],
+      "errors": [],
+      "warnings": [],
+      "tool": "com.android.apksig.ApkVerifier included in verified official bundletool 1.18.3",
+      "expected_upload_certificate_matches": true
+    },
+    "native_libraries": {
+      "artifact": "KorlixCopyBox-1.0.0-build1-universal.apk",
+      "artifact_type": "APK",
+      "libraries": [
+        {
+          "library": "lib/arm64-v8a/libapp.so",
+          "elf_class": 64,
+          "load_segment_alignments": [
+            65536,
+            65536,
+            65536
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": false,
+          "zip_data_offset_mod_16k": 0
+        },
+        {
+          "library": "lib/arm64-v8a/libdartjni.so",
+          "elf_class": 64,
+          "load_segment_alignments": [
+            16384,
+            16384,
+            16384
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": false,
+          "zip_data_offset_mod_16k": 0
+        },
+        {
+          "library": "lib/arm64-v8a/libdatastore_shared_counter.so",
+          "elf_class": 64,
+          "load_segment_alignments": [
+            16384,
+            16384,
+            16384,
+            16384
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": false,
+          "zip_data_offset_mod_16k": 0
+        },
+        {
+          "library": "lib/arm64-v8a/libflutter.so",
+          "elf_class": 64,
+          "load_segment_alignments": [
+            65536,
+            65536,
+            65536
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": false,
+          "zip_data_offset_mod_16k": 0
+        },
+        {
+          "library": "lib/armeabi-v7a/libapp.so",
+          "elf_class": 32,
+          "load_segment_alignments": [
+            16384,
+            16384,
+            16384
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": false,
+          "zip_data_offset_mod_16k": 0
+        },
+        {
+          "library": "lib/armeabi-v7a/libdartjni.so",
+          "elf_class": 32,
+          "load_segment_alignments": [
+            16384,
+            16384,
+            16384
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": false,
+          "zip_data_offset_mod_16k": 0
+        },
+        {
+          "library": "lib/armeabi-v7a/libdatastore_shared_counter.so",
+          "elf_class": 32,
+          "load_segment_alignments": [
+            16384,
+            16384,
+            16384,
+            16384
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": false,
+          "zip_data_offset_mod_16k": 0
+        },
+        {
+          "library": "lib/armeabi-v7a/libflutter.so",
+          "elf_class": 32,
+          "load_segment_alignments": [
+            65536,
+            65536,
+            65536
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": false,
+          "zip_data_offset_mod_16k": 0
+        },
+        {
+          "library": "lib/x86_64/libapp.so",
+          "elf_class": 64,
+          "load_segment_alignments": [
+            65536,
+            65536,
+            65536
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": false,
+          "zip_data_offset_mod_16k": 0
+        },
+        {
+          "library": "lib/x86_64/libdartjni.so",
+          "elf_class": 64,
+          "load_segment_alignments": [
+            16384,
+            16384,
+            16384
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": false,
+          "zip_data_offset_mod_16k": 0
+        },
+        {
+          "library": "lib/x86_64/libdatastore_shared_counter.so",
+          "elf_class": 64,
+          "load_segment_alignments": [
+            16384,
+            16384,
+            16384,
+            16384
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": false,
+          "zip_data_offset_mod_16k": 0
+        },
+        {
+          "library": "lib/x86_64/libflutter.so",
+          "elf_class": 64,
+          "load_segment_alignments": [
+            65536,
+            65536,
+            65536
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": false,
+          "zip_data_offset_mod_16k": 0
+        }
+      ],
+      "apk_zip_layout_checked": true,
+      "additional_check": "Run on a 16KB-page Android device; this check does not verify runtime behavior or signing.",
+      "validation_errors": []
+    },
+    "all_native_elf_loads_16k_aligned": true,
+    "all_12_native_libraries_uncompressed": true,
+    "all_native_zip_offsets_mod_16384_zero": true
+  },
+  "tools": {
+    "java": "17.0.20",
+    "bundletool": "1.18.3",
+    "bundletool_sha256": "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29",
+    "aab_signer_verifier": "java --module jdk.jartool/sun.security.tools.jarsigner.Main -verify -verbose -certs",
+    "aab_certificate_inspector": "keytool -printcert -jarfile",
+    "native_scanner": "scripts/ci/inspect-copybox-artifact.py",
+    "native_scanner_sha256": "bcbde218811dc5922fdf78058cd02581ee1e0d2934e328a3c1d9a8cd04895410",
+    "apk_signature_verifier": "com.android.apksig.ApkVerifier bundled in the pinned official bundletool JAR",
+    "apk_signature_checked_api_range": [
+      24,
+      36
+    ]
+  },
+  "limits": {
+    "physical_device_runtime_tested": false,
+    "android_16k_page_runtime_tested": false,
+    "installation_tested": false,
+    "google_play_upload_or_acceptance_established_by_this_report": false,
+    "google_play_delivered_apk_checked": false,
+    "source_tests_repeated_locally": false,
+    "generated_apk_signer_role": "Dedicated upload certificate; Google Play delivered APKs use the separately managed app-signing certificate."
+  },
+  "validation_errors": []
+}

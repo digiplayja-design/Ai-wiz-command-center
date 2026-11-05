@@ -532,3 +532,134 @@ workflows:
       - apps/receipt_wiz/build/ios/iphonesimulator/ReceiptWiz-Simulator.zip
       - /tmp/xcodebuild_logs/*.log
 
+  korlix-copybox-android-candidate:
+    name: KORLIX COPY Box — signed Android candidate
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    working_directory: apps/korlix_copy_box
+    # No triggering events or publishing configuration: start manually and
+    # retain the signed bundle for review before any Play Console upload.
+    environment:
+      flutter: 3.47.7
+      java: 17
+      android_signing:
+        - KORLIX_COPYBOX_ANDROID_UPLOAD_KEY
+    scripts:
+      - name: Require the dedicated COPY Box upload key
+        script: |
+          set -euo pipefail
+          : "${CM_KEYSTORE_PATH:?Configure KORLIX_COPYBOX_ANDROID_UPLOAD_KEY in Codemagic}"
+          : "${CM_KEYSTORE_PASSWORD:?The COPY Box keystore password is required}"
+          : "${CM_KEY_ALIAS:?The COPY Box key alias is required}"
+          : "${CM_KEY_PASSWORD:?The COPY Box key password is required}"
+          test -f "$CM_KEYSTORE_PATH"
+          if [ -e android/key.properties ]; then
+            printf '%s\n' 'Remove android/key.properties from this build; the dedicated Codemagic identity must supply COPY Box signing.' >&2
+            exit 1
+          fi
+      - name: Validate locked authentication package and COPY Box app
+        script: |
+          set -euo pipefail
+          cd "$CM_BUILD_DIR/packages/korlix_auth_core"
+          flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
+          flutter analyze --no-pub
+          flutter test --no-pub --reporter expanded
+          cd "$CM_BUILD_DIR/apps/korlix_copy_box"
+          flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
+          flutter analyze --no-pub
+          export KORLIX_FLUTTER_ROOT="$(python3 -c 'from pathlib import Path; import shutil; print(Path(shutil.which("flutter")).resolve().parent.parent)')"
+          export COPYBOX_PREVIEWS="$CM_BUILD_DIR/.copybox-ui-previews"
+          flutter test --no-pub --reporter expanded
+      - name: Build signed COPY Box Android App Bundle
+        script: |
+          set -euo pipefail
+          export KORLIX_COPYBOX_ANDROID_STORE_FILE="${CM_KEYSTORE_PATH:?COPY Box keystore is required}"
+          export KORLIX_COPYBOX_ANDROID_STORE_PASSWORD="${CM_KEYSTORE_PASSWORD:?COPY Box keystore password is required}"
+          export KORLIX_COPYBOX_ANDROID_KEY_ALIAS="${CM_KEY_ALIAS:?COPY Box key alias is required}"
+          export KORLIX_COPYBOX_ANDROID_KEY_PASSWORD="${CM_KEY_PASSWORD:?COPY Box key password is required}"
+          flutter build appbundle --release --no-pub
+          test -s build/app/outputs/bundle/release/app-release.aab
+          mkdir -p artifacts
+          python3 "$CM_BUILD_DIR/scripts/ci/inspect-copybox-artifact.py" android \
+            build/app/outputs/bundle/release/app-release.aab \
+            --output artifacts/CopyBox-native-dependencies.json
+          cp build/app/outputs/bundle/release/app-release.aab artifacts/KorlixCopyBox.aab
+    artifacts:
+      - $CM_BUILD_DIR/apps/korlix_copy_box/artifacts/KorlixCopyBox.aab
+      - $CM_BUILD_DIR/apps/korlix_copy_box/artifacts/CopyBox-native-dependencies.json
+
+  korlix-copybox-ios-candidate: &copybox_ios_candidate
+    name: KORLIX COPY Box — iOS release candidate
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    working_directory: apps/korlix_copy_box
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    environment:
+      flutter: 3.47.7
+      xcode: 26.6
+      cocoapods: default
+      ios_signing:
+        provisioning_profiles:
+          - KORLIX_COPYBOX_APP_STORE_PROFILE
+        certificates:
+          - KORLIX_APP_STORE_CERT
+    scripts:
+      - name: Install pinned Apple release tools
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.copybox-ios-tools"
+          "$CM_BUILD_DIR/.copybox-ios-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+          printf 'PATH=%s/.copybox-ios-tools/bin:%s\n' "$CM_BUILD_DIR" "$PATH" >> "$CM_ENV"
+      - name: Verify the separate COPY Box Apple app
+        script: |
+          set -euo pipefail
+          python3 "$CM_BUILD_DIR/scripts/prepare_ios_release.py" \
+            --bundle-id com.korlixdeveloper.copybox \
+            --environment-file "$CM_ENV"
+          cp "$CM_BUILD_DIR/docs/releases/copybox-20261103/release-notes.txt" release_notes_en-US.txt
+      - name: Validate the independent writing app
+        script: |
+          set -euo pipefail
+          flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
+          flutter analyze --no-pub
+          export KORLIX_FLUTTER_ROOT="$(python3 -c 'from pathlib import Path; import shutil; print(Path(shutil.which("flutter")).resolve().parent.parent)')"
+          export COPYBOX_PREVIEWS="$CM_BUILD_DIR/.copybox-ui-previews"
+          flutter test --no-pub --reporter expanded
+      - name: Configure COPY Box and apply its own provisioning profile
+        script: |
+          set -euo pipefail
+          flutter build ios --release --config-only --no-codesign --no-pub \
+            --build-name="$KORLIX_IOS_VERSION" --build-number="$KORLIX_IOS_BUILD_NUMBER"
+          xcode-project use-profiles --project ios/Runner.xcodeproj \
+            --export-options-plist "$CM_BUILD_DIR/copybox-ios-export.plist" \
+            --custom-export-options '{"manageAppVersionAndBuildNumber": false}'
+      - name: Build and verify COPY Box IPA
+        script: |
+          set -euo pipefail
+          flutter build ipa --release --no-pub \
+            --build-name="$KORLIX_IOS_VERSION" --build-number="$KORLIX_IOS_BUILD_NUMBER" \
+            --export-options-plist="$CM_BUILD_DIR/copybox-ios-export.plist"
+          mkdir -p artifacts
+          IPA_FILES=(build/ios/ipa/*.ipa)
+          test "${#IPA_FILES[@]}" -eq 1
+          python3 "$CM_BUILD_DIR/scripts/verify_ios_ipa.py" "${IPA_FILES[0]}" \
+            --bundle-id com.korlixdeveloper.copybox --version "$KORLIX_IOS_VERSION" \
+            --build "$KORLIX_IOS_BUILD_NUMBER" --output artifacts/CopyBox-verification.json
+          python3 "$CM_BUILD_DIR/scripts/ci/inspect-copybox-artifact.py" ios \
+            "${IPA_FILES[0]}" \
+            --output artifacts/CopyBox-native-dependencies.json
+          cp "${IPA_FILES[0]}" artifacts/KorlixCopyBox.ipa
+    artifacts:
+      - $CM_BUILD_DIR/apps/korlix_copy_box/artifacts/*.ipa
+      - $CM_BUILD_DIR/apps/korlix_copy_box/artifacts/*.json
+      - /tmp/xcodebuild_logs/*.log
+
+  korlix-copybox-ios-testflight:
+    <<: *copybox_ios_candidate
+    name: KORLIX COPY Box — TestFlight upload
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: false
+        submit_to_app_store: false

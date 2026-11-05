@@ -1,0 +1,25 @@
+{
+  "artifact": "Runner.app",
+  "bundle_identifier": "com.korlixdeveloper.copybox",
+  "version": "1.0.0",
+  "build": "1",
+  "platforms": [
+    "iPhoneSimulator"
+  ],
+  "protected_access_purpose_strings": [
+    "NSLocalNetworkUsageDescription"
+  ],
+  "mach_o_binaries_inspected": 6,
+  "unused_native_references": [],
+  "privacy_manifests": [
+    "Frameworks/Flutter.framework/PrivacyInfo.xcprivacy",
+    "PrivacyInfo.xcprivacy",
+    "file_picker_darwin_file_picker_darwin.bundle/PrivacyInfo.xcprivacy",
+    "flutter_secure_storage_darwin_flutter_secure_storage_darwin.bundle/PrivacyInfo.xcprivacy",
+    "package_info_plus_package_info_plus.bundle/PrivacyInfo.xcprivacy",
+    "share_plus_share_plus.bundle/PrivacyInfo.xcprivacy",
+    "shared_preferences_foundation_shared_preferences_foundation.bundle/PrivacyInfo.xcprivacy",
+    "url_launcher_ios_url_launcher_ios.bundle/PrivacyInfo.xcprivacy"
+  ],
+  "validation_errors": []
+}

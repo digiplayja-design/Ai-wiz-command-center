@@ -1,0 +1,18 @@
+[
+  {
+    "file": "KORLIX_COPY_Box_1.0.0_iOS_Simulator.zip",
+    "size_bytes": 59758707,
+    "sha256": "d4567617f2008100683454dd592a7bc77590ec11dfdf1c9db2b4c3ef31775e6a",
+    "artifact_id": 13280008969,
+    "source_commit": "de58d87d0277759db87d20abc048358e6ab4f89c",
+    "workflow_run": 41739349055
+  },
+  {
+    "file": "KORLIX_COPY_Box_1.0.0_Android_test.apk",
+    "size_bytes": 165563059,
+    "sha256": "2a43dcad96748549a7917f730bde8cacd352d5afced236a3caee6744ea224acc",
+    "artifact_id": 13279519044,
+    "source_commit": "de58d87d0277759db87d20abc048358e6ab4f89c",
+    "workflow_run": 41739349055
+  }
+]
