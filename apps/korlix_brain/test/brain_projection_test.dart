@@ -31,10 +31,11 @@ class Fixture {
           (method, path, body) async {
             requests.add(path);
             if (path.endsWith('/config')) return config;
-            if (path.endsWith('/resolve'))
+            if (path.endsWith('/resolve')) {
               return {
                 'candidates': [place],
               };
+            }
             return {
               'text': 'A test answer with evidence. [1]',
               'scope': 'The selected fixture city',
@@ -274,10 +275,11 @@ void main() {
         final f = Fixture(
           request: (method, path, body) async {
             if (path.endsWith('/config')) return config;
-            if (path.endsWith('/resolve'))
+            if (path.endsWith('/resolve')) {
               return {
                 'candidates': [place],
               };
+            }
             return {
               'text': 'Unsupported factual assertion',
               'sources': [

@@ -7,6 +7,9 @@ const screenDirectory = process.env.PROJECTION_SCREENSHOTS;
 
 async function fixture(page) {
   await page.addInitScript(() => {
+    // Playwright also evaluates init scripts in child frames. Only the bundled
+    // top-level shell receives the native workspace fixture and session nonce.
+    if(window !== window.top)return;
     window.projectionCommands = [];
     window.projectionTimeouts = [];
     const browserSetTimeout=window.setTimeout.bind(window);
@@ -194,6 +197,7 @@ async function fixture(page) {
     assert.equal(await page.locator('#world-canvas').isVisible(),false);
     const renderer = page.frames().find(frame=>frame.url().startsWith('https://projection.test/'));
     await renderer.waitForFunction(()=>window.received.length>0);
+    assert.equal(await renderer.evaluate(()=>typeof window.projectionState),'undefined','Workspace fixture state is not injected into the renderer');
     assert.equal(await renderer.evaluate(()=>JSON.stringify(window.received).includes('test-session-nonce')),false,'Native nonce never reaches iframe');
     assert.deepEqual(await renderer.evaluate(()=>Object.keys(window.received[0]).sort()),['camera','place','type']);
     assert.equal(await renderer.evaluate(()=>window.received[0].camera.operation),'flyTo','Native place selection reaches the map unchanged');

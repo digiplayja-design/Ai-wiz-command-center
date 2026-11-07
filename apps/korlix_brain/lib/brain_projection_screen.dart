@@ -118,8 +118,9 @@ class _BrainProjectionScreenState extends State<BrainProjectionScreen> {
             final uri = Uri.tryParse(url);
             if (!mounted ||
                 uri?.scheme != 'file' ||
-                !uri!.path.endsWith('/assets/web/projection.html'))
+                !uri!.path.endsWith('/assets/web/projection.html')) {
               return;
+            }
             _ready = true;
             unawaited(
               _web
