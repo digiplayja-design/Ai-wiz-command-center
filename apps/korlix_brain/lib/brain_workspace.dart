@@ -21,6 +21,8 @@ import 'brain_pronunciation.dart';
 import 'brain_welcome.dart';
 import 'brain_billing.dart';
 import 'brain_billing_screen.dart';
+import 'brain_projection.dart';
+import 'brain_projection_screen.dart';
 
 class BrainWorkspace extends StatefulWidget {
   const BrainWorkspace({super.key, required this.auth});
@@ -34,6 +36,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
   late final BrainApi _api;
   late final BrainRepository _repository;
   late final BrainVoice _voice;
+  late final BrainProjection _projection;
   late final BrainWelcome _welcome;
   late final BrainBilling _billing;
   late final WebViewController _web;
@@ -73,9 +76,28 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
     _billing = BrainBilling(_api);
     unawaited(_billing.initialize().catchError((Object _) {}));
     _repository = BrainRepository(_api);
+    _projection = BrainProjection(
+      backendUrl: widget.auth.backendUrl,
+      request: _projectionRequest,
+      onOpen: () {
+        if (!_disposed && mounted) setState(() {});
+        unawaited(_welcome.stop().catchError((Object _) {}));
+      },
+      onClose: () {
+        if (!_disposed && mounted) setState(() {});
+      },
+      onStartVoice: () async {
+        if (!_voice.active) await _dispatch('startVoice', {'mode': 'live'});
+      },
+      onStopVoice: () async {
+        await _dispatch('stopVoice', {});
+      },
+      onSave: _saveProjectionPlace,
+    );
     _voice = BrainVoice(
       _api,
       _emit,
+      onProjection: _projection.voiceTurn,
       onSaved: (result) async {
         // A confirmed write must remain visible even if the subsequent refresh fails.
         final memory = Map<String, dynamic>.from(result['memory'] as Map);
@@ -168,6 +190,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
         // A local archive/account error must not interrupt working live audio.
       }
     }
+    _projection.receiveVoice(event);
     unawaited(
       _web
           .runJavaScript('window.KorlixBrainReceive?.(${jsonEncode(event)});')
@@ -262,6 +285,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
     if (action == 'stopVoice') {
       ++_voiceStartRequest;
       _captureStarting = false;
+      _projection.cancelPending();
       await _voice.stop();
       return null;
     }
@@ -269,6 +293,9 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
       throw const BrainApiException('Please sign in again.');
     }
     switch (action) {
+      case 'openProjection':
+        _projection.open();
+        return {'open': true};
       case 'listSavedTranscripts':
         return _transcriptStore.listSaved();
       case 'saveTranscript':
@@ -402,6 +429,65 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
         return _report(_text(data, 'text', max: 20000));
       default:
         throw const BrainApiException('This app action is not supported.');
+    }
+  }
+
+  Future<bool> _saveProjectionPlace(String text, bool fromVoice) async {
+    if (_disposed || !mounted || widget.auth.session == null) return false;
+    final revision = widget.auth.revision;
+    // Speaking an explicit place-save command is the confirmation. A typed
+    // place note uses the existing review-before-save interaction.
+    if (!fromVoice) {
+      final approved = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Save this place in My Brain?'),
+          content: SingleChildScrollView(child: Text(text)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Save place note'),
+            ),
+          ],
+        ),
+      );
+      if (approved != true) return false;
+    }
+    if (_disposed || !mounted || revision != widget.auth.revision) return false;
+    final snapshot = await _repository.saveMemory(
+      text,
+      fromVoice ? 'voice' : 'projection',
+    );
+    _emit({'type': 'brainSnapshot', 'snapshot': snapshot});
+    return true;
+  }
+
+  Future<Map<String, dynamic>> _projectionRequest(
+    String method,
+    String path,
+    Map<String, dynamic>? body,
+  ) async {
+    if (path != '/api/brain-projection/answer') {
+      return _api.json(method, path, body);
+    }
+    // Sourced reasoning has the same longer budget as Deep Think. Stop stays
+    // local and can invalidate its result while the request is outstanding.
+    final response = await _api.send(
+      method,
+      path,
+      body: body,
+      timeout: const Duration(seconds: 175),
+    );
+    try {
+      return Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+    } catch (_) {
+      throw const BrainApiException(
+        'The place answer could not be read. Please try again.',
+      );
     }
   }
 
@@ -721,6 +807,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
   @override
   void dispose() {
     _disposed = true;
+    _projection.dispose();
     _billing.dispose();
     unawaited(_welcome.dispose().catchError((Object _) {}));
     WidgetsBinding.instance.removeObserver(this);
@@ -737,31 +824,53 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
     await _voice.stop();
     if (!mounted || _disposed) return;
     unawaited(_billing.refresh());
-    await Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => BrainBillingScreen(billing: _billing),
-    ));
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => BrainBillingScreen(billing: _billing),
+      ),
+    );
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    body: SafeArea(
-      child: _pageError == null
-          ? WebViewWidget(controller: _web)
-          : Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(_pageError!),
-                  FilledButton(
-                    onPressed: () {
-                      setState(() => _pageError = null);
-                      unawaited(_web.loadFlutterAsset('assets/web/index.html'));
-                    },
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
+  Widget build(BuildContext context) => PopScope(
+    canPop: !_projection.isOpen,
+    onPopInvokedWithResult: (didPop, result) {
+      if (!didPop && _projection.isOpen) _projection.close();
+    },
+    child: Scaffold(
+      body: SafeArea(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Offstage(
+              offstage: _projection.isOpen,
+              child: _pageError == null
+                  ? WebViewWidget(controller: _web)
+                  : Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(_pageError!),
+                          FilledButton(
+                            onPressed: () {
+                              setState(() => _pageError = null);
+                              unawaited(
+                                _web.loadFlutterAsset('assets/web/index.html'),
+                              );
+                            },
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ),
             ),
+            if (_projection.isOpen)
+              Positioned.fill(
+                child: BrainProjectionScreen(projection: _projection),
+              ),
+          ],
+        ),
+      ),
     ),
   );
 }

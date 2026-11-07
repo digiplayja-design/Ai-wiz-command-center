@@ -383,3 +383,14 @@ html,body{margin:0;background:#100b1b;color:#fff9e9;min-height:100%;font-family:
 #korlix-silent-storm .kb-welcome-controls button{min-height:44px;min-width:44px;color:var(--kb-cyan,#77e9ef)}
 #korlix-silent-storm [data-welcome="playing"] .kb-welcome-controls{color:var(--kb-gold,#e2c58d)}
 @media(max-width:420px){#korlix-silent-storm .kb-welcome-controls{margin:0 17px}}
+
+/* Projection is an additive shortcut; the original home and voice state remain intact. */
+#korlix-cinema-app .kb-projection-entry{display:flex;align-items:center;gap:12px;width:100%;margin:14px 0 0;padding:13px 16px;text-align:left;border:1px solid #bda3e03d;border-radius:14px;color:#dfc49e;background:linear-gradient(120deg,#a080c517,#d3b0800c);cursor:pointer;touch-action:manipulation}
+#korlix-cinema-app .kb-projection-entry>span:nth-child(2){flex:1;min-width:0}
+#korlix-cinema-app .kb-projection-entry strong{display:block;font-family:inherit;font-weight:500;font-size:13px;line-height:1.4;letter-spacing:.02em;color:#eee0cb}
+#korlix-cinema-app .kb-projection-entry small{display:block;margin-top:4px;font-size:10px;line-height:1.4;color:#a799b5;letter-spacing:.015em}
+#korlix-cinema-app .kb-projection-entry-icon{display:grid;place-items:center;width:34px;height:34px;border:1px solid #bba2d832;border-radius:50%;background:#b094d20b;flex-shrink:0}
+#korlix-cinema-app .kb-projection-entry svg{width:18px;height:18px;stroke-width:1.4}
+#korlix-cinema-app .kb-projection-entry>svg{width:15px;height:15px;color:#b39fbd;flex-shrink:0}
+#korlix-cinema-app .kb-projection-entry:focus-visible{outline:2px solid #80e6f2;outline-offset:4px}
+#korlix-cinema-app .kb-projection-entry:hover{border-color:#d9c29d6b;background:linear-gradient(120deg,#a080c525,#d3b08012)}

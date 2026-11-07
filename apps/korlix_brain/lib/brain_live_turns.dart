@@ -2,9 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'brain_pronunciation.dart';
+import 'brain_voice_session.dart';
 
 /// Native Realtime replies are never held behind ASR, HTTP or Sol. Only an
-/// explicit memory tool waits for the original, item-bound user transcript.
+/// explicit tool waits for the original, item-bound user transcript.
 class BrainLiveTurns {
   BrainLiveTurns({
     required this.send,
@@ -13,6 +14,7 @@ class BrainLiveTurns {
     required this.saved,
     required this.isCurrent,
     required this.reportTiming,
+    this.onProjection,
     DateTime Function()? now,
     this.transcriptionTimeout = const Duration(seconds: 15),
   }) : now = now ?? DateTime.now;
@@ -22,6 +24,12 @@ class BrainLiveTurns {
   final Future<void> Function(Map<String, dynamic>) saved;
   final bool Function() isCurrent;
   final Future<void> Function(String, int) reportTiming;
+  final Future<Map<String, dynamic>?> Function(
+    String turnId,
+    String transcript,
+    Map<String, dynamic>? arguments,
+  )?
+  onProjection;
   final DateTime Function() now;
   final Duration transcriptionTimeout;
   final _turns = <String, _LiveTurn>{};
@@ -153,6 +161,12 @@ class BrainLiveTurns {
         .where((item) => item['type'] == 'function_call')
         .toList();
     if (calls.isEmpty) return;
+    if (calls.every((call) => call['name'] == 'control_projection')) {
+      // A newer spoken search/close must reach the controller immediately so
+      // it can invalidate an older lookup. The turn epoch still gates speech.
+      await _completeTools(turnId, calls);
+      return;
+    }
     // Serialize writes; a newer utterance must not change which transcript
     // authorizes an in-flight save. Duplicate call IDs never replay it.
     final task = _toolQueue.then((_) => _completeTools(turnId, calls));
@@ -164,16 +178,25 @@ class BrainLiveTurns {
     final turn = _turns[turnId];
     if (!current || turn == null) return;
     var wroteOutput = false;
+    var usedProjection = false;
     for (final call in calls) {
       final callId = call['call_id']?.toString();
       if (callId == null || !_calls.add(callId)) continue;
+      final projection = call['name'] == 'control_projection';
+      usedProjection = usedProjection || projection;
       Map<String, dynamic> result;
       try {
         final args = jsonDecode(call['arguments']?.toString() ?? '{}');
-        if (call['name'] != 'remember_in_brain' ||
-            args is! Map ||
-            args.isNotEmpty) {
-          throw StateError('Unsupported memory request');
+        if (projection) {
+          if (onProjection == null || !_projectionArguments(args)) {
+            throw StateError('Unsupported projection request');
+          }
+        } else {
+          if (call['name'] != 'remember_in_brain' ||
+              args is! Map ||
+              args.isNotEmpty) {
+            throw StateError('Unsupported memory request');
+          }
         }
         final transcript = await turn.transcript.future.timeout(
           transcriptionTimeout,
@@ -181,25 +204,57 @@ class BrainLiveTurns {
         );
         if (!current) return;
         if (transcript == null) throw StateError('Missing original transcript');
-        // The server validates the command and owns idempotency and allowance.
-        result = await requestMemory(turnId, transcript);
-        if (!current) return;
-        if (result['saved'] == true && _savedTurns.add(turnId)) {
-          unawaited(saved(result).catchError((Object _) {}));
-          emit({
-            'type': 'voiceSaved',
-            'message': result['answer'],
-            'memory': result['memory'],
-          });
+        if (projection) {
+          // A delayed navigation must not replace a newer place or utterance.
+          // The controller also invalidates in-flight work on Stop/selection.
+          if (turn.epoch != _epoch) {
+            result = _interruptedProjection;
+          } else {
+            result =
+                await onProjection!(
+                  turnId,
+                  transcript,
+                  Map<String, dynamic>.from(args as Map),
+                ) ??
+                {
+                  'ok': false,
+                  'handled': false,
+                  'answer': 'That request was not recognized as a projection command. Please say what you want to open or explore.',
+                };
+            if (!current) return;
+            if (turn.epoch != _epoch) result = _interruptedProjection;
+          }
+          // Explicit place notes are saved and refreshed by the controller.
+          // A projection result must never replay the existing memory handler.
+        } else {
+          // The server validates the command and owns idempotency and allowance.
+          result = await requestMemory(turnId, transcript);
+          if (!current) return;
+          if (result['saved'] == true && _savedTurns.add(turnId)) {
+            unawaited(saved(result).catchError((Object _) {}));
+            emit({
+              'type': 'voiceSaved',
+              'message': result['answer'],
+              'memory': result['memory'],
+            });
+          }
         }
       } catch (_) {
-        result = {
-          'ok': false,
-          'saved': false,
-          'answer':
-              'The save was not confirmed. Check My Brain before repeating it.',
-        };
-        if (current) emit({'type': 'voiceNotice', 'message': result['answer']});
+        result = projection
+            ? {
+                'ok': false,
+                'handled': false,
+                'saved': false,
+                'answer': 'The projection request could not be confirmed. Please repeat the command.',
+              }
+            : {
+                'ok': false,
+                'saved': false,
+                'answer': 'The save was not confirmed. Check My Brain before repeating it.',
+              };
+        if (current && (!projection || turn.epoch == _epoch)) {
+          emit({'type': 'voiceNotice', 'message': result['answer']});
+        }
       }
       if (!current) return;
       await send({
@@ -215,6 +270,13 @@ class BrainLiveTurns {
               'answer',
               'awaitingMemory',
               'kind',
+              if (projection) ...[
+                'sources',
+                'scope',
+                'date',
+                'isLive',
+                'imageryDate',
+              ],
             ])
               if (result.containsKey(key)) key: result[key],
           }),
@@ -227,13 +289,28 @@ class BrainLiveTurns {
         'type': 'response.create',
         'response': {
           'metadata': {'brain_turn': turnId},
-          'instructions':
-              'Briefly relay the memory tool result accurately. Confirm a save only when saved is true. Do not call another tool for the same utterance. Your name is Ree-see. $brainPronunciation',
+          'instructions': usedProjection
+              ? 'Briefly relay the tool result accurately, including its scope and source limits. Do not add unverified location facts or describe map imagery as live video. Confirm a save only when saved is true. Do not call another tool for the same utterance. Your name is Ree-see. $brainPronunciation'
+              : 'Briefly relay the memory tool result accurately. Confirm a save only when saved is true. Do not call another tool for the same utterance. Your name is Ree-see. $brainPronunciation',
           'tool_choice': 'none',
         },
       });
     }
   }
+
+  bool _projectionArguments(Object? value) =>
+      value is Map &&
+      value.length == 2 &&
+      BrainVoiceSessionGate.projectionActions.contains(value['action']) &&
+      value['value'] is String &&
+      (value['value'] as String).length <=
+          BrainVoiceSessionGate.projectionValueLimit;
+
+  static const _interruptedProjection = <String, dynamic>{
+    'ok': false,
+    'handled': true,
+    'answer': 'That projection reply was interrupted by a newer request.',
+  };
 
   void dispose() {
     _disposed = true;

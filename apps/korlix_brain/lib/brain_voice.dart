@@ -15,10 +15,16 @@ import 'package:flutter/foundation.dart';
 import 'voice_usage_guard.dart';
 
 class BrainVoice {
-  BrainVoice(this.api, this.emit, {required this.onSaved});
+  BrainVoice(this.api, this.emit, {required this.onSaved, this.onProjection});
   final BrainApi api;
   final void Function(Map<String, dynamic>) emit;
   final Future<void> Function(Map<String, dynamic>) onSaved;
+  final Future<Map<String, dynamic>?> Function(
+    String turnId,
+    String transcript,
+    Map<String, dynamic>? arguments,
+  )?
+  onProjection;
   BrainVoiceTurns? _turns;
   BrainLiveTurns? _live;
   RTCPeerConnection? _peer;
@@ -154,7 +160,10 @@ class BrainVoice {
         check();
       }
       _channel = channel;
-      final sessionGate = BrainVoiceSessionGate(mode: mode);
+      final sessionGate = BrainVoiceSessionGate(
+        mode: mode,
+        projectionEnabled: onProjection != null,
+      );
       channel.onMessage = (message) {
         if (!current() || message.isBinary) return;
         try {
@@ -263,8 +272,9 @@ class BrainVoice {
                 if (current()) {
                   emit({
                     'type': 'voiceNotice',
-                    'message':
-                        'The memory reply was interrupted. Check My Brain.',
+                    'message': onProjection == null
+                        ? 'The memory reply was interrupted. Check My Brain.'
+                        : 'The reply was interrupted. Check My Brain before repeating a save.',
                   });
                 }
               }),
@@ -354,6 +364,7 @@ class BrainVoice {
 
       if (mode.isLive) {
         _live = BrainLiveTurns(
+          onProjection: onProjection,
           isCurrent: current,
           emit: emit,
           saved: onSaved,
@@ -373,6 +384,7 @@ class BrainVoice {
         );
       } else {
         _turns = BrainVoiceTurns(
+          onProjection: onProjection,
           isCurrent: current,
           emit: emit,
           saved: onSaved,
