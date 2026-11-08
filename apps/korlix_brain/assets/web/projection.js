@@ -13,10 +13,13 @@
   const phases = new Set(['complete', 'connecting', 'listening', 'thinking', 'speaking', 'stopping', 'error']);
   const requests = new Map();
   const transcripts = [];
+  const shell = document.querySelector('.projection-shell');
   const busy = {search:false, select:false, ask:false, save:false, close:false};
   let nonce = '', nextId = 0, connected = false, searchEpoch = 0, askEpoch = 0;
   let startPending = false, stopPending = false, startTimer = null, stopTimer = null;
+  let voiceViewportActive = false;
   let frame = null, frameOrigin = '', frameUrl = '', mapStatus = 'illustration', lastCamera = '';
+  let rendererCreditHeight = 30;
   let rendererTimer = null, canvasInvalidated = true;
   let localNotice = '', localNoticeKind = '', lastSavedPlace = '', pendingQuestionLocal = false;
 
@@ -217,10 +220,20 @@
     help.lastElementChild.textContent = 'Confirm a result before traveling.';
   }
 
+  function measureVoiceDock() {
+    const height = document.querySelector('.voice-dock').getBoundingClientRect().height;
+    if (!Number.isFinite(height)) return;
+    document.documentElement.style.setProperty('--voice-dock-height',
+      Math.max(0,Math.min(Math.ceil(height),Math.floor(window.innerHeight))) + 'px');
+  }
+
   function renderVoice() {
     const voice = state.voice;
     const phase = stopPending ? 'stopping' : startPending && !voice.active ? 'connecting' : voice.phase;
     const active = voice.active || startPending || stopPending;
+    const viewportActive = !['complete','error'].includes(phase);
+    const transition = viewportActive !== voiceViewportActive;
+    const scrollOffset = transition ? (voiceViewportActive ? shell.scrollTop : window.scrollY) : 0;
     document.body.dataset.voice = phase;
     $('voice-phase').textContent = phase === 'stopping' ? 'Stopping conversation…' : phase === 'connecting' ? 'Connecting to Rici…'
       : voice.message || (active ? 'Rici is with you' : 'Ready when you are');
@@ -231,6 +244,17 @@
     $('stop-button').disabled = !connected || !active || stopPending;
     $('stop-label').textContent = stopPending ? 'Stopping…' : 'Stop conversation';
     $('rici-presence').textContent = phase === 'listening' ? 'Listening' : phase === 'speaking' ? 'Speaking' : phase === 'thinking' ? 'Thinking' : active ? 'Connected' : 'Ready';
+    measureVoiceDock();
+    if (transition) {
+      voiceViewportActive = viewportActive;
+      if (viewportActive) {
+        window.scrollTo(0,0);
+        shell.scrollTop = scrollOffset;
+      } else {
+        shell.scrollTop = 0;
+        window.scrollTo(0,scrollOffset);
+      }
+    }
   }
 
   function syncVoiceGuards() {
@@ -278,9 +302,17 @@
     }
   }
 
+  function applyCreditHeight() {
+    // A renderer can reserve at most one local viewport of presentation space.
+    // The ready scene grows by that amount, keeping its map/control area intact.
+    const height = Math.min(rendererCreditHeight, Math.max(0, Math.floor(window.innerHeight)), 4096);
+    $('scene-stage').style.setProperty('--map-credit-height', height + 'px');
+  }
+
   function disposeFrame() {
     clearTimeout(rendererTimer);
     frame?.remove(); frame = null; frameOrigin = ''; frameUrl = ''; lastCamera = '';
+    rendererCreditHeight = 30; applyCreditHeight();
     $('map-container').replaceChildren(); setMapStatus('illustration');
   }
 
@@ -314,7 +346,13 @@
   window.addEventListener('message',event => {
     if (!frame || event.source !== frame.contentWindow || event.origin !== frameOrigin) return;
     const data = event.data;
-    if (!isObject(data) || data.type !== 'korlix-projection-status' || !['loading','ready','error'].includes(data.status)) return;
+    if (!isObject(data)) return;
+    if (data.type === 'korlix-projection-credits') {
+      if (!Number.isInteger(data.height) || !finite(data.height,0,4096)) return;
+      rendererCreditHeight = data.height; applyCreditHeight();
+      return;
+    }
+    if (data.type !== 'korlix-projection-status' || !['loading','ready','error'].includes(data.status)) return;
     const wasReady = mapStatus === 'ready';
     if (data.status !== 'loading') clearTimeout(rendererTimer);
     setMapStatus(data.status,clip(data.message,500));
@@ -323,6 +361,7 @@
       sendCamera();
     }
   });
+  window.addEventListener('resize',applyCreditHeight);
 
   function render() {
     $('connection-label').textContent = connected ? 'Your KORLIX workspace' : 'Preview · open inside KORLIX';
@@ -529,6 +568,7 @@
     requestAnimationFrame(animate);
   }
   new ResizeObserver(resizeCanvas).observe($('scene-stage'));
+  new ResizeObserver(measureVoiceDock).observe(document.querySelector('.voice-dock'));
   reducedMotion.addEventListener('change',() => { canvasInvalidated=true; });
   document.addEventListener('visibilitychange',() => { canvasInvalidated=true; });
   render(); resizeCanvas(); requestAnimationFrame(animate);

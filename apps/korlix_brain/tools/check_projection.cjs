@@ -77,6 +77,10 @@ async function fixture(page) {
   await page.waitForFunction(()=>document.querySelector('#connection-label').textContent==='Your KORLIX workspace');
 }
 
+async function settleLayout(page) {
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+}
+
 (async()=>{
   const browser = await chromium.launch({headless:true,executablePath:process.env.BROWSER_EXECUTABLE_PATH||undefined,args:['--no-sandbox','--disable-dev-shm-usage']});
   const errors=[];
@@ -185,7 +189,17 @@ async function fixture(page) {
 
     const page = await browser.newPage({viewport:{width:1024,height:768},reducedMotion:'reduce'});
     page.on('pageerror',error=>errors.push(error.message));
-    await page.route('https://projection.test/brain-projection/earth.html',route=>route.fulfill({contentType:'text/html',body:`<!doctype html><html><body style="background:#142135;color:white">Map renderer fixture<script>window.received=[];window.addEventListener('message',e=>window.received.push(e.data));window.emitStatus=status=>parent.postMessage({type:'korlix-projection-status',status},'*');window.emitStatus('ready');</script></body></html>`}));
+    await page.route('https://projection.test/brain-projection/earth.html',route=>route.fulfill({contentType:'text/html',body:`<!doctype html><html><head><style>
+      html,body{height:100%;margin:0;overflow:hidden;background:#142135;color:white;font:11px/1.5 system-ui}
+      #map-credits{position:absolute;left:0;right:0;bottom:0;padding:8px;background:#030b13;overflow-wrap:anywhere}
+      </style></head><body>Map renderer fixture<div id="map-credits">Google Maps · Synthetic imagery supplied by Example City Survey Office; Example Regional Mapping Group; Example Geospatial Imagery Cooperative; Example Municipal Cartography Archive; Example Terrain Survey Partnership; Example Geographic Data Consortium. Attribution fixture only; no real imagery is requested.</div><script>
+      window.received=[];window.addEventListener('message',e=>window.received.push(e.data));
+      window.emitStatus=status=>parent.postMessage({type:'korlix-projection-status',status},'*');
+      window.emitCreditHeight=height=>parent.postMessage({type:'korlix-projection-credits',height},'*');
+      window.publishCredits=()=>{if(!window.pauseCreditReports)window.emitCreditHeight(Math.ceil(document.getElementById('map-credits').getBoundingClientRect().height));};
+      new ResizeObserver(window.publishCredits).observe(document.getElementById('map-credits'));
+      window.addEventListener('resize',window.publishCredits);window.emitStatus('ready');window.publishCredits();
+      </script></body></html>`}));
     await fixture(page);
     await page.evaluate(()=>{
       window.projectionState.selectedPlace={id:'renderer-fixture',label:'Camera fixture',address:'Not a real location claim',latitude:40.71,longitude:-74,provider:'Test'};
@@ -209,6 +223,84 @@ async function fixture(page) {
     assert.equal(await page.locator('body').getAttribute('data-map'),'ready','Forged window or origin is ignored');
     await renderer.evaluate(()=>window.emitStatus('ready'));
     assert.equal(await page.evaluate(()=>window.projectionCommands.filter(c=>c.action==='rendererReady'&&c.payload.status==='ready').length),1,'Duplicate renderer status does not duplicate ready action');
+
+    await settleLayout(page);
+    const creditHeightBefore=await page.evaluate(()=>document.getElementById('scene-stage').style.getPropertyValue('--map-credit-height'));
+    const nativeCommandsBefore=await page.evaluate(()=>window.projectionCommands.length);
+    await page.evaluate(()=>{
+      window.dispatchEvent(new MessageEvent('message',{origin:'https://projection.test',source:window,data:{type:'korlix-projection-credits',height:250}}));
+      window.dispatchEvent(new MessageEvent('message',{origin:'https://attacker.test',source:document.querySelector('iframe').contentWindow,data:{type:'korlix-projection-credits',height:250}}));
+    });
+    await renderer.evaluate(()=>{
+      window.pauseCreditReports=true;
+      for(const height of [-1,1.5,'80',NaN,Infinity,null,{},4097,1000000])window.emitCreditHeight(height);
+    });
+    await settleLayout(page);
+    assert.equal(await page.evaluate(()=>document.getElementById('scene-stage').style.getPropertyValue('--map-credit-height')),creditHeightBefore,'Forged source/origin or malformed/unbounded credit geometry cannot move shell controls');
+    await renderer.evaluate(()=>window.emitCreditHeight(4096));
+    await page.waitForFunction(()=>parseFloat(document.getElementById('scene-stage').style.getPropertyValue('--map-credit-height'))===innerHeight);
+    assert.equal(await page.evaluate(()=>window.projectionCommands.length),nativeCommandsBefore,'Public geometry never becomes a native command or changes readiness');
+    await renderer.evaluate(()=>{window.pauseCreditReports=false;window.publishCredits();});
+    await settleLayout(page);
+
+    for(const width of [320,390,1024]) {
+      await page.setViewportSize({width,height:844});
+      for(const room of ['command','discovery']) {
+        await page.locator('#room-'+room).click();
+        await settleLayout(page);
+        const footer=await renderer.evaluate(()=>document.getElementById('map-credits').getBoundingClientRect().toJSON());
+        const iframe=await page.locator('#map-container iframe').boundingBox();
+        const geometry=await page.evaluate(()=>{
+          const stage=document.getElementById('scene-stage');
+          const selectors=['.world-caption','.camera-controls','.place-banner','.room-architecture','.scene-crosshair','.scene-topline'];
+          return {reserved:parseFloat(getComputedStyle(stage).getPropertyValue('--map-credit-height')),
+            base:parseFloat(getComputedStyle(stage).getPropertyValue('--scene-height')),stage:stage.getBoundingClientRect().toJSON(),
+            afterBottom:parseFloat(getComputedStyle(stage,'::after').bottom),beforeBottom:parseFloat(getComputedStyle(stage,'::before').bottom),
+            overlays:Object.fromEntries(selectors.map(selector=>[selector,document.querySelector(selector).getBoundingClientRect().toJSON()]))};
+        });
+        assert.ok(footer.height>30,'Fixture uses genuinely wrapped attribution at '+width);
+        assert.equal(geometry.reserved,Math.ceil(footer.height),'Entire measured attribution receives room at '+width+' / '+room);
+        assert.ok(geometry.stage.height>=geometry.base+geometry.reserved-1,'Footer space does not shrink the map/control area');
+        const footerTop=iframe.y+footer.top;
+        for(const [name,box] of Object.entries(geometry.overlays)) {
+          assert.ok(box.bottom<=footerTop+1,name+' stays out of provider credits at '+width+' / '+room);
+        }
+        assert.ok(geometry.afterBottom>=geometry.reserved,'Vignette excludes provider footer');
+        if(room==='discovery')assert.ok(geometry.beforeBottom>=geometry.reserved,'Discovery frame excludes provider footer');
+        if(screenDirectory&&width<500)await page.screenshot({path:path.join(screenDirectory,`projection-attribution-${room}-${width}.png`),fullPage:true});
+
+        await page.evaluate(()=>{
+          const stage=document.getElementById('scene-stage');
+          window.scrollTo(0,Math.max(0,stage.getBoundingClientRect().bottom+scrollY-innerHeight+40));
+          window.scrollBeforeVoice=scrollY;
+          window.projectionState.voice={active:true,phase:'listening',message:'Rici is listening'};window.sendSnapshot();
+        });
+        assert.equal(await page.evaluate(()=>Math.abs(document.querySelector('.projection-shell').scrollTop-window.scrollBeforeVoice)<1),true,'Starting voice preserves the reading position in the reserved scroll viewport');
+        await page.evaluate(()=>{
+          const shell=document.querySelector('.projection-shell');
+          shell.scrollTop+=document.getElementById('scene-stage').getBoundingClientRect().bottom-shell.getBoundingClientRect().bottom+12;
+        });
+        await settleLayout(page);
+        const active=await page.evaluate(()=>{
+          const shell=document.querySelector('.projection-shell'),dock=document.querySelector('.voice-dock'),stop=document.getElementById('stop-button');
+          const button=stop.getBoundingClientRect();
+          return {shell:shell.getBoundingClientRect().toJSON(),dock:dock.getBoundingClientRect().toJSON(),stop:button.toJSON(),
+            stopHittable:document.elementFromPoint(button.x+button.width/2,button.y+button.height/2)?.closest('#stop-button')===stop};
+        });
+        const activeFrame=await page.locator('#map-container iframe').boundingBox();
+        const activeFooter=await renderer.evaluate(()=>document.getElementById('map-credits').getBoundingClientRect().toJSON());
+        assert.ok(active.shell.bottom<=active.dock.top-10,'Scroll viewport ends above the active voice dock');
+        assert.ok(activeFrame.y+activeFooter.top>=active.shell.top&&activeFrame.y+activeFooter.bottom<=active.shell.bottom,'Full attribution can scroll into view without going behind the dock');
+        assert.ok(activeFrame.y+activeFooter.bottom<active.dock.top,'Active voice dock never covers visible provider attribution');
+        assert.ok(active.stop.y>=0&&active.stop.bottom<=844&&active.stopHittable,'Stop stays visible and hittable with wrapped credits at '+width+' / '+room);
+        if(screenDirectory&&width===390)await page.screenshot({path:path.join(screenDirectory,`projection-attribution-active-${room}-${width}.png`)});
+        await page.evaluate(()=>{
+          window.scrollBeforeStop=document.querySelector('.projection-shell').scrollTop;
+          window.projectionState.voice={active:false,phase:'complete',message:'Microphone off'};window.sendSnapshot();
+        });
+        assert.equal(await page.evaluate(()=>Math.abs(scrollY-window.scrollBeforeStop)<1),true,'Stopping voice restores the same reading position to normal page scrolling');
+      }
+    }
     await page.locator('[data-camera="closer"]').click();
     await renderer.waitForFunction(()=>window.received.at(-1).camera.operation==='closer');
     await renderer.evaluate(()=>window.emitStatus('error'));
@@ -221,6 +313,6 @@ async function fixture(page) {
     }
     await page.close();
     assert.deepEqual(errors,[],'No uncaught browser errors');
-    console.log('Projection UI passed: five viewport sizes, both rooms, explicit place confirmation, source safety, cost disclosure, save failure/success, voice continuity, duplicate-start prevention, close/stop separation, renderer origin isolation, and no credential transfer.');
+    console.log('Projection UI passed: five viewport sizes, both rooms, explicit place confirmation, source safety, cost disclosure, save failure/success, voice continuity, duplicate-start prevention, close/stop separation, renderer origin isolation, bounded wrapping attribution, active-dock clearance with scroll preservation, and no credential transfer.');
   } finally { await browser.close(); }
 })().catch(error=>{console.error(error);process.exitCode=1;});

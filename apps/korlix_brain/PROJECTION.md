@@ -46,7 +46,10 @@ implementation does not include Street View or infer occupancy from imagery.
 - The native controller accepts only the exact HTTPS renderer path on the
   configured API origin: `/brain-projection/earth.html`.
 - The bundled parent validates both message origin and source. The iframe only
-  receives bounded camera/selected-place data and returns renderer status.
+  receives bounded camera/selected-place data and returns renderer status and
+  bounded attribution height. The map, caption and controls reserve room for
+  wrapped provider credits. During a conversation, the workspace scrolls above
+  the pinned voice dock so Stop remains reachable without covering attribution.
 - Source links open externally only when present in the current answer.
 - Live Conversation appends `control_projection` to the acknowledged server
   configuration, preserving the original memory tool and account instructions.
@@ -58,8 +61,10 @@ implementation does not include Street View or infer occupancy from imagery.
 This app branch starts at the mobile release baseline
 `217e19a5bb628a9673e143eaa305dca789fff831`. Its historical backend directory is not
 the deployment baseline. The matching API change is isolated on
-`feature/brain-projection-api-20261107`, based on current backend release
-`901ca58c95ba7a16abf56e20361f7f021924df3e`.
+`feature/brain-projection-api-20261107`. It includes the shared voice-meter fix
+from current backend release `65a660fcfcbaa3112584d353408aac6d6c7d4b12` so deploying
+Projection cannot revert that repair. Always compare the API branch against the
+latest deployed backend before release.
 
 The API provides authenticated config, address resolution and sourced answers:
 
@@ -73,8 +78,11 @@ The server's dedicated map renderer uses Cesium and Google Photorealistic 3D
 Tiles. It is public map-only content and consumes no account credentials.
 Configuration requires separate `BRAIN_PROJECTION_GEOCODING_KEY` and
 `BRAIN_PROJECTION_MAP_BROWSER_KEY` values, plus the correct public backend
-origin. The browser key must be restricted to that HTTPS renderer origin and
-the required map API. A server key is never substituted for the browser key.
+origin. Google currently documents IP restrictions for Map Tiles, so this
+direct browser integration requires actual allowed-origin and denied-origin/API
+tests before activation. The browser key stays withheld and the map unavailable
+until `BRAIN_PROJECTION_MAP_BROWSER_RESTRICTIONS_VERIFIED=true` is set after those
+checks. A server key is never substituted for the browser key.
 Provider setup and tests are documented in `backend/brain_projection/README.md`
 on the API branch. Unconfigured services are displayed as unavailable.
 
