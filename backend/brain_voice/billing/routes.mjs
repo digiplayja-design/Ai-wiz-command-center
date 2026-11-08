@@ -98,7 +98,13 @@ export function createBrainBilling({database,requireUser,environment=process.env
     catch(e){await hangup({call_id:match[1]}).catch(()=>{});throw e;}
   }
   async function usage(userId,body) {
-    let session;try{session=await call(userId,'session',{sessionId:body.sessionId});}catch(e){if(e.statusCode===404)return null;throw e;}
+    let session;
+    try{session=await call(userId,'session',{sessionId:body.sessionId});}
+    catch(e){
+      // BillingError uses status; a non-Brain session continues to its own meter.
+      if((e.statusCode ?? e.status)===404)return null;
+      throw e;
+    }
     if(body.ended===true || Date.parse(session.deadline)<=Date.now())return end(userId,session.id);
     const result=await call(userId,'usage',{sessionId:session.id});
     if(result.limitReached)await hangup(session);
