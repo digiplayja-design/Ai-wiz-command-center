@@ -10,26 +10,35 @@ body[data-room="discovery"]{background:radial-gradient(ellipse at 45% 0,#30213a7
 @media(max-width:350px){.projection-shell{padding:0 10px}.brand strong{font-size:15px}.brand-brain{width:27px}.close-button{font-size:8px;gap:5px}.workspace-name>.eyebrow{font-size:5px}.room-button{font-size:8px;gap:6px}.scene-stage{--scene-height:365px}.scene-heading h2{font-size:24px}.search-form{gap:7px;padding-left:10px}.search-form input{font-size:9px}.search-form button{padding:6px 8px}.search-form button>span{display:none}.search-help{font-size:6px}.rici-panel{padding:15px}.voice-dock{padding:12px;gap:12px 8px}.talk-button{padding:6px 11px 6px 7px;gap:7px}.talk-button strong{font-size:9px}.talk-button small{font-size:6px}.stop-button{min-width:111px;font-size:7px;padding:6px 7px}.workspace-footer{font-size:5px}}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;scroll-behavior:auto!important;transition:none!important}}
 
-/* Keep the renderer laid out during initialization, without covering the local globe. */
-.map-container{opacity:0;pointer-events:none}body[data-map="ready"] .map-container{opacity:1;pointer-events:auto}
+/* A configured map owns its full surface from loading through readiness. */
+.map-container{opacity:0;pointer-events:none}body[data-renderer="active"] .map-container{opacity:1;pointer-events:auto}
 @media(max-width:560px){.room-button{font-size:11px}.scene-heading .eyebrow{font-size:7px}.scene-heading p{font-size:11px}.map-badge{font-size:8px}.world-caption{font-size:8px;max-width:235px}.search-form input{font-size:16px}.search-form button{font-size:11px}.search-help{font-size:9px}.scene-footnote{font-size:9px}.rici-heading .eyebrow{font-size:7px}.rici-presence{font-size:10px}.answer-label{font-size:7px}.answer-text{font-size:14px}.answer-context{font-size:10px}.source-button{font-size:11px}.source-button small{font-size:9px}.ask-section h3{font-size:12px}.question-chips button{font-size:11px;min-height:42px}.question-form input{font-size:16px;height:40px}.question-form button{width:34px;height:34px}.question-form input::placeholder{font-size:12px}.section-help{font-size:10px}.conversation-details summary{font-size:11px}.conversation-details summary>span:last-child{font-size:9px}.save-details summary{font-size:10px}.transcript-message strong{font-size:9px}.transcript-message p{font-size:12px}#save-form label{font-size:11px}#save-form textarea{font-size:16px}#save-form textarea::placeholder{font-size:12px}#save-form button{font-size:12px;min-height:40px}.projection-notice{font-size:10px}.voice-identity strong{font-size:12px}.voice-identity div>span{font-size:10px}.talk-button strong{font-size:11px}.talk-button small{font-size:8px}.stop-button{font-size:10px}.workspace-footer{font-size:8px}.candidate-button strong{font-size:12px}.candidate-button small{font-size:10px}.candidates-heading>.eyebrow{font-size:8px}.place-banner strong{font-size:12px}.place-banner #place-address{font-size:10px}.place-banner .eyebrow{font-size:7px}}
 @media(max-width:350px){.room-button{font-size:10px;gap:5px}.stop-button{font-size:9px;min-width:113px}.talk-button strong{font-size:10px}.talk-button small{font-size:7px}.world-caption{font-size:7px}.search-help{font-size:8px}.workspace-footer{font-size:7px}.question-chips button{font-size:10px}.place-banner #place-address{font-size:9px}}
 
-/* The verified renderer measures the full, wrapping provider attribution.
- * Add its footer to the scene so controls keep the original map area. */
-body[data-map="ready"] .scene-stage{height:calc(var(--scene-height) + var(--map-credit-height,30px))}
-body[data-map="ready"] .world-caption{bottom:calc(var(--map-credit-height,30px) + 6px);font-size:8px}
-body[data-map="ready"] .camera-controls{bottom:calc(var(--map-credit-height,30px) + 6px)}
-body[data-map="ready"] .place-banner{bottom:calc(var(--map-credit-height,30px) + 42px)}
-body[data-map="ready"] .room-architecture{bottom:var(--map-credit-height,30px);overflow:hidden}
-body[data-map="ready"] .scene-stage:after{bottom:var(--map-credit-height,30px);border-bottom-left-radius:0;border-bottom-right-radius:0}
-body[data-map="ready"][data-room="discovery"] .scene-stage:before{bottom:calc(var(--map-credit-height,30px) + 9px)}
-body[data-map="ready"] .scene-crosshair{top:calc((100% - var(--map-credit-height,30px)) / 2)}
+/* Keep all KORLIX content outside the provider iframe. The provider owns every
+ * pixel of its surface, including its controls, logos, links and attribution. */
+body[data-renderer="active"] .scene-stage{height:auto;display:flex;flex-direction:column;gap:12px;padding:14px;box-shadow:0 14px 65px #0005}
+body[data-renderer="active"] .scene-stage:before,body[data-renderer="active"] .scene-stage:after{content:none}
+body[data-renderer="active"] .room-architecture,body[data-renderer="active"] .scene-crosshair,body[data-renderer="active"] #world-canvas{display:none}
+body[data-renderer="active"] .scene-topline{position:static;inset:auto;order:0;display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
+body[data-renderer="active"] .scene-heading{min-width:0;width:auto;padding:0;background:none;backdrop-filter:none}
+body[data-renderer="active"] .scene-heading h2{font-size:19px;max-width:none;margin:5px 0}
+body[data-renderer="active"] .scene-heading p{display:none}
+body[data-renderer="active"] .map-badge{position:static;inset:auto;max-width:100%;align-self:flex-start;flex-shrink:0;white-space:normal}
+body[data-renderer="active"] .map-container{position:relative;inset:auto;order:1;z-index:auto;flex:0 0 var(--scene-height);height:var(--scene-height);width:100%;min-width:0;border:1px solid #b9a2c333;border-radius:0;overflow:visible;box-shadow:none}
+body[data-renderer="active"] .place-banner{position:static;inset:auto;order:2;margin:0;min-width:0;box-shadow:none;backdrop-filter:none}
+body[data-renderer="active"] .camera-controls{position:static;inset:auto;order:3;display:flex;flex-direction:row;justify-content:center;align-items:center;flex-wrap:wrap;gap:4px;padding:6px;backdrop-filter:none}
+body[data-renderer="active"] .camera-controls button{width:44px;height:44px;padding:10px}
+body[data-renderer="active"] .camera-controls .control-divider{flex:0 0 1px;width:1px;height:24px;margin:0 2px}
+body[data-renderer="active"] .world-caption{position:static;inset:auto;order:4;width:auto;max-width:none;justify-content:center;margin:0;padding:0;background:none;font-size:9px;text-align:center}
+body[data-renderer="active"] .rici-panel,body[data-renderer="active"] .voice-dock{box-shadow:none}
 /* A running conversation keeps Stop pinned outside the scrollable map/workspace. */
 body[data-voice]:not([data-voice="complete"]):not([data-voice="error"]){overflow:hidden}
 body[data-voice]:not([data-voice="complete"]):not([data-voice="error"]) .projection-shell{position:fixed;inset:0 0 calc(var(--voice-dock-height,90px) + 24px + env(safe-area-inset-bottom));overflow-y:auto;overscroll-behavior-y:contain;scrollbar-gutter:stable}
 body[data-voice]:not([data-voice="complete"]):not([data-voice="error"]) .voice-dock{position:fixed;left:clamp(14px,3.2vw,52px);right:clamp(14px,3.2vw,52px);bottom:calc(12px + env(safe-area-inset-bottom));max-width:1536px;margin:0 auto;z-index:20;background:linear-gradient(110deg,#191320,#10111e);box-shadow:0 -8px 32px #0008,0 12px 36px #0006}
+body[data-renderer="active"][data-voice]:not([data-voice="complete"]):not([data-voice="error"]) .voice-dock{box-shadow:none}
 body[data-voice]:not([data-voice="complete"]):not([data-voice="error"]) main{padding-bottom:12px}
-@media(max-width:560px){body[data-map="ready"] .world-caption{font-size:7px}body[data-map="ready"][data-room="discovery"] .scene-stage:before{bottom:calc(var(--map-credit-height,30px) + 7px)}body[data-voice]:not([data-voice="complete"]):not([data-voice="error"]) main{padding-bottom:12px}}
+@media(max-width:560px){body[data-renderer="active"] .scene-stage{padding:10px;gap:10px}body[data-renderer="active"] .scene-heading h2{font-size:17px}}
 
 .candidate-button .partial-match-warning,.place-banner .partial-match-warning{display:block;color:#e0bd84;font-size:10px;line-height:1.5;margin-top:5px}
+.map-data-credit{display:block;margin-top:6px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.4;font-style:normal;font-weight:400;letter-spacing:normal;text-transform:none;white-space:nowrap;color:#fff}

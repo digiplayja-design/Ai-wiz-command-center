@@ -312,8 +312,11 @@ class BrainProjection extends ChangeNotifier {
       } else {
         // Always confirm a destination; even a single geocoder result can be a
         // partial or corrected address. Never silently relocate the user.
+        // Keep provider-returned address text in the visual candidate cards.
+        // This status also becomes a voice tool result, so it must not turn
+        // Google Maps Content into synthesized speech.
         _notice = _candidates.length == 1
-            ? 'I found ${_candidates.first['address']}. Is this the place you mean?'
+            ? 'I found a possible destination. Review the full address on screen. Is this the place you mean?'
             : 'I found ${_candidates.length} possible places. Choose one on screen, or say “choose the first result”.';
       }
       return _result(_notice);
@@ -358,7 +361,7 @@ class BrainProjection extends ChangeNotifier {
       'heading': 0,
       'pitch': -45,
     };
-    _notice = 'Selected ${_place!['address']}.';
+    _notice = 'The destination you confirmed is selected on screen.';
     _changed();
     return _result(_notice);
   }

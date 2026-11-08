@@ -8,6 +8,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import 'brain_api.dart';
 import 'brain_projection.dart';
+import 'brain_projection_navigation.dart';
 
 /// The remote Earth iframe gets no account bridge. Only this bundled document
 /// receives the unpredictable per-view nonce, which is never posted to frames.
@@ -79,8 +80,10 @@ class BrainProjectionScreen extends StatefulWidget {
 class _BrainProjectionScreenState extends State<BrainProjectionScreen> {
   late final WebViewController _web;
   late final BrainProjectionBridge _bridge;
+  late final ProjectionProviderLinkLauncher _providerLinks;
   bool _ready = false;
   String? _error;
+  String? _bundledDocumentUrl;
 
   @override
   void initState() {
@@ -88,6 +91,9 @@ class _BrainProjectionScreenState extends State<BrainProjectionScreen> {
     final random = Random.secure();
     _bridge = BrainProjectionBridge(
       base64Url.encode(List.generate(32, (_) => random.nextInt(256))),
+    );
+    _providerLinks = ProjectionProviderLinkLauncher(
+      launch: (uri) => launchUrl(uri, mode: LaunchMode.externalApplication),
     );
     widget.projection.addListener(_changed);
     _web = WebViewController()
@@ -100,27 +106,38 @@ class _BrainProjectionScreenState extends State<BrainProjectionScreen> {
       ..setNavigationDelegate(
         NavigationDelegate(
           onNavigationRequest: (request) {
-            final uri = Uri.tryParse(request.url);
-            if (request.isMainFrame) {
-              return uri?.scheme == 'file' &&
-                      uri!.path.endsWith('/assets/web/projection.html')
-                  ? NavigationDecision.navigate
-                  : NavigationDecision.prevent;
+            final config = widget.projection.snapshot['config'] as Map;
+            final action = projectionNavigationPolicy(
+              url: request.url,
+              isMainFrame: request.isMainFrame,
+              rendererUrl: config['rendererUrl'] as String?,
+              bundledDocumentUrl: _bundledDocumentUrl,
+            );
+            if (action == ProjectionNavigation.external) {
+              unawaited(_openProviderLink(request.url));
+              return NavigationDecision.prevent;
             }
-            final renderer = widget.projection.snapshot['config'] as Map;
-            return request.url == renderer['rendererUrl'] ||
-                    request.url == 'about:blank'
+            return action == ProjectionNavigation.allow
                 ? NavigationDecision.navigate
                 : NavigationDecision.prevent;
           },
-          onPageStarted: (_) => _ready = false,
+          onPageStarted: (url) {
+            if (isBundledProjectionDocument(
+              url,
+              expectedUrl: _bundledDocumentUrl,
+            )) {
+              _ready = false;
+            }
+          },
           onPageFinished: (url) {
-            final uri = Uri.tryParse(url);
             if (!mounted ||
-                uri?.scheme != 'file' ||
-                !uri!.path.endsWith('/assets/web/projection.html')) {
+                !isBundledProjectionDocument(
+                  url,
+                  expectedUrl: _bundledDocumentUrl,
+                )) {
               return;
             }
+            _bundledDocumentUrl ??= url;
             _ready = true;
             unawaited(
               _web
@@ -140,6 +157,15 @@ class _BrainProjectionScreenState extends State<BrainProjectionScreen> {
         ),
       )
       ..loadFlutterAsset('assets/web/projection.html');
+  }
+
+  Future<void> _openProviderLink(String url) async {
+    final opened = await _providerLinks.open(url);
+    if (opened == false && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('This Google Maps link could not open.')),
+      );
+    }
   }
 
   void _changed() {
@@ -209,6 +235,7 @@ class _BrainProjectionScreenState extends State<BrainProjectionScreen> {
   @override
   void dispose() {
     _ready = false;
+    _providerLinks.dispose();
     widget.projection.removeListener(_changed);
     super.dispose();
   }

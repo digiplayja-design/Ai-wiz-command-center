@@ -20,6 +20,7 @@ async function fixture(page) {
     window.testResearchCalls = 0;
     window.testHoldStart = false;
     window.testHoldStop = false;
+    window.testGeocodingProvider = 'Test geocoder';
     window.projectionState = {
       open:true,room:'command',loading:false,selectedPlace:null,candidates:[],answer:null,notice:'',
       camera:{sequence:0,operation:'reset'},
@@ -36,8 +37,8 @@ async function fixture(page) {
         case 'room': state.room=command.payload.room; window.sendSnapshot(); return reply({room:state.room});
         case 'search':
           state.candidates = [
-            {id:'fixture-a',label:'First destination candidate',address:'A location fixture for UI testing',latitude:40.71,longitude:-74,provider:'Test geocoder'},
-            {id:'fixture-b',label:'Second destination candidate',address:'A different location fixture for UI testing',latitude:40.72,longitude:-73.98,provider:'Test geocoder',partialMatch:true}
+            {id:'fixture-a',label:'First destination candidate',address:'A location fixture for UI testing',latitude:40.71,longitude:-74,provider:window.testGeocodingProvider},
+            {id:'fixture-b',label:'Second destination candidate',address:'A different location fixture for UI testing',latitude:40.72,longitude:-73.98,provider:window.testGeocodingProvider,partialMatch:true}
           ];
           state.notice='Choose a matching destination to confirm.'; window.sendSnapshot(); return reply({requiresConfirmation:true});
         case 'select':
@@ -82,29 +83,91 @@ async function settleLayout(page) {
 }
 
 async function settleRendererLayout(page,renderer,label) {
-  // A credit resize crosses two documents: iframe ResizeObserver -> postMessage
-  // -> scene height -> iframe viewport. Parent animation frames alone do not
-  // establish that the child has received its new viewport size.
+  // Window size and the active voice scrollport can resize the iframe. Wait for
+  // both documents to agree without inspecting any provider-owned internals.
   let previous='',last;
   const deadline=Date.now()+5000;
   while(Date.now()<deadline) {
     await settleLayout(page);
-    const child=await renderer.evaluate(()=>({width:innerWidth,height:innerHeight,
-      footer:document.getElementById('map-credits').getBoundingClientRect().toJSON()}));
+    const child=await renderer.evaluate(()=>({width:innerWidth,height:innerHeight}));
     const parent=await page.evaluate(()=>{
-      const frame=document.querySelector('#map-container iframe'),stage=document.getElementById('scene-stage');
-      return {width:frame.clientWidth,height:frame.clientHeight,
-        reserved:parseFloat(getComputedStyle(stage).getPropertyValue('--map-credit-height'))};
+      const frame=document.querySelector('#map-container iframe');
+      return {width:frame.clientWidth,height:frame.clientHeight};
     });
     last={label,parent,child};
-    const signature=JSON.stringify({parent,width:child.width,height:child.height,footer:child.footer});
-    const agrees=Math.abs(parent.width-child.width)<=1&&Math.abs(parent.height-child.height)<=1&&
-      parent.reserved===Math.ceil(child.footer.height)&&child.footer.top>=0&&child.footer.bottom<=child.height+1;
+    const signature=JSON.stringify({parent,child});
+    const agrees=parent.width>0&&parent.height>0&&Math.abs(parent.width-child.width)<=1&&Math.abs(parent.height-child.height)<=1;
     if(agrees&&signature===previous)return;
     previous=signature;
   }
   if(screenDirectory)await page.screenshot({path:path.join(screenDirectory,`projection-layout-failure-${label}.png`)});
   throw new Error('Renderer layout did not settle: '+JSON.stringify(last));
+}
+
+async function alignRendererInViewport(page) {
+  await page.evaluate(()=>{
+    const shell=document.querySelector('.projection-shell'),frame=document.querySelector('#map-container iframe');
+    const active=!['complete','error'].includes(document.body.dataset.voice);
+    const clip=active?shell.getBoundingClientRect():{top:0,height:innerHeight};
+    const rect=frame.getBoundingClientRect();
+    const change=rect.top-(clip.top+Math.max(8,(clip.height-rect.height)/2));
+    if(active)shell.scrollTop+=change;
+    else window.scrollBy(0,change);
+  });
+  await settleLayout(page);
+}
+
+async function assertClearRendererSurface(page,label,{activeVoice=false,capture=false}={}) {
+  const geometry=await page.evaluate(()=>{
+    const frame=document.querySelector('#map-container iframe'),stage=document.getElementById('scene-stage');
+    const shell=document.querySelector('.projection-shell'),dock=document.querySelector('.voice-dock'),stop=document.getElementById('stop-button');
+    const rect=frame.getBoundingClientRect(),button=stop.getBoundingClientRect();
+    const selectors=['.scene-topline','.scene-heading','.map-badge','.world-caption','.camera-controls','.place-banner','.room-architecture','.scene-crosshair','#world-canvas','.voice-dock'];
+    const points=[[rect.left+2,rect.top+2],[rect.right-2,rect.top+2],[rect.left+2,rect.bottom-2],[rect.right-2,rect.bottom-2],[rect.left+rect.width/2,rect.top+rect.height/2]];
+    return {frame:rect.toJSON(),shell:shell.getBoundingClientRect().toJSON(),dock:dock.getBoundingClientRect().toJSON(),stop:button.toJSON(),
+      width:innerWidth,height:innerHeight,phase:document.body.dataset.map,renderer:document.body.dataset.renderer,
+      before:getComputedStyle(stage,'::before').content,after:getComputedStyle(stage,'::after').content,
+      dockShadow:getComputedStyle(dock).boxShadow,
+      riciShadow:getComputedStyle(document.querySelector('.rici-panel')).boxShadow,
+      overlays:Object.fromEntries(selectors.map(selector=>{
+        const element=document.querySelector(selector),style=getComputedStyle(element),box=element.getBoundingClientRect();
+        return [selector,{visible:style.display!=='none'&&style.visibility!=='hidden'&&box.width>0&&box.height>0,rect:box.toJSON()}];
+      })),
+      hits:points.map(([x,y])=>{const hit=document.elementFromPoint(x,y);return {x,y,frame:hit===frame,hit:hit?.id||hit?.className||hit?.tagName};}),
+      scrollTop:shell.scrollTop,windowScroll:scrollY,
+      stopHittable:document.elementFromPoint(button.x+button.width/2,button.y+button.height/2)?.closest('#stop-button')===stop};
+  });
+  if(screenDirectory&&capture) {
+    await page.screenshot({path:path.join(screenDirectory,`projection-surface-${label}.png`)});
+    fs.writeFileSync(path.join(screenDirectory,`projection-surface-${label}.json`),JSON.stringify(geometry,null,2));
+  }
+  try {
+    assert.equal(geometry.renderer,'active','Remote map has its unobstructed layout at '+label);
+    assert.equal(geometry.before,'none','Discovery decoration stays outside the iframe at '+label);
+    assert.equal(geometry.after,'none','App vignette cannot cover the iframe at '+label);
+    assert.equal(geometry.dockShadow,'none','Voice dock decoration cannot shade the provider surface at '+label);
+    assert.equal(geometry.riciShadow,'none','Rici panel decoration cannot shade the provider surface at '+label);
+    const frame=geometry.frame;
+    for(const [selector,overlay] of Object.entries(geometry.overlays)) {
+      if(!overlay.visible)continue;
+      const box=overlay.rect;
+      const overlapWidth=Math.max(0,Math.min(frame.right,box.right)-Math.max(frame.left,box.left));
+      const overlapHeight=Math.max(0,Math.min(frame.bottom,box.bottom)-Math.max(frame.top,box.top));
+      assert.ok(overlapWidth*overlapHeight<.5,selector+' stays entirely outside the provider iframe at '+label);
+    }
+    const clip=activeVoice?geometry.shell:{top:0,bottom:geometry.height};
+    assert.ok(frame.top>=clip.top&&frame.bottom<=clip.bottom,'Complete iframe can scroll into view at '+label);
+    assert.ok(geometry.hits.every(hit=>hit.frame),'All iframe corners and its center remain hittable at '+label);
+    if(activeVoice) {
+      assert.ok(geometry.shell.bottom<=geometry.dock.top-10,'Scroll viewport ends above the active voice dock at '+label);
+      assert.ok(frame.bottom<geometry.dock.top,'Voice dock never covers the provider surface at '+label);
+      assert.ok(geometry.stop.y>=0&&geometry.stop.bottom<=geometry.height&&geometry.stopHittable,'Stop stays visible and hittable at '+label);
+    }
+  } catch(error) {
+    console.error('Projection surface geometry:',JSON.stringify({label,geometry}));
+    if(screenDirectory&&!capture)await page.screenshot({path:path.join(screenDirectory,`projection-surface-failure-${label}.png`)});
+    throw error;
+  }
 }
 
 (async()=>{
@@ -141,12 +204,14 @@ async function settleRendererLayout(page,renderer,label) {
       await page.locator('#search-button').click();
       await page.locator('.candidate-button').first().waitFor();
       assert.equal(await page.locator('.candidate-button').count(),2);
+      assert.equal(await page.locator('.candidate-button .map-data-credit').count(),0,'Non-Google candidates do not carry Google attribution');
       assert.equal(await page.locator('.candidate-button').last().locator('.partial-match-warning').textContent(),'Check address — partial match','Partial geocoder matches must be disclosed before selection');
       assert.equal(await page.locator('#place-banner').isVisible(),false,'No automatic travel before explicit confirmation');
       assert.equal(await page.evaluate(()=>window.projectionCommands.some(c=>c.action==='select')),false);
       await page.locator('.candidate-button').last().click();
       await page.locator('#place-banner').waitFor();
       assert.equal(await page.locator('#place-label').textContent(),'Second destination candidate');
+      assert.equal(await page.locator('#place-source').isVisible(),false,'Non-Google selected data does not carry Google attribution');
       assert.equal(await page.locator('#place-match').isVisible(),true,'The partial-match warning survives selection');
       assert.equal(await page.locator('#place-match').textContent(),'Check address — partial match');
       assert.equal(await page.locator('#question-help').textContent(),'4 credits per successful sourced lookup.');
@@ -213,18 +278,69 @@ async function settleRendererLayout(page,renderer,label) {
       await page.close();
     }
 
+    // Geocoding remains available independently of the map. Its Google address
+    // data needs a visible source credit attached to the candidate/selected card.
+    for(const width of [320,390]) {
+      for(const room of ['command','discovery']) {
+        const offMap=await browser.newPage({viewport:{width,height:844},reducedMotion:'reduce'});
+        offMap.on('pageerror',error=>errors.push(error.message));
+        await fixture(offMap);
+        await offMap.evaluate(room=>{
+          window.testGeocodingProvider='google';window.projectionState.room=room;window.sendSnapshot();
+        },room);
+        assert.equal(await offMap.locator('#map-container iframe').count(),0,'Address attribution works with the map disabled');
+        await offMap.locator('#destination-input').fill('Google address fixture');
+        await offMap.locator('#search-button').click();
+        await offMap.locator('.candidate-button').first().waitFor();
+        const assertCredits=async(selector,count)=>{
+          const credits=await offMap.locator(selector).evaluateAll(nodes=>nodes.map(node=>{
+            const style=getComputedStyle(node),rect=node.getBoundingClientRect();
+            const card=node.closest('.candidate-button,.place-banner').getBoundingClientRect();
+            return {text:node.textContent,translate:node.getAttribute('translate'),fontSize:parseFloat(style.fontSize),
+              weight:style.fontWeight,fontStyle:style.fontStyle,nowrap:style.whiteSpace,spacing:style.letterSpacing,color:style.color,
+              width:rect.width,height:rect.height,inside:rect.left>=card.left&&rect.right<=card.right&&rect.top>=card.top&&rect.bottom<=card.bottom};
+          }));
+          assert.equal(credits.length,count,'Google source credit count at '+room+'/'+width);
+          for(const credit of credits) {
+            assert.equal(credit.text,'Google Maps');assert.equal(credit.translate,'no');
+            assert.ok(credit.fontSize>=12&&credit.fontSize<=16,'Attribution is legible on the small card');
+            assert.equal(credit.weight,'400');assert.equal(credit.fontStyle,'normal');
+            assert.equal(credit.nowrap,'nowrap');assert.equal(credit.spacing,'normal');assert.equal(credit.color,'rgb(255, 255, 255)');
+            assert.ok(credit.width>0&&credit.height>0&&credit.inside,'The complete credit fits inside its address card');
+          }
+        };
+        await assertCredits('.candidate-button .map-data-credit',2);
+        await offMap.locator('.candidate-button').first().click();
+        await offMap.locator('#place-source').waitFor();
+        await assertCredits('#place-source',1);
+        assert.equal(await offMap.locator('#answer-text').textContent(),'Your destination is confirmed. What would you like to know?','Google labels stay in credited cards, separate from independent research');
+        assert.equal(await offMap.locator('#answer-sources .map-data-credit').count(),0);
+        assert.equal(await offMap.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'Google address credits fit '+room+'/'+width);
+        if(screenDirectory)await offMap.screenshot({path:path.join(screenDirectory,`projection-geocoding-${room}-${width}.png`),fullPage:true});
+        for(const provider of ['Google','google.com','not-google','']) {
+          await offMap.evaluate(provider=>{window.projectionState.selectedPlace.provider=provider;window.sendSnapshot();},provider);
+          assert.equal(await offMap.locator('#place-source').isVisible(),false,'Only the exact Google provider receives Google attribution: '+provider);
+        }
+        await offMap.close();
+      }
+    }
+
     const page = await browser.newPage({viewport:{width:1024,height:768},reducedMotion:'reduce'});
     page.on('pageerror',error=>errors.push(error.message));
-    await page.route('https://projection.test/brain-projection/earth.html',route=>route.fulfill({contentType:'text/html',body:`<!doctype html><html><head><style>
+    await page.context().route('https://provider-links.test/terms',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:'<!doctype html><html><head><meta charset="utf-8"></head><body><h1>Provider link fixture</h1><form action="/accepted" method="get"><button type="submit">Continue fixture</button></form></body></html>'}));
+    await page.context().route('https://provider-links.test/accepted**',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:'<!doctype html><html><body><h1>Separate provider page accepted</h1></body></html>'}));
+    await page.route('https://projection.test/brain-projection/earth.html',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:`<!doctype html><html><head><meta charset="utf-8"><style>
       html,body{height:100%;margin:0;overflow:hidden;background:#142135;color:white;font:11px/1.5 system-ui}
-      #map-credits{position:absolute;left:0;right:0;bottom:0;padding:8px;background:#030b13;overflow-wrap:anywhere}
-      </style></head><body>Map renderer fixture<div id="map-credits">Google Maps · Synthetic imagery supplied by Example City Survey Office; Example Regional Mapping Group; Example Geospatial Imagery Cooperative; Example Municipal Cartography Archive; Example Terrain Survey Partnership; Example Geographic Data Consortium. Attribution fixture only; no real imagery is requested.</div><script>
+      body{background:linear-gradient(140deg,#1b3245,#0c1729)}
+      .provider-label{position:absolute;top:8px;left:8px;padding:6px;background:#031019}
+      .provider-controls{position:absolute;top:8px;right:8px;display:flex;gap:4px}
+      .provider-controls button{color:white;background:#273d50;border:1px solid #7191a3;padding:5px}
+      #provider-attribution{position:absolute;left:0;right:0;bottom:0;padding:8px;background:#030b13;overflow-wrap:anywhere}a{color:#b3e1ff}
+      </style></head><body><span class="provider-label">Provider surface fixture</span><div class="provider-controls"><button>Map control</button></div><div id="provider-attribution">Google Maps · Synthetic imagery supplied by Example City Survey Office; Example Regional Mapping Group; Example Geospatial Imagery Cooperative; Example Municipal Cartography Archive. Attribution fixture only; no real imagery is requested. <a id="provider-terms" href="https://provider-links.test/terms" target="_blank">Provider link fixture</a></div><script>
       window.received=[];window.addEventListener('message',e=>window.received.push(e.data));
-      window.emitStatus=status=>parent.postMessage({type:'korlix-projection-status',status},'*');
+      window.emitStatus=status=>{document.body.dataset.phase=status;parent.postMessage({type:'korlix-projection-status',status},'*');};
       window.emitCreditHeight=height=>parent.postMessage({type:'korlix-projection-credits',height},'*');
-      window.publishCredits=()=>{if(!window.pauseCreditReports)window.emitCreditHeight(Math.ceil(document.getElementById('map-credits').getBoundingClientRect().height));};
-      new ResizeObserver(window.publishCredits).observe(document.getElementById('map-credits'));
-      window.addEventListener('resize',window.publishCredits);window.emitStatus('ready');window.publishCredits();
+      window.emitStatus('loading');
       </script></body></html>`}));
     await fixture(page);
     await page.evaluate(()=>{
@@ -232,10 +348,17 @@ async function settleRendererLayout(page,renderer,label) {
       window.projectionState.camera={sequence:1,operation:'flyTo',latitude:40.71,longitude:-74,height:650,heading:0,pitch:-45};
       window.projectionState.config={...window.projectionState.config,mapAvailable:true,rendererUrl:'https://projection.test/brain-projection/earth.html'};window.sendSnapshot();
     });
+    await page.locator('#map-container iframe').waitFor();
+    const renderer = await (await page.locator('#map-container iframe').elementHandle()).contentFrame();
+    assert.ok(renderer,'Configured iframe has its own document');
+    await renderer.waitForFunction(()=>typeof window.emitStatus==='function');
+    await page.waitForFunction(()=>document.body.dataset.renderer==='active');
+    assert.equal(await page.locator('#map-container').isVisible(),true,'The provider owns a visible unobstructed surface while loading');
+    assert.equal(await page.locator('#world-canvas').isVisible(),false,'The illustrative globe cannot cover a loading provider');
+    assert.equal(await page.locator('[data-camera="closer"]').isEnabled(),false,'Loading is not camera readiness');
+    assert.equal(await renderer.evaluate(()=>window.received.length),0,'Camera commands wait for actual renderer readiness');
+    await renderer.evaluate(()=>window.emitStatus('ready'));
     await page.waitForFunction(()=>document.body.dataset.map==='ready');
-    assert.equal(await page.locator('#map-container').isVisible(),true);
-    assert.equal(await page.locator('#world-canvas').isVisible(),false);
-    const renderer = page.frames().find(frame=>frame.url().startsWith('https://projection.test/'));
     await renderer.waitForFunction(()=>window.received.length>0);
     assert.equal(await renderer.evaluate(()=>typeof window.projectionState),'undefined','Workspace fixture state is not injected into the renderer');
     assert.equal(await renderer.evaluate(()=>JSON.stringify(window.received).includes('test-session-nonce')),false,'Native nonce never reaches iframe');
@@ -250,96 +373,69 @@ async function settleRendererLayout(page,renderer,label) {
     await renderer.evaluate(()=>window.emitStatus('ready'));
     assert.equal(await page.evaluate(()=>window.projectionCommands.filter(c=>c.action==='rendererReady'&&c.payload.status==='ready').length),1,'Duplicate renderer status does not duplicate ready action');
 
-    await settleLayout(page);
-    const creditHeightBefore=await page.evaluate(()=>document.getElementById('scene-stage').style.getPropertyValue('--map-credit-height'));
+    await settleRendererLayout(page,renderer,'initial');
+    const sandbox=(await page.locator('#map-container iframe').getAttribute('sandbox')).split(/\s+/).sort();
+    assert.deepEqual(sandbox,['allow-popups','allow-popups-to-escape-sandbox','allow-same-origin','allow-scripts'],'Only the provider popup permissions are added to the isolated iframe');
+    await alignRendererInViewport(page);
+    const localUrl=page.url(),rendererUrl=renderer.url();
+    const popupOpened=page.context().waitForEvent('page');
+    await renderer.locator('#provider-terms').click();
+    const popup=await popupOpened;
+    await popup.waitForLoadState('domcontentloaded');
+    assert.equal(popup.url(),'https://provider-links.test/terms','A user-clicked provider link opens its separate destination');
+    assert.deepEqual(await popup.evaluate(()=>({opener:window.opener!==null,bridge:typeof window.Projection,workspace:typeof window.projectionState,connect:typeof window.KorlixProjectionConnect})),
+      {opener:false,bridge:'undefined',workspace:'undefined',connect:'undefined'},'The provider popup has no local parent, native bridge or workspace/nonce fixture');
+    await popup.getByRole('button',{name:'Continue fixture'}).click();
+    await popup.waitForURL(url=>url.origin==='https://provider-links.test'&&url.pathname==='/accepted');
+    assert.equal(await popup.locator('h1').textContent(),'Separate provider page accepted','The provider popup does not inherit the original iframe form restriction');
+    assert.equal(page.url(),localUrl,'Provider popup cannot replace the local workspace');
+    assert.equal(renderer.url(),rendererUrl,'Provider popup leaves the configured renderer in place');
+    await popup.close();
+    await settleRendererLayout(page,renderer,'after-provider-popup');
+    const surfaceBefore=await page.evaluate(()=>{
+      const frame=document.querySelector('#map-container iframe');
+      return {width:frame.clientWidth,height:frame.clientHeight,stage:document.getElementById('scene-stage').clientHeight};
+    });
     const nativeCommandsBefore=await page.evaluate(()=>window.projectionCommands.length);
-    await page.evaluate(()=>{
-      window.dispatchEvent(new MessageEvent('message',{origin:'https://projection.test',source:window,data:{type:'korlix-projection-credits',height:250}}));
-      window.dispatchEvent(new MessageEvent('message',{origin:'https://attacker.test',source:document.querySelector('iframe').contentWindow,data:{type:'korlix-projection-credits',height:250}}));
-    });
     await renderer.evaluate(()=>{
-      window.pauseCreditReports=true;
-      for(const height of [-1,1.5,'80',NaN,Infinity,null,{},4097,1000000])window.emitCreditHeight(height);
+      for(const height of [0,80,4096,-1,1.5,'80',NaN,Infinity,null,{},1000000])window.emitCreditHeight(height);
     });
-    await settleLayout(page);
-    assert.equal(await page.evaluate(()=>document.getElementById('scene-stage').style.getPropertyValue('--map-credit-height')),creditHeightBefore,'Forged source/origin or malformed/unbounded credit geometry cannot move shell controls');
-    await renderer.evaluate(()=>window.emitCreditHeight(4096));
-    await page.waitForFunction(()=>parseFloat(document.getElementById('scene-stage').style.getPropertyValue('--map-credit-height'))===innerHeight);
-    assert.equal(await page.evaluate(()=>window.projectionCommands.length),nativeCommandsBefore,'Public geometry never becomes a native command or changes readiness');
-    await renderer.evaluate(()=>{window.pauseCreditReports=false;window.publishCredits();});
-    await settleLayout(page);
+    await settleRendererLayout(page,renderer,'ignored-legacy-geometry');
+    assert.deepEqual(await page.evaluate(()=>{
+      const frame=document.querySelector('#map-container iframe');
+      return {width:frame.clientWidth,height:frame.clientHeight,stage:document.getElementById('scene-stage').clientHeight};
+    }),surfaceBefore,'Remote credit geometry is retired and cannot resize the provider surface');
+    assert.equal(await page.evaluate(()=>window.projectionCommands.length),nativeCommandsBefore,'Unknown geometry never becomes a native command or changes readiness');
 
-    for(const width of [320,390,1024]) {
+    for(const width of [320,390,768,1024,1440]) {
       await page.setViewportSize({width,height:844});
       for(const room of ['command','discovery']) {
         await page.locator('#room-'+room).click();
-        await settleRendererLayout(page,renderer,`${room}-${width}`);
-        const footer=await renderer.evaluate(()=>document.getElementById('map-credits').getBoundingClientRect().toJSON());
-        const iframe=await page.locator('#map-container iframe').boundingBox();
-        const geometry=await page.evaluate(()=>{
-          const stage=document.getElementById('scene-stage');
-          const selectors=['.world-caption','.camera-controls','.place-banner','.room-architecture','.scene-crosshair','.scene-topline'];
-          return {reserved:parseFloat(getComputedStyle(stage).getPropertyValue('--map-credit-height')),
-            base:parseFloat(getComputedStyle(stage).getPropertyValue('--scene-height')),stage:stage.getBoundingClientRect().toJSON(),
-            afterBottom:parseFloat(getComputedStyle(stage,'::after').bottom),beforeBottom:parseFloat(getComputedStyle(stage,'::before').bottom),
-            overlays:Object.fromEntries(selectors.map(selector=>[selector,document.querySelector(selector).getBoundingClientRect().toJSON()]))};
-        });
-        assert.ok(footer.height>30,'Fixture uses genuinely wrapped attribution at '+width);
-        assert.equal(geometry.reserved,Math.ceil(footer.height),'Entire measured attribution receives room at '+width+' / '+room);
-        assert.ok(geometry.stage.height>=geometry.base+geometry.reserved-1,'Footer space does not shrink the map/control area');
-        const footerTop=iframe.y+footer.top;
-        for(const [name,box] of Object.entries(geometry.overlays)) {
-          assert.ok(box.bottom<=footerTop+1,name+' stays out of provider credits at '+width+' / '+room);
-        }
-        assert.ok(geometry.afterBottom>=geometry.reserved,'Vignette excludes provider footer');
-        if(room==='discovery')assert.ok(geometry.beforeBottom>=geometry.reserved,'Discovery frame excludes provider footer');
-        if(screenDirectory&&width<500)await page.screenshot({path:path.join(screenDirectory,`projection-attribution-${room}-${width}.png`),fullPage:true});
+        for(const phase of ['loading','ready']) {
+          const label=`${room}-${phase}-${width}`;
+          await renderer.evaluate(value=>window.emitStatus(value),phase);
+          await page.waitForFunction(value=>document.body.dataset.map===(value==='ready'?'ready':'illustration'),phase);
+          await settleRendererLayout(page,renderer,label);
+          assert.equal(await page.locator('[data-camera="closer"]').isEnabled(),phase==='ready','App camera readiness remains accurate at '+label);
+          assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'Remote map layout fits '+label);
+          await alignRendererInViewport(page);
+          await assertClearRendererSurface(page,label);
+          if(screenDirectory&&width<500&&phase==='ready')await page.screenshot({path:path.join(screenDirectory,`projection-map-layout-${room}-${width}.png`),fullPage:true});
 
-        await page.evaluate(()=>{
-          const stage=document.getElementById('scene-stage');
-          window.scrollTo(0,Math.max(0,stage.getBoundingClientRect().bottom+scrollY-innerHeight+40));
-          window.scrollBeforeVoice=scrollY;
-          window.projectionState.voice={active:true,phase:'listening',message:'Rici is listening'};window.sendSnapshot();
-        });
-        assert.equal(await page.evaluate(()=>Math.abs(document.querySelector('.projection-shell').scrollTop-window.scrollBeforeVoice)<1),true,'Starting voice preserves the reading position in the reserved scroll viewport');
-        // Activating the bounded scroll viewport can add a scrollbar and wrap
-        // credits again. Align only after both documents agree on that layout.
-        await settleRendererLayout(page,renderer,`active-${room}-${width}`);
-        await page.evaluate(()=>{
-          const shell=document.querySelector('.projection-shell');
-          shell.scrollTop+=document.getElementById('scene-stage').getBoundingClientRect().bottom-shell.getBoundingClientRect().bottom+12;
-        });
-        await settleRendererLayout(page,renderer,`aligned-${room}-${width}`);
-        const active=await page.evaluate(()=>{
-          const shell=document.querySelector('.projection-shell'),dock=document.querySelector('.voice-dock'),stop=document.getElementById('stop-button');
-          const button=stop.getBoundingClientRect();
-          return {shell:shell.getBoundingClientRect().toJSON(),dock:dock.getBoundingClientRect().toJSON(),stop:button.toJSON(),
-            scrollTop:shell.scrollTop,scrollHeight:shell.scrollHeight,clientHeight:shell.clientHeight,windowScroll:scrollY,
-            reservedCredits:parseFloat(getComputedStyle(document.getElementById('scene-stage')).getPropertyValue('--map-credit-height')),
-            stopHittable:document.elementFromPoint(button.x+button.width/2,button.y+button.height/2)?.closest('#stop-button')===stop};
-        });
-        const activeFrame=await page.locator('#map-container iframe').boundingBox();
-        const activeFooter=await renderer.evaluate(()=>document.getElementById('map-credits').getBoundingClientRect().toJSON());
-        const diagnostic={width,room,active,activeFrame,activeFooter,
-          absoluteFooter:{top:activeFrame.y+activeFooter.top,bottom:activeFrame.y+activeFooter.bottom}};
-        if(screenDirectory) {
-          await page.screenshot({path:path.join(screenDirectory,`projection-attribution-active-${room}-${width}.png`)});
-          fs.writeFileSync(path.join(screenDirectory,`projection-attribution-geometry-${room}-${width}.json`),JSON.stringify(diagnostic,null,2));
+          await page.evaluate(()=>{
+            window.scrollBeforeVoice=scrollY;
+            window.projectionState.voice={active:true,phase:'listening',message:'Rici is listening'};window.sendSnapshot();
+          });
+          assert.equal(await page.evaluate(()=>Math.abs(document.querySelector('.projection-shell').scrollTop-window.scrollBeforeVoice)<1),true,'Starting voice preserves the reading position at '+label);
+          await settleRendererLayout(page,renderer,`active-${label}`);
+          await alignRendererInViewport(page);
+          await assertClearRendererSurface(page,`active-${label}`,{activeVoice:true,capture:true});
+          await page.evaluate(()=>{
+            window.scrollBeforeStop=document.querySelector('.projection-shell').scrollTop;
+            window.projectionState.voice={active:false,phase:'complete',message:'Microphone off'};window.sendSnapshot();
+          });
+          assert.equal(await page.evaluate(()=>Math.abs(scrollY-window.scrollBeforeStop)<1),true,'Stopping voice restores normal page scrolling at '+label);
         }
-        try {
-          assert.ok(active.shell.bottom<=active.dock.top-10,'Scroll viewport ends above the active voice dock at '+width+' / '+room);
-          assert.ok(activeFrame.y+activeFooter.top>=active.shell.top&&activeFrame.y+activeFooter.bottom<=active.shell.bottom,'Full attribution can scroll into view without going behind the dock at '+width+' / '+room);
-          assert.ok(activeFrame.y+activeFooter.bottom<active.dock.top,'Active voice dock never covers visible provider attribution at '+width+' / '+room);
-          assert.ok(active.stop.y>=0&&active.stop.bottom<=844&&active.stopHittable,'Stop stays visible and hittable with wrapped credits at '+width+' / '+room);
-        } catch(error) {
-          console.error('Active attribution geometry:',JSON.stringify(diagnostic));
-          throw error;
-        }
-        await page.evaluate(()=>{
-          window.scrollBeforeStop=document.querySelector('.projection-shell').scrollTop;
-          window.projectionState.voice={active:false,phase:'complete',message:'Microphone off'};window.sendSnapshot();
-        });
-        assert.equal(await page.evaluate(()=>Math.abs(scrollY-window.scrollBeforeStop)<1),true,'Stopping voice restores the same reading position to normal page scrolling');
       }
     }
     await page.locator('[data-camera="closer"]').click();
@@ -354,6 +450,6 @@ async function settleRendererLayout(page,renderer,label) {
     }
     await page.close();
     assert.deepEqual(errors,[],'No uncaught browser errors');
-    console.log('Projection UI passed: five viewport sizes, both rooms, explicit place confirmation, source safety, cost disclosure, save failure/success, voice continuity, duplicate-start prevention, close/stop separation, renderer origin isolation, bounded wrapping attribution, active-dock clearance with scroll preservation, and no credential transfer.');
+    console.log('Projection UI passed: five viewport sizes, both rooms, explicit place confirmation, Google address attribution without a map, source safety, cost disclosure, save failure/success, voice continuity, duplicate-start prevention, close/stop separation, renderer origin isolation, unobstructed provider surfaces while loading/ready, separate provider popups, active-dock clearance with scroll preservation, and no credential transfer.');
   } finally { await browser.close(); }
 })().catch(error=>{console.error(error);process.exitCode=1;});

@@ -19,7 +19,6 @@
   let startPending = false, stopPending = false, startTimer = null, stopTimer = null;
   let voiceViewportActive = false;
   let frame = null, frameOrigin = '', frameUrl = '', mapStatus = 'illustration', lastCamera = '';
-  let rendererCreditHeight = 30;
   let rendererTimer = null, canvasInvalidated = true;
   let localNotice = '', localNoticeKind = '', lastSavedPlace = '', pendingQuestionLocal = false;
 
@@ -143,9 +142,10 @@
     $('place-banner').hidden = !place;
     $('place-label').textContent = place?.label || '';
     $('place-address').textContent = place?.address || '';
+    $('place-source').hidden = place?.provider !== 'google';
     $('place-match').hidden = !place?.partialMatch;
     $('place-banner').querySelector('.place-confirmed').textContent = place?.partialMatch ? 'Partial match' : 'Confirmed';
-    $('provider-label').textContent = place?.provider ? clip(place.provider,60).toUpperCase() : 'PROJECTION / EARTH';
+    $('provider-label').textContent = place?.provider && place.provider !== 'google' ? clip(place.provider,60).toUpperCase() : 'PROJECTION / EARTH';
     $('save-button').disabled = !connected || !place || busy.save;
     $('save-button').textContent = busy.save ? 'Saving…' : 'Save place';
     $('place-note').disabled = !place || busy.save;
@@ -166,6 +166,10 @@
       const labels = document.createElement('span');
       labels.append(textNode('strong','',place.label),textNode('small','',place.address || 'Confirm this destination'));
       if (place.partialMatch) labels.append(textNode('small','partial-match-warning','Check address — partial match'));
+      if (place.provider === 'google') {
+        const credit = textNode('span','map-data-credit','Google Maps');
+        credit.setAttribute('translate','no'); labels.append(credit);
+      }
       button.append(icon('pin'),labels,icon('arrow'));
       button.addEventListener('click',async () => {
         if (busy.select) return;
@@ -181,7 +185,7 @@
   function renderAnswer() {
     const answer = state.answer;
     $('answer-text').textContent = answer?.text || (state.selectedPlace
-      ? `You’re exploring ${state.selectedPlace.label}. What would you like to know?`
+      ? 'Your destination is confirmed. What would you like to know?'
       : `Your ${state.room === 'discovery' ? 'Discovery Theater' : 'Command Center'} is open. Where would you like to explore?`);
     const context = answer ? [answer.scope,answer.date ? 'As of ' + answer.date : ''].filter(Boolean).join(' · ') : '';
     $('answer-context').hidden = !context; $('answer-context').textContent = context;
@@ -289,12 +293,14 @@
     const previousStatus = mapStatus;
     mapStatus = status;
     const ready = status === 'ready';
+    const remoteActive = !!frame && ['loading','ready'].includes(status);
     document.body.dataset.map = ready ? 'ready' : 'illustration';
-    $('map-container').hidden = !frame;
-    $('world-canvas').hidden = ready;
+    document.body.dataset.renderer = remoteActive ? 'active' : 'inactive';
+    $('map-container').hidden = !remoteActive;
+    $('world-canvas').hidden = remoteActive;
     $('map-badge').lastChild.textContent = ready ? '3D Earth imagery' : status === 'loading' ? 'Connecting map' : 'Illustrative globe';
     $('world-caption-text').textContent = ready ? 'Earth imagery · not a live camera feed' : status === 'loading'
-      ? 'Illustrative globe · preparing your map' : 'Illustrative globe · map provider not connected';
+      ? 'Connecting recorded 3D imagery · not a live camera feed' : 'Illustrative globe · map provider not connected';
     if (message && status === 'error') notice(message,'error');
     canvasInvalidated = true; renderPlace();
     if (connected && status !== previousStatus && ['ready','loading','error'].includes(status)) {
@@ -302,17 +308,9 @@
     }
   }
 
-  function applyCreditHeight() {
-    // A renderer can reserve at most one local viewport of presentation space.
-    // The ready scene grows by that amount, keeping its map/control area intact.
-    const height = Math.min(rendererCreditHeight, Math.max(0, Math.floor(window.innerHeight)), 4096);
-    $('scene-stage').style.setProperty('--map-credit-height', height + 'px');
-  }
-
   function disposeFrame() {
     clearTimeout(rendererTimer);
     frame?.remove(); frame = null; frameOrigin = ''; frameUrl = ''; lastCamera = '';
-    rendererCreditHeight = 30; applyCreditHeight();
     $('map-container').replaceChildren(); setMapStatus('illustration');
   }
 
@@ -325,7 +323,9 @@
     // renderer path. This layer rejects non-HTTPS and credential-bearing URLs.
     frameOrigin = new URL(url).origin; frameUrl = url;
     frame = document.createElement('iframe'); frame.title = 'KORLIX 3D Earth map';
-    frame.setAttribute('sandbox','allow-scripts allow-same-origin');
+    // Provider-owned links may open a separate window. The iframe still cannot
+    // navigate the local workspace, submit forms or receive its native bridge.
+    frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox');
     frame.setAttribute('referrerpolicy','no-referrer');
     frame.setAttribute('allow',"camera 'none'; microphone 'none'; geolocation 'none'; payment 'none'; clipboard-read 'none'; clipboard-write 'none'");
     frame.src = url; $('map-container').append(frame); setMapStatus('loading');
@@ -347,11 +347,8 @@
     if (!frame || event.source !== frame.contentWindow || event.origin !== frameOrigin) return;
     const data = event.data;
     if (!isObject(data)) return;
-    if (data.type === 'korlix-projection-credits') {
-      if (!Number.isInteger(data.height) || !finite(data.height,0,4096)) return;
-      rendererCreditHeight = data.height; applyCreditHeight();
-      return;
-    }
+    // The provider owns its full iframe surface, including controls/credits.
+    // No remote geometry, HTML or styling messages are consumed by the shell.
     if (data.type !== 'korlix-projection-status' || !['loading','ready','error'].includes(data.status)) return;
     const wasReady = mapStatus === 'ready';
     if (data.status !== 'loading') clearTimeout(rendererTimer);
@@ -361,7 +358,6 @@
       sendCamera();
     }
   });
-  window.addEventListener('resize',applyCreditHeight);
 
   function render() {
     $('connection-label').textContent = connected ? 'Your KORLIX workspace' : 'Preview · open inside KORLIX';
@@ -519,7 +515,7 @@
   }
 
   function drawGlobe(now) {
-    if (!ctx || !canvasWidth || mapStatus === 'ready') return;
+    if (!ctx || !canvasWidth || canvas.hidden) return;
     const w = canvasWidth, h = canvasHeight, theater = state.room === 'discovery';
     ctx.clearRect(0,0,w,h);
     stars.forEach(star => { ctx.beginPath(); ctx.arc(star.x*w,star.y*h,star.r,0,Math.PI*2); ctx.fillStyle = star.r === 1 ? '#ddccea73' : '#9e98c84a'; ctx.fill(); });

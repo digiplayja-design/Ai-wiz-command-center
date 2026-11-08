@@ -182,6 +182,44 @@ void main() {
       },
     );
 
+    test(
+      'voice lookup and selection keep provider address labels on screen',
+      () async {
+        final f = Fixture();
+        addTearDown(f.projection.dispose);
+        f.projection.open();
+        final lookup = await f.projection.voiceTurn(
+          'provider-lookup',
+          'Go to My destination',
+          {'action': 'search', 'value': 'My destination'},
+        );
+        expect(
+          lookup?['answer'],
+          contains('Review the full address on screen'),
+        );
+        expect(
+          (f.projection.snapshot['candidates'] as List).single['address'],
+          place['address'],
+        );
+        final selection = await f.projection.voiceTurn(
+          'provider-confirm',
+          'Yes that is the place',
+          {'action': 'search', 'value': 'yes'},
+        );
+        expect(selection?['answer'], contains('confirmed'));
+        expect(
+          (f.projection.snapshot['selectedPlace'] as Map)['address'],
+          place['address'],
+        );
+        for (final result in [lookup, selection]) {
+          final spoken = jsonEncode(result);
+          expect(spoken, isNot(contains(place['address'] as String)));
+          expect(spoken, isNot(contains(place['label'] as String)));
+          expect(spoken, isNot(contains(place['id'] as String)));
+        }
+      },
+    );
+
     test('reopening restores the selected destination while room changes retain the camera', () async {
       final f = Fixture();
       addTearDown(f.projection.dispose);
