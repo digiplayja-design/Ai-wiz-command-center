@@ -4,6 +4,58 @@ const fs = require('node:fs');
 const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const app = path.resolve(__dirname,'..');
 
+// Runs entirely in the page: querying, measuring and accepting a snapshot must
+// share one browser turn. Native refreshes replace rows, so a later evaluateAll
+// can measure different (or detached) nodes from those accepted by an earlier wait.
+function stableSavedTargetGeometry(){
+  return new Promise(resolve=>{
+    let previousButtons=[],previousSignature='',stableFrames=0,generation=0,frame,timer,last;
+    const history=[],started=performance.now();
+    function finish(stable){
+      clearTimeout(timer);cancelAnimationFrame(frame);
+      resolve({stable,...last,history});
+    }
+    function sample(){
+      const root=document.querySelector('.kb-product');
+      const section=document.querySelector('section[data-screen="saved"]');
+      const buttons=[...document.querySelectorAll('#cinema-kb-saved-transcripts [data-transcript-action]')];
+      const sameNodes=buttons.length===previousButtons.length&&buttons.every((button,index)=>button===previousButtons[index]);
+      if(!sameNodes)generation++;
+      const ancestors=new Set();
+      const targets=buttons.map(button=>{
+        for(let node=button;node;node=node.parentElement)ancestors.add(node);
+        const rect=button.getBoundingClientRect(),style=getComputedStyle(button);
+        return {action:button.dataset.transcriptAction,connected:button.isConnected,
+          x:rect.x,y:rect.y,width:rect.width,height:rect.height,offsetHeight:button.offsetHeight,
+          cssHeight:style.height,minHeight:style.minHeight,display:style.display,visibility:style.visibility,
+          transform:style.transform,scale:style.scale,translate:style.translate};
+      });
+      const animations=[...ancestors].flatMap(node=>node.getAnimations().filter(animation=>
+        animation.pending||animation.playState==='running').map(animation=>({
+          target:node.id||node.dataset.screen||node.tagName,playState:animation.playState,
+          pending:animation.pending,currentTime:animation.currentTime})));
+      const ready=root?.dataset.screen==='saved'&&section&&!section.hidden&&
+        window.testPendingSavedLoads===0&&document.fonts.status==='loaded'&&
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches&&animations.length===0&&
+        buttons.length===3&&targets.every(target=>target.connected&&target.height>=44&&target.width>0&&
+          target.display!=='none'&&target.visibility==='visible');
+      const signature=JSON.stringify(targets);
+      stableFrames=ready?(sameNodes&&signature===previousSignature?stableFrames+1:1):0;
+      last={screen:root?.dataset.screen,motion:root?.dataset.motion,motionOverride:root?.dataset.motionOverride,
+        reducedMotion:window.matchMedia('(prefers-reduced-motion: reduce)').matches,fonts:document.fonts.status,
+        pendingSavedLoads:window.testPendingSavedLoads,generation,stableFrames,targets,animations};
+      history.push({elapsedMs:performance.now()-started,generation,stableFrames,
+        heights:targets.map(target=>target.height),pendingSavedLoads:window.testPendingSavedLoads});
+      if(history.length>6)history.shift();
+      previousButtons=buttons;previousSignature=signature;
+      if(stableFrames>=3)finish(true);
+      else frame=requestAnimationFrame(sample);
+    }
+    timer=setTimeout(()=>finish(false),5000);
+    frame=requestAnimationFrame(sample);
+  });
+}
+
 (async()=>{
   const browser = await chromium.launch({headless:true,executablePath:process.env.BROWSER_EXECUTABLE_PATH||undefined,args:['--no-sandbox','--disable-dev-shm-usage']});
   const errors=[];
@@ -15,14 +67,17 @@ const app = path.resolve(__dirname,'..');
       window.testAccount={training:'Use plain language.',memories:[],canUndo:false};
       window.testCommands=[];window.testFailSave=false;window.testHoldStop=false;
       window.testMessages={};window.testSaved=JSON.parse(localStorage.getItem('testSavedMessages')||'{}');
-      window.testFailTranscript=false;window.testCancelDelete=false;
+      window.testFailTranscript=false;window.testCancelDelete=false;window.testPendingSavedLoads=0;
       window.Korlix={postMessage:raw=>{
         const m=JSON.parse(raw);window.testCommands.push(m);
-        const reply=(data,error)=>setTimeout(()=>window.KorlixBrainReceive({type:'reply',id:m.id,data,error}),0);
+        const reply=(data,error)=>setTimeout(()=>{
+          window.KorlixBrainReceive({type:'reply',id:m.id,data,error});
+          if(m.action==='listSavedTranscripts')window.testPendingSavedLoads--;
+        },0);
         switch(m.action){
           case 'welcomeState':return reply({native:false,automatic:false,foreground:true});
           case 'load':return reply(window.testAccount);
-          case 'listSavedTranscripts':return reply(Object.values(window.testSaved).reverse());
+          case 'listSavedTranscripts':window.testPendingSavedLoads++;return reply(Object.values(window.testSaved).reverse());
           case 'saveTranscript':
             if(window.testFailTranscript)return reply(null,'Device storage unavailable. Please retry.');
             window.testSaved[m.payload.messageId]=window.testMessages[m.payload.messageId];localStorage.setItem('testSavedMessages',JSON.stringify(window.testSaved));return reply(window.testSaved[m.payload.messageId]);
@@ -96,20 +151,20 @@ const app = path.resolve(__dirname,'..');
     assert.equal(await page.locator('#cinema-kb-saved-transcripts p').textContent(),'<img src=x onerror="window.injected=true">');
     assert.equal(await page.evaluate(()=>window.testCommands.filter(c=>c.action==='saveMemory').length),2,'Transcript Save never calls Brain save');
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'Saved view fits '+width);
-    // A native refresh replaces rows; wait for their final visible geometry.
+    // Assert the exact snapshot that was stable, without a second DOM query.
+    let geometry;
     try{
-      await page.waitForFunction(()=>{
-        const buttons=[...document.querySelectorAll('#cinema-kb-saved-transcripts [data-transcript-action]')];
-        return buttons.length===3&&buttons.every(button=>button.getBoundingClientRect().height>=44);
-      },null,{timeout:5000});
+      geometry=await page.evaluate(stableSavedTargetGeometry);
+      assert.equal(geometry.stable,true,'Stable saved transcript geometry at '+width);
+      assert.equal(geometry.targets.length,3,'Three transcript actions at '+width);
+      assert.deepEqual(geometry.targets.map(target=>target.action).sort(),['delete','save','share'],'Exact transcript actions at '+width);
+      for(const target of geometry.targets)assert.ok(target.height>=44,
+        'Accessible '+target.action+' target at '+width+': measured '+target.height+'px');
     }catch(error){
-      console.log('Transcript geometry at '+width,await page.evaluate(()=>({screen:document.querySelector('.kb-product').dataset.screen,motion:document.querySelector('.kb-product').dataset.motion,targets:[...document.querySelectorAll('#cinema-kb-saved-transcripts [data-transcript-action]')].map(button=>({action:button.dataset.transcriptAction,height:button.getBoundingClientRect().height,minHeight:getComputedStyle(button).minHeight,display:getComputedStyle(button).display}))})));
+      console.log('Transcript geometry at '+width,JSON.stringify(geometry||{observationFailed:true}));
       if(process.env.UI_SCREENSHOTS)await page.screenshot({path:path.join(process.env.UI_SCREENSHOTS,'brain-saved-failure-'+width+'.png'),fullPage:true});
       throw error;
     }
-    const actionSizes=await page.locator('#cinema-kb-saved-transcripts [data-transcript-action]').evaluateAll(buttons=>buttons.map(button=>({action:button.dataset.transcriptAction,height:button.getBoundingClientRect().height})));
-    assert.equal(actionSizes.length,3,'Three transcript actions at '+width);
-    for(const target of actionSizes)assert.ok(target.height>=44,'Accessible '+target.action+' target at '+width);
     if(process.env.UI_SCREENSHOTS)await page.screenshot({path:path.join(process.env.UI_SCREENSHOTS,'brain-saved-'+width+'.png'),fullPage:true});
     await page.locator('#cinema-kb-saved-back').click();
     if(process.env.UI_SCREENSHOTS)await page.screenshot({path:path.join(process.env.UI_SCREENSHOTS,'brain-talk-'+width+'.png'),fullPage:true});
