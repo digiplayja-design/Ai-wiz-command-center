@@ -81,6 +81,32 @@ async function settleLayout(page) {
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
 }
 
+async function settleRendererLayout(page,renderer,label) {
+  // A credit resize crosses two documents: iframe ResizeObserver -> postMessage
+  // -> scene height -> iframe viewport. Parent animation frames alone do not
+  // establish that the child has received its new viewport size.
+  let previous='',last;
+  const deadline=Date.now()+5000;
+  while(Date.now()<deadline) {
+    await settleLayout(page);
+    const child=await renderer.evaluate(()=>({width:innerWidth,height:innerHeight,
+      footer:document.getElementById('map-credits').getBoundingClientRect().toJSON()}));
+    const parent=await page.evaluate(()=>{
+      const frame=document.querySelector('#map-container iframe'),stage=document.getElementById('scene-stage');
+      return {width:frame.clientWidth,height:frame.clientHeight,
+        reserved:parseFloat(getComputedStyle(stage).getPropertyValue('--map-credit-height'))};
+    });
+    last={label,parent,child};
+    const signature=JSON.stringify({parent,width:child.width,height:child.height,footer:child.footer});
+    const agrees=Math.abs(parent.width-child.width)<=1&&Math.abs(parent.height-child.height)<=1&&
+      parent.reserved===Math.ceil(child.footer.height)&&child.footer.top>=0&&child.footer.bottom<=child.height+1;
+    if(agrees&&signature===previous)return;
+    previous=signature;
+  }
+  if(screenDirectory)await page.screenshot({path:path.join(screenDirectory,`projection-layout-failure-${label}.png`)});
+  throw new Error('Renderer layout did not settle: '+JSON.stringify(last));
+}
+
 (async()=>{
   const browser = await chromium.launch({headless:true,executablePath:process.env.BROWSER_EXECUTABLE_PATH||undefined,args:['--no-sandbox','--disable-dev-shm-usage']});
   const errors=[];
@@ -247,7 +273,7 @@ async function settleLayout(page) {
       await page.setViewportSize({width,height:844});
       for(const room of ['command','discovery']) {
         await page.locator('#room-'+room).click();
-        await settleLayout(page);
+        await settleRendererLayout(page,renderer,`${room}-${width}`);
         const footer=await renderer.evaluate(()=>document.getElementById('map-credits').getBoundingClientRect().toJSON());
         const iframe=await page.locator('#map-container iframe').boundingBox();
         const geometry=await page.evaluate(()=>{
@@ -276,24 +302,39 @@ async function settleLayout(page) {
           window.projectionState.voice={active:true,phase:'listening',message:'Rici is listening'};window.sendSnapshot();
         });
         assert.equal(await page.evaluate(()=>Math.abs(document.querySelector('.projection-shell').scrollTop-window.scrollBeforeVoice)<1),true,'Starting voice preserves the reading position in the reserved scroll viewport');
+        // Activating the bounded scroll viewport can add a scrollbar and wrap
+        // credits again. Align only after both documents agree on that layout.
+        await settleRendererLayout(page,renderer,`active-${room}-${width}`);
         await page.evaluate(()=>{
           const shell=document.querySelector('.projection-shell');
           shell.scrollTop+=document.getElementById('scene-stage').getBoundingClientRect().bottom-shell.getBoundingClientRect().bottom+12;
         });
-        await settleLayout(page);
+        await settleRendererLayout(page,renderer,`aligned-${room}-${width}`);
         const active=await page.evaluate(()=>{
           const shell=document.querySelector('.projection-shell'),dock=document.querySelector('.voice-dock'),stop=document.getElementById('stop-button');
           const button=stop.getBoundingClientRect();
           return {shell:shell.getBoundingClientRect().toJSON(),dock:dock.getBoundingClientRect().toJSON(),stop:button.toJSON(),
+            scrollTop:shell.scrollTop,scrollHeight:shell.scrollHeight,clientHeight:shell.clientHeight,windowScroll:scrollY,
+            reservedCredits:parseFloat(getComputedStyle(document.getElementById('scene-stage')).getPropertyValue('--map-credit-height')),
             stopHittable:document.elementFromPoint(button.x+button.width/2,button.y+button.height/2)?.closest('#stop-button')===stop};
         });
         const activeFrame=await page.locator('#map-container iframe').boundingBox();
         const activeFooter=await renderer.evaluate(()=>document.getElementById('map-credits').getBoundingClientRect().toJSON());
-        assert.ok(active.shell.bottom<=active.dock.top-10,'Scroll viewport ends above the active voice dock');
-        assert.ok(activeFrame.y+activeFooter.top>=active.shell.top&&activeFrame.y+activeFooter.bottom<=active.shell.bottom,'Full attribution can scroll into view without going behind the dock');
-        assert.ok(activeFrame.y+activeFooter.bottom<active.dock.top,'Active voice dock never covers visible provider attribution');
-        assert.ok(active.stop.y>=0&&active.stop.bottom<=844&&active.stopHittable,'Stop stays visible and hittable with wrapped credits at '+width+' / '+room);
-        if(screenDirectory&&width===390)await page.screenshot({path:path.join(screenDirectory,`projection-attribution-active-${room}-${width}.png`)});
+        const diagnostic={width,room,active,activeFrame,activeFooter,
+          absoluteFooter:{top:activeFrame.y+activeFooter.top,bottom:activeFrame.y+activeFooter.bottom}};
+        if(screenDirectory) {
+          await page.screenshot({path:path.join(screenDirectory,`projection-attribution-active-${room}-${width}.png`)});
+          fs.writeFileSync(path.join(screenDirectory,`projection-attribution-geometry-${room}-${width}.json`),JSON.stringify(diagnostic,null,2));
+        }
+        try {
+          assert.ok(active.shell.bottom<=active.dock.top-10,'Scroll viewport ends above the active voice dock at '+width+' / '+room);
+          assert.ok(activeFrame.y+activeFooter.top>=active.shell.top&&activeFrame.y+activeFooter.bottom<=active.shell.bottom,'Full attribution can scroll into view without going behind the dock at '+width+' / '+room);
+          assert.ok(activeFrame.y+activeFooter.bottom<active.dock.top,'Active voice dock never covers visible provider attribution at '+width+' / '+room);
+          assert.ok(active.stop.y>=0&&active.stop.bottom<=844&&active.stopHittable,'Stop stays visible and hittable with wrapped credits at '+width+' / '+room);
+        } catch(error) {
+          console.error('Active attribution geometry:',JSON.stringify(diagnostic));
+          throw error;
+        }
         await page.evaluate(()=>{
           window.scrollBeforeStop=document.querySelector('.projection-shell').scrollTop;
           window.projectionState.voice={active:false,phase:'complete',message:'Microphone off'};window.sendSnapshot();
