@@ -5,11 +5,11 @@ import {readFile} from 'node:fs/promises';
 import {ProjectionError, publicProjectionConfiguration, projectionConfiguration, normalizeQuery, normalizePlace,
   normalizeQuestion, parseGeocodingResponse, resolvePlace, directProjectionAnswer, parsePlaceAnswer, researchPlace} from '../brain_projection/core.mjs';
 import {registerBrainProjection} from '../brain_projection/routes.mjs';
-import {rendererDocument, CESIUM_VERSION, CESIUM_JS_INTEGRITY, CESIUM_CSS_INTEGRITY} from '../brain_projection/renderer.mjs';
+import {rendererDocument, rendererPolicy, MAPS_JS_CHANNEL} from '../brain_projection/renderer.mjs';
 
 const environment = {BRAIN_PROJECTION_GEOCODING_KEY: 'server-only-geocoding-test-key',
-  BRAIN_PROJECTION_MAP_BROWSER_KEY: 'browser-restricted-test-key-12345',
-  BRAIN_PROJECTION_MAP_BROWSER_RESTRICTIONS_VERIFIED: 'true',
+  BRAIN_PROJECTION_MAPS_JS_BROWSER_KEY: 'browser-restricted-test-key-12345',
+  BRAIN_PROJECTION_MAPS_JS_RESTRICTIONS_VERIFIED: 'true',
   RENDER_EXTERNAL_URL: 'https://chee-chai-chee-backend.onrender.com', OPENAI_API_KEY: 'server-only-openai-test-key'};
 const place = {id: 'confirmed-place', label: 'Confirmed address', address: '10 Test Street, Example City',
   latitude: 40.7, longitude: -73.9, userQuery: '10 Test Street, Example City', provider: 'google'};
@@ -33,8 +33,8 @@ test('public configuration exposes only readiness, not private or public API key
   assert.equal(configured.rendererUrl, environment.RENDER_EXTERNAL_URL + '/brain-projection/earth.html');
   assert.equal(configured.answersAvailable, true);
   assert.doesNotMatch(JSON.stringify(configured), /test-key|geocoding-test/);
-  assert.equal(publicProjectionConfiguration({...environment, BRAIN_PROJECTION_MAP_BROWSER_KEY: environment.BRAIN_PROJECTION_GEOCODING_KEY}).mapAvailable, false);
-  assert.equal(publicProjectionConfiguration({...environment, BRAIN_PROJECTION_MAP_BROWSER_KEY: ''}).mapAvailable, false);
+  assert.equal(publicProjectionConfiguration({...environment, BRAIN_PROJECTION_MAPS_JS_BROWSER_KEY: environment.BRAIN_PROJECTION_GEOCODING_KEY}).mapAvailable, false);
+  assert.equal(publicProjectionConfiguration({...environment, BRAIN_PROJECTION_MAPS_JS_BROWSER_KEY: ''}).mapAvailable, false);
   assert.equal(publicProjectionConfiguration({...environment, BRAIN_PROJECTION_GEOCODING_KEY: ''}).mapAvailable, true);
 });
 
@@ -43,12 +43,12 @@ test('renderer origin and explicitly public key fail closed', () => {
     'https://127.0.0.1', 'https://localhost', 'https://korlix.com/path', 'https://korlix.com?key=secret', 'https://korlix.com#token']) {
     assert.equal(publicProjectionConfiguration({...environment, KORLIX_PUBLIC_BACKEND_URL: origin}).mapAvailable, false, origin);
   }
-  assert.equal(projectionConfiguration({...environment, BRAIN_PROJECTION_MAP_BROWSER_KEY: '"><script>alert(1)</script>'}).browserKey, '');
+  assert.equal(projectionConfiguration({...environment, BRAIN_PROJECTION_MAPS_JS_BROWSER_KEY: '"><script>alert(1)</script>'}).browserKey, '');
 });
 
 test('a candidate browser key remains private and inactive until its restrictions are verified', () => {
   for (const value of [undefined, '', 'false', '1', 'yes', 'TRUE', true]) {
-    const pending = {...environment, BRAIN_PROJECTION_MAP_BROWSER_RESTRICTIONS_VERIFIED: value};
+    const pending = {...environment, BRAIN_PROJECTION_MAPS_JS_RESTRICTIONS_VERIFIED: value};
     const config = publicProjectionConfiguration(pending);
     assert.equal(config.mapAvailable, false);
     assert.equal(config.rendererUrl, null);
@@ -56,8 +56,21 @@ test('a candidate browser key remains private and inactive until its restriction
     assert.equal(config.answersAvailable, true);
     assert.equal(projectionConfiguration(pending).browserKey, '');
     const html = rendererDocument(pending);
-    assert.ok(!html.includes(environment.BRAIN_PROJECTION_MAP_BROWSER_KEY));
-    assert.doesNotMatch(html, /Cesium\.js/);
+    assert.ok(!html.includes(environment.BRAIN_PROJECTION_MAPS_JS_BROWSER_KEY));
+    assert.doesNotMatch(html, /<script[^>]*src="https:/);
+  }
+});
+
+test('legacy Map Tiles credentials and activation assertions never enable Maps JavaScript', () => {
+  const {BRAIN_PROJECTION_MAPS_JS_BROWSER_KEY: key,
+    BRAIN_PROJECTION_MAPS_JS_RESTRICTIONS_VERIFIED: _verified, ...base} = environment;
+  const legacy = {...base, BRAIN_PROJECTION_MAP_BROWSER_KEY: key,
+    BRAIN_PROJECTION_MAP_BROWSER_RESTRICTIONS_VERIFIED: 'true'};
+  for (const config of [legacy, {...legacy, BRAIN_PROJECTION_MAPS_JS_BROWSER_KEY: key},
+    {...legacy, BRAIN_PROJECTION_MAPS_JS_RESTRICTIONS_VERIFIED: 'true'}]) {
+    assert.equal(publicProjectionConfiguration(config).mapAvailable, false);
+    assert.equal(projectionConfiguration(config).browserKey, '');
+    assert.ok(!rendererDocument(config).includes(key));
   }
 });
 
@@ -330,32 +343,46 @@ test('malformed requests and abuse budgets stop before provider requests', async
   assert.equal(f.calls.resolve, 20);
 });
 
-test('hosted renderer is public and map-only, with pinned integrity, attribution and restricted CSP', async t => {
+test('hosted renderer is public and map-only, with fresh matching script/style nonces and restricted CSP', async t => {
   const f = await setup(t);
   const response = await fetch(f.base + '/brain-projection/earth.html');
   const html = await response.text();
   assert.equal(response.status, 200);
   assert.equal(f.calls.auth, 0);
-  assert.match(html, new RegExp(CESIUM_VERSION.replace('.', '\\.')));
-  assert.ok(html.includes(CESIUM_JS_INTEGRITY));
-  assert.ok(html.includes(CESIUM_CSS_INTEGRITY));
-  assert.ok(html.includes(environment.BRAIN_PROJECTION_MAP_BROWSER_KEY));
+  assert.equal(MAPS_JS_CHANNEL, 'quarterly');
+  assert.match(html, /name="korlix-map-channel" content="quarterly"/);
+  assert.ok(html.includes(environment.BRAIN_PROJECTION_MAPS_JS_BROWSER_KEY));
   assert.ok(!html.includes(environment.BRAIN_PROJECTION_GEOCODING_KEY));
   assert.ok(!html.includes(environment.OPENAI_API_KEY));
-  assert.match(html, /map-credits/);
+  assert.doesNotMatch(html, /Cesium|cesium|map-credits/);
   assert.match(html, /Capture date unavailable/);
   const policy = response.headers.get('content-security-policy');
-  assert.match(policy, /frame-src 'none'/);
+  const nonces = [...html.matchAll(/nonce="([A-Za-z0-9_-]+)"/g)].map(match => match[1]);
+  assert.equal(nonces.length, 3);
+  assert.equal(new Set(nonces).size, 1, 'The local module and SDK style seed use the document CSP nonce');
+  assert.match(nonces[0], /^[A-Za-z0-9_-]{24}$/);
+  assert.equal(policy, rendererPolicy(nonces[0]));
+  assert.match(policy, /frame-src https:\/\/\*\.google\.com/);
   const scriptPolicy = policy.split('; ').find(directive => directive.startsWith('script-src '));
-  assert.equal(scriptPolicy, "script-src 'self' https://cesium.com 'unsafe-eval'",
-    'The pinned Cesium bundle requires string evaluation; only the isolated renderer receives this exception');
-  assert.doesNotMatch(scriptPolicy, /unsafe-inline|https:\/\/\*|data:|blob:/);
+  assert.ok(scriptPolicy.includes(`'nonce-${nonces[0]}' 'strict-dynamic'`));
+  assert.doesNotMatch(scriptPolicy, /unsafe-inline|https:\/\/\*|https:(?: |$)|data:/);
+  assert.ok(policy.includes(`style-src 'self' 'nonce-${nonces[0]}' https://fonts.googleapis.com`));
+  assert.match(policy, /object-src 'none'; base-uri 'none'; form-action 'none'/);
+  assert.doesNotMatch(html, /<script[^>]*src="https:/, 'Runtime installs authentication/error handlers before inserting the SDK');
+  const next = await fetch(f.base + '/brain-projection/earth.html');
+  const nextHtml = await next.text();
+  assert.ok(!nextHtml.includes(`nonce="${nonces[0]}"`), 'Nonces are regenerated for every uncached document');
+  assert.notEqual(next.headers.get('content-security-policy'), policy);
   assert.equal(response.headers.get('referrer-policy'), 'strict-origin-when-cross-origin');
   assert.match(response.headers.get('permissions-policy'), /microphone=\(\)/);
   assert.equal(response.headers.get('cache-control'), 'no-store');
   const unconfigured = rendererDocument({});
-  assert.doesNotMatch(unconfigured, /Cesium\.js/);
+  assert.doesNotMatch(unconfigured, /Cesium|<script[^>]*src="https:/);
   assert.match(unconfigured, /not connected/);
+  for (const nonce of ['', 'short', '\"; script-src *', null]) {
+    assert.throws(() => rendererDocument({}, {nonce}), TypeError);
+    assert.throws(() => rendererPolicy(nonce), TypeError);
+  }
   for (const filename of ['earth.mjs', 'camera.mjs', 'earth.css']) {
     assert.equal((await fetch(f.base + '/brain-projection/' + filename)).status, 200);
   }

@@ -30,43 +30,106 @@ export function parseCameraMessage(event, {parent, ownOrigin, lastSequence = -1}
   return {camera, place};
 }
 
-export function createCameraController({Cesium, viewer}) {
-  let selected = null;
-  const start = {latitude: 20, longitude: -25, height: 22000000, heading: 0, pitch: -90};
-  function fly(value, duration = 1.2) {
-    viewer.camera.cancelFlight();
-    viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(value.longitude, value.latitude, value.height),
-      orientation: {heading: Cesium.Math.toRadians(value.heading || 0), pitch: Cesium.Math.toRadians(value.pitch ?? -50), roll: 0}, duration});
-    viewer.scene.requestRender();
+const clamp = (value, low, high) => Math.min(high, Math.max(low, value));
+const heading = value => ((value % 360) + 360) % 360;
+const maxRange = 40000000;
+const start = {center: {lat: 20, lng: -25, altitude: 0}, range: 22000000, heading: 0, tilt: 0, roll: 0};
+
+export function initialCameraOptions() {
+  return {...start, center: {...start.center}};
+}
+
+// Quarterly v3.65 CameraOptions supports terrain-relative centers and range:
+// https://developers.google.com/maps/documentation/javascript/reference/3.65/3d-map#CameraOptions
+// https://developers.google.com/maps/documentation/javascript/reference/3.65/3d-map-draw#AltitudeMode
+// Legacy "height" is a compatibility standoff hint, not a surveyed elevation.
+// Center the requested place on terrain; putting the camera directly above its
+// coordinates while tilting would point past the requested building.
+function destination(value) {
+  const tilt = clamp(90 + (value.pitch ?? -50), 0, 85);
+  return {center: {lat: value.latitude, lng: value.longitude, altitude: 0},
+    altitudeMode: 'RELATIVE_TO_GROUND',
+    range: clamp((value.height ?? 650) / Math.cos(tilt * Math.PI / 180), 35, maxRange),
+    heading: heading(value.heading ?? 0), tilt, roll: 0};
+}
+
+export function createCameraController({map, reducedMotion = false, onError = () => {}}) {
+  let selected = null, disposed = false, generation = 0;
+  function current() {
+    const center = map.center;
+    if (!center || !numberIn(center.lat, -90, 90) || !numberIn(center.lng, -180, 180) ||
+        !Number.isFinite(center.altitude) || !Number.isFinite(map.range) ||
+        !Number.isFinite(map.heading) || !Number.isFinite(map.tilt)) {
+      throw new Error('Map camera state unavailable.');
+    }
+    // The SDK's current center is absolute MSL, including after touch gestures.
+    return {center: {lat: center.lat, lng: center.lng, altitude: center.altitude},
+      altitudeMode: 'ABSOLUTE', range: clamp(map.range, 35, maxRange),
+      heading: heading(map.heading), tilt: clamp(map.tilt, 0, 85), roll: 0};
+  }
+  function move(makeCamera, durationMillis) {
+    if (disposed) return;
+    const token = ++generation;
+    const rejected = () => { if (!disposed && generation === token) onError(); };
+    const perform = () => {
+      if (disposed || generation !== token) return;
+      try {
+        const endCamera = makeCamera();
+        if (!endCamera) return;
+        const flight = map.flyCameraTo({endCamera, durationMillis: reducedMotion ? 0 : durationMillis});
+        // Public methods may return void. Also absorb a rejected asynchronous
+        // implementation without allowing an older flight to fail a new one.
+        if (flight?.then) void Promise.resolve(flight).catch(rejected);
+      } catch { rejected(); }
+    };
+    try {
+      const stopped = map.stopCameraAnimation();
+      if (stopped?.then) void Promise.resolve(stopped).then(perform, rejected);
+      else perform();
+    } catch { rejected(); }
   }
   function apply({camera, place}) {
-    if (place) selected = place;
-    const position = viewer.camera.positionCartographic;
-    const current = {latitude: Cesium.Math.toDegrees(position.latitude), longitude: Cesium.Math.toDegrees(position.longitude),
-      height: position.height, heading: Cesium.Math.toDegrees(viewer.camera.heading), pitch: Cesium.Math.toDegrees(viewer.camera.pitch)};
+    if (disposed) return;
+    if (place) selected = {...place};
     switch (camera.operation) {
-      case 'flyTo':
-        fly({latitude: camera.latitude ?? selected.latitude, longitude: camera.longitude ?? selected.longitude,
-          height: camera.height ?? 650, heading: camera.heading ?? 0, pitch: camera.pitch ?? -50});
-        break;
-      case 'reset':
-        fly(selected ? {...selected, height: 650, heading: 0, pitch: -50} : start);
-        break;
-      case 'closer':
-      case 'farther': {
-        // Move along the current view ray, preserving the building in view.
-        viewer.camera.cancelFlight();
-        const amount = Math.max(10, current.height * 0.35);
-        if (camera.operation === 'closer' && current.height > 45) viewer.camera.zoomIn(Math.min(amount, current.height - 35));
-        if (camera.operation === 'farther' && current.height < 40000000) viewer.camera.zoomOut(Math.min(amount, 40000000 - current.height));
-        viewer.scene.requestRender();
+      case 'flyTo': {
+        const target = destination({latitude: camera.latitude ?? selected?.latitude,
+          longitude: camera.longitude ?? selected?.longitude, height: camera.height,
+          heading: camera.heading, pitch: camera.pitch});
+        move(() => target, 1200);
         break;
       }
+      case 'reset': {
+        const target = selected ? destination(selected) : {...initialCameraOptions(), altitudeMode: 'ABSOLUTE'};
+        move(() => target, 1200);
+        break;
+      }
+      case 'closer':
+      case 'farther':
+        move(() => {
+          const view = current();
+          const minimum = Math.max(35, 25 / Math.cos(view.tilt * Math.PI / 180));
+          const range = clamp(view.range * (camera.operation === 'closer' ? .65 : 1.35), minimum, maxRange);
+          return range === view.range ? null : {...view, range};
+        }, 500);
+        break;
       case 'left':
       case 'right':
-        fly({...current, heading: current.heading + (camera.operation === 'left' ? -18 : 18)}, .5);
+        move(() => {
+          const view = current();
+          return {...view, heading: heading(view.heading + (camera.operation === 'left' ? -18 : 18))};
+        }, 500);
         break;
     }
   }
-  return {apply, reset: () => fly(start, 0)};
+  function dispose() {
+    if (disposed) return;
+    disposed = true;
+    generation++;
+    try {
+      const stopped = map.stopCameraAnimation();
+      if (stopped?.then) void Promise.resolve(stopped).catch(() => {});
+    } catch { /* The document is closing; never surface provider diagnostics. */ }
+  }
+  return {apply, dispose};
 }

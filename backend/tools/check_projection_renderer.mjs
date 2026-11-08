@@ -1,87 +1,97 @@
 import assert from 'node:assert/strict';
-import {createHash} from 'node:crypto';
 import {mkdir, writeFile} from 'node:fs/promises';
 import {createServer} from 'node:http';
 import {createRequire} from 'node:module';
 import {resolve} from 'node:path';
+import {Script} from 'node:vm';
 import express from 'express';
-import {registerProjectionRenderer, CESIUM_VERSION, CESIUM_ROOT,
-  CESIUM_JS_INTEGRITY, CESIUM_CSS_INTEGRITY} from '../brain_projection/renderer.mjs';
+import {registerProjectionRenderer, MAPS_JS_CHANNEL} from '../brain_projection/renderer.mjs';
 
-// Run in CI with Playwright installed in a separate temporary directory. This
-// loads the unmodified official SDK through the real renderer routes and CSP.
-// Google/Ion requests NEVER leave the browser: synthetic tiles and a labelled
-// credit-logo fixture are fulfilled locally; all other upstreams fail closed.
-// This checks Chromium bootstrap/rendering, not Google keys, coverage, imagery,
-// provider referrer enforcement, native WebViews, or the native voice session.
-const attribution = 'KORLIX synthetic CI building geometry — deterministic fixture, not geographic imagery';
-const place = {id: 'ci-synthetic-building', label: 'Synthetic CI building', latitude: 40.7, longitude: -73.9};
-const browserKey = 'korlix-browser-ci-fake-key-not-a-credential';
-const jsUrl = `${CESIUM_ROOT}Cesium.js`;
-const cssUrl = `${CESIUM_ROOT}Widgets/widgets.css`;
-const sha384 = body => `sha384-${createHash('sha384').update(body).digest('base64')}`;
+// CI CONTRACT FIXTURES, NOT THE GOOGLE SDK. Google Maps JavaScript requires an
+// owner-provisioned valid key. This test runs the real local renderer, headers,
+// nonce CSP and camera adapter against a narrowly modeled public maps3d API.
+// Every external request is fulfilled from this file or blocked. It proves no
+// Google rendering, authorization, attribution layout, coverage or device claim.
+const browserKey = 'korlix-maps-js-ci-fixture-not-a-real-credential';
+const place = {id: 'ci-camera-contract', label: 'Camera contract fixture', latitude: 40.7, longitude: -73.9};
+const scriptOrigin = 'https://maps.googleapis.com';
+const scriptPath = '/maps/api/js';
+const modes = ['ready', 'map-error', 'auth-failure', 'import-error', 'loader-error',
+  'delayed-import-close', 'never-steady', 'unverified', 'legacy-only'];
 
-function tileFixture() {
-  // Uncompressed, unlit glTF cube in a local east/north/up frame. Its asset
-  // copyright exercises Cesium's actual per-tile on-screen attribution path.
-  const positions = [-100, 0, -100, 100, 0, -100, 100, 0, 100, -100, 0, 100,
-    -100, 150, -100, 100, 150, -100, 100, 150, 100, -100, 150, 100];
-  const indices = [0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6, 0, 4, 5, 0, 5, 1,
-    1, 5, 6, 1, 6, 2, 2, 6, 7, 2, 7, 3, 3, 7, 4, 3, 4, 0];
-  const binary = Buffer.alloc(positions.length * 4 + indices.length * 2);
-  positions.forEach((value, index) => binary.writeFloatLE(value, index * 4));
-  indices.forEach((value, index) => binary.writeUInt16LE(value, positions.length * 4 + index * 2));
-  const gltf = {
-    asset: {version: '2.0', generator: 'KORLIX deterministic renderer CI', copyright: attribution},
-    scene: 0, scenes: [{nodes: [0]}], nodes: [{mesh: 0}],
-    meshes: [{primitives: [{attributes: {POSITION: 0}, indices: 1, material: 0}]}],
-    materials: [{doubleSided: true, pbrMetallicRoughness: {baseColorFactor: [0.05, 0.85, 0.7, 1],
-      metallicFactor: 0, roughnessFactor: 1}, extensions: {KHR_materials_unlit: {}}}],
-    extensionsUsed: ['KHR_materials_unlit'], buffers: [{byteLength: binary.length}],
-    bufferViews: [{buffer: 0, byteOffset: 0, byteLength: positions.length * 4, target: 34962},
-      {buffer: 0, byteOffset: positions.length * 4, byteLength: indices.length * 2, target: 34963}],
-    accessors: [{bufferView: 0, componentType: 5126, count: positions.length / 3, type: 'VEC3',
-      min: [-100, 0, -100], max: [100, 150, 100]},
-    {bufferView: 1, componentType: 5123, count: indices.length, type: 'SCALAR', min: [0], max: [7]}],
+// Deliberately self-contained so its source can be delivered at the intercepted
+// loader URL. The closed shadow tree belongs to this synthetic test fixture;
+// the test/renderer only observe public element geometry, events and methods.
+function installMaps3dContractFixture(mode) {
+  const copy = value => JSON.parse(JSON.stringify(value));
+  const fixture = window.__maps3dContractFixture = {
+    kind: 'synthetic-maps3d-contract-fixture', liveProviderVerified: false,
+    imports: [], constructors: [], flights: [], stops: 0, connected: 0, disconnected: 0,
+    bootstrap: {
+      authCallbackInstalled: typeof window.gm_authFailure === 'function',
+      callbackInstalled: typeof window.__korlixMapsReady === 'function',
+      loaderNonce: document.currentScript?.nonce,
+      moduleNonce: document.querySelector('script[type="module"][nonce]')?.nonce,
+      loaderReferrerPolicy: document.currentScript?.referrerPolicy,
+    },
   };
-  const json = Buffer.from(JSON.stringify(gltf));
-  const jsonChunk = Buffer.alloc(Math.ceil(json.length / 4) * 4, 0x20);
-  json.copy(jsonChunk);
-  const glb = Buffer.alloc(12 + 8 + jsonChunk.length + 8 + binary.length);
-  glb.write('glTF'); glb.writeUInt32LE(2, 4); glb.writeUInt32LE(glb.length, 8);
-  glb.writeUInt32LE(jsonChunk.length, 12); glb.write('JSON', 16); jsonChunk.copy(glb, 20);
-  const binaryHeader = 20 + jsonChunk.length;
-  glb.writeUInt32LE(binary.length, binaryHeader); glb.writeUInt32LE(0x004e4942, binaryHeader + 4);
-  binary.copy(glb, binaryHeader + 8);
-
-  const latitude = place.latitude * Math.PI / 180, longitude = place.longitude * Math.PI / 180;
-  const sinLat = Math.sin(latitude), cosLat = Math.cos(latitude);
-  const sinLon = Math.sin(longitude), cosLon = Math.cos(longitude);
-  const eccentricitySquared = 6.6943799901413165e-3;
-  const normal = 6378137 / Math.sqrt(1 - eccentricitySquared * sinLat ** 2);
-  const transform = [-sinLon, cosLon, 0, 0, -sinLat * cosLon, -sinLat * sinLon, cosLat, 0,
-    cosLat * cosLon, cosLat * sinLon, sinLat, 0,
-    normal * cosLat * cosLon, normal * cosLat * sinLon, normal * (1 - eccentricitySquared) * sinLat, 1];
-  // Tileset-level error describes the error without loading its root. Cesium
-  // intentionally skips the entire tileset when this is zero; only the exact
-  // leaf geometry below has zero error. A positive coarse error lets the real
-  // traversal request this building when the camera arrives over the fixture.
-  const tileset = {asset: {version: '1.1', gltfUpAxis: 'Y'}, geometricError: 2000,
-    root: {boundingVolume: {sphere: [0, 0, 75, 200]}, transform, geometricError: 0,
-      refine: 'ADD', content: {uri: 'fixture.glb'}}};
-  return {glb, tileset};
+  let currentMap = null, releaseImport = null;
+  class Map3DElement extends HTMLElement {
+    constructor(options) {
+      super();
+      fixture.constructors.push(copy(options));
+      Object.assign(this, copy(options));
+      currentMap = this;
+      const shadow = this.attachShadow({mode: 'closed'});
+      const style = document.createElement('style');
+      style.nonce = document.querySelector('style[nonce]')?.nonce || '';
+      style.textContent = ':host{display:block;background:#092535;color:#d5f7ff;font:14px system-ui}' +
+        '.fixture{box-sizing:border-box;height:100%;display:flex;flex-direction:column;justify-content:center;text-align:center;padding:24px;' +
+        'background:linear-gradient(140deg,#123746,#061926)}h1{font-size:22px;margin:0 0 14px}p{line-height:1.6;margin:8px 0}' +
+        '.disclaimer{margin-top:auto;border-top:1px solid #6694a4;padding-top:14px;font-size:12px}' +
+        '.space{flex:1;min-height:0}.badge{color:#f7cd7c;font-weight:700;letter-spacing:.06em}';
+      const panel = document.createElement('section');
+      panel.className = 'fixture';
+      panel.innerHTML = '<div class="space"></div><p class="badge">AUTOMATED CONTRACT FIXTURE</p>' +
+        '<h1>maps3d API integration</h1><p>No Google SDK or geographic imagery is loaded.<br>Camera events and methods are simulated.</p>' +
+        '<div class="space"></div><p class="disclaimer">Fixture footer only. Real Google attribution, links and rendering require live verification.</p>';
+      shadow.append(style, panel);
+    }
+    connectedCallback() { fixture.connected++; }
+    disconnectedCallback() { fixture.disconnected++; }
+    stopCameraAnimation() { fixture.stops++; }
+    flyCameraTo(options) {
+      fixture.flights.push(copy(options));
+      Object.assign(this, copy(options.endCamera));
+      this.dispatchEvent(new Event('gmp-animationend'));
+    }
+  }
+  customElements.define('gmp-map-3d', Map3DElement);
+  const library = {Map3DElement};
+  fixture.emitSteady = isSteady => {
+    const event = new Event('gmp-steadychange');
+    Object.defineProperty(event, 'isSteady', {value: isSteady});
+    currentMap?.dispatchEvent(event);
+  };
+  fixture.emitMapError = () => currentMap?.dispatchEvent(new Event('gmp-error'));
+  fixture.releaseImport = () => releaseImport?.(library);
+  fixture.publicState = () => currentMap ? {connected: currentMap.isConnected,
+    center: copy(currentMap.center), range: currentMap.range, heading: currentMap.heading, tilt: currentMap.tilt} : null;
+  window.google = {maps: {importLibrary(name) {
+    fixture.imports.push(name);
+    if (name !== 'maps3d') return Promise.reject(new Error('Unexpected fixture library.'));
+    if (mode === 'import-error') return Promise.reject(new Error('private-provider-fixture-details'));
+    if (mode === 'delayed-import-close') return new Promise(resolveLibrary => { releaseImport = resolveLibrary; });
+    return Promise.resolve(library);
+  }}};
+  const ready = window.__korlixMapsReady;
+  if (mode === 'auth-failure') window.gm_authFailure();
+  // The captured callback also exercises cancellation of a late loader response.
+  ready();
 }
 
-const fixture = tileFixture();
-// Validate binary framing without starting a browser (also usable in restricted
-// local environments with: node tools/check_projection_renderer.mjs --fixture-only).
-assert.equal(fixture.glb.readUInt32LE(8), fixture.glb.length);
-const fixtureJsonLength = fixture.glb.readUInt32LE(12);
-const fixtureJson = JSON.parse(fixture.glb.subarray(20, 20 + fixtureJsonLength).toString());
-assert.equal(fixtureJson.asset.version, '2.0');
-assert.equal(fixtureJson.buffers[0].byteLength, fixture.glb.readUInt32LE(20 + fixtureJsonLength));
-assert.equal(fixture.tileset.root.transform.length, 16);
-assert.ok(fixture.tileset.root.transform.every(Number.isFinite));
+const sdkFixture = mode => `(${installMaps3dContractFixture.toString()})(${JSON.stringify(mode)});`;
+for (const mode of modes) new Script(sdkFixture(mode), {filename: `maps3d-${mode}-fixture.js`});
 
 async function main() {
   const require = createRequire(process.env.KORLIX_PROJECTION_BROWSER_DEPS
@@ -90,340 +100,254 @@ async function main() {
   assert.equal(require('playwright/package.json').version, '1.56.1', 'Use the CI-pinned Playwright version.');
   const artifactDirectory = resolve(process.env.PROJECTION_RENDERER_ARTIFACTS || 'projection-renderer-artifacts');
   await mkdir(artifactDirectory, {recursive: true});
-  const report = {cesiumVersion: CESIUM_VERSION, providerNetworkRequests: 0, officialAssets: [], scenarios: [],
-    limits: 'Real Cesium/Chromium, synthetic 3D Tiles and logo. No Google credentials, coverage, referrer-policy enforcement, native device or voice validation.'};
+  const report = {validationKind: 'maps3d-contract-fixture', sdkSource: 'synthetic',
+    liveProviderVerified: false, providerNetworkRequests: 0, channel: MAPS_JS_CHANNEL, scenarios: [],
+    limits: ['No real Google SDK, imagery, WebGL rendering or provider credential validation.',
+      'No live website/API restriction or billing validation.',
+      'No real SDK attribution/link layout or iOS/Android WebView/voice verification.',
+      'Production local routes, nonce CSP, lifecycle and public camera adapter run unchanged against labeled fixtures.']};
+  const environment = {};
   const app = express();
   app.disable('x-powered-by');
-  registerProjectionRenderer(app, {environment: {
-    BRAIN_PROJECTION_MAP_BROWSER_KEY: browserKey,
-    BRAIN_PROJECTION_MAP_BROWSER_RESTRICTIONS_VERIFIED: 'true',
-    KORLIX_PUBLIC_BACKEND_URL: 'https://chee-chai-chee-backend.onrender.com',
-  }});
-  // Only the test parent is synthetic. The iframe document, JS, CSS and headers
-  // come from the production registerProjectionRenderer implementation above.
+  registerProjectionRenderer(app, {environment});
+  app.get('/favicon.ico', (_req, res) => res.status(204).end());
   app.get('/__projection_ci/host.html', (_req, res) => res.type('html').send(`<!doctype html>
-    <html lang="en"><meta charset="utf-8"><link rel="icon" href="data:,"><title>Projection configured renderer CI</title>
-    <style>html,body{margin:0;width:100%;height:100%;background:#030b13}iframe{border:0;width:100%;height:100%}
-    #fixture-label{position:absolute;top:0;right:0;z-index:9;font:11px system-ui;color:white;background:#542100;padding:4px;pointer-events:none}</style>
-    <div id="fixture-label">CI fixture · synthetic building · provider traffic blocked</div>
-    <iframe id="projection" title="Production Projection renderer" src="/brain-projection/earth.html"></iframe></html>`));
+    <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    <link rel="icon" href="data:,"><title>Projection maps3d contract fixture</title>
+    <style>html,body{margin:0;width:100%;height:100%;background:#05111b;color:#e5f2f8;font:13px system-ui}
+    body{display:flex;flex-direction:column}header{box-sizing:border-box;padding:12px;flex:0 0 auto;border-bottom:1px solid #456}
+    iframe{display:block;flex:1 1 auto;min-height:0;width:100%;border:0}</style></head><body>
+    <header id="fixture-banner">CI fixture · No Google SDK, imagery or live provider verification</header>
+    <iframe title="Projection renderer contract fixture" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+      allow="camera 'none'; microphone 'none'; geolocation 'none'" src="/brain-projection/earth.html"></iframe></body></html>`));
   const server = createServer(app);
-  await new Promise((resolveListening, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', resolveListening);
-  });
-  const origin = `http://127.0.0.1:${server.address().port}`;
-  const assetCache = new Map();
   let browser;
-  try {
-    browser = await chromium.launch({headless: true, args: [
-      '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-dev-shm-usage',
-    ]});
+  await new Promise((resolveListening, reject) => {server.once('error', reject); server.listen(0, '127.0.0.1', resolveListening);});
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const nonces = new Set();
 
+  try {
+    browser = await chromium.launch({headless: true, args: ['--disable-background-networking']});
     async function scenario(mode) {
-      const result = {mode, providerFixtures: [], unexpectedRequests: [], pageErrors: [], consoleErrors: []};
+      for (const name of Object.keys(environment)) delete environment[name];
+      Object.assign(environment, {BRAIN_PROJECTION_MAPS_JS_BROWSER_KEY: browserKey,
+        BRAIN_PROJECTION_MAPS_JS_RESTRICTIONS_VERIFIED: 'true', KORLIX_PUBLIC_BACKEND_URL: 'https://korlix.com'});
+      if (mode === 'unverified') environment.BRAIN_PROJECTION_MAPS_JS_RESTRICTIONS_VERIFIED = 'false';
+      if (mode === 'legacy-only') {
+        delete environment.BRAIN_PROJECTION_MAPS_JS_BROWSER_KEY;
+        delete environment.BRAIN_PROJECTION_MAPS_JS_RESTRICTIONS_VERIFIED;
+        environment.BRAIN_PROJECTION_MAP_BROWSER_KEY = browserKey;
+        environment.BRAIN_PROJECTION_MAP_BROWSER_RESTRICTIONS_VERIFIED = 'true';
+      }
+      const result = {mode, fixture: true, liveProviderVerified: false,
+        loaderRequests: [], routeErrors: [], unexpectedRequests: [], pageErrors: [], consoleErrors: [], geometry: []};
       report.scenarios.push(result);
-      const context = await browser.newContext({viewport: {width: 1280, height: 800},
-        deviceScaleFactor: 1, serviceWorkers: 'block'});
-      // Install before navigation. This observes the genuine Viewer instance
-      // after the full SDK has initialized; it does not stub any Cesium API or
-      // alter SDK bytes, CSP, provider factory, WebGL, or camera implementation.
+      const context = await browser.newContext({viewport: {width: 1280, height: 800}, serviceWorkers: 'block'});
       await context.addInitScript(() => {
-        const observed = window.__projectionCi = {messages: [], violations: [], visibleTiles: 0};
-        document.addEventListener('securitypolicyviolation', event => observed.violations.push({
-          directive: event.violatedDirective, blockedURI: event.blockedURI, disposition: event.disposition,
-        }));
+        window.__projectionContractObserver = {violations: [], messages: []};
+        window.addEventListener('securitypolicyviolation', event => {
+          window.__projectionContractObserver.violations.push({directive: event.effectiveDirective, blockedURI: event.blockedURI});
+        });
         window.addEventListener('message', event => {
-          if (event.source === document.getElementById('projection')?.contentWindow && event.origin === location.origin) {
-            observed.messages.push(event.data);
+          const frame = document.querySelector('iframe');
+          if (window === window.top && event.source === frame?.contentWindow && event.origin === window.location.origin) {
+            window.__projectionContractObserver.messages.push(event.data);
           }
         });
-        window.addEventListener('load', () => {
-          const actualSdk = window.Cesium;
-          if (!actualSdk?.Viewer) return;
-          observed.sdk = actualSdk;
-          const viewerConstructor = new Proxy(actualSdk.Viewer, {construct(target, args) {
-            observed.viewer = Reflect.construct(target, args, target);
-            return observed.viewer;
-          }});
-          window.Cesium = new Proxy(actualSdk, {get(target, property) {
-            return property === 'Viewer' ? viewerConstructor : Reflect.get(target, property);
-          }});
-        }, {once: true});
       });
-      await context.routeWebSocket('**/*', async socket => {
-        result.unexpectedRequests.push({kind: 'websocket', url: socket.url()});
-        await socket.close();
+      await context.routeWebSocket('**/*', socket => {
+        result.unexpectedRequests.push({kind: 'websocket'});
+        socket.close();
       });
       await context.route('**/*', async route => {
         const url = new URL(route.request().url());
         if (url.origin === origin) return route.continue();
-        if (url.href.startsWith(CESIUM_ROOT) && url.origin === 'https://cesium.com' && !url.search) {
+        if (url.origin === scriptOrigin && url.pathname === scriptPath) {
           try {
-            if (!assetCache.has(url.href)) assetCache.set(url.href, (async () => {
-              // No redirects: an SDK URL cannot become an unreviewed upstream.
-              const response = await route.fetch({maxRedirects: 0, maxRetries: 0, timeout: 45000});
-              assert.equal(response.status(), 200, `Official Cesium asset failed: ${url.pathname}`);
-              const body = await response.body();
-              const integrity = sha384(body);
-              if (url.href === jsUrl) assert.equal(integrity, CESIUM_JS_INTEGRITY);
-              if (url.href === cssUrl) assert.equal(integrity, CESIUM_CSS_INTEGRITY);
-              const headers = response.headers();
-              // Preserve the real CDN's CORS/CORP headers; fabricating '*' here
-              // could hide an official-asset integration regression. Body bytes
-              // are already decoded by Playwright, so remove transport headers.
-              for (const name of ['content-encoding', 'content-length', 'transfer-encoding', 'connection']) delete headers[name];
-              if (url.href === jsUrl || url.href === cssUrl) {
-                assert.ok(['*', origin].includes(headers['access-control-allow-origin']), 'Official SRI assets require CDN CORS permission.');
-              }
-              report.officialAssets.push({url: url.href, integrity, bytes: body.length,
-                cors: headers['access-control-allow-origin'] || null});
-              return {body, headers};
-            })());
-            const asset = await assetCache.get(url.href);
-            return route.fulfill({status: 200, body: asset.body, headers: asset.headers});
+            assert.equal(url.searchParams.get('key'), browserKey);
+            assert.deepEqual(Object.fromEntries([...url.searchParams].filter(([name]) => name !== 'key')), {
+              v: 'quarterly', loading: 'async', callback: '__korlixMapsReady', auth_referrer_policy: 'origin',
+            });
+            assert.equal([...url.searchParams].length, 5);
           } catch (error) {
-            result.unexpectedRequests.push({kind: 'sdk-fetch-failed', path: url.pathname, error: error.message});
-            return route.abort('failed');
+            result.routeErrors.push(error.message);
+            return route.abort('blockedbyclient');
           }
-        }
-        // The real Google factory chooses these URLs. All provider responses,
-        // including the denied-key case, are generated here with no network.
-        if (url.origin === 'https://tile.googleapis.com' && url.pathname === '/v1/3dtiles/root.json') {
-          assert.equal(url.searchParams.get('key'), browserKey);
-          result.providerFixtures.push({path: url.pathname, status: mode === 'denied-key' ? 403 : 200});
-          return route.fulfill({status: mode === 'denied-key' ? 403 : 200, contentType: 'application/json',
-            headers: {'access-control-allow-origin': '*'}, body: JSON.stringify(mode === 'denied-key'
-              ? {error: {message: 'CI provider denied fake key; private diagnostic must not reach the parent'}} : fixture.tileset)});
-        }
-        if (mode === 'ready' && url.origin === 'https://tile.googleapis.com' && url.pathname === '/v1/3dtiles/fixture.glb') {
-          result.providerFixtures.push({path: url.pathname, status: 200});
-          return route.fulfill({status: 200, contentType: 'model/gltf-binary', body: fixture.glb,
-            headers: {'access-control-allow-origin': '*'}});
-        }
-        if (url.href === 'https://assets.ion.cesium.com/google-credit.png') {
-          result.providerFixtures.push({path: url.pathname, status: 200});
-          return route.fulfill({status: 200, contentType: 'image/svg+xml',
-            body: '<svg xmlns="http://www.w3.org/2000/svg" width="95" height="22"><rect width="95" height="22" fill="white"/><text x="4" y="16" fill="#174ea6" font-size="15">Google</text><text x="55" y="16" fill="#444" font-size="9">CI fixture</text></svg>'});
+          result.loaderRequests.push({path: scriptPath, channel: url.searchParams.get('v'), intercepted: true});
+          return route.fulfill({status: mode === 'loader-error' ? 503 : 200, contentType: 'application/javascript',
+            body: mode === 'loader-error' ? '' : sdkFixture(mode)});
         }
         result.unexpectedRequests.push({kind: 'blocked', origin: url.origin, path: url.pathname});
         return route.abort('blockedbyclient');
       });
-
       const page = await context.newPage();
       page.on('pageerror', error => result.pageErrors.push(error.message));
       page.on('console', message => {if (message.type() === 'error') result.consoleErrors.push(message.text());});
-      page.setDefaultTimeout(30000);
-      let frame, documentResponse;
+      page.setDefaultTimeout(40000);
+      let frame, documentResponse, sequence = 0;
       page.on('response', response => {
         if (response.url() === `${origin}/brain-projection/earth.html`) documentResponse = response;
       });
+      const statuses = () => page.evaluate(() => window.__projectionContractObserver.messages
+        .filter(message => message.type === 'korlix-projection-status').map(message => message.status));
+      const waitStatus = status => page.waitForFunction(expected => window.__projectionContractObserver.messages
+        .some(message => message.type === 'korlix-projection-status' && message.status === expected), status);
+      const command = (operation, camera = {}, selected = undefined) => page.evaluate(value => {
+        document.querySelector('iframe').contentWindow.postMessage(value, window.location.origin);
+      }, {type: 'korlix-projection-camera', camera: {operation, sequence: ++sequence, ...camera}, ...(selected ? {place: selected} : {})});
+      const snapshot = () => frame.evaluate(() => {
+        const fixture = window.__maps3dContractFixture;
+        return fixture ? {imports: fixture.imports, constructors: fixture.constructors, flights: fixture.flights,
+          stops: fixture.stops, connected: fixture.connected, disconnected: fixture.disconnected,
+          bootstrap: fixture.bootstrap, camera: fixture.publicState()} : null;
+      });
       try {
-        await page.goto(`${origin}/__projection_ci/host.html`, {waitUntil: 'load', timeout: 90000});
+        const started = Date.now();
+        await page.goto(`${origin}/__projection_ci/host.html`, {waitUntil: 'load'});
         frame = page.frames().find(candidate => candidate.url() === `${origin}/brain-projection/earth.html`);
-        assert.ok(frame, 'The actual production renderer document must load in its parent iframe.');
-        assert.ok(documentResponse, 'The production renderer response must be observed.');
-        result.rendererHeaders = await documentResponse.allHeaders();
-        assert.match(result.rendererHeaders['content-security-policy'], /default-src 'none'/);
-        assert.match(result.rendererHeaders['permissions-policy'], /microphone=\(\)/);
-        assert.equal(result.rendererHeaders['cache-control'], 'no-store');
-        const scriptAttributes = await frame.locator(`script[src="${jsUrl}"]`).evaluate(node => ({
-          integrity: node.integrity, crossOrigin: node.crossOrigin,
+        assert.ok(frame && documentResponse, 'The actual renderer route must load.');
+        const headers = await documentResponse.allHeaders();
+        assert.equal(headers['cache-control'], 'no-store');
+        assert.equal(headers['referrer-policy'], 'strict-origin-when-cross-origin');
+        assert.match(headers['permissions-policy'], /camera=\(\), microphone=\(\)/);
+        const policy = headers['content-security-policy'];
+        const nonce = /script-src[^;]*'nonce-([^']+)'/.exec(policy)?.[1];
+        assert.ok(nonce && nonce.length >= 24);
+        assert.equal(nonces.has(nonce), false, 'Each document response needs a fresh nonce.');
+        nonces.add(nonce);
+        assert.match(policy, /'strict-dynamic'/);
+        assert.doesNotMatch(policy.split(';').find(directive => directive.trim().startsWith('script-src')), /'unsafe-inline'/);
+        const documentContract = await frame.evaluate(() => ({
+          scriptNonce: document.querySelector('script[type="module"]')?.nonce,
+          styleNonce: document.querySelector('#korlix-sdk-style-nonce')?.nonce,
+          stylesheetNonce: document.querySelector('link[rel="stylesheet"]')?.nonce,
+          channel: document.querySelector('meta[name="korlix-map-channel"]')?.content,
+          keyPresent: Boolean(document.querySelector('meta[name="korlix-map-key"]')?.content),
         }));
-        assert.deepEqual(scriptAttributes, {integrity: CESIUM_JS_INTEGRITY, crossOrigin: 'anonymous'});
-        assert.equal(await frame.locator(`link[href="${cssUrl}"]`).getAttribute('integrity'), CESIUM_CSS_INTEGRITY);
-        await page.waitForFunction(() => window.__projectionCi.messages.some(message =>
-          message.type === 'korlix-projection-status' && ['ready', 'error'].includes(message.status)));
-        const statuses = () => page.evaluate(() => window.__projectionCi.messages
-          .filter(message => message.type === 'korlix-projection-status').map(message => message.status));
-        assert.deepEqual(await statuses(), ['loading', mode === 'ready' ? 'ready' : 'error']);
-        result.sdk = await frame.evaluate(() => ({version: window.__projectionCi.sdk?.VERSION,
-          realViewer: window.__projectionCi.viewer instanceof window.__projectionCi.sdk.Viewer,
-          ionToken: window.__projectionCi.sdk.Ion.defaultAccessToken}));
-        assert.deepEqual(result.sdk, {version: `${CESIUM_VERSION}.0`, realViewer: true, ionToken: ''});
+        assert.deepEqual(documentContract, {scriptNonce: nonce, styleNonce: nonce, stylesheetNonce: nonce,
+          channel: 'quarterly', keyPresent: !['unverified', 'legacy-only'].includes(mode)});
+        result.productionNonceCsp = true;
+        await waitStatus('loading');
 
-        let sequence = 0;
-        async function command(operation, values = {}) {
-          sequence++;
-          await page.evaluate(payload => document.getElementById('projection').contentWindow.postMessage(payload, location.origin),
-            {type: 'korlix-projection-camera', camera: {sequence, operation, ...values}, place});
-        }
-        const position = () => frame.evaluate(() => {
-          const {viewer, sdk} = window.__projectionCi, camera = viewer.camera, location = camera.positionCartographic;
-          return {latitude: sdk.Math.toDegrees(location.latitude), longitude: sdk.Math.toDegrees(location.longitude),
-            height: location.height, heading: sdk.Math.toDegrees(camera.heading)};
-        });
-
-        if (mode === 'ready') {
-          assert.equal(await frame.locator('#map-state').isVisible(), false);
-          assert.equal(await frame.locator('#map canvas').count(), 1);
-          await frame.evaluate(() => {
-            const observed = window.__projectionCi;
-            observed.tileset = observed.viewer.scene.primitives.get(0);
-            observed.tileset.tileVisible.addEventListener(() => {observed.visibleTiles++;});
-          });
-          await command('flyTo', {latitude: place.latitude, longitude: place.longitude, height: 850, heading: 0, pitch: -90});
-          await frame.waitForFunction(expected => {
-            const {viewer, sdk} = window.__projectionCi, current = viewer.camera.positionCartographic;
-            return !viewer.camera._currentFlight && Math.abs(sdk.Math.toDegrees(current.latitude) - expected.latitude) < 0.00001 &&
-              Math.abs(sdk.Math.toDegrees(current.longitude) - expected.longitude) < 0.00001 && Math.abs(current.height - 850) < 1;
-          }, place);
-          await frame.waitForFunction(() => window.__projectionCi.tileset.root.contentReady &&
-            window.__projectionCi.tileset.tilesLoaded && window.__projectionCi.visibleTiles > 0);
-          result.rendered = await frame.evaluate(() => new Promise((resolvePixels, reject) => {
-            const {viewer, tileset, visibleTiles} = window.__projectionCi, scene = viewer.scene;
-            const timer = setTimeout(() => {remove(); reject(Error('No rendered WebGL frame arrived.'));}, 10000);
-            const remove = scene.postRender.addEventListener(() => {
-              remove(); clearTimeout(timer);
-              const canvas = scene.canvas;
-              const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
-              const width = Math.min(160, gl.drawingBufferWidth), height = Math.min(160, gl.drawingBufferHeight);
-              // Cesium binds its default framebuffer before reading. Sampling
-              // in postRender avoids the browser clearing an unpreserved buffer.
-              const pixels = scene.context.readPixels({x: Math.floor((gl.drawingBufferWidth - width) / 2),
-                y: Math.floor((gl.drawingBufferHeight - height) / 2), width, height});
-              let coloredPixels = 0;
-              for (let index = 0; index < pixels.length; index += 4) {
-                if (pixels[index + 1] > 70 && pixels[index + 2] > 60 && pixels[index + 3] > 0) coloredPixels++;
-              }
-              resolvePixels({webgl: gl instanceof WebGLRenderingContext || gl instanceof WebGL2RenderingContext,
-                lost: gl.isContextLost(), width: canvas.width, height: canvas.height,
-                contentReady: tileset.root.contentReady, visibleTiles, coloredPixels, glError: gl.getError()});
-            });
-            scene.requestRender();
-          }));
-          assert.equal(result.rendered.webgl, true);
-          assert.equal(result.rendered.lost, false);
-          assert.equal(result.rendered.glError, 0);
-          assert.ok(result.rendered.width > 0 && result.rendered.height > 0);
-          assert.ok(result.rendered.coloredPixels > 100, 'Decoded synthetic geometry must produce visible pixels in the real WebGL canvas.');
-          assert.ok(result.providerFixtures.some(request => request.path.endsWith('/fixture.glb')), 'The real tile loader must request binary model content.');
-
-          result.credits = [];
-          async function creditsAtViewport(width, height) {
-            await page.setViewportSize({width, height});
-            await frame.waitForFunction(expected => document.getElementById('map-credits').innerText.includes(expected), attribution);
-            await page.waitForFunction(() => window.__projectionCi.messages.some(message => message.type === 'korlix-projection-credits'));
-            await frame.waitForFunction(() => [...document.querySelectorAll('#map-credits img')].every(image => image.complete && image.naturalWidth > 0));
-            const credits = await frame.locator('#map-credits').evaluate(element => {
-              const box = element.getBoundingClientRect(), style = getComputedStyle(element);
-              const visible = node => {const bounds = node.getBoundingClientRect(); return bounds.width > 0 && bounds.height > 0;};
-              // A positioned Cesium credit child can overflow a tiny outer
-              // container while that container itself is inside the viewport.
-              // Verify every visible credit descendant fits the measured strip
-              // that the app uses to reserve space, including real SDK logos.
-              const descendants = [...element.querySelectorAll('*')].filter(node => visible(node) &&
-                getComputedStyle(node).visibility !== 'hidden').map(node => {
-                const bounds = node.getBoundingClientRect();
-                return {tag: node.tagName, className: node.className, alt: node.getAttribute('alt'),
-                  x: bounds.x, y: bounds.y, right: bounds.right, bottom: bounds.bottom,
-                  contained: bounds.x >= box.x - 1 && bounds.y >= box.y - 1 &&
-                    bounds.right <= box.right + 1 && bounds.bottom <= box.bottom + 1};
-              });
-              return {text: element.innerText, x: box.x, y: box.y, width: box.width, height: box.height,
-                bottom: box.bottom, right: box.right, viewport: {width: innerWidth, height: innerHeight},
-                visible: style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity) > 0,
-                descendants,
-                googleLogo: [...element.querySelectorAll('img')].some(image => image.alt === 'Google' && visible(image)),
-                cesiumCredit: [...element.querySelectorAll('a')].some(link => /cesium/i.test(link.href) && visible(link))};
-            });
-            result.credits.push(credits);
-            assert.match(credits.text, /Google Maps/);
-            assert.ok(credits.text.includes(attribution));
-            assert.ok(credits.visible && credits.googleLogo && credits.cesiumCredit);
-            assert.ok(credits.height > 0 && credits.x >= 0 && credits.y >= 0);
-            assert.ok(credits.bottom <= credits.viewport.height + 1 && credits.right <= credits.viewport.width + 1);
-            assert.ok(credits.descendants.length > 0 && credits.descendants.every(node => node.contained),
-              `All visible credit content must fit the reported footer: ${JSON.stringify(credits.descendants.filter(node => !node.contained))}`);
-            await page.waitForFunction(expected => {
-              const latest = window.__projectionCi.messages.filter(message => message.type === 'korlix-projection-credits').at(-1);
-              return latest && Number.isInteger(latest.height) && Math.abs(latest.height - expected) <= 1;
-            }, Math.ceil(credits.height));
-            await page.screenshot({path: resolve(artifactDirectory, `ready-${width}.png`)});
-            return credits;
-          }
-          await creditsAtViewport(1280, 800);
-          await creditsAtViewport(360, 740);
-          result.camera = {flyTo: await position()};
-          const initialHeight = result.camera.flyTo.height;
-          await command('closer');
-          await frame.waitForFunction(before => window.__projectionCi.viewer.camera.positionCartographic.height < before - 50, initialHeight);
-          result.camera.closer = await position();
-          await command('farther');
-          await frame.waitForFunction(before => window.__projectionCi.viewer.camera.positionCartographic.height > before + 50, result.camera.closer.height);
-          result.camera.farther = await position();
-          await command('left');
-          await frame.waitForFunction(() => {
-            const {sdk, viewer} = window.__projectionCi;
-            return !viewer.camera._currentFlight && Math.abs(sdk.Math.toDegrees(viewer.camera.heading) - 342) < 1;
-          });
-          result.camera.left = await position();
-          await command('right');
-          await frame.waitForFunction(() => {
-            const {sdk, viewer} = window.__projectionCi, heading = sdk.Math.toDegrees(viewer.camera.heading);
-            return !viewer.camera._currentFlight && Math.min(Math.abs(heading), Math.abs(heading - 360)) < 1;
-          });
-          result.camera.right = await position();
-          await command('reset');
-          await frame.waitForFunction(() => !window.__projectionCi.viewer.camera._currentFlight &&
-            Math.abs(window.__projectionCi.viewer.camera.positionCartographic.height - 650) < 1);
-          result.camera.reset = await position();
-          assert.ok(Math.abs(result.camera.reset.latitude - place.latitude) < 0.00001);
-          assert.ok(Math.abs(result.camera.reset.longitude - place.longitude) < 0.00001);
-          // Exercise the same pagehide listener used by frame close/navigation.
-          await frame.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide')));
-          assert.equal(await frame.evaluate(() => window.__projectionCi.viewer.isDestroyed()), true);
-          assert.equal(await frame.locator('#map canvas').count(), 0);
-          await command('closer');
-          assert.deepEqual(await statuses(), ['loading', 'ready']);
-          assert.deepEqual(result.consoleErrors, []);
+        if (['unverified', 'legacy-only', 'loader-error', 'auth-failure', 'import-error'].includes(mode)) {
+          await waitStatus('error');
         } else {
-          assert.equal(await frame.locator('#map-state').isVisible(), true);
-          assert.match(await frame.locator('#map-state').innerText(), /could not load/);
-          assert.equal(await frame.evaluate(() => window.__projectionCi.viewer.isDestroyed()), true);
-          assert.equal(await frame.locator('#map canvas').count(), 0);
-          await command('flyTo', {latitude: place.latitude, longitude: place.longitude, height: 850});
-          assert.deepEqual(await statuses(), ['loading', 'error']);
-          const messages = await page.evaluate(() => window.__projectionCi.messages);
-          assert.doesNotMatch(JSON.stringify(messages), /fake-key|private diagnostic|CI provider denied/);
-          assert.ok(result.consoleErrors.every(message => /Failed to load resource.*403/.test(message)),
-            `Only the expected denied-provider HTTP console error is permitted: ${JSON.stringify(result.consoleErrors)}`);
-          await page.screenshot({path: resolve(artifactDirectory, 'denied-key.png')});
+          await frame.waitForFunction(() => window.__maps3dContractFixture?.imports.length === 1);
+          if (mode === 'delayed-import-close') {
+            assert.equal((await snapshot()).constructors.length, 0);
+            await frame.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide')));
+            await frame.evaluate(async () => {window.__maps3dContractFixture.releaseImport(); await Promise.resolve(); await Promise.resolve();});
+            assert.equal((await snapshot()).constructors.length, 0, 'Late import resolution must not create a map after close.');
+            assert.deepEqual(await statuses(), ['loading']);
+          } else {
+            await frame.waitForFunction(() => document.querySelector('gmp-map-3d')?.isConnected);
+            const beforeSteady = await snapshot();
+            assert.equal(beforeSteady.constructors.length, 1);
+            assert.equal(beforeSteady.constructors[0].mode, 'SATELLITE');
+            assert.equal(beforeSteady.constructors[0].defaultUIHidden, true);
+            await frame.evaluate(() => window.__maps3dContractFixture.emitSteady(false));
+            assert.deepEqual(await statuses(), ['loading'], 'Library and false steady events must not report readiness.');
+            if (mode === 'map-error') {
+              await frame.evaluate(() => window.__maps3dContractFixture.emitMapError());
+              await waitStatus('error');
+              await frame.evaluate(() => window.__maps3dContractFixture.emitSteady(true));
+            } else if (mode === 'never-steady') {
+              await waitStatus('error');
+              result.elapsedToDeadlineMs = Date.now() - started;
+              assert.ok(result.elapsedToDeadlineMs >= 29000 && result.elapsedToDeadlineMs < 40000,
+                'The combined production loading deadline must fire around 30 seconds.');
+            } else {
+              await command('flyTo', {height: 850}, place);
+              await frame.evaluate(() => new Promise(resolveFrame => requestAnimationFrame(resolveFrame)));
+              assert.equal((await snapshot()).flights.length, 0, 'Camera commands wait for a steady scene.');
+              await frame.evaluate(() => window.__maps3dContractFixture.emitSteady(true));
+              await waitStatus('ready');
+              await frame.waitForFunction(() => window.__maps3dContractFixture.flights.length === 1);
+              const first = (await snapshot()).flights[0].endCamera;
+              assert.deepEqual(first.center, {lat: place.latitude, lng: place.longitude, altitude: 0});
+              assert.equal(first.altitudeMode, 'RELATIVE_TO_GROUND');
+              assert.ok(Number.isFinite(first.range) && first.range > 850);
+              assert.equal(first.tilt, 40);
+              const expected = {closer: value => value.range < first.range,
+                farther: value => value.range > first.range * .65, left: value => value.heading === 342,
+                right: value => value.heading === 0, reset: value => value.center.lat === place.latitude && value.center.lng === place.longitude};
+              for (const operation of ['closer', 'farther', 'left', 'right', 'reset']) {
+                const count = (await snapshot()).flights.length;
+                await command(operation);
+                await frame.waitForFunction(previous => window.__maps3dContractFixture.flights.length > previous, count);
+                assert.ok(expected[operation]((await snapshot()).flights.at(-1).endCamera), `${operation} must use the public camera API.`);
+              }
+              result.cameraContract = (await snapshot()).flights;
+              for (const [width, height] of [[1280, 800], [360, 740]]) {
+                await page.setViewportSize({width, height});
+                await frame.evaluate(() => new Promise(resolveFrame => requestAnimationFrame(resolveFrame)));
+                const geometry = await frame.evaluate(() => {
+                  const rect = selector => {
+                    const bounds = document.querySelector(selector).getBoundingClientRect();
+                    return {x: bounds.x, y: bounds.y, right: bounds.right, bottom: bounds.bottom, width: bounds.width, height: bounds.height};
+                  };
+                  const host = document.querySelector('gmp-map-3d');
+                  return {viewport: {width: innerWidth, height: innerHeight}, map: rect('#map'), host: rect('gmp-map-3d'),
+                    label: rect('#imagery-label'), stateHidden: document.querySelector('#map-state').hidden,
+                    hostShadowOpaque: host.shadowRoot === null};
+                });
+                assert.ok(geometry.hostShadowOpaque, 'The adapter must work without inspecting provider internals.');
+                assert.ok(geometry.stateHidden && geometry.host.width > 0 && geometry.host.height > 0);
+                assert.ok(geometry.label.bottom <= geometry.host.y + 1, 'Our imagery label must remain outside the entire SDK viewport.');
+                assert.ok(geometry.host.x >= 0 && geometry.host.y >= 0 &&
+                  geometry.host.right <= geometry.viewport.width + 1 && geometry.host.bottom <= geometry.viewport.height + 1);
+                assert.ok(Math.abs(geometry.host.width - geometry.map.width) <= 1 && Math.abs(geometry.host.height - geometry.map.height) <= 1);
+                result.geometry.push(geometry);
+                await page.screenshot({path: resolve(artifactDirectory, `fixture-ready-${width}.png`)});
+              }
+              const flights = (await snapshot()).flights.length;
+              await frame.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide')));
+              assert.equal((await snapshot()).disconnected, 1);
+              await command('closer');
+              await frame.evaluate(() => window.__maps3dContractFixture.emitSteady(true));
+              assert.equal((await snapshot()).flights.length, flights);
+              assert.deepEqual(await statuses(), ['loading', 'ready']);
+            }
+          }
         }
-        result.cspViolations = await frame.evaluate(() => window.__projectionCi.violations);
-        assert.deepEqual(result.cspViolations, [], 'The real SDK must initialize/render without CSP violations.');
-        assert.deepEqual(result.pageErrors, [], 'SDK/bootstrap must not produce uncaught browser errors.');
-        assert.deepEqual(result.unexpectedRequests, [], 'Unreviewed network destinations must never be required.');
+
+        const final = await snapshot();
+        if (final) {
+          assert.deepEqual(final.bootstrap, {authCallbackInstalled: true, callbackInstalled: true,
+            loaderNonce: nonce, moduleNonce: nonce, loaderReferrerPolicy: 'strict-origin-when-cross-origin'});
+        }
+        if (!['ready', 'delayed-import-close'].includes(mode)) {
+          assert.deepEqual(await statuses(), ['loading', 'error']);
+          assert.equal(await frame.locator('gmp-map-3d').count(), 0);
+          assert.equal(await frame.locator('#map-state').isVisible(), true);
+          assert.match(await frame.locator('#map-state').innerText(), /could not load|not connected yet/);
+          if (mode === 'map-error') await page.screenshot({path: resolve(artifactDirectory, 'fixture-sanitized-error.png')});
+        }
+        assert.equal(result.loaderRequests.length, ['unverified', 'legacy-only'].includes(mode) ? 0 : 1);
+        result.messages = await page.evaluate(() => window.__projectionContractObserver.messages);
+        assert.doesNotMatch(JSON.stringify(result.messages), /not-a-real-credential|private-provider-fixture-details|maps\.googleapis\.com/);
+        assert.ok(result.messages.every(message => message.type === 'korlix-projection-status'), 'Only public statuses cross the frame boundary.');
+        result.cspViolations = await frame.evaluate(() => window.__projectionContractObserver.violations);
+        assert.deepEqual(result.cspViolations, [], 'Production nonce CSP must permit the adapter and nonced fixture without violations.');
+        assert.deepEqual(result.pageErrors, []);
+        assert.deepEqual(result.routeErrors, [], 'The production loader must use the reviewed URL and parameters.');
+        assert.deepEqual(result.unexpectedRequests, [], 'No unexpected external destinations may be required.');
+        assert.ok(result.consoleErrors.every(message => mode === 'loader-error' && /Failed to load resource.*503/.test(message)),
+          `Unexpected browser console errors: ${JSON.stringify(result.consoleErrors)}`);
         result.statuses = await statuses();
+        result.fixtureCalls = final;
         result.passed = true;
-        console.log(`PASS configured renderer: ${mode}; real Cesium ${CESIUM_VERSION}; provider network requests=0`);
+        console.log(`PASS maps3d contract fixture: ${mode}; liveProviderVerified=false; forwarded external requests=0`);
       } catch (error) {
         result.error = error.stack || error.message;
-        result.messages = await page.evaluate(() => window.__projectionCi?.messages).catch(() => []);
-        result.cspViolations = frame ? await frame.evaluate(() => window.__projectionCi?.violations).catch(() => []) : [];
-        result.rendererState = frame ? await frame.evaluate(() => {
-          const observed = window.__projectionCi, viewer = observed?.viewer, tileset = observed?.tileset;
-          if (!viewer) return {viewer: false};
-          if (viewer.isDestroyed()) return {viewer: true, destroyed: true};
-          const camera = viewer.camera.positionCartographic;
-          return {viewer: true, destroyed: false, camera: {latitude: camera.latitude, longitude: camera.longitude,
-            height: camera.height, flight: Boolean(viewer.camera._currentFlight)}, visibleTiles: observed.visibleTiles,
-            tileset: tileset && {tilesLoaded: tileset.tilesLoaded, geometricError: tileset.geometricError,
-              rootVisible: tileset.root.isVisible, contentReady: tileset.root.contentReady,
-              contentFailed: tileset.root.contentFailed, requested: tileset._statistics?.numberOfPendingRequests},
-            credits: document.getElementById('map-credits')?.innerText};
-        }).catch(() => null) : null;
-        await page.screenshot({path: resolve(artifactDirectory, `${mode}-failure.png`)}).catch(() => {});
+        result.messages = await page.evaluate(() => window.__projectionContractObserver?.messages).catch(() => []);
+        result.cspViolations = frame ? await frame.evaluate(() => window.__projectionContractObserver?.violations).catch(() => []) : [];
+        result.fixtureCalls = frame ? await snapshot().catch(() => null) : null;
+        await page.screenshot({path: resolve(artifactDirectory, `fixture-${mode}-failure.png`)}).catch(() => {});
         throw error;
-      } finally {
-        await context.close();
-      }
+      } finally { await context.close(); }
     }
-
-    await scenario('ready');
-    await scenario('denied-key');
-    assert.ok(report.officialAssets.some(asset => asset.url === jsUrl && asset.integrity === CESIUM_JS_INTEGRITY));
-    assert.ok(report.officialAssets.some(asset => asset.url === cssUrl && asset.integrity === CESIUM_CSS_INTEGRITY));
+    for (const mode of modes) await scenario(mode);
     report.passed = true;
   } finally {
     await writeFile(resolve(artifactDirectory, 'report.json'), JSON.stringify(report, null, 2) + '\n');
@@ -433,8 +357,10 @@ async function main() {
   }
 }
 
-if (process.argv.includes('--fixture-only')) {
-  console.log(`PASS deterministic 3D Tiles/glTF fixture: ${fixture.glb.length} bytes; no browser or provider requests.`);
-} else {
+if (process.argv.length === 3 && process.argv[2] === '--fixture-only') {
+  console.log('PASS maps3d fixture syntax only; no browser, real SDK or provider requests; liveProviderVerified=false.');
+} else if (process.argv.length === 2) {
   await main();
+} else {
+  throw new Error('Only --fixture-only is supported for offline validation.');
 }

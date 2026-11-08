@@ -1,4 +1,4 @@
-name: Brain Projection API and configured renderer
+name: Brain Projection API and maps3d contract fixtures
 on:
   workflow_dispatch:
   pull_request:
@@ -33,12 +33,14 @@ jobs:
         run: |
           node --check server.js
           node --check tools/check_projection_renderer.mjs
+          node --check tools/check_projection_provider.mjs
+          node tools/check_projection_renderer.mjs --fixture-only
           node --test test/brain_projection.test.mjs test/brain_projection_renderer.test.mjs test/brain_projection_provider_check.test.mjs test/brain_voice.test.mjs test/brain_live.test.mjs test/brain_billing.test.mjs test/brain_billing_meter_fallback.test.mjs test/auth_session_security.test.mjs
       - name: Install pinned browser dependencies outside the repository
         run: |
           npm install --prefix "$RUNNER_TEMP/projection-renderer-browser" --no-audit --no-fund --ignore-scripts playwright@1.56.1
           "$RUNNER_TEMP/projection-renderer-browser/node_modules/.bin/playwright" install --with-deps chromium
-      - name: Bootstrap real Cesium under production CSP with intercepted provider traffic
+      - name: Check maps3d adapter fixtures under production nonce CSP (no live provider verification)
         env:
           KORLIX_PROJECTION_BROWSER_DEPS: ${{ runner.temp }}/projection-renderer-browser
           PROJECTION_RENDERER_ARTIFACTS: projection-renderer-artifacts
@@ -46,7 +48,7 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: brain-projection-configured-renderer
+          name: brain-projection-maps3d-contract-fixtures
           path: projection-renderer-artifacts
           if-no-files-found: warn
           retention-days: 14

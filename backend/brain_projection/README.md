@@ -4,44 +4,42 @@ Optional map and public-place research services for the existing Brain+Voice app
 
 ## Configuration
 
-All capabilities default to unavailable unless their dependencies are configured. This change does not set production variables, deploy a service, create a Google project, enable billing, or create a subscription.
+The hosted view now uses **Google Maps JavaScript API, `maps3d`, `Map3DElement`, quarterly channel**. This is Google's supported website-key path for photorealistic 3D. The earlier direct Map Tiles/Cesium candidate is retired; its key and activation flag are intentionally ignored. The original app, account, voice and research contracts stay the same.
 
 | Variable | Purpose | Exposure |
 | --- | --- | --- |
-| `BRAIN_PROJECTION_GEOCODING_KEY` | Google Geocoding API server key, restricted to that API and the backend's actual outbound IPs/CIDRs. | Backend only. Never included in API responses, renderer HTML, logs or iframe messages. |
-| `BRAIN_PROJECTION_MAP_BROWSER_KEY` | Separate candidate Google Map Tiles API browser key. Its application and API restrictions must pass the activation checks below. | Public only after the verification switch is enabled. It must never be an unrestricted or server key. Reusing the geocoding key is rejected. |
-| `BRAIN_PROJECTION_MAP_BROWSER_RESTRICTIONS_VERIFIED` | Set to the exact string `true` only after the configured provider accepts the authorized renderer and rejects unauthorized use. Default is inactive. | Deployment assertion; never a substitute for testing the actual provider restrictions. Without it the key is withheld and the map remains unavailable. |
-| `KORLIX_PUBLIC_BACKEND_URL` or existing `RENDER_EXTERNAL_URL` | Canonical existing first-party HTTPS origin, with no path, credentials, query or fragment. | Public renderer URL. The first variable takes precedence. |
+| `BRAIN_PROJECTION_GEOCODING_KEY` | Google Geocoding API server key, restricted to that API and the backend's actual outbound IPs/CIDRs. | Backend only. Never included in API responses, renderer HTML, logs or frame messages. |
+| `BRAIN_PROJECTION_MAPS_JS_BROWSER_KEY` | Separate Google Maps JavaScript API key, restricted to the exact first-party HTTPS renderer website and Maps JavaScript API. | Public only after the verification switch is enabled. Reusing the private geocoding key is rejected. |
+| `BRAIN_PROJECTION_MAPS_JS_RESTRICTIONS_VERIFIED` | Exact string `true` after real provider/browser restriction checks pass. Default is inactive. | Deployment assertion only; a configuration value is not evidence that Google accepted the connection. |
+| `KORLIX_PUBLIC_BACKEND_URL` or existing `RENDER_EXTERNAL_URL` | Canonical first-party HTTPS origin with no path, credentials, query or fragment. The first variable takes precedence. | Public renderer origin; must match the installed native app's API origin. |
 | Existing `OPENAI_API_KEY` | Existing Responses API web search. | Backend only. |
 
-Source inspection found no existing Maps/geocoding key configuration to reuse, so the two explicit key names above were introduced. The existing OpenAI configuration is reused. No Cesium ion token or account is needed for direct Google tiles.
+`BRAIN_PROJECTION_MAP_BROWSER_KEY` and `BRAIN_PROJECTION_MAP_BROWSER_RESTRICTIONS_VERIFIED` belong to the retired Tiles candidate and never enable this renderer. There is no Cesium dependency, ion token, Map Tiles key, or server tile proxy in the new map connection.
 
-Configuration indicates a provider is configured, not that a paid live request has passed. Invalid keys, domain restrictions, quotas, unsupported coverage, unavailable WebGL and provider failures produce unavailable/error states. Automated checks use provider fixtures, including a generated test tile with the actual pinned SDK; they make no paid Google or OpenAI requests.
+All capabilities default to unavailable unless configured. Invalid/restricted keys, provider failures, unsupported coverage or WebGL failures produce honest unavailable states. The automated browser tests use labeled SDK contract fixtures and block every external request; they do not prove that actual Google imagery has rendered.
 
-Google Map Tiles and Geocoding require their own enabled APIs and applicable Google Cloud billing/quotas. This implementation does not claim these services are free. Set appropriate Google project quotas before connecting the keys. Review the project's applicable Google Maps terms, including any EEA-specific behavior.
+### Activation sequence
 
-### Provider activation gate
+1. Use an owner-confirmed Google Cloud project. Enable **Maps JavaScript API** and **Geocoding API**, and review its existing billing, usage and quotas. Do not repurpose the Play Billing service account or a different application's routing key.
+2. Create separate credentials with the restrictions in the table. For the current native API origin, the browser website restriction is `https://chee-chai-chee-backend.onrender.com/*`. The loader uses `auth_referrer_policy=origin`, so authorize the origin rather than a path-specific restriction. The server key uses Render's actual outbound IP ranges. Neither key is entered in chat or committed to Git.
+3. Set the canonical backend origin and keys through the service's secure environment settings. Keep `BRAIN_PROJECTION_MAPS_JS_RESTRICTIONS_VERIFIED` unset while preparing acceptance. The default native API origin is `https://chee-chai-chee-backend.onrender.com`; a custom native build must use the same explicit origin as the renderer configuration.
+4. Run the offline configuration preflight from the repository root:
 
-The [Google Maps FAQ](https://developers.google.com/maps/faq#keysystem) and [API security guidance](https://developers.google.com/maps/api-security-best-practices) currently list Map Tiles among APIs using **IP address restrictions**. A direct browser key restricted to the renderer website is therefore an unverified integration candidate, not a guaranteed supported configuration. Keep the verification switch unset until real provider tests establish all of the following:
+   ```sh
+   node backend/tools/check_projection_provider.mjs
+   ```
 
-1. The allowed first-party HTTPS renderer can load actual 3D content with the candidate key restricted to Map Tiles API only.
-2. Requests with an unrelated website referrer and with no referrer are rejected.
-3. The same key cannot call a different Google API.
-4. Actual Android and iOS WebViews preserve the allowed referrer and render the imagery with all required attributions.
+   It never contacts Google, exposes keys, changes settings, or asserts live verification. Exit 1 means structurally invalid/incomplete configuration; exit 2 means the configuration is structurally ready but external verification was not performed. The obsolete `--allow-provider-check` switch is rejected. A loader HTTP 200 or a generic provider 403 is not proof of restrictions.
+5. Use an authorized non-production first-party HTTPS acceptance environment to test the actual SDK with the candidate key. Verify a complete 3D scene, correct attribution and camera controls from the allowed origin. Verify that a different origin and a missing referrer produce the specific authorization denial. Confirm the Maps JavaScript-only API allowlist and denial when that key is used for another API. Never substitute an unrestricted key to make a test pass.
+6. Verify the actual renderer in Android and iPhone WebViews, including the expected referrer, microphone continuity, lifecycle handling, provider links, narrow-screen credit visibility and source/save behavior. After successful evidence and a review of the applicable Google terms, enable the production verification switch and release the matching app/API pair.
 
-If these checks fail, leave browser activation disabled and use a supported browser map integration or design an authenticated, narrowly scoped server proxy with an IP-restricted Tiles key. Do not make the browser key unrestricted or expose an IP-restricted server credential as a workaround.
+A configured switch is not permission to enable paid Google billing. Real Google acceptance and any account/billing changes require the authorized project owner's setup. Google Cloud console access was unavailable in this workspace during preparation; no production provider values or billing were changed.
 
-The current mobile client's default API origin is `https://chee-chai-chee-backend.onrender.com`. Set `KORLIX_PUBLIC_BACKEND_URL` to the exact origin used by the installed app, including any intentional custom-domain override. The native client rejects a renderer on any different origin.
+### Usage and cost boundary
 
-The renderer route is public and begins a root tileset request whenever activated; account authentication and account rate limits on research/geocoding do not limit direct renderer opens. Before a pilot, set and verify conservative Google request quotas and check existing usage on the billing account. Budget notifications alone do not stop spending. Do not enable paid billing, create keys, or change production values merely to run CI.
+Maps JavaScript 3D map loads use Google's **Immersive Maps** SKU; geocoding has its own usage charges. This implementation does not claim they are free. Review current [Maps JavaScript billing](https://developers.google.com/maps/documentation/javascript/usage-and-billing) and the project's applicable price list. Set conservative available request quotas and usage alerts before a pilot; budget notifications do not themselves stop spending.
 
-For an authorized provider check, supply the candidate browser key and canonical origin through environment variables, then run from the repository root:
-
-```sh
-node backend/tools/check_projection_provider.mjs --allow-provider-check
-```
-
-This manual diagnostic is not run against real credentials in CI. It makes at most three Map Tiles root requests and one basic Geocoding v4 request, any of which can be billable if restrictions are absent, and stops at the first failed or inconclusive check. It requires a valid root response plus restriction-specific denials for unrelated/missing referrers and the other API. Generic 403s, disabled services, billing errors and quota failures are not proof. Output is sanitized JSON; exit 0 means the four observations passed. It does not change environment variables or enable the map. Confirm the exact Map Tiles-only allowlist in Google Cloud as well, then complete browser/device acceptance before release.
+The public map-only document can be opened outside an authenticated research request. Authentication and per-account budgets on the address/research API do not cap direct map loads. Keep the project-level cost controls and verification gate in place. Review the existing public Terms/Privacy links against [Google's Maps JavaScript requirements](https://developers.google.com/maps/documentation/javascript/policies) before activation.
 
 ## Authenticated API
 
@@ -61,13 +59,15 @@ Every `/api/brain-projection/*` endpoint calls the existing `requireUser(req)` b
 }
 ```
 
-`rendererUrl` becomes the canonical backend origin plus `/brain-projection/earth.html` only when a separate browser key, verified-restrictions switch and HTTPS origin are configured. Private keys never appear here. The app displays the research cost before a sourced question is submitted.
+`rendererUrl` becomes the canonical backend origin plus `/brain-projection/earth.html` only when a separate Maps JavaScript browser key, verified-restrictions switch and HTTPS origin are configured. Private keys never appear here. The app displays the research cost before a sourced question is submitted.
 
 ### `POST /api/brain-projection/resolve`
 
 Body: `{ "query": "place or address" }` (2–300 characters).
 
 Returns `candidates`, `requiresConfirmation: true` and a short `answer`. Each candidate contains `id`, `label`, `address`, `latitude`, `longitude`, `userQuery`, `provider: "google"` and `partialMatch`. At most five candidates are returned. Every candidate requires explicit user confirmation, including a single apparently exact result. Google partial matches and mismatched street numbers/US ZIPs get an additional warning. No result causes no invented coordinates or fallback city. The inconsistent example “14360 Jupiter Rd, Brooklyn, 10012” must be corrected or explicitly matched to a fully displayed provider result before navigation.
+
+The native app keeps provider-returned address labels in the visual candidate/selected-place cards. Its spoken lookup and selection replies use generic confirmation text, rather than converting geocoder content into speech. Place research remains independently sourced.
 
 Requests use one fixed Google HTTPS endpoint, disallow redirects, have a 12-second timeout and cap upstream body size. A URL supplied as a search query remains address text; it cannot change the destination of the server's fetch. There is no arbitrary URL fetch endpoint or geocoding result cache.
 
@@ -91,37 +91,31 @@ One research request per account can be active in this process, with eight total
 
 ## Hosted renderer and app isolation
 
-The public `/brain-projection/earth.html` document contains map-only UI. The native app's bundled offline Projection shell embeds this first-party HTTPS page so the browser key has a valid restricted origin. The original home page does not gain network access. No bearer token, refresh token, account data or native bridge nonce is sent to the map iframe.
+The public `/brain-projection/earth.html` document contains map-only UI. The bundled Projection shell embeds this first-party HTTPS page so Google receives a valid website referrer. No bearer token, refresh token, account data or native bridge nonce is sent to the map frame. The existing home does not gain map network access.
 
-CesiumJS **1.147** comes from its official pinned release directory. JavaScript and stylesheet use SHA-384 Subresource Integrity; worker/assets use the same pinned version. No Google Earth website iframe is used. The viewer disables the default basemap, geocoder, terrain/ion services and unrelated controls; it uses only Google Photorealistic 3D Tiles. Explicit Google Maps text, Google's logo, Cesium credit and viewport-specific data attribution remain visible along the bottom. The parent shell must leave this strip unobstructed. Renderer links cannot navigate the isolated frame or open windows in this phase. No Street View is implemented.
+The renderer uses the supported **quarterly** Maps JavaScript channel and only the documented core `maps3d` APIs: `Map3DElement`, `SATELLITE` mode, camera fly/stop controls and lifecycle events. It does not embed the Google Earth website, implement Street View, or rely on alpha/beta features. Map imagery, logos, terms links and provider credits remain owned by the Google component. Application headings, buttons, selected-place cards and captions are placed outside the entire map rectangle; the active voice dock has its own scroll boundary. The app never inspects a provider's private DOM, copies its credit HTML, or estimates a credit-strip height.
 
-The renderer has a restrictive CSP, no child frames, no forms, no object embedding, and no camera/microphone/geolocation permissions. Its `script-src` permits `unsafe-eval` solely because the pinned full Cesium bundle initializes Knockout with JavaScript string evaluation before the Viewer starts. This exception is limited to the isolated renderer routes; inline scripts remain blocked, and API/original-home/voice policies are untouched. No researched HTML is inserted into this document. It keeps a bounded in-memory GPU tile cache using Cesium's standard renderer; it does not download, export or persist map tiles or perform image analysis. Researched text is independent public-source research, not an interpretation of Google imagery. Save-place notes should preserve only the user's own query, an exempt provider place ID and user-authored note, not copied Google map content or imagery.
+Each HTML response has a fresh cryptographic nonce shared by its CSP, local module and style seed. Google inherits script/style nonces following its [strict CSP guidance](https://developers.google.com/maps/documentation/javascript/content-security-policy). There is no inline-script allowance or arbitrary HTTPS script allowlist. Google's required string evaluation and documented resource domains are limited to this isolated map document; camera, microphone, geolocation and payment permissions remain disabled. No researched HTML is inserted into the renderer.
 
-Parent → iframe:
+The local module installs `gm_authFailure` and its SDK callback before inserting the Google loader. It requests the quarterly `maps3d` library with an origin-only referrer policy. Loading the script or constructing the custom element is insufficient for readiness: only the documented `gmp-steadychange` event with `isSteady === true` enables ready status. The older `gmp-steadystate` example is not used. A 30-second deadline covers SDK loading and first scene completion; authentication, initialization and import errors produce sanitized failures. Disposal stops camera animation, removes listeners and the map element, and prevents late callbacks from restoring readiness. Removing the containing iframe closes the document and its provider resources.
 
-```js
-{
-  type: 'korlix-projection-camera',
-  camera: {
-    sequence: 1,
-    operation: 'flyTo', // closer | farther | left | right | reset | flyTo
-    latitude: 40.7, longitude: -73.9, height: 650, heading: 0, pitch: -50
-  },
-  place: {id: 'provider-place-id', label: 'Confirmed place', latitude: 40.7, longitude: -73.9}
-}
-```
+### Camera and status protocol
 
-Camera angles are degrees; height is meters (25–40,000,000), latitude ±90, longitude ±180, heading ±360, pitch −90..0. Sequences must be increasing nonnegative safe integers. Messages must come from the actual parent window with opaque local origin `"null"` or the renderer's same HTTPS origin. Unknown fields are discarded; unsupported operations and malformed/stale messages are ignored. The iframe does not receive `userQuery`, account context or a native command channel.
+The parent sends `korlix-projection-camera` with an increasing nonnegative safe integer sequence and one of `flyTo`, `closer`, `farther`, `left`, `right`, or `reset`. Optional camera bounds remain latitude ±90, longitude ±180, legacy `height` 25–40,000,000 meters, heading ±360 and pitch −90..0. Selected-place data contains only public `id`, `label`, `latitude` and `longitude`.
 
-Iframe → parent:
+`flyTo` and selected-place reset aim at the building as the camera center. The legacy height field is interpreted as an approximate vertical standoff hint and converted into a bounded range using the tilt; it is not a surveyed altitude. The target uses terrain-relative altitude. Relative zoom and orbit preserve the component's current center so a user's touch exploration is respected.
+
+Commands must come from the actual parent window, with the opaque bundled origin `null` or the renderer's own HTTPS origin. Unsupported operations and malformed/stale messages are discarded. No URL, account context, executable code or native command channel is accepted.
+
+The renderer returns only:
 
 ```js
 {type: 'korlix-projection-status', status: 'loading' /* ready | error */, message: 'Public map status'}
 ```
 
-`ready` is emitted only after a Cesium viewer and actual Google tileset have initialized, never for the illustrative globe or absent credentials. Tile/provider/WebGL errors are sanitized. There is a 30-second initialization deadline. Page close/error destroys the viewer, clears listeners/timers, and destroys any tileset that resolves after disposal, preventing stale ready events. The native shell separately validates the source/origin of status messages.
+The parent verifies both origin and source. The retired `korlix-projection-credits` height message is ignored; protecting the full provider surface replaces credit-height reservation. The SDK and iframe never receive access to account credentials or the native bridge.
 
-The renderer also emits `{type: 'korlix-projection-credits', height: <integer CSS pixels>}` when its full attribution footer changes size. `ResizeObserver` measures wrapping; older viewers fall back to post-render updates. Height is bounded to 0–4096 and the renderer viewport, and the parent independently validates the source/origin and clamps reserved space to its own viewport. No credit HTML or URLs cross this channel. The parent moves lower controls/captions and decorations above the measured footer, and scrolls above the pinned active voice dock. Closing the renderer disconnects the observer and resize listener.
+Research remains independent public-source research, not image interpretation. No map screenshots, tiles or geocoder content are exported or persisted. Saved notes retain only the user's own query/note and the exempt provider place ID.
 
 ## Verification
 
@@ -131,18 +125,19 @@ Run from `backend/`:
 node --test test/brain_projection.test.mjs test/brain_projection_renderer.test.mjs test/brain_projection_provider_check.test.mjs test/brain_voice.test.mjs test/brain_live.test.mjs test/brain_billing.test.mjs test/brain_billing_meter_fallback.test.mjs test/auth_session_security.test.mjs
 ```
 
-The Projection suites cover input/output bounds, exact/partial/no-result address handling, fixed provider URL and redirects, private-key separation and activation gating, required web-search evidence, malicious source URLs, missing reporting scope/date, existing auth status propagation, quota and retry behavior, free unavailable answers, pinned renderer assets/CSP, parent-message validation, camera actions and renderer disposal/failure races. Provider fixtures are explicit test-only data. The shared voice-meter fallback from release commit `65a660fcfcbaa3112584d353408aac6d6c7d4b12` is included and its regression suite runs alongside Projection.
+The Projection suites cover input/output bounds, exact/partial/no-result address handling, fixed provider URL and redirects, private-key separation and activation gating, required web-search evidence, malicious source URLs, missing reporting scope/date, existing auth status propagation, quota and retry behavior, free unavailable answers, per-response nonce/CSP, retired-key rejection, parent-message validation, building-centered camera actions, genuine steady-state readiness and renderer disposal/failure races. Provider fixtures are explicit test-only data. The shared voice-meter fallback from release commit `65a660fcfcbaa3112584d353408aac6d6c7d4b12` is included and its regression suite runs alongside Projection.
 
-`tools/check_projection_renderer.mjs` and the dedicated `brain-projection-api.yml` workflow exercise the production renderer document, headers and exact pinned SDK in Chromium. All Google/Ion requests are intercepted before navigation and use generated fixtures. This verifies SDK/CSP/WebGL integration without real map credentials; it does not verify Google account access, coverage or key restrictions.
+`tools/check_projection_renderer.mjs` and the dedicated `brain-projection-api.yml` workflow exercise production renderer HTML, headers, SDK-loader parameters and lifecycle behavior in Chromium using clearly labeled public-API contract fixtures. Every external request is intercepted. Reports explicitly state that actual Google provider rendering was not verified. These fixtures are not substitutes for the first authorized Google SDK/WebGL acceptance run.
 
-Before release with real credentials, validate first-party HTTPS embedding and key referrer restrictions on actual Android/iOS WebViews, Google coverage and attribution at narrow screen sizes, device WebGL performance, and a small approved live sourced-query smoke test. This source change alone is not a deployed or provider-connected release.
+Before release with actual credentials, complete the activation sequence above and a small authorized sourced-query smoke test. Confirm native Back/backgrounding, account changes, memory saving, microphone continuity, provider links, Google coverage and device GPU performance. This source change alone is not a deployed or provider-connected release.
 
 ## Official implementation references
 
-- [Google Photorealistic 3D Tiles](https://developers.google.com/maps/documentation/tile/3d-tiles)
-- [Google Map Tiles policies and attribution](https://developers.google.com/maps/documentation/tile/policies)
-- [Google API security best practices](https://developers.google.com/maps/api-security-best-practices)
+- [Google Maps JavaScript 3D overview](https://developers.google.com/maps/documentation/javascript/3d/overview)
+- [Quarterly Map3DElement reference](https://developers.google.com/maps/documentation/javascript/reference/3.65/3d-map)
+- [Google Maps key restriction guidance](https://developers.google.com/maps/api-security-best-practices)
+- [Maps JavaScript CSP](https://developers.google.com/maps/documentation/javascript/content-security-policy)
+- [Maps JavaScript attribution and policies](https://developers.google.com/maps/documentation/javascript/policies)
+- [Maps JavaScript usage and billing](https://developers.google.com/maps/documentation/javascript/usage-and-billing)
 - [Google Geocoding request/response](https://developers.google.com/maps/documentation/geocoding/requests-geocoding)
-- [CesiumJS release downloads](https://cesium.com/downloads/)
-- [Cesium Viewer reference](https://cesium.com/learn/cesiumjs/ref-doc/Viewer.html)
 - [OpenAI Responses web search and source evidence](https://developers.openai.com/api/docs/guides/tools-web-search)

@@ -2,220 +2,155 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {checkProjectionProviderRestrictions, MAX_POTENTIAL_BILLABLE_REQUESTS} from '../tools/check_projection_provider.mjs';
+import {checkProjectionActivationConfiguration} from '../tools/check_projection_provider.mjs';
 
-const key = 'candidate-browser-key-sensitive-fixture-12345';
-const environment = Object.freeze({BRAIN_PROJECTION_MAP_BROWSER_KEY: key,
-  KORLIX_PUBLIC_BACKEND_URL: 'https://korlix.com',
-  BRAIN_PROJECTION_MAP_BROWSER_RESTRICTIONS_VERIFIED: 'false',
-  BRAIN_PROJECTION_GEOCODING_KEY: 'private-geocoding-key-never-used'});
-const rootBody = {asset: {version: '1.1'}, geometricError: 1000,
-  root: {boundingVolume: {sphere: [0, 0, 0, 6378137]}, geometricError: 1000, children: []}};
-const rootResponse = () => Response.json(rootBody);
-function denied(reason, options = {}) {
-  return Response.json({error: {code: 403, status: 'PERMISSION_DENIED',
-    message: options.message || `Provider message containing ${key}`,
-    details: [{'@type': 'type.googleapis.com/google.rpc.ErrorInfo', domain: 'googleapis.com', reason,
-      metadata: {service: 'unused-for-output', consumer: 'projects/private-project'}}]}}, {status: 403});
-}
-const referrerDenied = () => denied('API_KEY_HTTP_REFERRER_BLOCKED');
-const apiDenied = () => denied('API_KEY_SERVICE_BLOCKED');
-function queuedFetch(factories) {
-  const calls = [];
-  return {calls, fetchImpl: async (url, options) => {
-    calls.push({url, options});
-    const factory = factories[calls.length - 1];
-    assert.ok(factory, 'No retries or unplanned provider requests are allowed');
-    return factory(url, options);
-  }};
-}
-const run = options => checkProjectionProviderRestrictions({environment, allowProviderCheck: true, ...options});
+const browserKey = 'sensitive-maps-js-key-fixture-12345';
+const privateKey = 'sensitive-private-geocoding-fixture';
+const environment = Object.freeze({BRAIN_PROJECTION_MAPS_JS_BROWSER_KEY: browserKey,
+  KORLIX_PUBLIC_BACKEND_URL: 'https://korlix.com', BRAIN_PROJECTION_MAPS_JS_RESTRICTIONS_VERIFIED: 'false',
+  BRAIN_PROJECTION_GEOCODING_KEY: privateKey});
+const check = overrides => checkProjectionActivationConfiguration({environment: {...environment, ...overrides}});
 
-test('explicit opt-in and valid environment are required before any provider request', async () => {
-  let calls = 0;
-  const fetchImpl = async () => { calls++; throw Error('must not fetch'); };
-  for (const options of [{}, {allowProviderCheck: false}, {allowProviderCheck: 'true'}]) {
-    const result = await checkProjectionProviderRestrictions({environment, fetchImpl, ...options});
-    assert.equal(result.status, 'FAIL');
-    assert.equal(result.reason, 'explicit_opt_in_required');
+test('valid structural configuration remains explicitly unverified without any network', () => {
+  const originalFetch = globalThis.fetch;
+  let networkCalls = 0;
+  globalThis.fetch = () => { networkCalls++; throw new Error('Offline preflight must never fetch.'); };
+  try {
+    const result = check();
+    assert.equal(result.status, 'NOT_VERIFIED');
+    assert.equal(result.exitCode, 2);
+    assert.equal(result.liveVerification, 'not_performed');
+    assert.equal(result.liveProviderVerified, false);
     assert.equal(result.requestsMade, 0);
+    assert.equal(networkCalls, 0);
+    assert.deepEqual(result.blockers, []);
+    assert.equal(result.configuration.origin, 'https://korlix.com');
+    assert.equal(result.configuration.rendererConfiguredToExposeKey, false);
+    assert.equal(result.requiredGoogleSetup.serviceId, 'maps-backend.googleapis.com');
+    assert.deepEqual(result.requiredGoogleSetup.browserKeyApiAllowlist, ['maps-backend.googleapis.com']);
+    assert.equal(result.requiredGoogleSetup.channel, 'quarterly');
+    assert.equal(result.requiredGoogleSetup.library, 'maps3d');
+    assert.ok(result.requiredLiveChecks.every(item => item.status === 'NOT_PERFORMED'));
+  } finally { globalThis.fetch = originalFetch; }
+});
+
+test('asserting a deployment flag is not provider verification', () => {
+  for (const flag of ['true', 'false', undefined, 'TRUE', '1', ' true ']) {
+    const result = check({BRAIN_PROJECTION_MAPS_JS_RESTRICTIONS_VERIFIED: flag});
+    assert.equal(result.status, 'NOT_VERIFIED');
+    assert.equal(result.exitCode, 2);
+    assert.equal(result.liveProviderVerified, false);
+    const asserted = typeof flag === 'string' && flag.trim() === 'true';
+    assert.equal(result.configuration.restrictionsFlagAsserted, asserted);
+    assert.equal(result.configuration.rendererConfiguredToExposeKey, asserted);
   }
-  for (const candidate of [{}, {...environment, BRAIN_PROJECTION_MAP_BROWSER_KEY: ''},
-    {...environment, BRAIN_PROJECTION_MAP_BROWSER_KEY: 'bad\nkey'},
-    {...environment, BRAIN_PROJECTION_MAP_BROWSER_KEY: 'x'.repeat(201)}]) {
-    assert.equal((await run({environment: candidate, fetchImpl})).reason, 'candidate_browser_key_required');
+  assert.equal(environment.BRAIN_PROJECTION_MAPS_JS_RESTRICTIONS_VERIFIED, 'false');
+});
+
+test('legacy Tiles credentials and verification flag cannot supply the new browser key', () => {
+  const result = check({BRAIN_PROJECTION_MAPS_JS_BROWSER_KEY: undefined,
+    BRAIN_PROJECTION_MAP_BROWSER_KEY: browserKey, BRAIN_PROJECTION_MAP_BROWSER_RESTRICTIONS_VERIFIED: 'true'});
+  assert.equal(result.status, 'INVALID_CONFIGURATION');
+  assert.equal(result.exitCode, 1);
+  assert.equal(result.configuration.browserKeyPresent, false);
+  assert.equal(result.configuration.legacyTilesVariablesIgnored, true);
+  assert.equal(result.configuration.rendererConfiguredToExposeKey, false);
+  assert.deepEqual(result.blockers.map(item => item.code), ['valid_maps_js_browser_key_required']);
+});
+
+test('missing or malformed browser credentials fail structural validation', () => {
+  for (const key of [undefined, '', 'short', 'bad key with spaces 1234567890', 'bad\nkey-12345678901234567890', 'x'.repeat(201), 123]) {
+    const result = check({BRAIN_PROJECTION_MAPS_JS_BROWSER_KEY: key});
+    assert.equal(result.status, 'INVALID_CONFIGURATION');
+    assert.equal(result.exitCode, 1);
+    assert.ok(result.blockers.some(item => item.code === 'valid_maps_js_browser_key_required'));
+    assert.equal(result.configuration.rendererConfiguredToExposeKey, false);
   }
+  assert.equal(check({BRAIN_PROJECTION_MAPS_JS_BROWSER_KEY: ` ${browserKey} `}).status, 'NOT_VERIFIED');
+});
+
+test('a reused server key is rejected but geocoding is optional for structural map preflight', () => {
+  const result = check({BRAIN_PROJECTION_MAPS_JS_BROWSER_KEY: ` ${privateKey} `,
+    BRAIN_PROJECTION_MAPS_JS_RESTRICTIONS_VERIFIED: 'true'});
+  assert.equal(result.status, 'INVALID_CONFIGURATION');
+  assert.equal(result.configuration.distinctFromGeocodingKey, false);
+  assert.equal(result.configuration.rendererConfiguredToExposeKey, false);
+  assert.ok(result.blockers.some(item => item.code === 'browser_key_must_differ_from_geocoding_key'));
+  assert.equal(check({BRAIN_PROJECTION_GEOCODING_KEY: undefined}).status, 'NOT_VERIFIED');
+});
+
+test('origin validation matches production and never echoes invalid origin secrets', () => {
   for (const origin of [undefined, '', 'http://korlix.com', 'https://127.0.0.1', 'https://localhost',
-    'https://korlix.invalid', 'https://user:secret@korlix.com', 'https://korlix.com/path',
-    'https://korlix.com?key=secret', 'https://korlix.com#secret', 'https://korlix.com:8443', 'https://korlix.com\n']) {
-    const result = await run({environment: {...environment, KORLIX_PUBLIC_BACKEND_URL: origin}, fetchImpl});
-    assert.equal(result.reason, 'valid_public_backend_origin_required');
+    'https://korlix.invalid', 'https://user:private-origin-secret@korlix.com',
+    'https://korlix.com/path', 'https://korlix.com?key=private-origin-secret',
+    'https://korlix.com#private-origin-secret', 'https://korlix.com:8443']) {
+    const result = check({KORLIX_PUBLIC_BACKEND_URL: origin, RENDER_EXTERNAL_URL: undefined});
+    assert.equal(result.status, 'INVALID_CONFIGURATION', String(origin));
+    assert.equal(result.configuration.origin, null);
+    assert.doesNotMatch(JSON.stringify(result), /private-origin-secret/);
   }
-  for (const timeoutMs of [0, -1, 15001, Infinity, '1000']) {
-    assert.equal((await run({fetchImpl, timeoutMs})).reason, 'invalid_check_configuration');
+  assert.equal(check({KORLIX_PUBLIC_BACKEND_URL: '', RENDER_EXTERNAL_URL: 'https://korlix.onrender.com'}).configuration.origin,
+    'https://korlix.onrender.com');
+  assert.equal(check({RENDER_EXTERNAL_URL: 'https://other.onrender.com'}).configuration.origin, 'https://korlix.com');
+});
+
+test('manual verification demands browser and restriction-specific observations', () => {
+  const result = check();
+  assert.deepEqual(result.requiredLiveChecks.map(item => item.id), [
+    'allowed_origin_browser', 'unrelated_origin_browser', 'missing_referrer_browser', 'other_api_restriction', 'native_devices',
+  ]);
+  const requirements = result.requiredLiveChecks.map(item => item.requiredObservation).join(' ');
+  assert.match(requirements, /gmp-steadychange/);
+  assert.match(requirements, /HTTP 200 loader.*not evidence/);
+  assert.match(requirements, /RefererNotAllowedMapError/);
+  assert.match(requirements, /API_KEY_SERVICE_BLOCKED/);
+  assert.match(requirements, /generic.*inconclusive/);
+  assert.match(requirements, /billing, quota.*not proof/);
+  assert.match(requirements, /legal links/);
+});
+
+test('result never exposes keys, including when configured or duplicated', () => {
+  for (const overrides of [{}, {BRAIN_PROJECTION_MAPS_JS_RESTRICTIONS_VERIFIED: 'true'},
+    {BRAIN_PROJECTION_MAPS_JS_BROWSER_KEY: privateKey}, {BRAIN_PROJECTION_MAP_BROWSER_KEY: 'legacy-sensitive-secret-12345'}]) {
+    assert.doesNotMatch(JSON.stringify(check(overrides)), /sensitive-maps|sensitive-private|legacy-sensitive/);
   }
-  assert.equal(calls, 0);
+  const result = checkProjectionActivationConfiguration({environment: null});
+  assert.equal(result.exitCode, 1);
+  assert.equal(result.requestsMade, 0);
 });
 
-test('all four verified outcomes pass without depending on or changing the renderer flag', async () => {
-  const fake = queuedFetch([rootResponse, referrerDenied, referrerDenied, apiDenied]);
-  const result = await run(fake);
-  assert.equal(result.status, 'PASS');
-  assert.equal(result.reason, 'four_provider_checks_verified');
-  assert.equal(result.requestsMade, 4);
-  assert.deepEqual(result.maxPotentialBillableRequests, {photorealistic3DRoot: 3, geocoding: 1, total: 4});
-  assert.deepEqual(result.maxPotentialBillableRequests, MAX_POTENTIAL_BILLABLE_REQUESTS);
-  assert.ok(result.checks.every(check => check.status === 'PASS'));
-  assert.equal(environment.BRAIN_PROJECTION_MAP_BROWSER_RESTRICTIONS_VERIFIED, 'false');
-  for (const [index, call] of fake.calls.entries()) {
-    const url = new URL(call.url);
-    assert.equal(url.protocol, 'https:');
-    assert.equal(call.options.redirect, 'error');
-    assert.equal(call.options.credentials, 'omit');
-    assert.equal(call.options.cache, 'no-store');
-    assert.equal(call.options.method, 'GET');
-    assert.ok(call.options.signal instanceof AbortSignal);
-    assert.equal(call.options.headers.Accept, 'application/json');
-    if (index < 3) {
-      assert.equal(url.origin, 'https://tile.googleapis.com');
-      assert.equal(url.pathname, '/v1/3dtiles/root.json');
-      assert.equal(url.searchParams.get('key'), key);
-      assert.equal([...url.searchParams.keys()].length, 1);
-    } else {
-      assert.equal(url.origin, 'https://geocode.googleapis.com');
-      assert.match(url.pathname, /^\/v4\/geocode\/address\/1600\+Amphitheatre\+Parkway/);
-      assert.equal(url.search, '');
-      assert.equal(call.options.headers['X-Goog-Api-Key'], key);
-      assert.equal(call.options.headers['X-Goog-FieldMask'], 'results.placeId');
-      assert.equal(call.options.headers.Referer, 'https://korlix.com/');
-    }
+const checker = fileURLToPath(new URL('../tools/check_projection_provider.mjs', import.meta.url));
+function cli(args = [], overrides = {}) {
+  const child = spawnSync(process.execPath, [checker, ...args], {
+    env: {PATH: process.env.PATH, ...environment, ...overrides}, encoding: 'utf8', timeout: 10000,
+  });
+  assert.equal(child.error, undefined);
+  assert.equal(child.stderr, '');
+  return {code: child.status, result: JSON.parse(child.stdout), output: child.stdout};
+}
+
+test('CLI returns exit 2 for valid-but-unverified configuration and exit 1 for missing config', () => {
+  for (const flag of ['false', 'true']) {
+    const result = cli([], {BRAIN_PROJECTION_MAPS_JS_RESTRICTIONS_VERIFIED: flag});
+    assert.equal(result.code, 2);
+    assert.equal(result.result.status, 'NOT_VERIFIED');
+    assert.equal(result.result.liveProviderVerified, false);
+    assert.doesNotMatch(result.output, /sensitive-maps|sensitive-private/);
   }
-  assert.equal(fake.calls[0].options.headers.Referer, 'https://korlix.com/');
-  assert.equal(fake.calls[1].options.headers.Referer, 'https://korlix-provider-check.invalid/');
-  assert.equal(fake.calls[2].options.headers.Referer, undefined);
-  assert.equal(fake.calls[2].options.headers.Origin, 'https://korlix.com');
-  assert.doesNotMatch(JSON.stringify(result), /sensitive-fixture|private-project|private-geocoding|https:|Provider message/);
+  const missing = cli([], {BRAIN_PROJECTION_MAPS_JS_BROWSER_KEY: ''});
+  assert.equal(missing.code, 1);
+  assert.equal(missing.result.status, 'INVALID_CONFIGURATION');
 });
 
-test('unrestricted, missing-referrer-permitted, and wrong API keys fail with early stop', async () => {
-  for (const scenario of [
-    {responses: [rootResponse, rootResponse], count: 2, reason: 'unexpected_request_accepted'},
-    {responses: [rootResponse, referrerDenied, rootResponse], count: 3, reason: 'unexpected_request_accepted'},
-    {responses: [rootResponse, referrerDenied, referrerDenied, () => Response.json({results: [{placeId: 'fixture'}]})],
-      count: 4, reason: 'unexpected_request_accepted'},
-    {responses: [() => denied('API_KEY_INVALID')], count: 1, reason: 'invalid_key'},
-    {responses: [apiDenied], count: 1, reason: 'allowed_origin_not_verified'},
-  ]) {
-    const fake = queuedFetch(scenario.responses);
-    const result = await run(fake);
-    assert.equal(result.status, 'FAIL');
-    assert.equal(result.reason, scenario.reason);
-    assert.equal(result.requestsMade, scenario.count);
-    assert.equal(fake.calls.length, scenario.count);
-    assert.ok(result.checks.slice(scenario.count).every(check => check.status === 'NOT_RUN'));
-  }
-});
-
-test('generic denials, unrelated restriction types, quota, billing and disabled APIs are not restriction proof', async () => {
-  const ambiguous = [
-    () => Response.json({error: {code: 403, status: 'PERMISSION_DENIED', message: 'Forbidden'}}, {status: 403}),
-    () => Response.json({status: 'REQUEST_DENIED', error_message: 'This API project is not authorized to use this API.'}),
-    () => denied('API_KEY_IP_ADDRESS_BLOCKED'),
-    () => denied('API_KEY_SERVICE_BLOCKED'),
-    () => denied('SERVICE_DISABLED'),
-    () => denied('BILLING_DISABLED'),
-    () => denied('RATE_LIMIT_EXCEEDED'),
-    () => Response.json({error: {status: 'RESOURCE_EXHAUSTED'}}, {status: 429}),
-    () => Response.json({error: {code: 503}}, {status: 503}),
-    () => Response.json({error: {code: 403, status: 'PERMISSION_DENIED', details: [
-      {'@type': 'type.googleapis.com/google.rpc.ErrorInfo', domain: 'attacker.example', reason: 'API_KEY_HTTP_REFERRER_BLOCKED'}]}}, {status: 403}),
-  ];
-  for (const response of ambiguous) {
-    const fake = queuedFetch([rootResponse, response]);
-    const result = await run(fake);
-    assert.equal(result.status, 'FAIL');
-    assert.equal(result.requestsMade, 2);
-    assert.equal(result.checks[1].status, 'FAIL');
-  }
-  for (const response of [referrerDenied, () => denied('SERVICE_DISABLED'),
-    () => denied('BILLING_DISABLED'), () => denied('API_KEY_INVALID'),
-    () => Response.json({status: 'REQUEST_DENIED', error_message: 'Key API restrictions might be wrong.'})]) {
-    const result = await run(queuedFetch([rootResponse, referrerDenied, referrerDenied, response]));
-    assert.equal(result.status, 'FAIL');
-    assert.equal(result.checks[3].status, 'FAIL');
-  }
-});
-
-test('malformed roots, redirects, invalid JSON and oversized bodies fail without following or retrying', async () => {
-  const factories = [
-    () => Response.json({asset: {version: '1.1'}, root: {}}),
-    () => Response.json({error: {code: 403}, ...rootBody}),
-    () => Response.json({...rootBody, geometricError: -1}),
-    () => Response.json({...rootBody, root: {boundingVolume: {sphere: [0, 1]}}}),
-    () => new Response('', {status: 302, headers: {Location: 'https://attacker.invalid/?key=' + key}}),
-    () => { const response = rootResponse(); Object.defineProperty(response, 'redirected', {value: true}); return response; },
-    () => new Response(key, {headers: {'Content-Type': 'text/html'}}),
-    () => new Response('{"unclosed":', {headers: {'Content-Type': 'application/json'}}),
-    () => new Response('x'.repeat(256 * 1024 + 1), {headers: {'Content-Type': 'application/json'}}),
-    () => new Response('{}', {headers: {'Content-Type': 'application/json', 'Content-Length': '300000'}}),
-  ];
-  for (const response of factories) {
-    const fake = queuedFetch([response]);
-    const result = await run(fake);
-    assert.equal(result.status, 'FAIL');
-    assert.equal(result.requestsMade, 1);
-    assert.equal(fake.calls.length, 1);
-    assert.ok(!JSON.stringify(result).includes(key));
-    assert.doesNotMatch(JSON.stringify(result), /attacker|unclosed|https:/);
-  }
-});
-
-test('deadline covers a stalled fetch even when the fetch implementation ignores abort', async () => {
-  let signal;
-  const result = await run({timeoutMs: 10, fetchImpl: async (_url, options) => {
-    signal = options.signal;
-    return new Promise(() => {});
-  }});
-  assert.equal(result.status, 'FAIL');
-  assert.equal(result.reason, 'timeout');
-  assert.equal(result.requestsMade, 1);
-  assert.equal(signal.aborted, true);
-});
-
-test('deadline also cancels a stalled response stream', async () => {
-  let cancelled = false;
-  const body = new ReadableStream({start(controller) { controller.enqueue(new TextEncoder().encode('{')); },
-    cancel() { cancelled = true; }});
-  const result = await run({timeoutMs: 10,
-    fetchImpl: async () => new Response(body, {headers: {'Content-Type': 'application/json'}})});
-  assert.equal(result.status, 'FAIL');
-  assert.equal(result.reason, 'timeout');
-  assert.equal(cancelled, true);
-});
-
-test('network exceptions and provider details cannot leak keys, full URLs, project IDs or bodies', async () => {
-  const fake = queuedFetch([(_url, options) => {
-    throw Error(`Request ${_url} failed; headers=${JSON.stringify(options.headers)}; private-project-id`);
-  }]);
-  const result = await run(fake);
-  assert.equal(result.status, 'FAIL');
-  assert.equal(result.reason, 'network_error');
-  assert.ok(!JSON.stringify(result).includes(key));
-  assert.doesNotMatch(JSON.stringify(result), /https:|private-project|headers=/);
-});
-
-test('CLI without opt-in or with forbidden arguments emits only sanitized JSON and exits unsuccessfully', () => {
-  const filename = fileURLToPath(new URL('../tools/check_projection_provider.mjs', import.meta.url));
-  for (const args of [[], [`--key=${key}`], ['--allow-provider-check', '--allow-provider-check']]) {
-    const child = spawnSync(process.execPath, [filename, ...args], {
-      env: {...process.env, ...environment}, encoding: 'utf8', timeout: 5000,
-    });
-    assert.equal(child.status, 1);
-    assert.equal(child.stderr, '');
-    const result = JSON.parse(child.stdout);
-    assert.equal(result.status, 'FAIL');
-    assert.equal(result.requestsMade, 0);
-    assert.ok(!child.stdout.includes(key));
-    assert.doesNotMatch(child.stdout, /https:|private-geocoding/);
+test('CLI rejects removed live-network opt-in and all unexpected arguments without echoing them', () => {
+  for (const args of [['--allow-provider-check'], ['--allow-provider-check', '--allow-provider-check'],
+    ['--key=sensitive-cli-key'], ['--url=https://private.invalid/path']]) {
+    const result = cli(args);
+    assert.equal(result.code, 1);
+    assert.equal(result.result.status, 'INVALID_ARGUMENTS');
+    assert.equal(result.result.requestsMade, 0);
+    assert.equal(result.result.liveVerification, 'not_performed');
+    assert.doesNotMatch(result.output, /sensitive-cli-key|private\.invalid/);
+    if (args.includes('--allow-provider-check')) assert.equal(result.result.reason, 'live_provider_check_option_removed');
   }
 });

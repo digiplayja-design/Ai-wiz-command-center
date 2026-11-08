@@ -1,14 +1,10 @@
 :root { color-scheme: dark; font-family: system-ui, -apple-system, sans-serif; background: #030b13; color: #e9f6fb; }
-html, body, #map { width: 100%; height: 100%; margin: 0; overflow: hidden; }
-#map-state { position: absolute; inset: 0; display: grid; place-content: center; padding: 2rem; text-align: center; font-size: .95rem; background: #030b13e8; z-index: 2; }
+html, body { width: 100%; height: 100%; margin: 0; }
+body { display: flex; flex-direction: column; min-height: 0; }
+/* Public labels occupy their own rows. Nothing is placed over the SDK host,
+ * whose attribution and internal controls have no public measurement API. */
+#imagery-label { order: 0; flex: 0 0 auto; box-sizing: border-box; padding: 7px 10px; color: #c7e8f4; font-size: 11px; line-height: 1.4; }
+#map-state { order: 1; flex: 0 0 auto; box-sizing: border-box; padding: 10px; text-align: center; font-size: .95rem; line-height: 1.4; }
 #map-state[hidden] { display: none; }
-#imagery-label { position: absolute; top: 10px; left: 10px; right: 10px; pointer-events: none; width: fit-content; max-width: calc(100% - 40px); padding: 6px 10px; border-radius: 7px; background: #031019d9; color: #c7e8f4; font-size: 11px; line-height: 1.4; }
-#map-credits { position: absolute; left: 0; bottom: 0; right: 0; box-sizing: border-box; padding: 5px 8px max(5px, env(safe-area-inset-bottom)); background: #030b13e8; color: white; font-size: 11px; line-height: 1.5; white-space: normal; overflow-wrap: anywhere; z-index: 3; }
-/* An external Cesium credit container is outside .cesium-viewer, so the SDK's
- * normal-flow override does not apply. Keep its entire credit child in this
- * measured footer rather than absolutely positioned above its padding. */
-#map-credits .cesium-widget-credits { position: static; display: block; bottom: auto; left: auto; padding: 0; font: inherit; }
-#map-credits a { color: #e0f7ff; text-decoration: underline; }
-#map-credits img { max-width: 100px; max-height: 22px; vertical-align: middle; }
-#map-credits .cesium-credit-logoContainer { margin-right: 10px; }
-.cesium-widget, .cesium-widget canvas { width: 100%; height: 100%; }
+#map { order: 2; flex: 1 1 auto; width: 100%; min-height: 0; }
+gmp-map-3d { display: block; width: 100%; height: 100%; }
