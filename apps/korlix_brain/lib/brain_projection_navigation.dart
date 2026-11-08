@@ -181,10 +181,9 @@ ProjectionNavigation projectionNavigationPolicy({
 /// A blocked/duplicate request returns null; an actual failed launch is false.
 class ProjectionProviderLinkLauncher {
   ProjectionProviderLinkLauncher({
-    required Future<bool> Function(Uri) launch,
+    required this._launch,
     DateTime Function()? now,
-  }) : _launch = launch,
-       _now = now ?? DateTime.now;
+  }) : _now = now ?? DateTime.now;
 
   final Future<bool> Function(Uri) _launch;
   final DateTime Function() _now;
