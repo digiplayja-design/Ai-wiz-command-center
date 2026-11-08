@@ -299,6 +299,7 @@ async function main() {
           assert.ok(result.rendered.coloredPixels > 100, 'Decoded synthetic geometry must produce visible pixels in the real WebGL canvas.');
           assert.ok(result.providerFixtures.some(request => request.path.endsWith('/fixture.glb')), 'The real tile loader must request binary model content.');
 
+          result.credits = [];
           async function creditsAtViewport(width, height) {
             await page.setViewportSize({width, height});
             await frame.waitForFunction(expected => document.getElementById('map-credits').innerText.includes(expected), attribution);
@@ -307,17 +308,33 @@ async function main() {
             const credits = await frame.locator('#map-credits').evaluate(element => {
               const box = element.getBoundingClientRect(), style = getComputedStyle(element);
               const visible = node => {const bounds = node.getBoundingClientRect(); return bounds.width > 0 && bounds.height > 0;};
+              // A positioned Cesium credit child can overflow a tiny outer
+              // container while that container itself is inside the viewport.
+              // Verify every visible credit descendant fits the measured strip
+              // that the app uses to reserve space, including real SDK logos.
+              const descendants = [...element.querySelectorAll('*')].filter(node => visible(node) &&
+                getComputedStyle(node).visibility !== 'hidden').map(node => {
+                const bounds = node.getBoundingClientRect();
+                return {tag: node.tagName, className: node.className, alt: node.getAttribute('alt'),
+                  x: bounds.x, y: bounds.y, right: bounds.right, bottom: bounds.bottom,
+                  contained: bounds.x >= box.x - 1 && bounds.y >= box.y - 1 &&
+                    bounds.right <= box.right + 1 && bounds.bottom <= box.bottom + 1};
+              });
               return {text: element.innerText, x: box.x, y: box.y, width: box.width, height: box.height,
                 bottom: box.bottom, right: box.right, viewport: {width: innerWidth, height: innerHeight},
                 visible: style.display !== 'none' && style.visibility !== 'hidden' && Number(style.opacity) > 0,
+                descendants,
                 googleLogo: [...element.querySelectorAll('img')].some(image => image.alt === 'Google' && visible(image)),
                 cesiumCredit: [...element.querySelectorAll('a')].some(link => /cesium/i.test(link.href) && visible(link))};
             });
+            result.credits.push(credits);
             assert.match(credits.text, /Google Maps/);
             assert.ok(credits.text.includes(attribution));
             assert.ok(credits.visible && credits.googleLogo && credits.cesiumCredit);
             assert.ok(credits.height > 0 && credits.x >= 0 && credits.y >= 0);
             assert.ok(credits.bottom <= credits.viewport.height + 1 && credits.right <= credits.viewport.width + 1);
+            assert.ok(credits.descendants.length > 0 && credits.descendants.every(node => node.contained),
+              `All visible credit content must fit the reported footer: ${JSON.stringify(credits.descendants.filter(node => !node.contained))}`);
             await page.waitForFunction(expected => {
               const latest = window.__projectionCi.messages.filter(message => message.type === 'korlix-projection-credits').at(-1);
               return latest && Number.isInteger(latest.height) && Math.abs(latest.height - expected) <= 1;
@@ -325,7 +342,8 @@ async function main() {
             await page.screenshot({path: resolve(artifactDirectory, `ready-${width}.png`)});
             return credits;
           }
-          result.credits = [await creditsAtViewport(1280, 800), await creditsAtViewport(360, 740)];
+          await creditsAtViewport(1280, 800);
+          await creditsAtViewport(360, 740);
           result.camera = {flyTo: await position()};
           const initialHeight = result.camera.flyTo.height;
           await command('closer');
