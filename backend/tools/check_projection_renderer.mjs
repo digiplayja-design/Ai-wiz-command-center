@@ -62,7 +62,11 @@ function tileFixture() {
   const transform = [-sinLon, cosLon, 0, 0, -sinLat * cosLon, -sinLat * sinLon, cosLat, 0,
     cosLat * cosLon, cosLat * sinLon, sinLat, 0,
     normal * cosLat * cosLon, normal * cosLat * sinLon, normal * (1 - eccentricitySquared) * sinLat, 1];
-  const tileset = {asset: {version: '1.1', gltfUpAxis: 'Y'}, geometricError: 0,
+  // Tileset-level error describes the error without loading its root. Cesium
+  // intentionally skips the entire tileset when this is zero; only the exact
+  // leaf geometry below has zero error. A positive coarse error lets the real
+  // traversal request this building when the camera arrives over the fixture.
+  const tileset = {asset: {version: '1.1', gltfUpAxis: 'Y'}, geometricError: 2000,
     root: {boundingVolume: {sphere: [0, 0, 75, 200]}, transform, geometricError: 0,
       refine: 'ADD', content: {uri: 'fixture.glb'}}};
   return {glb, tileset};
@@ -379,6 +383,18 @@ async function main() {
         result.error = error.stack || error.message;
         result.messages = await page.evaluate(() => window.__projectionCi?.messages).catch(() => []);
         result.cspViolations = frame ? await frame.evaluate(() => window.__projectionCi?.violations).catch(() => []) : [];
+        result.rendererState = frame ? await frame.evaluate(() => {
+          const observed = window.__projectionCi, viewer = observed?.viewer, tileset = observed?.tileset;
+          if (!viewer) return {viewer: false};
+          if (viewer.isDestroyed()) return {viewer: true, destroyed: true};
+          const camera = viewer.camera.positionCartographic;
+          return {viewer: true, destroyed: false, camera: {latitude: camera.latitude, longitude: camera.longitude,
+            height: camera.height, flight: Boolean(viewer.camera._currentFlight)}, visibleTiles: observed.visibleTiles,
+            tileset: tileset && {tilesLoaded: tileset.tilesLoaded, geometricError: tileset.geometricError,
+              rootVisible: tileset.root.isVisible, contentReady: tileset.root.contentReady,
+              contentFailed: tileset.root.contentFailed, requested: tileset._statistics?.numberOfPendingRequests},
+            credits: document.getElementById('map-credits')?.innerText};
+        }).catch(() => null) : null;
         await page.screenshot({path: resolve(artifactDirectory, `${mode}-failure.png`)}).catch(() => {});
         throw error;
       } finally {
