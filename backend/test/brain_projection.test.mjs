@@ -9,6 +9,7 @@ import {rendererDocument, CESIUM_VERSION, CESIUM_JS_INTEGRITY, CESIUM_CSS_INTEGR
 
 const environment = {BRAIN_PROJECTION_GEOCODING_KEY: 'server-only-geocoding-test-key',
   BRAIN_PROJECTION_MAP_BROWSER_KEY: 'browser-restricted-test-key-12345',
+  BRAIN_PROJECTION_MAP_BROWSER_RESTRICTIONS_VERIFIED: 'true',
   RENDER_EXTERNAL_URL: 'https://chee-chai-chee-backend.onrender.com', OPENAI_API_KEY: 'server-only-openai-test-key'};
 const place = {id: 'confirmed-place', label: 'Confirmed address', address: '10 Test Street, Example City',
   latitude: 40.7, longitude: -73.9, userQuery: '10 Test Street, Example City', provider: 'google'};
@@ -43,6 +44,21 @@ test('renderer origin and explicitly public key fail closed', () => {
     assert.equal(publicProjectionConfiguration({...environment, KORLIX_PUBLIC_BACKEND_URL: origin}).mapAvailable, false, origin);
   }
   assert.equal(projectionConfiguration({...environment, BRAIN_PROJECTION_MAP_BROWSER_KEY: '"><script>alert(1)</script>'}).browserKey, '');
+});
+
+test('a candidate browser key remains private and inactive until its restrictions are verified', () => {
+  for (const value of [undefined, '', 'false', '1', 'yes', 'TRUE', true]) {
+    const pending = {...environment, BRAIN_PROJECTION_MAP_BROWSER_RESTRICTIONS_VERIFIED: value};
+    const config = publicProjectionConfiguration(pending);
+    assert.equal(config.mapAvailable, false);
+    assert.equal(config.rendererUrl, null);
+    assert.equal(config.geocodingAvailable, true);
+    assert.equal(config.answersAvailable, true);
+    assert.equal(projectionConfiguration(pending).browserKey, '');
+    const html = rendererDocument(pending);
+    assert.ok(!html.includes(environment.BRAIN_PROJECTION_MAP_BROWSER_KEY));
+    assert.doesNotMatch(html, /Cesium\.js/);
+  }
 });
 
 test('input normalization bounds text and coordinates without taking account or URL fields', () => {
@@ -328,7 +344,13 @@ test('hosted renderer is public and map-only, with pinned integrity, attribution
   assert.ok(!html.includes(environment.OPENAI_API_KEY));
   assert.match(html, /map-credits/);
   assert.match(html, /Capture date unavailable/);
-  assert.match(response.headers.get('content-security-policy'), /frame-src 'none'/);
+  const policy = response.headers.get('content-security-policy');
+  assert.match(policy, /frame-src 'none'/);
+  const scriptPolicy = policy.split('; ').find(directive => directive.startsWith('script-src '));
+  assert.equal(scriptPolicy, "script-src 'self' https://cesium.com 'unsafe-eval'",
+    'The pinned Cesium bundle requires string evaluation; only the isolated renderer receives this exception');
+  assert.doesNotMatch(scriptPolicy, /unsafe-inline|https:\/\/\*|data:|blob:/);
+  assert.equal(response.headers.get('referrer-policy'), 'strict-origin-when-cross-origin');
   assert.match(response.headers.get('permissions-policy'), /microphone=\(\)/);
   assert.equal(response.headers.get('cache-control'), 'no-store');
   const unconfigured = rendererDocument({});

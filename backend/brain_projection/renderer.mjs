@@ -28,7 +28,11 @@ ${key ? `<link rel="stylesheet" href="${CESIUM_ROOT}Widgets/widgets.css" integri
 
 const csp = [
   "default-src 'none'",
-  "script-src 'self' https://cesium.com 'wasm-unsafe-eval'",
+  // The pinned full Cesium bundle initializes Knockout with a string eval even
+  // when its widgets are disabled. Keep this exception on the map-only routes:
+  // no inline scripts, native bridge, account tokens or researched HTML enter
+  // this document. The API, original home and voice policies are unchanged.
+  "script-src 'self' https://cesium.com 'unsafe-eval'",
   // Cesium positions its canvas and attribution with inline style properties.
   "style-src 'self' 'unsafe-inline' https://cesium.com",
   "img-src 'self' data: blob: https://cesium.com https://tile.googleapis.com https://assets.ion.cesium.com https://maps.gstatic.com",

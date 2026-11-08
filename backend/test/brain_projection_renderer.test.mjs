@@ -45,15 +45,21 @@ function eventBus() {
     emit: (...args) => {for (const callback of [...listeners]) callback(...args);}, size: () => listeners.size};
 }
 function fakeBrowser({key = 'public-test-key', loadTiles, viewerThrows = false} = {}) {
-  const posts = [], events = new Map(), documentEvents = new Map(), timers = new Map();
-  const state = {hidden: false, textContent: ''}, credits = {};
+  const posts = [], events = new Map(), documentEvents = new Map(), timers = new Map(), observers = [];
+  const state = {hidden: false, textContent: ''};
+  const credits = {height: 32, getBoundingClientRect() {return {height: this.height};}};
   const add = (map, name, callback) => {
     if (!map.has(name)) map.set(name, new Set());
     map.get(name).add(callback);
   };
   const remove = (map, name, callback) => map.get(name)?.delete(callback);
-  const win = {location: {origin}, devicePixelRatio: 2,
+  const win = {location: {origin}, devicePixelRatio: 2, innerHeight: 600,
     parent: {postMessage: (...args) => posts.push(args)},
+    ResizeObserver: class {
+      constructor(callback) {this.callback = callback; this.disconnected = false; observers.push(this);}
+      observe(target) {this.target = target;}
+      disconnect() {this.disconnected = true;}
+    },
     addEventListener: (name, callback) => add(events, name, callback),
     removeEventListener: (name, callback) => remove(events, name, callback),
     setTimeout: callback => {const id = timers.size + 1; timers.set(id, callback); return id;},
@@ -74,7 +80,7 @@ function fakeBrowser({key = 'public-test-key', loadTiles, viewerThrows = false} 
         this.camera = {positionCartographic: {latitude: .7, longitude: -1.2, height: 1000}, heading: 0, pitch: -.8,
           cancelFlight: () => {calls.cancellations++;}, flyTo: input => calls.flights.push(input),
           zoomIn: distance => calls.zooms.push(['in', distance]), zoomOut: distance => calls.zooms.push(['out', distance])};
-        this.scene = {backgroundColor: null, renderError: eventBus(),
+        this.scene = {backgroundColor: null, renderError: eventBus(), postRender: eventBus(),
           primitives: {add: value => calls.tiles.push(value)}, requestRender: () => {}};
         this.creditDisplay = {addStaticCredit: value => calls.credits.push(value)};
         calls.viewers.push(this);
@@ -89,16 +95,18 @@ function fakeBrowser({key = 'public-test-key', loadTiles, viewerThrows = false} 
     Color: {fromCssColorString: css => css},
   };
   const emit = (name, value) => {for (const callback of [...(events.get(name) || [])]) callback(value);};
-  return {window: win, document: doc, Cesium: C, posts, state, calls, tiles, events, documentEvents, timers, emit};
+  return {window: win, document: doc, Cesium: C, posts, state, credits, calls, tiles, events, documentEvents, timers, observers, emit};
 }
+const statusPosts = fixture => fixture.posts.filter(post => post[0].type === 'korlix-projection-status');
+const creditPosts = fixture => fixture.posts.filter(post => post[0].type === 'korlix-projection-credits');
 
 test('real renderer lifecycle reports loading then ready, uses Google-only base and preserves credits', async () => {
   let providerArguments;
   const f = fakeBrowser();
   f.Cesium.createGooglePhotorealistic3DTileset = async (...args) => {providerArguments = args; return f.tiles;};
   const runtime = await mountProjectionRenderer(f);
-  assert.deepEqual(f.posts.map(post => post[0].status), ['loading', 'ready']);
-  assert.ok(f.posts.every(post => post[0].type === 'korlix-projection-status' && post[1] === '*'));
+  assert.deepEqual(statusPosts(f).map(post => post[0].status), ['loading', 'ready']);
+  assert.ok(f.posts.every(post => ['korlix-projection-status', 'korlix-projection-credits'].includes(post[0].type) && post[1] === '*'));
   assert.doesNotMatch(JSON.stringify(f.posts), /public-test-key|Authorization|nonce/);
   assert.equal(f.Cesium.Ion.defaultAccessToken, '');
   const viewer = f.calls.viewers[0];
@@ -116,7 +124,56 @@ test('real renderer lifecycle reports loading then ready, uses Google-only base 
   assert.equal(viewer.isDestroyed(), true);
   assert.equal(f.events.get('message').size, 0);
   assert.equal(f.documentEvents.get('click').size, 0);
+  assert.equal(f.events.get('resize').size, 0);
+  assert.ok(f.observers.every(observer => observer.disconnected));
   runtime.dispose();
+});
+
+test('wrapping attribution reports only bounded changed geometry and disconnects on disposal', async () => {
+  const f = fakeBrowser();
+  const runtime = await mountProjectionRenderer(f);
+  const observer = f.observers[0];
+  assert.equal(observer.target, f.credits);
+  assert.deepEqual(creditPosts(f).map(post => post[0]), [{type: 'korlix-projection-credits', height: 32}]);
+  f.credits.height = 104.25;
+  observer.callback();
+  assert.deepEqual(creditPosts(f).at(-1)[0], {type: 'korlix-projection-credits', height: 105});
+  observer.callback();
+  assert.equal(creditPosts(f).length, 2, 'Unchanged heights do not flood the parent');
+  for (const height of [-1, NaN, Infinity]) {
+    f.credits.height = height;
+    observer.callback();
+  }
+  assert.equal(creditPosts(f).length, 2, 'Malformed measurements are never forwarded');
+  f.credits.height = 100000;
+  observer.callback();
+  assert.equal(creditPosts(f).at(-1)[0].height, 600, 'Height cannot exceed the current renderer viewport');
+  f.window.innerHeight = 420;
+  f.emit('resize');
+  assert.equal(creditPosts(f).at(-1)[0].height, 420);
+  f.window.innerHeight = 100000;
+  f.emit('resize');
+  assert.equal(creditPosts(f).at(-1)[0].height, 4096, 'Geometry has an absolute protocol bound as well');
+  const count = f.posts.length;
+  runtime.dispose();
+  assert.equal(observer.disconnected, true);
+  assert.equal(f.events.get('resize').size, 0);
+  f.credits.height = 20;
+  observer.callback();
+  f.emit('resize');
+  assert.equal(f.posts.length, count, 'Already queued observer callbacks cannot revive a closed frame');
+});
+
+test('older WebViews observe credit changes after rendering and release the fallback listener', async () => {
+  const f = fakeBrowser();
+  delete f.window.ResizeObserver;
+  const runtime = await mountProjectionRenderer(f);
+  const event = f.calls.viewers[0].scene.postRender;
+  f.credits.height = 88;
+  event.emit();
+  assert.equal(creditPosts(f).at(-1)[0].height, 88);
+  runtime.dispose();
+  assert.equal(event.size(), 0);
 });
 
 test('queued valid flyTo applies once ready; wrong source and replayed sequence do not move camera', async () => {
@@ -124,7 +181,7 @@ test('queued valid flyTo applies once ready; wrong source and replayed sequence 
   const f = fakeBrowser({loadTiles: () => new Promise(resolve => {release = resolve;})});
   const mounting = mountProjectionRenderer(f);
   f.emit('message', message(f.window.parent));
-  assert.deepEqual(f.posts.map(post => post[0].status), ['loading']);
+  assert.deepEqual(statusPosts(f).map(post => post[0].status), ['loading']);
   release(f.tiles);
   const runtime = await mounting;
   assert.deepEqual(f.calls.flights.at(-1).destination, {longitude: -73.9, latitude: 40.7, height: 650});
@@ -140,7 +197,7 @@ test('queued valid flyTo applies once ready; wrong source and replayed sequence 
 test('missing key or unavailable Cesium never claims a connected map', async () => {
   for (const f of [fakeBrowser({key: ''}), {...fakeBrowser(), Cesium: undefined}]) {
     const runtime = await mountProjectionRenderer(f);
-    assert.deepEqual(f.posts.map(post => post[0].status), ['loading', 'error']);
+    assert.deepEqual(statusPosts(f).map(post => post[0].status), ['loading', 'error']);
     assert.equal(f.state.hidden, false);
     assert.equal(f.calls.viewers.length, 0);
     runtime.dispose();
@@ -151,7 +208,7 @@ test('failed provider, WebGL or tile error does not leak details and releases re
   for (const f of [fakeBrowser({loadTiles: async () => {throw Error('key=secret-private-provider-url');}}),
     fakeBrowser({viewerThrows: true})]) {
     await mountProjectionRenderer(f);
-    assert.deepEqual(f.posts.map(post => post[0].status), ['loading', 'error']);
+    assert.deepEqual(statusPosts(f).map(post => post[0].status), ['loading', 'error']);
     assert.doesNotMatch(JSON.stringify(f.posts), /secret|private|WebGL diagnostics/);
     assert.equal(f.events.get('message').size, 0);
     assert.equal(f.timers.size, 0);
@@ -173,7 +230,7 @@ test('closing during tile load destroys late tiles and cannot emit a stale ready
   await mounting;
   assert.equal(f.calls.viewers[0].isDestroyed(), true);
   assert.equal(f.tiles.isDestroyed(), true);
-  assert.deepEqual(f.posts.map(post => post[0].status), ['loading']);
+  assert.deepEqual(statusPosts(f).map(post => post[0].status), ['loading']);
   assert.equal(f.events.get('message').size, 0);
 });
 

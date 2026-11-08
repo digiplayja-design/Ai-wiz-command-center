@@ -26,6 +26,33 @@ export async function mountProjectionRenderer({window: win, document: doc, Cesiu
     if (!controller) { pending = command; return; }
     try { controller.apply(command); } catch { failed(); }
   }
+  function watchAttribution() {
+    const credits = doc.getElementById('map-credits');
+    let lastHeight = -1;
+    function publishHeight() {
+      if (disposed || win.parent === win) return;
+      const measured = credits?.getBoundingClientRect?.().height;
+      if (!Number.isFinite(measured) || measured < 0 ||
+          !Number.isFinite(win.innerHeight) || win.innerHeight <= 0) return;
+      // Geometry is public presentation data only. Never forward credit HTML,
+      // provider URLs, keys or arbitrary style values to the native shell.
+      const height = Math.min(4096, Math.ceil(measured), Math.floor(win.innerHeight));
+      if (height === lastHeight) return;
+      lastHeight = height;
+      win.parent.postMessage({type: 'korlix-projection-credits', height}, '*');
+    }
+    if (typeof win.ResizeObserver === 'function') {
+      const observer = new win.ResizeObserver(publishHeight);
+      observer.observe(credits);
+      removeListeners.push(() => observer.disconnect());
+    } else if (viewer.scene.postRender) {
+      // Older WebViews still update viewport-specific provider credit changes.
+      removeListeners.push(viewer.scene.postRender.addEventListener(publishHeight));
+    }
+    win.addEventListener('resize', publishHeight);
+    removeListeners.push(() => win.removeEventListener('resize', publishHeight));
+    publishHeight();
+  }
   function dispose() {
     if (disposed) return;
     disposed = true;
@@ -84,6 +111,7 @@ export async function mountProjectionRenderer({window: win, document: doc, Cesiu
     if (pending) { controller.apply(pending); pending = null; }
     viewer.scene.requestRender();
     status('ready', 'Recorded 3D imagery connected. Capture date unavailable.');
+    watchAttribution();
   } catch { failed(); }
   return {dispose};
 }

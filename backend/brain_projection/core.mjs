@@ -27,9 +27,12 @@ const envText = (environment, name) => typeof environment[name] === 'string' ? e
 export function projectionConfiguration(environment = process.env) {
   const serverKey = envText(environment, 'BRAIN_PROJECTION_GEOCODING_KEY');
   // This explicitly named public key is the ONLY credential the renderer can receive.
-  // A reused server key fails closed rather than silently becoming public.
+  // A reused server key fails closed rather than silently becoming public. Do not
+  // expose even this key until its application/API restrictions have been tested;
+  // Map Tiles documents IP restrictions, so browser referrers need verification.
   const configuredBrowserKey = envText(environment, 'BRAIN_PROJECTION_MAP_BROWSER_KEY');
-  const browserKey = /^[A-Za-z0-9_-]{20,200}$/.test(configuredBrowserKey) &&
+  const browserRestrictionsVerified = envText(environment, 'BRAIN_PROJECTION_MAP_BROWSER_RESTRICTIONS_VERIFIED') === 'true';
+  const browserKey = browserRestrictionsVerified && /^[A-Za-z0-9_-]{20,200}$/.test(configuredBrowserKey) &&
     configuredBrowserKey !== serverKey ? configuredBrowserKey : '';
   let origin = null;
   try {
