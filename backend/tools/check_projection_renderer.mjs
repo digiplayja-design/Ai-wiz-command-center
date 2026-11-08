@@ -16,6 +16,11 @@ const browserKey = 'korlix-maps-js-ci-fixture-not-a-real-credential';
 const place = {id: 'ci-camera-contract', label: 'Camera contract fixture', latitude: 40.7, longitude: -73.9};
 const scriptOrigin = 'https://maps.googleapis.com';
 const scriptPath = '/maps/api/js';
+// Chromium 141 reports these intentional iframe denials as console errors even
+// when no permission API is called. Keep an exact diagnostic list and assert
+// the effective denied capabilities; never suppress CSP/access errors broadly.
+const expectedPermissionDiagnostics = new Set(['camera', 'geolocation', 'microphone'].map(capability =>
+  `Potential permissions policy violation: ${capability} is not allowed in this document.`));
 const modes = ['ready', 'map-error', 'auth-failure', 'import-error', 'loader-error',
   'delayed-import-close', 'never-steady', 'unverified', 'legacy-only'];
 
@@ -226,6 +231,13 @@ async function main() {
         }));
         assert.deepEqual(documentContract, {scriptNonce: nonce, styleNonce: nonce, stylesheetNonce: nonce,
           channel: 'quarterly', keyPresent: !['unverified', 'legacy-only'].includes(mode)});
+        result.deniedCapabilities = await frame.evaluate(() => {
+          const policy = document.permissionsPolicy || document.featurePolicy;
+          return Object.fromEntries(['camera', 'geolocation', 'microphone'].map(capability =>
+            [capability, policy?.allowsFeature(capability) === false]));
+        });
+        assert.deepEqual(result.deniedCapabilities, {camera: true, geolocation: true, microphone: true},
+          'The iframe must actually deny camera, microphone and geolocation.');
         result.productionNonceCsp = true;
         await waitStatus('loading');
 
@@ -332,7 +344,9 @@ async function main() {
         assert.deepEqual(result.pageErrors, []);
         assert.deepEqual(result.routeErrors, [], 'The production loader must use the reviewed URL and parameters.');
         assert.deepEqual(result.unexpectedRequests, [], 'No unexpected external destinations may be required.');
-        assert.ok(result.consoleErrors.every(message => mode === 'loader-error' && /Failed to load resource.*503/.test(message)),
+        result.permissionPolicyDiagnostics = result.consoleErrors.filter(message => expectedPermissionDiagnostics.has(message));
+        const otherConsoleErrors = result.consoleErrors.filter(message => !expectedPermissionDiagnostics.has(message));
+        assert.ok(otherConsoleErrors.every(message => mode === 'loader-error' && /Failed to load resource.*503/.test(message)),
           `Unexpected browser console errors: ${JSON.stringify(result.consoleErrors)}`);
         result.statuses = await statuses();
         result.fixtureCalls = final;
