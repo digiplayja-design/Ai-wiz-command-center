@@ -115,7 +115,7 @@ The renderer returns only:
 
 The parent verifies both origin and source. The retired `korlix-projection-credits` height message is ignored; protecting the full provider surface replaces credit-height reservation. The SDK and iframe never receive access to account credentials or the native bridge.
 
-Research remains independent public-source research, not image interpretation. No map screenshots, tiles or geocoder content are exported or persisted. Saved notes retain only the user's own query/note and the exempt provider place ID.
+Research remains independent public-source research, not image interpretation. The app does not export or persist map screenshots or tiles. Geocoder results stay in transient Projection state; a question sends the selected public-place fields to the authenticated research endpoint, which includes them as context for independent web research. Saved notes retain only the user's own query/note and the exempt provider place ID, not copied geocoder address details.
 
 ## Verification
 
