@@ -27,3 +27,35 @@ test('Auto-Email auth aliases override spoofed scope and never expose another us
   const otherSession=await(await fetch(base+'/api/auto-email/session',{headers:{authorization:other}})).json();assert.equal(otherSession.workspace,null);
   const status=await fetch(base+'/api/auto-email/status');assert.equal(status.headers.get('cache-control'),'no-store');assert.equal((await status.json()).mailboxOAuth,false);
 });
+
+test('standalone support routes permit only exact owner API methods, never provider hooks or legacy sends', () => {
+  const id='12345678-1234-4234-8234-123456789012';
+  const allowed=[['GET','/api/automated-support/profiles'],['GET','/api/automated-support/cases?profileId=business-one&state=new'],
+    ['PATCH','/api/automated-support/profiles/business-one'],['GET',`/api/automated-support/cases/${id}`],
+    ['PATCH',`/api/automated-support/cases/${id}`],['POST',`/api/automated-support/cases/${id}/replies`],['POST',`/api/automated-support/cases/${id}/process`]];
+  for (const [method,originalUrl] of allowed) assert.equal(autoEmailAppRouteAllowed({method,originalUrl}),true,`${method} ${originalUrl}`);
+  const denied=[['POST','/api/automated-support/resend/webhook'],['GET','/api/automated-support/resend/webhook'],
+    ['POST','/api/automated-support/profiles'],['PUT','/api/automated-support/profiles/business-one'],
+    ['DELETE',`/api/automated-support/cases/${id}`],['GET',`/api/automated-support/cases/${id}/replies`],
+    ['POST',`/api/automated-support/cases/${id}/send`],['POST',`/api/automated-support/cases/${id}/replies/extra`],
+    ['GET','/api/automated-support/cases/not-an-id'],['PATCH','/api/automated-support/profiles/one%2ftwo'],
+    ['GET','/api/automated-support/profiles/'],['HEAD','/api/automated-support/profiles'],
+    ['POST',`/api/live-convo/agents/nova/email/drafts/${id}/send`]];
+  for (const [method,originalUrl] of denied) assert.equal(autoEmailAppRouteAllowed({method,originalUrl}),false,`${method} ${originalUrl}`);
+});
+
+test('an enrolled second support owner gets support capability without access to the Nova pilot', async t => {
+  const nova='12345678-1234-4234-8234-123456789012',business='22345678-1234-4234-8234-123456789012',stranger='32345678-1234-4234-8234-123456789012';
+  const app=express();
+  registerAutoEmailAppRoutes(app,{requireUser:async req=>({id:req.headers.authorization,email:'owner@example.test'}),loadProfile:async()=>({tier:'enterprise'}),environment:{
+    KORLIX_VAPI_NOVA_OWNER_UID:nova,KORLIX_VAPI_NOVA_AGENT_ID:'nova',KORLIX_VAPI_NOVA_ASSISTANT_ID:'synthetic-assistant',
+    KORLIX_SUPPORT_PROFILES_JSON:JSON.stringify([{id:'business-support',ownerUid:business,appKeys:['business_app'],displayName:'Business Support',fromEmail:'help@business.test',replyTo:'help@business.test',inboundAddresses:['help@business.test']}]),
+  }});
+  const server=app.listen(0,'127.0.0.1');await new Promise(resolve=>server.once('listening',resolve));t.after(()=>new Promise(resolve=>server.close(resolve)));
+  const base=`http://127.0.0.1:${server.address().port}`;
+  const session=await(await fetch(base+'/api/auto-email/session',{headers:{authorization:business}})).json();
+  assert.equal(session.workspace,null);assert.equal(session.capabilities.automatedSupport,true);
+  for(const name of ['draftSync','sending','liveVoice','mailboxOAuth'])assert.equal(session.capabilities[name],false,name);
+  const unrelated=await(await fetch(base+'/api/auto-email/session',{headers:{authorization:stranger}})).json();
+  assert.equal(unrelated.capabilities.automatedSupport,false);assert.equal(unrelated.workspace,null);
+});

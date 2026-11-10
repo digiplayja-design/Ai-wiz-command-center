@@ -2,6 +2,7 @@ import {sendingReady} from '../auto_email/outbox-security.mjs';
 import {mailboxReady} from '../auto_email/mailbox-security.mjs';
 import {autoEmailVoiceReady} from '../auto_email/voice.mjs';
 import {korlixAgentEmailNovaBinding} from '../korlix_agent_email.mjs';
+import {parseSupportProfiles} from '../automated_support/config.mjs';
 
 const ACCOUNT_ROUTES = new Set(['signin', 'refresh', 'signout']);
 const AGENT = '[a-z][a-z0-9_]{0,95}';
@@ -25,6 +26,12 @@ export function autoEmailAuthAlias(req, res, next) {
 export function autoEmailAppRouteAllowed(req) {
   const method = String(req?.method || '').toUpperCase();
   const path = String(req?.originalUrl || req?.url || req?.path || '').split('?')[0];
+  // This API has its own server-enrolled owner/profile authorization. These
+  // exact routes do not grant access to the legacy sender or mailbox credentials.
+  if (method === 'GET' && ['/api/automated-support/profiles','/api/automated-support/cases'].includes(path)) return true;
+  if (method === 'PATCH' && /^\/api\/automated-support\/profiles\/[a-z0-9][a-z0-9_-]{0,63}$/.test(path)) return true;
+  if (['GET','PATCH'].includes(method) && new RegExp('^/api/automated-support/cases/' + UUID + '$','i').test(path)) return true;
+  if (method === 'POST' && new RegExp('^/api/automated-support/cases/' + UUID + '/(replies|process)$','i').test(path)) return true;
   if (method==='GET' && (path==='/api/auto-email/outbox'||new RegExp(`^/api/auto-email/outbox/${UUID}$`,'i').test(path))) return true;
   if (method==='POST' && ['/api/auto-email/outbox/review','/api/auto-email/outbox/submit'].includes(path)) return true;
   if (method==='GET' && (/^\/api\/auto-email\/mailboxes$/.test(path)||new RegExp(`^/api/auto-email/mailboxes/flows/${UUID}$`,'i').test(path))) return true;
@@ -36,8 +43,8 @@ export function autoEmailAppRouteAllowed(req) {
   }
   if (method === 'POST' && ['/api/auto-email/voice/session','/api/auto-email/voice/usage','/api/auto-email/voice/end'].includes(path)) return true;
   if (method === 'POST' && ['/api/auto-email/auth/refresh', '/api/auto-email/auth/signout'].includes(path)) return true;
-  // This pilot can save correspondence, but cannot send, approve messages,
-  // change consent, alter settings, or activate any sending rule.
+  // Legacy Agent Email remains limited to saving drafts. Support permissions
+  // above are separately checked against enrolled profiles on the server.
   if (method === 'POST') return new RegExp(`^/api/live-convo/agents/${AGENT}/email/drafts$`, 'i').test(path);
   if (method === 'PATCH') return new RegExp(`^/api/live-convo/agents/${AGENT}/email/drafts/${UUID}$`, 'i').test(path);
   return false;
@@ -56,10 +63,12 @@ export function registerAutoEmailAppRoutes(app, {requireUser, loadProfile, envir
       const profile = await loadProfile(user);
       const binding = korlixAgentEmailNovaBinding(environment);
       const ownsWorkspace = binding.configured && binding.ownerUid.toLowerCase() === user.id.toLowerCase();
+      let ownsSupport = false;
+      try {ownsSupport = parseSupportProfiles(environment).some(row => row.ownerUid === user.id.toLowerCase());} catch {}
       res.json({ok: true, user: {id: user.id, email: user.email},
         profile: {name: String(profile?.full_name || profile?.display_name || '').slice(0,160), tier: profile?.tier || 'basic'},
         workspace: ownsWorkspace ? {agentId: binding.agentId} : null,
-        capabilities: {draftSync: ownsWorkspace, sending: ownsWorkspace && sendingReady(environment), liveVoice: ownsWorkspace && autoEmailVoiceReady(environment), mailboxOAuth: ownsWorkspace && mailboxReady(environment)}});
+        capabilities: {draftSync: ownsWorkspace, sending: ownsWorkspace && sendingReady(environment), liveVoice: ownsWorkspace && autoEmailVoiceReady(environment), mailboxOAuth: ownsWorkspace && mailboxReady(environment), automatedSupport:ownsSupport}});
     } catch (error) {
       const status = [401,403].includes(error?.statusCode) ? error.statusCode : 503;
       res.status(status).json({error: status === 503 ? 'Your email workspace could not be loaded. Please retry.' : 'Sign in to your KORLIX account to continue.'});
