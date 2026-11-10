@@ -2,6 +2,25 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:http/http.dart' as http;
+import 'package:package_info_plus/package_info_plus.dart';
+
+Future<String?>? _installedVersion;
+
+// Package metadata is best-effort and cached. Missing platform services must
+// never prevent a user from submitting a report or produce a guessed version.
+Future<String?> _reportVersion() => _installedVersion ??= (() async {
+  try {
+    final info = await PackageInfo.fromPlatform().timeout(
+      const Duration(seconds: 1),
+    );
+    if (info.version.trim().isEmpty) return null;
+    return info.buildNumber.trim().isEmpty
+        ? info.version
+        : '${info.version}+${info.buildNumber}';
+  } catch (_) {
+    return null;
+  }
+})();
 
 class KorlixAiReportException implements Exception {
   const KorlixAiReportException(this.message);
@@ -25,6 +44,7 @@ Future<String> submitKorlixAiReport({
   String? videoId,
   String? language,
   String? platform,
+  String? appVersion,
   String contentType = 'ai_output',
   String appArea = 'saved_history',
   http.Client? client,
@@ -33,6 +53,7 @@ Future<String> submitKorlixAiReport({
   final ownedClient = client == null;
   final transport = client ?? http.Client();
   try {
+    final version = appVersion ?? await _reportVersion();
     final body = jsonEncode({
       'contentType': contentType,
       'appArea': appArea,
@@ -45,6 +66,7 @@ Future<String> submitKorlixAiReport({
       'videoId': ?videoId,
       'language': ?language,
       'platform': ?platform,
+      'appVersion': ?version,
     });
     if (utf8.encode(body).length > 28 * 1024) {
       throw const KorlixAiReportException(
