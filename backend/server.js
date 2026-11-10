@@ -3,6 +3,7 @@ import {createBrainBilling} from './brain_voice/billing/routes.mjs';
 import {checkBrainModelAccess} from './brain_voice/model_access.mjs';
 import {createBrainVoice, brainSpeechConfig, isBrainVoice, brainProfile, BRAIN_PROFILES, BRAIN_MODEL, BRAIN_EFFORT, BRAIN_PROTOCOL} from './brain_voice/core.mjs';
 import {streamBrainTurn} from './brain_voice/stream.mjs';
+import {registerBrainProjection} from './brain_projection/routes.mjs';
 import {registerMagicApple} from './magic_camera/apple.mjs';
 import {registerMagicBilling, MAGIC_PACKAGE} from './magic_camera/billing.mjs';
 import {magicAuthAlias} from './magic_camera/auth.mjs';
@@ -269,6 +270,7 @@ const port = process.env.PORT || 8787;
 
 app.use(cors());
 app.use('/api/onboarding/events', express.json({limit: '8kb'}));
+app.use('/api/brain-projection', express.json({limit: '8kb'}));
 app.use(express.json({
   limit: "5mb",
   verify: (req, _res, buffer) => {
@@ -9527,6 +9529,22 @@ const brainVoice = createBrainVoice({
   loadRuntime: userId => korlixLiveConvoBuildAgentRuntimeV1({req: {headers: {}}, user: {id: userId}, agentId: 'general', characterName: 'Rici', language: 'English', brainVoice: true, memoryOptions: {maximumItems: 100, maximumCharacters: 48000}}),
   saveMemory: ({userId, body}) => korlixAgentSaveMemoryV1({client: korlixLiveConvoAgentPersistenceClientV1(), userId, agentId: 'general', body}),
   reportUsage: ({userId, body, limits}) => korlixRecordVoiceUsage({user: {id: userId}, body, limits, entitlement: korlixLiveConvoBuild131EntitlementForUser({id: userId})}),
+});
+// Projection research reuses the existing typed-search allowance. It does not
+// reserve, end, or charge Brain voice sessions; maps/camera controls are separate.
+const projectionSearchCredits = calculateCredits({liveSearchNeeded: true, fileRequested: false});
+registerBrainProjection(app, {requireUser, environment: process.env, answerCredits: projectionSearchCredits,
+  clientFactory: () => new OpenAI({apiKey: process.env.OPENAI_API_KEY, maxRetries: 0}),
+  access: async user => {
+    const profile = await getOrCreateProfile(user), usageCounter = await getOrCreateUsageCounter(user.id);
+    if (!profile || !usageCounter) throw Object.assign(new Error('Search allowance unavailable'), {statusCode: 503});
+    return checkUsageAllowed({profile, usageCounter, creditsNeeded: projectionSearchCredits});
+  },
+  charge: async user => {
+    const usageCounter = await getOrCreateUsageCounter(user.id);
+    if (!usageCounter) throw Object.assign(new Error('Search allowance unavailable'), {statusCode: 503});
+    await incrementUsage({usageCounter, liveSearchUsed: true, fileRequested: false, creditsNeeded: projectionSearchCredits});
+  },
 });
 app.get('/api/brain-voice/health', (_req, res) => res.json({ok: true,
   enabled: korlixLiveConvoEnabledV1(), protocol: BRAIN_PROTOCOL,
