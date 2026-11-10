@@ -9,6 +9,7 @@ import {magicAuthAlias} from './magic_camera/auth.mjs';
 import {registerMagicCamera} from './magic_camera/routes.mjs';
 import {renderer as magicRenderer} from './magic_camera/core.mjs';
 import {registerAutoEmailOutboxRoutes} from './auto_email/outbox.mjs';
+import {createAutomatedSupportRuntime} from './automated_support/runtime.mjs';
 import {registerAutoEmailMailboxRoutes} from './auto_email/mailboxes.mjs';
 import {createAutoEmailVoiceBridge, autoEmailVoiceInstructions, autoEmailVoiceTools} from './auto_email/voice.mjs';
 import {autoEmailAuthAlias, registerAutoEmailAppRoutes} from './security/auto_email_app.mjs';
@@ -276,6 +277,9 @@ app.use(express.json({
     if (url.startsWith("/api/agent-email/resend/webhook")) {
       req.korlixAgentEmailRawBody = Buffer.from(buffer);
     }
+    if (url.split("?",1)[0] === "/api/automated-support/resend/webhook") {
+      req.korlixSupportRawBody = Buffer.from(buffer);
+    }
     if (url.split("?",1)[0] === "/api/directory/billing/webhook") req.korlixDirectoryRawBody = Buffer.from(buffer);
     if (url.split("?",1)[0] === "/api/billing/web/webhook") req.korlixWebBillingRawBody = Buffer.from(buffer);
     if (url.split("?",1)[0] === "/api/scheduling/payments/webhook") req.korlixSchedulingRawBody = Buffer.from(buffer);
@@ -340,6 +344,7 @@ const supabaseAdmin =
     : null;
 
 registerAutoEmailMailboxRoutes(app,{requireUser,database:supabaseAdmin});
+const automatedSupport = createAutomatedSupportRuntime({app,requireUser,database:supabaseAdmin});
 const brainBilling = createBrainBilling({database:supabaseAdmin,requireUser});
 brainBilling.register(app);
 registerAutoEmailOutboxRoutes(app,{requireUser,database:supabaseAdmin,loadAgentProfile:korlixAgentLoadProfileV1});
@@ -10908,6 +10913,9 @@ app.post(
       if (imageEvidence) report.imageEvidence = reportImageMetadata(imageEvidence);
       // The report and image are inserted atomically before acknowledgement/email.
       await korlixReportDeliveryV2Persist(report, imageEvidence);
+      // The database trigger has already queued this report durably. Wake the
+      // isolated worker without making support delivery part of report success.
+      void automatedSupport.wake();
       console.log("[KORLIX_AI_OUTPUT_REPORT_RECEIVED]", report.id);
       const supportNotification = await korlixReportDeliveryV2SendEmail(report, imageEvidence);
       await markAiReportNotification(supabaseAdmin, report.id, supportNotification.delivered);

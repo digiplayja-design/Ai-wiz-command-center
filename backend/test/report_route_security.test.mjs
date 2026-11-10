@@ -32,6 +32,7 @@ function fixture({authenticated=true,throws=false,delivered=true}={}) {
     korlixReportDeliveryV2Persist:async (report,image)=>{persisted.push(report);images.push(image);if(throws)throw Object.assign(new Error('secret database diagnostic'),{statusCode:503});return {saved:true};},
     korlixReportDeliveryV2SendEmail:async report=>{emailed.push(report);return {delivered,response:{secret:'provider-internals'}};},
     supabaseAdmin:{},markAiReportNotification:async()=>true,
+    automatedSupport:{wake:async()=>{}},
     console:{log:(...args)=>logs.push(args),error:(...args)=>logs.push(args)},
   });
   return {persisted,emailed,logs,reports,images,async call(path,body={}){

@@ -42,3 +42,13 @@ test('invalid or oversized submissions do not consume a legitimate user allowanc
   assert.throws(()=>guard({user:actor,req:req({details:'x'.repeat(40000)})}),{statusCode:413});
   assert.equal(guard({user:actor,req:req({})}).userId,actor.id);
 });
+
+test('email verification metadata comes only from authenticated email confirmation',()=>{
+  const body={userEmailVerified:true,emailVerified:true,email_confirmed_at:'2026-11-01T00:00:00Z',confirmed_at:'2026-11-01T00:00:00Z'};
+  const make=user=>createReportSubmissionGuard()({user,req:req(body)});
+  assert.equal(make(actor).userEmailVerified,false);
+  assert.equal(make({...actor,email_confirmed_at:'2026-11-01T00:00:00Z'}).userEmailVerified,true);
+  assert.equal(make({...actor,email_confirmed_at:null,phone_confirmed_at:'2026-11-01T00:00:00Z',confirmed_at:'2026-11-01T00:00:00Z'}).userEmailVerified,false);
+  const report=make(actor);
+  assert.equal(report.emailVerified,undefined);assert.equal(report.email_confirmed_at,undefined);
+});

@@ -39,6 +39,7 @@ export function createReportSubmissionGuard({now=Date.now,idFactory=randomUUID,w
     const report={
       id:reportId,reportId,createdAt:new Date(timestamp).toISOString(),
       userId:user.id,userEmail:line(user.email,320),
+      userEmailVerified:Boolean(user.email_confirmed_at),
       contentType:line(body.contentType||body.type||'ai_output',100),
       reason:line(body.reason||'Other',200),
       details:text(body.details||body.message||body.notes),
