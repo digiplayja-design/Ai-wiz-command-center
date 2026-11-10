@@ -9,7 +9,7 @@ import {createAutomatedSupportStore} from '../automated_support/store.mjs';
 import {createAutomatedSupportService, supportAcknowledgment} from '../automated_support/service.mjs';
 import {registerAutomatedSupportRoutes} from '../automated_support/routes.mjs';
 
-const migration = readFileSync(new URL('../../supabase/migrations/20261110022913_automated_support_cases.sql', import.meta.url), 'utf8');
+const migration = readFileSync(new URL('../../supabase/migrations/20261110025449_automated_support_cases.sql', import.meta.url), 'utf8');
 const owner = randomUUID(), other = randomUUID(), reporter = randomUUID();
 const initialTime = '2026-11-10T03:00:00.000Z';
 let db, clock, store, service, profiles, environment, sent, sendError;
@@ -58,7 +58,10 @@ async function automatic() { await service.setProfileMode({ownerUid: owner, prof
 async function report(fields = {}) {
   const id = `korlix_report_${randomUUID()}`;
   const data = {id, reportId: id, userId: reporter, userEmail: 'customer@example.test', createdAt: new Date(clock).toISOString(), platform: 'android', appArea: 'app_wide_ai_reporting', reason: 'Other', details: 'not loading or can be found', ...fields};
-  await db.query('insert into korlix_ai_output_reports(id,user_id,report) values($1,$2,$3)', [id, reporter, data]); return data;
+  await db.query('insert into korlix_ai_output_reports(id,user_id,report) values($1,$2,$3)', [id, reporter, data]);
+  // The trigger uses database time; keep fixture scheduling on the test clock.
+  await db.query('update korlix_support_intake set created_at=$2,next_attempt_at=$2 where report_id=$1', [id, new Date(clock).toISOString()]);
+  return data;
 }
 const resolveReporter = async input => ({id: input.userId, email: input.userEmail, emailConfirmed: true});
 async function intake(fields) { const data = await report(fields); await service.drainIntake({resolveReporter}); return (await service.listCases({ownerUid: owner})).cases.find(row => row.reportId === data.id); }

@@ -69,7 +69,7 @@ Provider receiving uses a separate signed-webhook route. Ordinary authenticated 
 
 ## Durable delivery and database rules
 
-Migration: `20261110022913_automated_support_cases.sql`, created using Supabase CLI 3.1.0. This migration is prepared for deployment and was not applied to production as part of authoring.
+Migration: `20261110025449_automated_support_cases.sql`. The repository filename matches the version recorded in the production Supabase migration history; the SQL contents are unchanged from the reviewed migration.
 
 The four support tables have RLS enabled, no anon/authenticated policies or grants, and service-only function execution. Every function is `SECURITY INVOKER` with a fixed search path. The backend derives account identity from authentication; user-editable metadata is never authorization.
 
@@ -83,4 +83,13 @@ The reporting intake worker has expiring claims and may retry account lookup or 
 
 `node --test backend/test/automated_support.test.mjs` executes the migration in PGlite and tests the production service/store/routes against real SQL. Coverage includes service-only privileges, owner isolation, trusted recipient binding, duplicate intake/sends, rolling quota, uncertain outcomes, stale claims, sender changes, historical-report exclusion, manual replies, case takeover, global pause, inbound replay, HTTP override rejection and reviewed-template behavior. Email delivery is injected; no test sends mail.
 
-Live activation still requires deploying the migration and application changes, enrolling the actual verified identities, configuring and verifying receiving delivery, and testing with authorized test accounts before enabling automatic mode.
+Automatic sending remains paused. Activation still requires completing Resend sender and inbound receiving verification, recording the verified identities, and testing with authorized test accounts before enabling automatic mode.
+
+
+## Deployment record — November 10, 2026
+
+- Supabase recorded the applied migration as version `20261110025449`, name `automated_support_cases`.
+- Backend commit `094e7ac9f81c1118a55f46cd9ecf479782a08b6b` deployed successfully in Render deployment `dep-dbp8f3bm8hqs73d5p8o0`.
+- Profile `korlix-ai`, owned by the account `support@korlixdeveloper.com`, is paused. No support emails were sent during this rollout.
+- Resend sender and inbound receiving verification remain pending.
+- Frontend changes are tracked in the isolated [PR #50](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/50).
