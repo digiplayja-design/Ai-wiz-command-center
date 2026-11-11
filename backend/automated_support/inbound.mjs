@@ -2,6 +2,8 @@ import {parseFragment} from 'parse5';
 import {verifyKorlixAgentEmailResendWebhook} from '../korlix_agent_email_delivery.mjs';
 import {validateTransactionalEmailAddress} from '../fieldproof/email_provider.mjs';
 import {matchSupportReplyAddress} from './provider.mjs';
+import {AutomatedSupportError} from './config.mjs';
+import {supportWebhookSecret} from './secrets.mjs';
 
 export const SUPPORT_WEBHOOK_PATH = '/api/automated-support/resend/webhook';
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -65,29 +67,23 @@ export function supportInboundContent(email) {
   return {text,attachments};
 }
 
-export function registerAutomatedSupportInbound(app, {
-  service, provider, profiles, environment = process.env, now = Date.now,
+// Internal callback for events already verified against the exact raw provider
+// request. HTTP callers reach this only through one of the signed handlers.
+export function createAutomatedSupportInboundProcessor({
+  service, provider, profiles, environment = process.env,
 }) {
-  app.post(SUPPORT_WEBHOOK_PATH, async (req,res) => {
-    res.set('Cache-Control','no-store');
+  return async function processVerifiedSupportEvent(event) {
     try {
-      if (req.originalUrl?.includes('?')) return res.status(400).json({ok:false,error:'Invalid support event.'});
-      const {event} = verifyKorlixAgentEmailResendWebhook({
-        rawBody:req.korlixSupportRawBody,
-        headers:req.headers,
-        secret:environment.KORLIX_SUPPORT_WEBHOOK_SECRET,
-        now,
-      });
-      if (event?.type !== 'email.received') return res.json({ok:true,ignored:true});
+      if (event?.type !== 'email.received') return {ignored:true};
       const emailId = event.data?.email_id;
-      if (!UUID.test(emailId || '')) return res.status(400).json({ok:false,error:'Invalid support event.'});
+      if (!UUID.test(emailId || '')) throw new AutomatedSupportError('Invalid support event.',400,'support_inbound_invalid');
       const email = await provider.receive(emailId);
       // Provider authentication is distinct from webhook authentication. Never
       // let a failed sender check modify a customer's case.
       if (email.authentication?.dmarc === 'fail' || email.authentication?.dkim === 'fail' && email.authentication?.spf === 'fail') {
-        return res.json({ok:true,ignored:true});
+        return {ignored:true};
       }
-      if (isAutomated(email,profiles)) return res.json({ok:true,ignored:true});
+      if (isAutomated(email,profiles)) return {ignored:true};
       const recipients = [...new Set([
         ...(Array.isArray(email.to) ? email.to : []),
         ...(Array.isArray(email.received_for) ? email.received_for : []),
@@ -96,11 +92,11 @@ export function registerAutomatedSupportInbound(app, {
       const unique = new Map(matches.map(match => [match.profile.id + ':' + match.caseId,match]));
       // One email addressed to several cases is ambiguous; never copy it into
       // multiple businesses' support histories.
-      if (unique.size !== 1) return res.json({ok:true,ignored:true});
+      if (unique.size !== 1) return {ignored:true};
       const {profile,caseId} = [...unique.values()][0];
       const fromEmail = mailbox(email.from)?.toLowerCase();
       const content = supportInboundContent(email);
-      if (!fromEmail || !content.text) return res.json({ok:true,ignored:true});
+      if (!fromEmail || !content.text) return {ignored:true};
       const headers = headersOf(email.headers);
       await service.receiveReply({
         profileId:profile.id,caseId,fromEmail,
@@ -110,11 +106,36 @@ export function registerAutomatedSupportInbound(app, {
         inReplyTo:headers['in-reply-to'] || null,
         senderAuthenticated:email.authentication?.dmarc === 'pass' || email.authentication?.dkim === 'pass',
       });
-      return res.json({ok:true});
+      return {ignored:false};
     } catch (error) {
       // Permanent ownership/format rejection is acknowledged without revealing
       // whether a case exists. Fetch/storage failures retain provider retries.
-      if ([403,404,409,422].includes(error?.statusCode)) return res.json({ok:true,ignored:true});
+      if ([403,404,409,422].includes(error?.statusCode)) return {ignored:true};
+      const status = [400,401].includes(error?.statusCode) ? error.statusCode : 503;
+      throw new AutomatedSupportError(status === 503
+        ? 'Support replies are temporarily unavailable. Please retry.'
+        : 'The support event could not be verified.',status,'support_inbound_unavailable');
+    }
+  };
+}
+
+export function registerAutomatedSupportInbound(app, {
+  service, provider, profiles, environment = process.env, now = Date.now,
+  processVerifiedEvent = createAutomatedSupportInboundProcessor({service,provider,profiles,environment}),
+}) {
+  app.post(SUPPORT_WEBHOOK_PATH, async (req,res) => {
+    res.set('Cache-Control','no-store');
+    try {
+      if (req.originalUrl?.includes('?')) return res.status(400).json({ok:false,error:'Invalid support event.'});
+      const {event} = verifyKorlixAgentEmailResendWebhook({
+        rawBody:req.korlixSupportRawBody,
+        headers:req.headers,
+        secret:supportWebhookSecret(environment),
+        now,
+      });
+      const result = await processVerifiedEvent(event);
+      return res.json(result.ignored ? {ok:true,ignored:true} : {ok:true});
+    } catch (error) {
       const status = [400,401].includes(error?.statusCode) ? error.statusCode : 503;
       return res.status(status).json({ok:false,error:status === 503
         ? 'Support replies are temporarily unavailable. Please retry.'

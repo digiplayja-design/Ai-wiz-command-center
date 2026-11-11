@@ -3,7 +3,8 @@ import {createAutomatedSupportStore} from './store.mjs';
 import {createAutomatedSupportService} from './service.mjs';
 import {registerAutomatedSupportRoutes} from './routes.mjs';
 import {createAutomatedSupportResendProvider} from './provider.mjs';
-import {registerAutomatedSupportInbound} from './inbound.mjs';
+import {createAutomatedSupportInboundProcessor,registerAutomatedSupportInbound} from './inbound.mjs';
+import {supportLegacyWebhookEnabled} from './secrets.mjs';
 
 export function createAutomatedSupportRuntime({
   app, database, requireUser, environment = process.env, fetcher = globalThis.fetch,
@@ -23,9 +24,10 @@ export function createAutomatedSupportRuntime({
   const store = injectedStore || createAutomatedSupportStore(database);
   const provider = injectedProvider || createAutomatedSupportResendProvider({environment,fetcher});
   const service = createAutomatedSupportService({store,profiles:config.profiles,deliver:provider.send,now,environment});
+  const processVerifiedResendEmail = createAutomatedSupportInboundProcessor({service,provider,profiles:config.profiles,environment});
   // Inbound events are authenticated by their provider signature. Register this
   // exact endpoint before the authenticated owner API's namespace middleware.
-  registerAutomatedSupportInbound(app,{service,provider,profiles:config.profiles,environment,now});
+  registerAutomatedSupportInbound(app,{service,provider,profiles:config.profiles,environment,now,processVerifiedEvent:processVerifiedResendEmail});
   registerAutomatedSupportRoutes(app,{requireUser,service});
 
   const resolveReporter = injectedResolver || (async report => {
@@ -64,5 +66,6 @@ export function createAutomatedSupportRuntime({
     timer = setInterval(() => {void run();},Math.max(1000,intervalMilliseconds));
     timer.unref?.();
   }
-  return {service,configured:config.profiles.length>0,wake:run,close:()=>{closed=true;clearInterval(timer);}};
+  return {service,configured:config.profiles.length>0,wake:run,close:()=>{closed=true;clearInterval(timer);},
+    processVerifiedResendEmail:supportLegacyWebhookEnabled(environment) ? processVerifiedResendEmail : undefined};
 }

@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {supportWebhookConfigured, supportThreadSecret} from './secrets.mjs';
 
 export const SUPPORT_STATES = Object.freeze(['new', 'waiting_for_customer', 'needs_review', 'resolved']);
 export const SUPPORT_MODES = Object.freeze(['paused', 'draft', 'automatic']);
@@ -68,8 +69,8 @@ export function supportReadiness(profile, environment = process.env) {
   if (String(environment.KORLIX_AUTOMATED_SUPPORT_PAUSED).toLowerCase() !== 'false') setupReasons.push('Support sending is paused.');
   if (truth(environment.KORLIX_AGENT_EMAIL_EMERGENCY_PAUSE)) setupReasons.push('The email emergency pause is active.');
   if (typeof environment.RESEND_API_KEY !== 'string' || !environment.RESEND_API_KEY || environment.RESEND_API_KEY.length > 4096 || /\s/.test(environment.RESEND_API_KEY)) setupReasons.push('The email provider is not configured.');
-  if (!String(environment.KORLIX_SUPPORT_WEBHOOK_SECRET || '').startsWith('whsec_')) setupReasons.push('Incoming email verification is not configured.');
-  if (typeof environment.KORLIX_SUPPORT_THREAD_SECRET !== 'string' || environment.KORLIX_SUPPORT_THREAD_SECRET.length < 32 || environment.KORLIX_SUPPORT_THREAD_SECRET.length > 4096) setupReasons.push('Support conversation signing is not configured.');
+  if (!supportWebhookConfigured(environment)) setupReasons.push('Incoming email verification is not configured.');
+  if (!supportThreadSecret(environment)) setupReasons.push('Support conversation signing is not configured.');
   if (!profile.senderVerified) setupReasons.push('The sending address needs verification.');
   if (!profile.receivingVerified) setupReasons.push('Reply delivery needs verification.');
   if (profile.replyTo.split('@')[0].length > 22) setupReasons.push('Use a shorter reply address to support signed conversation routing.');
