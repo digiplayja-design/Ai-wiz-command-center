@@ -145,3 +145,29 @@ The bridge regression suite is `node --test backend/test/automated_support_bridg
 - Global sending remains disabled with `KORLIX_AUTOMATED_SUPPORT_ENABLED=false` and `KORLIX_AUTOMATED_SUPPORT_PAUSED=true`. Profile `korlix-ai` remains in Paused mode.
 - A synthetic report traversed the normal authenticated, email-confirmed intake path and created case `0493c4ad-bb21-41b5-bfdd-8ad1db576d79`. Its initial acknowledgment stayed pending while paused. The synthetic case and report were then closed with an explicit no-send note after the owner clarified the intended address. This verifies intake and case creation, not outbound or inbound email delivery. Final database counts were zero Sent, zero Sending and zero Uncertain messages.
 - The proposed real-email test was held after the owner clarified the intended support address. No support emails have been sent. A separate, explicitly agreed verified test inbox is still needed for the real round trip, because the support sender cannot also be its own acknowledgment recipient. Automatic support remains off until that verification is complete.
+
+## Controlled outbound test — November 11, 2026, 04:56 UTC
+
+After the no-send checkpoint above, the owner explicitly approved one bounded manual connection test from `support@korlixdeveloper.com` to `korlix@korlixdeveloper.com`. Automatic mode was never enabled. The profile was temporarily in Draft mode, the test case had `automation_paused=true`, the test cap allowed one message, and its pending automatic acknowledgment was cancelled before the approved reply was sent.
+
+| Record | Verified value |
+| --- | --- |
+| Case ID | `304b40a5-48e7-49a7-99e1-13222a7b7231` |
+| Support message ID | `28d1163a-b3ea-42d4-b1ff-29a231f160fe` |
+| Resend message ID | `01a1c8f6-edb3-7eec-8f45-3f1c5a110d6b` |
+| Sent timestamp | `2026-11-11T04:56:28.374Z` |
+| Provider observation | Resend UI marked the message **Delivered**, shown as November 10 at 11:56 PM EST. |
+
+The exact approved message body was:
+
+> This is a controlled KORLIX Support connection test. Please reply to this email from korlix@korlixdeveloper.com with “KORLIX support test received” so we can verify that your reply returns to the correct support case.
+
+Immediately after the one send, the profile returned to Paused, `KORLIX_AUTOMATED_SUPPORT_ENABLED=false`, `KORLIX_AUTOMATED_SUPPORT_PAUSED=true`, `receivingVerified=false`, and the normal `dailyCap=20`. No thread secret was regenerated. The restored enrollment fingerprint was `0268e321d4de41a732462797d63e7a9126f397b6af23545cfd855690c4b670e4`.
+
+The pause-restoration deployment `dep-dbpvb80n74is7397e910` used commit `b8d982196e90558a21ae1e9b655ca7566b3f82c3`, was created at `2026-11-11T04:57:04Z`, and became live at `2026-11-11T04:57:39.928Z`. The temporary test-enabled deployment `dep-dbpv93on74is739774m0` was deactivated. No duplicate deployment was triggered.
+
+An independent database check at 04:59:46 UTC confirmed one Sent message, zero Pending, zero Sending, zero Uncertain, and `automatic_since=null`. A further check at 05:00:42 UTC confirmed those same outbound counts, zero inbound replies, the case in `waiting_for_customer`, and the profile still Paused. The earlier proposed Gmail test remains cancelled and was never sent.
+
+Outbound provider delivery is verified. The actual inbound return to the support case is still unverified. The next step is for the owner to reply to the delivered message from the same `korlix@korlixdeveloper.com` mailbox with the requested test phrase, preserving its signed Reply-To address. The restored `receivingVerified=false` flag means the app will initially ignore case ingestion, even if Resend receives that reply.
+
+After the actual incoming message is verified in Resend, enroll `receivingVerified=true` while keeping `KORLIX_AUTOMATED_SUPPORT_ENABLED=false`, `KORLIX_AUTOMATED_SUPPORT_PAUSED=true`, and the profile Paused. Once that configuration deployment is stable, replay only the exact authenticated `email.received` event through Resend's existing retry control. Confirm that it attaches to case `304b40a5-48e7-49a7-99e1-13222a7b7231` and that a repeated delivery is deduplicated. This pending verification sends no further outbound email. Receipt in Resend and attachment to the original case must both be checked before declaring the round trip complete. Automatic support remains off.
