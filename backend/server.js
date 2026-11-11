@@ -9440,7 +9440,9 @@ app.use("/api/live-convo/session", async (req, res, next) => {
     const profile = await getOrCreateProfile(user);
     let result;
 
-    if (brainBilling.enabled() && brainProfile(req)?.protocol === 'rici-live-v1') {
+    // Respect the existing server-owned developer grant without minting minutes.
+    // Environment-only legacy access still uses the Brain ledger for Live.
+    if (brainBilling.enabled() && brainProfile(req)?.protocol === 'rici-live-v1' && !hasUnlimitedAccess(user)) {
       result = await brainBilling.reserve(req, user);
     } else if (entitlement.unlimited) {
       const limits = korlixLiveConvoBuild131LimitsForEntitlement(
@@ -9527,6 +9529,27 @@ app.use("/api/live-convo/session", async (req, res, next) => {
 });
 // KORLIX_LIVE_CONVO_BUILD129_LIMITS_END
 
+async function korlixRecordBrainVoiceUsage({userId, body, limits}) {
+  // Core turns retain an account ID, not a fresh authenticated user. Re-read
+  // the server-owned grant before each model response or memory save.
+  if (!supabaseAdmin) throw makeHttpError('Account access could not be verified. Please retry.', 503);
+  const {data: account, error} = await supabaseAdmin
+    .from('user_profiles')
+    .select('id,is_disabled,developer_access:korlix_developer_access(enabled)')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error) throw makeHttpError('Account access could not be verified. Please retry.', 503);
+  if (!account || account.id !== userId) throw makeHttpError('Your account access changed. Reconnect Rici.', 403);
+  assertAccountEnabled(account);
+  const user = authenticatedDeveloperUser({id: userId}, account);
+  const entitlement = korlixLiveConvoBuild131EntitlementForUser(user);
+  // Cached session limits cannot keep a revoked unlimited entitlement alive
+  // or send its former unlimited budget into the ordinary allowance RPC.
+  if (limits?.tier === KORLIX_LIVE_CONVO_BUILD131_UNLIMITED_TIER && !entitlement.unlimited) {
+    throw makeHttpError('Your account access changed. Reconnect Rici.', 403);
+  }
+  return korlixRecordVoiceUsage({user, body, limits, entitlement});
+}
 
 // Brain+Voice Live answers directly in Realtime; Deep Think retains Sol Max.
 // Direct, user-authorized memory saves remain account-bound server operations.
@@ -9537,7 +9560,7 @@ const brainVoice = createBrainVoice({
   apiKey: () => korlixLiveConvoEnvStringV1('OPENAI_API_KEY'),
   loadRuntime: userId => korlixLiveConvoBuildAgentRuntimeV1({req: {headers: {}}, user: {id: userId}, agentId: 'general', characterName: 'Rici', language: 'English', brainVoice: true, memoryOptions: {maximumItems: 100, maximumCharacters: 48000}}),
   saveMemory: ({userId, body}) => korlixAgentSaveMemoryV1({client: korlixLiveConvoAgentPersistenceClientV1(), userId, agentId: 'general', body}),
-  reportUsage: ({userId, body, limits}) => korlixRecordVoiceUsage({user: {id: userId}, body, limits, entitlement: korlixLiveConvoBuild131EntitlementForUser({id: userId})}),
+  reportUsage: korlixRecordBrainVoiceUsage,
 });
 // Projection research reuses the existing typed-search allowance. It does not
 // reserve, end, or charge Brain voice sessions; maps/camera controls are separate.
