@@ -22,7 +22,7 @@ class BrainCameraPicker {
       final lost = await _picker.retrieveLostData();
       if (pendingOwner != owner || !isCurrent() || lost.isEmpty) return [];
       if (lost.exception != null) throw lost.exception!;
-      return _read(lost.files ?? []);
+      return await _read(lost.files ?? []);
     } finally {
       await prefs.remove(_pendingOwnerKey);
     }
@@ -55,7 +55,7 @@ class BrainCameraPicker {
       if (files.length > remaining) {
         throw const BrainCameraAskException('Use up to three photos in one question.');
       }
-      return _read(files);
+      return await _read(files);
     } finally {
       await prefs.remove(_pendingOwnerKey);
     }

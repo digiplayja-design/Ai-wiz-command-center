@@ -222,7 +222,7 @@ class KorlixLiveConvoUsageGuard {
       }
       _reporting = null;
       try {
-        if (limit != null && !_ended) await _fireLimit(limit!);
+        if (limit != null && !_ended) await _fireLimit(limit);
       } catch (_) {
         // Media cleanup failures cannot leave an unhandled background future.
       } finally {

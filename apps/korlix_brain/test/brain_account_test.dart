@@ -317,9 +317,11 @@ void main() {
         uploads++;
         if (failure == 'timeout') throw TimeoutException('fixture timeout');
         if (failure == 'connection') throw http.ClientException('private server internals');
-        if (failure == 'bad_retention') return response({
-          'requiresApproval': true, 'autoSaved': false, 'sourceRetention': 'malformed',
-        });
+        if (failure == 'bad_retention') {
+          return response({
+            'requiresApproval': true, 'autoSaved': false, 'sourceRetention': 'malformed',
+          });
+        }
         return http.Response('<html>private server internals</html>', 503);
       }));
       addTearDown(api.dispose);

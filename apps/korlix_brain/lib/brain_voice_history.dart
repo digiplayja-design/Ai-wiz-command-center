@@ -23,7 +23,9 @@ class BrainVoiceHistory {
     var text = value.trim();
     if (text.length > 4000) text = text.substring(0, 4000);
     if (_entries.isNotEmpty && _entries.last['role'] == role &&
-        _entries.last['text'] == text) return;
+        _entries.last['text'] == text) {
+      return;
+    }
     _entries.add({'role': role, 'text': text});
     while (_entries.length > 16 ||
         _entries.fold<int>(0, (total, entry) => total + entry['text']!.length) > 12000) {
@@ -47,10 +49,14 @@ bool brainResumeAcknowledged(Map<String, dynamic> event, {
   required String text,
 }) {
   if (!const {'conversation.item.added', 'conversation.item.done',
-    'conversation.item.created'}.contains(event['type'])) return false;
+    'conversation.item.created'}.contains(event['type'])) {
+    return false;
+  }
   final item = event['item'];
   if (item is! Map || item['id'] != id || item['type'] != 'message' ||
-      item['role'] != 'user' || item['status'] == 'incomplete') return false;
+      item['role'] != 'user' || item['status'] == 'incomplete') {
+    return false;
+  }
   final content = item['content'];
   return content is List && content.length == 1 && content.single is Map &&
       (content.single as Map)['type'] == 'input_text' &&

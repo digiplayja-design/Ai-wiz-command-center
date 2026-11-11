@@ -186,10 +186,12 @@ class _BrainDocumentScreenState extends State<BrainDocumentScreen> {
                   DropdownMenuItem(value: item, child: Text(item.label)),
               ],
               onChanged: _busy || _documents.hasPreview ? null : (value) {
-                if (value != null) setState(() {
-                  _destination = value;
-                  _documents.destination = value;
-                });
+                if (value != null) {
+                  setState(() {
+                    _destination = value;
+                    _documents.destination = value;
+                  });
+                }
               },
             ),
             const SizedBox(height: 12),

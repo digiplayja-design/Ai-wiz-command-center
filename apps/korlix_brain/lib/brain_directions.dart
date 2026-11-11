@@ -14,10 +14,14 @@ Uri? checkedBrainDirections(
   if (value is! String || value.length > 2048 ||
       !(const {'driving', 'walking', 'transit'}).contains(mode) ||
       destination.length < 2 || destination.length > 300 ||
-      RegExp(r'[\x00-\x1f\x7f]').hasMatch(destination)) return null;
+      RegExp(r'[\x00-\x1f\x7f]').hasMatch(destination)) {
+    return null;
+  }
   final uri = Uri.tryParse(value);
   if (uri == null || uri.scheme != 'https' || uri.userInfo.isNotEmpty ||
-      uri.hasFragment || (uri.hasPort && uri.port != 443)) return null;
+      uri.hasFragment || (uri.hasPort && uri.port != 443)) {
+    return null;
+  }
   final expected = apple
       ? {'destination': destination, 'mode': mode}
       : {'api': '1', 'destination': destination, 'travelmode': mode};
@@ -31,7 +35,9 @@ Uri? checkedBrainDirections(
   }
   if (uri.host != (apple ? 'maps.apple.com' : 'www.google.com') ||
       uri.path != (apple ? '/directions' : '/maps/dir/') ||
-      parameters.length != expected.length) return null;
+      parameters.length != expected.length) {
+    return null;
+  }
   for (final entry in expected.entries) {
     final values = parameters[entry.key];
     if (values == null || values.length != 1 || values.single != entry.value) {
@@ -97,8 +103,10 @@ class _BrainDirectionsScreenState extends State<BrainDirectionsScreen> {
         if (!_allowed) _error = 'Address routing is not enabled for this account.';
       });
     } catch (error) {
-      if (_current) setState(() => _error = error is BrainApiException
-          ? error.message : 'Address routing could not be checked. Please try again.');
+      if (_current) {
+        setState(() => _error = error is BrainApiException
+            ? error.message : 'Address routing could not be checked. Please try again.');
+      }
     } finally {
       if (mounted) setState(() => _checking = false);
     }
@@ -116,7 +124,7 @@ class _BrainDirectionsScreenState extends State<BrainDirectionsScreen> {
     try {
       final data = await widget.api.json('POST', '/api/brain-projection/directions',
           {'destination': destination, 'mode': mode});
-      if (!_current) return;
+      if (!mounted || !_current) return;
       final uri = checkedBrainDirections(data[apple ? 'appleMapsUrl' : 'googleMapsUrl'],
           destination: destination, mode: mode, apple: apple);
       if (uri == null || data['destination'] != destination ||
@@ -147,8 +155,10 @@ class _BrainDirectionsScreenState extends State<BrainDirectionsScreen> {
         throw const BrainApiException('Maps could not open. Try the other map app.');
       }
     } catch (error) {
-      if (_current) setState(() => _error = error is BrainApiException
-          ? error.message : 'Directions could not open. Please try again.');
+      if (_current) {
+        setState(() => _error = error is BrainApiException
+            ? error.message : 'Directions could not open. Please try again.');
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

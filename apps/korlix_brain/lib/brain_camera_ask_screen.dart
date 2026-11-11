@@ -189,7 +189,9 @@ class _BrainCameraAskScreenState extends State<BrainCameraAskScreen> {
   Future<void> _newPhotos() async {
     if (_busy || _picking || _expired) return;
     if (_turns.isNotEmpty && !await _confirm('Start with new photos?',
-        'This clears the photos and conversation on this screen. Copy or share any answer you want to keep.', 'New photos')) return;
+        'This clears the photos and conversation on this screen. Copy or share any answer you want to keep.', 'New photos')) {
+      return;
+    }
     if (!mounted) return;
     try {
       widget.client.guard();
@@ -205,7 +207,9 @@ class _BrainCameraAskScreenState extends State<BrainCameraAskScreen> {
     _confirmingExit = true;
     try {
       if (_busy && !await _confirm('Leave Camera Ask?',
-          'The answer may still finish in your KORLIX History. Leaving does not guarantee the request or its credit charge is canceled.', 'Leave')) return;
+          'The answer may still finish in your KORLIX History. Leaving does not guarantee the request or its credit charge is canceled.', 'Leave')) {
+        return;
+      }
       if (!mounted) return;
       setState(() => _allowExit = true);
       // Update the route's PopScope before retrying the blocked back action.

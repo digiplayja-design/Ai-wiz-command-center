@@ -37,7 +37,7 @@ void main() {
     var inFlight=0,maximum=0;
     final guard=KorlixLiveConvoUsageGuard(scheduleHeartbeat:false,reportUsage:(body)async{
       bodies.add(Map.from(body));inFlight++;if(inFlight>maximum)maximum=inFlight;
-      final result=blocked==null?okay():await blocked!.future;
+      final result=blocked==null?okay():await blocked.future;
       inFlight--;return result;
     });
     await guard.beginFromSessionResponse(session(),onLimitReached:(_)async{});
@@ -46,7 +46,7 @@ void main() {
     final two=guard.observeServerEvent(response('two'));
     final end=guard.end(reason:'user_paused');
     expect(bodies.length,2);expect(bodies.last['ended'],false);
-    final completion=blocked;blocked=null;completion!.complete(okay());
+    final completion=blocked;blocked=null;completion.complete(okay());
     await Future.wait([one,two,end]);
     expect(maximum,1);expect(bodies.length,3);
     expect(bodies.last['responseCount'],2);expect(bodies.last['totalTokens'],40);
