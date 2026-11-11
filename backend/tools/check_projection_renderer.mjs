@@ -120,10 +120,9 @@ function installCspEnforcementFixture() {
   style.id = 'unnonced-style-probe';
   style.textContent = '#style-element-probe{height:991px!important}';
   document.head.append(style);
-  const script = document.createElement('script');
-  script.id = 'unnonced-script-probe';
-  script.textContent = 'window.__projectionCspFixture.unauthorizedScriptExecuted = true;';
-  document.body.append(script);
+  // The unnonced script probe follows this bootstrap in the response HTML.
+  // It must be parser-inserted: strict-dynamic intentionally trusts scripts
+  // constructed by trusted code, so createElement would test a permitted case.
   requestAnimationFrame(() => {
     fixture.finalStyle = {padding: getComputedStyle(attributeProbe).paddingLeft, height: getComputedStyle(elementProbe).height};
     fixture.completed = true;
@@ -173,7 +172,7 @@ async function checkCspEnforcement(browser, origin, report, artifactDirectory, n
     assert.deepEqual(observed.finalStyle, {padding: '43px', height: '19px'}, 'An unnonced style element must not override the baseline.');
     assert.equal(observed.unnoncedStyle, true);
     assert.equal(observed.unnoncedScript, true);
-    assert.equal(observed.unauthorizedScriptExecuted, false, 'An unnonced inline script must not execute.');
+    assert.equal(observed.unauthorizedScriptExecuted, false, 'An unnonced parser-inserted inline script must not execute.');
     assert.deepEqual([...observed.violations].sort((a, b) => a.directive.localeCompare(b.directive)), [
       {directive: 'script-src-elem', blockedURI: 'inline', disposition: 'enforce'},
       {directive: 'style-src-elem', blockedURI: 'inline', disposition: 'enforce'},
@@ -187,7 +186,7 @@ async function checkCspEnforcement(browser, origin, report, artifactDirectory, n
     assert.deepEqual(result.pageErrors, []);
     assert.deepEqual(result.unexpectedRequests, [], 'The CSP fixture must not request any provider or external resource.');
     result.passed = true;
-    console.log('PASS synthetic CSP enforcement fixture: style attributes apply; unnonced style/script elements blocked; liveProviderVerified=false; forwarded external requests=0');
+    console.log('PASS synthetic CSP enforcement fixture: style attributes apply; unnonced style and parser-inserted inline script blocked; liveProviderVerified=false; forwarded external requests=0');
   } catch (error) {
     result.error = error.stack || error.message;
     result.observed = await page.evaluate(() => window.__projectionCspFixture).catch(() => null);
@@ -224,7 +223,8 @@ async function main() {
       </head><body><h1>Synthetic CSP enforcement fixture</h1>
       <p>No Google SDK, credentials, geographic imagery or live provider verification.</p>
       <div id="style-attribute-probe">Dynamic style attribute probe</div><div id="style-element-probe"></div>
-      <script nonce="${nonce}">${cspFixture}</script></body></html>`);
+      <script nonce="${nonce}">${cspFixture}</script>
+      <script id="unnonced-script-probe">window.__projectionCspFixture.unauthorizedScriptExecuted = true;</script></body></html>`);
   });
   app.get('/__projection_ci/host.html', (_req, res) => res.type('html').send(`<!doctype html>
     <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
