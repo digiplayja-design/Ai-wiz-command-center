@@ -40,6 +40,10 @@ The positive view observes the production loader and real map events. It records
 
 Every camera command clears the visual checkboxes. A later nonsteady event invalidates the positive observation until the scene settles again. Animation-end events are diagnostic only, because reduced-motion or zero-duration camera changes may not produce one.
 
+Camera availability is separate from a successful observation. A ready, currently steady scene with no map, loader, page or provider errors can accept camera commands even when a CSP event has been recorded. Visual checkboxes become available after **Fly to landmark** under that same interaction condition. A CSP event continues to prevent `POSITIVE_OBSERVATION_COMPLETE`; enabling camera testing never clears or waives that event. The page explains both the control state and any pending policy review.
+
+Evidence version 2 includes up to eight distinct CSP event summaries. Effective directives, dispositions, and blocked/source resource categories are fixed labels, sanitized both when recorded and when the parent receives them. No blocked/source URL, hostname, path, query, fragment, policy text, nonce, referrer or code sample is exported. The aggregate count remains recorded separately. Actual CSP headers and the production renderer assets are unchanged.
+
 ## Deliberate no-referrer check
 
 Open `/no-referrer`, then press **Load test map**. Both the negative frame's HTTP header and meta policy are `no-referrer`. A clearly isolated test observer additionally overrides the exact Google SDK loader script's explicit `referrerPolicy` immediately before `head.append`/`appendChild`; otherwise the unchanged production loader would override the document policy. The positive view never changes this property. The observer preserves native insertion behavior and does not forge an allowed referrer.

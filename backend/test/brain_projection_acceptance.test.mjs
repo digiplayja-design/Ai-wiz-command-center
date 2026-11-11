@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 import {request as httpRequest} from 'node:http';
 import {createAcceptanceServer, acceptanceMapPolicy, acceptancePort} from '../brain_projection/acceptance/server.mjs';
 import {observeLoader} from '../brain_projection/acceptance/frame.mjs';
-import {classifyObservation, sanitizeEvidence, providerErrorCode} from '../brain_projection/acceptance/evidence.mjs';
+import {cameraControlsReady, classifyObservation, sanitizeEvidence, providerErrorCode, summarizeCspViolation} from '../brain_projection/acceptance/evidence.mjs';
 import {rendererPolicy} from '../brain_projection/renderer.mjs';
 
 const candidate = 'acceptance-browser-fixture-not-a-real-key';
@@ -139,6 +139,100 @@ test('positive evidence requires current steady, exact loader contract and indep
     ...['mapError', 'loaderError', 'pageError', 'cspViolations'].map(key => r => { r.sdk[key] = true; }),
     r => { r.sdk.providerErrorCodes = ['InvalidKeyMapError']; },
   ]) { const value = report(); mutate(value); assert.equal(classifyObservation(value, false), 'VISUAL_OR_SDK_REVIEW_PENDING'); }
+});
+
+test('the real iPad readiness case permits camera checks while one CSP violation keeps acceptance pending', () => {
+  const value = report();
+  value.cameraCommands = [];
+  Object.assign(value.sdk, {sdkVersion: '3.65.14a', steady: true, everSteady: true, steadyEvents: 3,
+    mapError: false, loaderError: false, pageError: false, cspViolations: 1, providerErrorCodes: []});
+  value.tester = {imageryAndControlsConfirmed: false, attributionAndLinksConfirmed: false};
+  assert.equal(cameraControlsReady(value), true);
+  assert.equal(classifyObservation(value, false), 'VISUAL_OR_SDK_REVIEW_PENDING');
+
+  // Camera and visual evidence can be gathered, but cannot waive a CSP violation.
+  value.cameraCommands.push('flyTo');
+  value.tester.imageryAndControlsConfirmed = true;
+  value.tester.attributionAndLinksConfirmed = true;
+  assert.equal(cameraControlsReady(value), true);
+  assert.equal(classifyObservation(value, false), 'VISUAL_OR_SDK_REVIEW_PENDING');
+  value.sdk.cspViolations = 0;
+  assert.equal(classifyObservation(value, false), 'POSITIVE_OBSERVATION_COMPLETE');
+});
+
+test('camera eligibility still requires current readiness and no renderer, page or provider failure', () => {
+  const cases = [
+    ['missing SDK evidence', value => { value.sdk = null; }],
+    ['loading renderer', value => { value.rendererStatus = 'loading'; }],
+    ['failed renderer', value => { value.rendererStatus = 'error'; }],
+    ['not started renderer', value => { value.rendererStatus = 'not-started'; }],
+    ['currently moving despite earlier steady', value => { value.sdk.steady = false; }],
+    ['truthy nonboolean steady', value => { value.sdk.steady = 'true'; }],
+    ...['mapError', 'loaderError', 'pageError'].map(key => [key, value => { value.sdk[key] = true; }]),
+    ['provider authorization failure', value => { value.sdk.providerErrorCodes = ['InvalidKeyMapError']; }],
+    ['unclassified provider failure', value => { value.sdk.providerErrorCodes = ['GoogleMapsError']; }],
+  ];
+  for (const [name, mutate] of cases) {
+    const value = report();
+    value.sdk.cspViolations = 1;
+    mutate(value);
+    assert.equal(cameraControlsReady(value), false, name);
+  }
+  const usable = report();
+  usable.sdk.cspViolations = 100;
+  assert.equal(cameraControlsReady(usable), true);
+  assert.equal(classifyObservation(usable, false), 'VISUAL_OR_SDK_REVIEW_PENDING');
+});
+
+test('CSP summaries classify resources without exporting URLs, credentials or raw violation details', () => {
+  const ownOrigin = 'https://korlix-projection-check-20261111.onrender.com';
+  const cases = [
+    ['', 'unknown'], ['inline', 'inline'], ['eval', 'eval'], ['wasm-eval', 'wasm-eval'],
+    [`data:text/plain,${candidate}`, 'data'], [`blob:${ownOrigin}/${candidate}`, 'blob'],
+    [`${ownOrigin}/acceptance/frame.mjs?key=${candidate}#private-fragment`, 'self'],
+    [`https://private-user:private-password@maps.googleapis.com/maps/api/js?key=${candidate}#private-fragment`, 'google-maps'],
+    [`https://maps.gstatic.com/maps-api-v3/private-path?key=${candidate}`, 'google-static'],
+    [`https://fonts.googleapis.com/css?key=${candidate}`, 'google-fonts'],
+    [`https://fonts.gstatic.com/s/private-path?key=${candidate}`, 'google-fonts'],
+    [`https://keyhole-pa.googleapis.com/private-path?key=${candidate}`, 'google-api'],
+    [`https://maps.google.com/private-path?key=${candidate}`, 'google'],
+    [`https://lh3.googleusercontent.com/private-path?key=${candidate}`, 'google'],
+    [`chrome-extension://private-extension/private-path?key=${candidate}`, 'extension'],
+    [`https://maps.googleapis.com.attacker.example/private-path?key=${candidate}`, 'external'],
+    [`https://notgoogleapis.com/private-path?key=${candidate}`, 'external'],
+    [`https://maps.googleapis.com@attacker.example/private-path?key=${candidate}`, 'external'],
+    ['https://[', 'unknown'],
+  ];
+  for (const [resource, classification] of cases) {
+    const summary = summarizeCspViolation({effectiveDirective: 'connect-src', disposition: 'enforce',
+      blockedURI: resource, sourceFile: resource,
+      documentURI: `${ownOrigin}/?key=${candidate}`, referrer: `https://private.example/${candidate}`,
+      originalPolicy: `script-src 'nonce-${candidate}'`, sample: `private-sample-${candidate}`}, ownOrigin);
+    assert.deepEqual(summary, {effectiveDirective: 'connect-src', disposition: 'enforce',
+      blockedResource: classification, sourceResource: classification}, classification);
+    assert.doesNotMatch(JSON.stringify(summary), /https?:|private-|nonce-|originalPolicy|sample|blockedURI|sourceFile/);
+    assert.equal(JSON.stringify(summary).includes(candidate), false);
+  }
+});
+
+test('CSP evidence is bounded and independently sanitized again at the frame boundary', () => {
+  const valid = {effectiveDirective: 'script-src-elem', disposition: 'report',
+    blockedResource: 'google-maps', sourceResource: 'self'};
+  const injected = {effectiveDirective: candidate, disposition: candidate,
+    blockedResource: `https://private-user:private-password@maps.googleapis.com/maps/api/js?key=${candidate}#private-fragment`,
+    sourceResource: `chrome-extension://private-extension/${candidate}`,
+    blockedURI: candidate, sourceFile: candidate, originalPolicy: candidate, sample: candidate};
+  const clean = sanitizeEvidence({cspViolations: 100000,
+    cspEvents: [valid, injected, ...Array.from({length: 10}, () => valid)]}, false);
+  assert.equal(clean.cspViolations, 100);
+  assert.equal(clean.cspEvents.length, 8);
+  assert.deepEqual(clean.cspEvents[0], valid);
+  assert.deepEqual(clean.cspEvents[1], {effectiveDirective: 'unknown', disposition: 'unknown',
+    blockedResource: 'unknown', sourceResource: 'unknown'});
+  assert.equal(JSON.stringify(clean).includes(candidate), false);
+  assert.doesNotMatch(JSON.stringify(clean), /https?:|private-|originalPolicy|blockedURI|sourceFile|sample/);
+  assert.deepEqual(sanitizeEvidence(clean, false), clean);
+  assert.deepEqual(sanitizeEvidence({cspEvents: {0: valid, length: 1}}, false).cspEvents, []);
 });
 
 test('negative proof needs a specific referrer denial and observed absent headers; ToS/generic errors remain inconclusive', () => {
