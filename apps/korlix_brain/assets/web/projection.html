@@ -21,6 +21,8 @@
       <symbol id="icon-right" viewBox="0 0 24 24"><path d="m10 6 6 6-6 6"/></symbol>
       <symbol id="icon-reset" viewBox="0 0 24 24"><path d="M3 10a9 9 0 1 1 2 8M3 4v6h6"/></symbol>
       <symbol id="icon-mic" viewBox="0 0 24 24"><rect x="8.5" y="2.5" width="7" height="12" rx="3.5"/><path d="M5 10v1a7 7 0 0 0 14 0v-1M12 18v4M8 22h8"/></symbol>
+      <symbol id="icon-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+      <symbol id="icon-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7V5Z"/></symbol>
       <symbol id="icon-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
       <symbol id="icon-bookmark" viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4V3Z"/></symbol>
       <symbol id="icon-link" viewBox="0 0 24 24"><path d="M14 3h7v7m0-7L10 14M10 3H4a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1v-6"/></symbol>
@@ -87,6 +89,7 @@
             </form>
             <div id="search-help" class="search-help"><span>Say “Go to…” or enter an address.</span><span>Confirm a result before traveling.</span></div>
             <div id="candidates-panel" class="candidates-panel" hidden><div class="candidates-heading"><span class="eyebrow">CONFIRM YOUR DESTINATION</span><span id="candidate-count"></span></div><div id="candidates-list"></div></div>
+            <div class="directions-panel"><button id="directions-button" class="directions-button" type="button" aria-label="Review destination for directions" aria-describedby="directions-help" disabled><svg aria-hidden="true"><use href="#icon-arrow"/></svg><span>Directions</span></button><p id="directions-help">Confirm a destination to review directions.</p></div>
           </section>
 
           <div class="scene-footnote"><span><svg><use href="#icon-globe"/></svg><span id="imagery-disclosure">Map imagery is not a live camera feed.</span></span><span id="provider-label">PROJECTION / EARTH</span></div>
@@ -107,9 +110,13 @@
       <p id="projection-notice" class="projection-notice" role="status" aria-live="polite">Your existing KORLIX conversation stays with you.</p>
 
       <section class="voice-dock" aria-label="Conversation controls">
-        <div class="voice-identity"><div class="voice-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><div><strong id="voice-phase">Ready when you are</strong><span id="voice-hint">Talk to Rici or type a destination.</span></div></div>
-        <button id="talk-button" class="talk-button" type="button"><span class="talk-microphone"><svg><use href="#icon-mic"/></svg></span><span><strong id="talk-label">Talk to Rici</strong><small id="talk-detail">Start conversation</small></span></button>
-        <button id="stop-button" class="stop-button" type="button" disabled><svg><use href="#icon-stop"/></svg><span id="stop-label">Stop conversation</span></button>
+        <div class="voice-identity"><div class="voice-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><div><strong id="voice-phase" role="status" aria-live="polite">Ready when you are</strong><span id="voice-hint">Talk to Rici or type a destination.</span></div></div>
+        <button id="talk-button" class="talk-button" type="button" aria-label="Start conversation"><span class="talk-microphone"><svg aria-hidden="true"><use href="#icon-mic"/></svg></span><span><strong id="talk-label">Talk to Rici</strong><small id="talk-detail">Start conversation</small></span></button>
+        <div class="voice-actions" role="group" aria-label="Live conversation controls">
+          <button id="pause-button" class="voice-control pause-button" type="button" aria-label="Pause conversation" disabled><svg aria-hidden="true"><use href="#icon-pause"/></svg><span id="pause-label">Pause</span></button>
+          <button id="resume-button" class="voice-control resume-button" type="button" aria-label="Resume conversation" disabled><svg aria-hidden="true"><use href="#icon-play"/></svg><span>Resume</span></button>
+          <button id="stop-button" class="voice-control stop-button" type="button" aria-label="Stop conversation" disabled><svg aria-hidden="true"><use href="#icon-stop"/></svg><span id="stop-label">Stop</span></button>
+        </div>
       </section>
       <footer class="workspace-footer"><span>Same Rici. Same conversation. A new dimension.</span><span>No headset required.</span></footer>
     </main>

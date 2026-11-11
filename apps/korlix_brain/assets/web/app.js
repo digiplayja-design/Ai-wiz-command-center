@@ -802,7 +802,7 @@
   // vocabulary can cross the native bridge; all account requests stay native.
   let training='', memories=[], pending=null, deletion=null, canUndo=false;
   let memorySource='Typed entry',trainingSource='Typed instructions';
-  let voiceActive=false, voiceStopping=false, voiceStarting=false, lastUserTranscript='', ready=false, writing=false;
+  let voiceActive=false, voicePaused=false, voicePausing=false, voiceStopping=false, voiceStarting=false, lastUserTranscript='', ready=false, writing=false;
   let requestNumber=0, voiceRequestEpoch=0;
   const requests=new Map();
   const transcriptMessages=new Map(), savedMessages=new Map(), transcriptBusy=new Set();
@@ -813,7 +813,7 @@
     if(!window.Korlix?.postMessage)return Promise.reject(new Error('Open the installed KORLIX Brain+Voice app to connect your account.'));
     const id=String(++requestNumber);
     return new Promise((resolve,reject)=>{
-      const timeout=action==='pickFile'?660000:action==='startVoice'?90000:65000;
+      const timeout=['pickFile','openDocuments','cameraAsk','directions'].includes(action)?3600000:['startVoice','resumeVoice'].includes(action)?90000:65000;
       const timer=setTimeout(()=>{requests.delete(id);reject(new Error('The response was interrupted. Refresh My Brain before trying a change again.'));},timeout);
       requests.set(id,{resolve,reject,timer});
       window.Korlix.postMessage(JSON.stringify({id,action,payload}));
@@ -826,19 +826,27 @@
       message.error?request.reject(new Error(message.error)):request.resolve(message.data);
     }else if(message.type==='voice'){
       if(message.phase!=='complete')stopWelcome();
-      if(message.phase==='complete'){voiceStarting=false;voiceStopping=false;}
-      if(voiceStopping&&message.phase!=='complete')message={...message,phase:'stopping',message:'Stopping conversation…'};
+      if(['complete','error','paused'].includes(message.phase)){voiceStarting=false;voicePausing=false;}
+      if(['complete','error'].includes(message.phase))voiceStopping=false;
+      if(voiceStopping&&!['complete','error'].includes(message.phase))message={...message,phase:'stopping',message:'Stopping conversation…'};
       const index=phases.findIndex(p=>p.key===message.phase);
-      if(index>=0)setPhase(index);
-      voiceActive=message.phase!=='complete';
+      if(index>=0)setPhase(index);else if(message.phase==='paused')setPhase(3);
+      voiceActive=!['complete','error','paused'].includes(message.phase);
+      voicePaused=message.phase==='paused'||message.paused===true;
+      if(['complete','error'].includes(message.phase))voicePaused=false;
       voiceStopping=message.phase==='stopping';
-      get('kb-voice-modes').disabled=voiceActive;
+      voicePausing=message.phase==='pausing';
+      get('kb-voice-modes').disabled=voiceActive||voicePaused;
       get('kb-voice-phase').textContent=message.message;
       get('kb-live-phase').textContent=message.message;
+      get('kb-return-voice').textContent=voicePaused?'Conversation paused':'Rici conversation active';
       get('kb-stop-voice').disabled=voiceStopping;
-      get('kb-stop-label').textContent=voiceStopping?'Stopping…':'Stop conversation';
+      get('kb-stop-label').textContent=voiceStopping?'Stopping…':'Stop';
+      get('kb-pause-voice').disabled=!voiceActive||voiceStopping||voicePausing;
+      get('kb-pause-label').textContent=voicePausing?'Pausing…':'Pause';
+      get('kb-resume-voice').disabled=!voicePaused||voiceActive||voiceStarting||voiceStopping;
       get('kb-replay-demo').textContent='Start conversation';
-      root.dataset.voiceActive=String(voiceActive);refreshMusic();welcomeUi();
+      root.dataset.voiceActive=String(voiceActive);root.dataset.voicePaused=String(voicePaused);refreshMusic();welcomeUi();
     }else if(message.type==='transcript'&&message.text){
       transcriptMessages.set(message.id||'unavailable-'+Date.now(),message);
       while(transcriptMessages.size>60)transcriptMessages.delete(transcriptMessages.keys().next().value);
@@ -991,6 +999,7 @@
     announce('Choose a document to analyze…');
     try{
       const result=await native('pickFile',{kind});if(result?.canceled)return;
+      if(result?.imported){refresh();announce('Document review closed. Your approved changes are in My Brain.');return;}
       show(kind==='training'?'train':'memory',true);
       get(kind==='training'?'kb-training':'kb-memory').value=result.text;
       if(kind==='training')trainingSource='File: '+result.filename;else memorySource='File: '+result.filename;
@@ -1013,7 +1022,7 @@
     });
   }
   function startVoice(){
-    if(voiceActive||voiceStarting)return;
+    if(voiceActive||voiceStarting||voicePaused)return;
     stopWelcome();
     const epoch=++voiceRequestEpoch;
     voiceStarting=true;
@@ -1027,12 +1036,38 @@
       window.KorlixBrainReceive({type:'voice',phase:'complete',message:'Microphone off'});fail(error);
     }).finally(()=>{if(epoch===voiceRequestEpoch)voiceStarting=false;});
   }
-  function toggleVoice(){voiceActive?stopVoice():startVoice();}
+  function pauseVoice(){
+    if(!voiceActive||voiceStopping||voicePausing)return;
+    const epoch=++voiceRequestEpoch;
+    window.KorlixBrainReceive({type:'voice',phase:'pausing',message:'Pausing Rici…'});
+    native('pauseVoice').then(result=>{
+      if(epoch!==voiceRequestEpoch)return;
+      // Native events include provider-close warnings. Keep their message when
+      // the pause has already completed instead of replacing it on reply.
+      if(result?.paused===true&&voicePausing)
+        window.KorlixBrainReceive({type:'voice',phase:'paused',paused:true,message:'Paused · microphone off'});
+      else if(result?.active===false&&result?.paused!==true)
+        window.KorlixBrainReceive({type:'voice',phase:'complete',message:'Microphone off'});
+    }).catch(error=>{if(epoch!==voiceRequestEpoch)return;voicePausing=false;get('kb-pause-voice').disabled=false;get('kb-pause-label').textContent='Retry pause';fail(error);});
+  }
+  function resumeVoice(){
+    if(!voicePaused||voiceStarting||voiceStopping)return;
+    stopWelcome();const epoch=++voiceRequestEpoch;voiceStarting=true;
+    window.KorlixBrainReceive({type:'voice',phase:'connecting',paused:true,message:'Resuming Rici…'});
+    native('resumeVoice').then(result=>{
+      if(epoch!==voiceRequestEpoch)return;
+      if(result?.active===false&&(!result.paused||voiceActive))window.KorlixBrainReceive({type:'voice',phase:result.paused?'paused':'complete',paused:result.paused===true,message:result.paused?'Paused · microphone off':'Microphone off'});
+    }).catch(error=>{
+      if(epoch!==voiceRequestEpoch)return;
+      window.KorlixBrainReceive({type:'voice',phase:'paused',paused:true,message:'Resume interrupted · tap Resume again'});fail(error);
+    }).finally(()=>{if(epoch===voiceRequestEpoch)voiceStarting=false;});
+  }
+  function toggleVoice(){voicePaused?resumeVoice():voiceActive?stopVoice():startVoice();}
   root.querySelectorAll('[data-go]').forEach(button=>button.addEventListener('click',()=>cinematicNavigate(button,()=>{
     if(writing){announce('Please wait for this change to finish.');return;}
     pending=null;deletion=null;show(button.dataset.go);
     if(button.dataset.go==='brain')refresh();
-    if(button.dataset.go==='talk'&&!voiceActive)startVoice();
+    if(button.dataset.go==='talk'&&!voiceActive&&!voicePaused)startVoice();
   })));
   menus.forEach(menu=>{
     menu.element.addEventListener('pointerenter',event=>{if(event.pointerType!=='touch')menu.hover=true;});menu.element.addEventListener('pointerleave',()=>{menu.hover=false;});
@@ -1079,6 +1114,11 @@
   get('kb-saved-back').addEventListener('click',()=>show('talk'));
   get('kb-saved-refresh').addEventListener('click',loadSavedTranscripts);
   get('kb-stop-voice').addEventListener('click',stopVoice);
+  get('kb-pause-voice').addEventListener('click',pauseVoice);
+  get('kb-resume-voice').addEventListener('click',resumeVoice);
+  for(const [id,action] of [['kb-upload-pdf','openDocuments'],['kb-camera-ask','cameraAsk'],['kb-directions','directions']]){
+    get(id).addEventListener('click',()=>{stopWelcome();native(action).then(()=>{if(action==='openDocuments')refresh();}).catch(fail);});
+  }
   setPhase(3);refresh();loadSavedTranscripts();
 
   const resize=new ResizeObserver(measure);menus.forEach(menu=>resize.observe(menu.element));scenes.forEach(scene=>resize.observe(scene.canvas));

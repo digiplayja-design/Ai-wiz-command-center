@@ -209,7 +209,7 @@ function stableSavedTargetGeometry(){
     await page.getByRole('button',{name:/Talk to Rici/}).click();
     await page.waitForFunction(()=>document.querySelector('#cinema-kb-voice-phase').textContent==='Rici is listening');
     await page.evaluate(()=>{const old=window.testCommands.find(c=>c.action==='stopVoice');window.KorlixBrainReceive({type:'reply',id:old.id,error:'Old cleanup failed'});});
-    assert.equal(await page.locator('#cinema-kb-stop-label').textContent(),'Stop conversation','Old stop reply cannot alter the new session');
+    assert.equal(await page.locator('#cinema-kb-stop-label').textContent(),'Stop','Old stop reply cannot alter the new session');
     await page.evaluate(()=>window.testHoldStop=false);
     await page.getByRole('button',{name:'Stop conversation',exact:true}).click();
     await page.waitForFunction(()=>document.querySelector('.kb-product').dataset.voiceActive==='false');

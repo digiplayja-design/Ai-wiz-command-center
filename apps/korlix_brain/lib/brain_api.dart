@@ -27,6 +27,7 @@ class BrainApi {
     Object? body,
     Map<String, String> headers = const {},
     Duration timeout = const Duration(seconds: 40),
+    bool acceptErrors = false,
   }) async {
     final revision = auth.revision;
     var session = await auth.sessions.ensureFresh();
@@ -68,7 +69,7 @@ class BrainApi {
         'Your account changed. Please reopen this screen.',
       );
     }
-    if (response.statusCode < 200 || response.statusCode >= 300) {
+    if (!acceptErrors && (response.statusCode < 200 || response.statusCode >= 300)) {
       String message =
           'KORLIX could not complete the request (${response.statusCode}).';
       try {
@@ -195,36 +196,62 @@ class BrainApi {
       );
     }
     final revision = auth.revision;
-    final session = await auth.sessions.ensureFresh();
+    void checkAccount() {
+      if (revision != auth.revision || auth.session == null) {
+        throw const BrainApiException('Your account changed. Choose the document again.');
+      }
+    }
+    var session = await auth.sessions.ensureFresh();
     if (session == null || revision != auth.revision) {
-      throw const BrainApiException('Please sign in again.');
+      throw const BrainApiException('Please sign in again.', status: 401);
     }
-    final request =
-        http.MultipartRequest(
-            'POST',
-            Uri.parse('${auth.backendUrl}$agentPath/$kind-files/analyze'),
-          )
-          ..headers.addAll({
-            ...auth.deviceHeaders,
-            'Authorization': 'Bearer ${session.accessToken}',
-          })
-          ..files.add(
-            http.MultipartFile.fromBytes('files', bytes, filename: filename),
-          );
-    final response = await http.Response.fromStream(await client.send(request))
-        .timeout(const Duration(minutes: 10));
-    if (revision != auth.revision) {
-      throw const BrainApiException('Your account changed.');
+    Future<http.Response> attempt(String token) async {
+      checkAccount();
+      final request = http.MultipartRequest('POST',
+        Uri.parse('${auth.backendUrl}$agentPath/$kind-files/analyze'))
+        ..headers.addAll({...auth.deviceHeaders,
+          'Authorization': 'Bearer $token', 'Accept': 'application/json'})
+        ..files.add(http.MultipartFile.fromBytes('files', bytes, filename: filename));
+      try {
+        return await client.send(request).then(http.Response.fromStream)
+            .timeout(const Duration(minutes: 10));
+      } on TimeoutException {
+        checkAccount();
+        throw const BrainApiException(
+          'Document analysis timed out. The preview was not confirmed. Check your connection before trying again.',
+        );
+      } on http.ClientException {
+        checkAccount();
+        throw const BrainApiException(
+          'The document connection was interrupted. The preview was not confirmed. Check your connection before trying again.',
+        );
+      }
     }
-    final data = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
-    if (response.statusCode >= 400) {
-      throw BrainApiException(
-        data['error']?.toString() ?? 'File analysis failed.',
-      );
+    var response = await attempt(session.accessToken);
+    if (response.statusCode == 401 && revision == auth.revision) {
+      session = await auth.sessions.ensureFresh(force: true,
+        rejectedAccessToken: session.accessToken);
+      checkAccount();
+      if (session == null) throw const BrainApiException('Please sign in again.', status: 401);
+      response = await attempt(session.accessToken);
     }
+    checkAccount();
+    Map<String, dynamic> data;
+    try {
+      data = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+    } catch (_) {
+      throw BrainApiException('Document analysis returned an unreadable response. Please try again.',
+        status: response.statusCode);
+    }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      final message = data['error'];
+      throw BrainApiException(message is String && message.length <= 1200
+          ? message : 'Document analysis could not finish. Please try again.', status: response.statusCode);
+    }
+    final retention = data['sourceRetention'];
     if (data['requiresApproval'] != true ||
         data['autoSaved'] != false ||
-        (data['sourceRetention'] as Map?)?['storedByKorlix'] == true) {
+        retention is! Map || retention['storedByKorlix'] != false) {
       throw const BrainApiException(
         'This server does not support reviewed file imports.',
       );

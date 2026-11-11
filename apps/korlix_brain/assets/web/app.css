@@ -394,3 +394,23 @@ html,body{margin:0;background:#100b1b;color:#fff9e9;min-height:100%;font-family:
 #korlix-cinema-app .kb-projection-entry>svg{width:15px;height:15px;color:#b39fbd;flex-shrink:0}
 #korlix-cinema-app .kb-projection-entry:focus-visible{outline:2px solid #80e6f2;outline-offset:4px}
 #korlix-cinema-app .kb-projection-entry:hover{border-color:#d9c29d6b;background:linear-gradient(120deg,#a080c525,#d3b08012)}
+
+/* Native voice controls and document/camera shortcuts. */
+#korlix-silent-storm .kb-feature-tools{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0 8px}
+#korlix-silent-storm .kb-feature-tools button{min-height:104px;padding:12px 6px;border:1px solid #8d74ac80;border-radius:18px;background:linear-gradient(150deg,#2c1944,#100b1b);color:#f7edff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;cursor:pointer;box-shadow:inset 0 1px 0 #ffffff1a,0 5px 14px #05020c55}
+#korlix-silent-storm .kb-feature-tools svg{width:23px;height:23px;color:#82e5f7}
+#korlix-silent-storm .kb-feature-tools strong{font-size:14px;font-weight:650}
+#korlix-silent-storm .kb-feature-tools small{font:11px/1.35 system-ui,sans-serif;color:#d0c3dd;text-align:center}
+#korlix-silent-storm .kb-feature-tools button:focus-visible{outline:3px solid #a9f0ff;outline-offset:3px}
+#korlix-silent-storm .kb-voice-control-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:100%}
+#korlix-silent-storm .kb-voice-control-row button{min-height:58px;min-width:0;display:flex;align-items:center;justify-content:center;gap:7px;border-radius:14px;font:700 15px/1.2 system-ui,sans-serif;cursor:pointer;touch-action:manipulation}
+#korlix-silent-storm .kb-voice-control-row svg{height:17px;width:17px}
+#korlix-silent-storm .kb-pause-conversation{background:#3b2d5d;border:1px solid #b6a0e0;color:#fff}
+#korlix-silent-storm .kb-resume-conversation{background:#135b62;border:1px solid #77e5e5;color:#fff}
+#korlix-silent-storm .kb-voice-control-row button:disabled{opacity:.42;cursor:default}
+#korlix-silent-storm .kb-voice-control-row button:focus-visible{outline:3px solid #fff;outline-offset:2px}
+#korlix-silent-storm [data-voice-paused="true"] .kb-live-banner{display:flex}
+#korlix-silent-storm .kb-product[data-voice-paused="true"]{padding-bottom:calc(132px + env(safe-area-inset-bottom))!important}
+#korlix-silent-storm [data-voice-paused="true"] #cinema-kb-replay-demo{display:none}
+#korlix-silent-storm [data-voice-paused="true"] .kb-live-dot{background:#d9beff}
+@media(max-width:359px){#korlix-silent-storm .kb-voice-control-row{gap:6px}#korlix-silent-storm .kb-voice-control-row button{font-size:13px;gap:5px}#korlix-silent-storm .kb-feature-tools{gap:6px}#korlix-silent-storm .kb-feature-tools strong{font-size:12px}}

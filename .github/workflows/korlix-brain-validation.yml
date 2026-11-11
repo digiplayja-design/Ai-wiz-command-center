@@ -48,6 +48,7 @@ jobs:
           export NODE_PATH="$RUNNER_TEMP/projection-browser/node_modules"
           node apps/korlix_brain/tools/check_projection.cjs
           node apps/korlix_brain/tools/check_ui.cjs
+          node apps/korlix_brain/tools/check_controls.cjs
           node apps/korlix_brain/tools/check_ambience.cjs
           node apps/korlix_brain/tools/check_welcome.cjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

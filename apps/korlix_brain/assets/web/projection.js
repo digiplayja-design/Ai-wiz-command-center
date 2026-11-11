@@ -10,13 +10,14 @@
   const finite = (value, min, max) => typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
   const operations = new Set(['closer', 'farther', 'left', 'right', 'reset']);
   const isLocalLiveQuestion = question => /\b(live|real[ -]?time)\b.*\b(view|camera|feed|video|imagery)\b/i.test(question);
-  const phases = new Set(['complete', 'connecting', 'listening', 'thinking', 'speaking', 'stopping', 'error']);
+  const phases = new Set(['complete', 'connecting', 'listening', 'thinking', 'speaking', 'pausing', 'paused', 'stopping', 'error']);
+  const terminalVoicePhases = new Set(['complete','error']);
   const requests = new Map();
   const transcripts = [];
   const shell = document.querySelector('.projection-shell');
-  const busy = {search:false, select:false, ask:false, save:false, close:false};
+  const busy = {search:false, select:false, ask:false, save:false, directions:false, close:false};
   let nonce = '', nextId = 0, connected = false, searchEpoch = 0, askEpoch = 0;
-  let startPending = false, stopPending = false, startTimer = null, stopTimer = null;
+  let voiceAction = '', voiceEpoch = 0;
   let voiceViewportActive = false;
   let frame = null, frameOrigin = '', frameUrl = '', mapStatus = 'illustration', lastCamera = '';
   let rendererTimer = null, canvasInvalidated = true;
@@ -25,8 +26,8 @@
   const emptyState = () => ({
     open:true, room:'command', loading:false, selectedPlace:null, candidates:[], answer:null,
     notice:'', camera:{sequence:0, operation:'reset'},
-    config:{rendererUrl:null, mapAvailable:false, geocodingAvailable:false, answersAvailable:false, answerCredits:0, answerCostLabel:''},
-    voice:{active:false, phase:'complete', message:''}
+    config:{rendererUrl:null, mapAvailable:false, geocodingAvailable:false, directionsAvailable:false, answersAvailable:false, answerCredits:0, answerCostLabel:''},
+    voice:{active:false, paused:false, phase:'complete', message:''}
   });
   let state = emptyState();
 
@@ -40,7 +41,7 @@
   function placeValue(raw) {
     if (!isObject(raw) || !clip(raw.id, 512) || !clip(raw.label, 600)) return null;
     if (!finite(raw.latitude, -90, 90) || !finite(raw.longitude, -180, 180)) return null;
-    return {id:clip(raw.id,512), label:clip(raw.label,600), address:clip(raw.address,1000),
+    return {id:clip(raw.id,512), label:clip(raw.label,600), address:clip(raw.address,1000), userQuery:clip(raw.userQuery,300),
       latitude:raw.latitude, longitude:raw.longitude, provider:clip(raw.provider,100), partialMatch:raw.partialMatch === true};
   }
 
@@ -57,8 +58,9 @@
 
   function voiceValue(raw) {
     const voice = isObject(raw) ? raw : {};
-    const phase = phases.has(voice.phase) ? voice.phase : voice.active === true ? 'listening' : 'complete';
-    return {active:voice.active === true && phase !== 'complete' && phase !== 'error', phase, message:clip(voice.message,300)};
+    const phase = phases.has(voice.phase) ? voice.phase : voice.paused === true ? 'paused' : voice.active === true ? 'listening' : 'complete';
+    const paused = !terminalVoicePhases.has(phase) && (voice.paused === true || phase === 'paused');
+    return {active:voice.active === true && !paused && !terminalVoicePhases.has(phase), paused, phase, message:clip(voice.message,300)};
   }
 
   function normalize(raw) {
@@ -75,6 +77,7 @@
     const config = isObject(raw.config) ? raw.config : {};
     base.config = {rendererUrl:safeUrl(config.rendererUrl), mapAvailable:config.mapAvailable === true,
       geocodingAvailable:config.geocodingAvailable === true, answersAvailable:config.answersAvailable === true,
+      directionsAvailable:config.directionsAvailable === true,
       answerCredits:finite(config.answerCredits,0,1000000) ? config.answerCredits : 0, answerCostLabel:clip(config.answerCostLabel,300)};
     if (isObject(raw.answer) && clip(raw.answer.text,18000)) {
       base.answer = {text:clip(raw.answer.text,18000), scope:clip(raw.answer.scope,500), date:clip(raw.answer.date,100),
@@ -100,7 +103,7 @@
     }
     const id = String(++nextId);
     return new Promise((resolve,reject) => {
-      const timeout = action === 'ask' ? 180000 : action === 'startVoice' ? 90000 : 65000;
+      const timeout = action === 'ask' ? 180000 : ['startVoice','resumeVoice'].includes(action) ? 90000 : 65000;
       const timer = setTimeout(() => {
         requests.delete(id);
         reject(new Error('The response was interrupted. Please try again.'));
@@ -149,6 +152,13 @@
     $('save-button').disabled = !connected || !place || busy.save;
     $('save-button').textContent = busy.save ? 'Saving…' : 'Save place';
     $('place-note').disabled = !place || busy.save;
+    $('directions-button').disabled = !connected || !place || !state.config.directionsAvailable || busy.directions;
+    $('directions-button').setAttribute('aria-busy',String(busy.directions));
+    $('directions-help').textContent = busy.directions ? 'Opening address review…' : !connected || !place
+      ? 'Confirm a destination to review directions.' : !state.config.directionsAvailable
+      ? 'Address routing is not enabled for this account.' : place.userQuery.trim()
+      ? 'Review the full destination and choose Apple Maps or Google Maps.'
+      : 'Enter the full address on the directions screen.';
     if (!place) $('save-status').textContent = 'Choose and confirm a destination first.';
     else if ($('save-status').textContent === 'Choose and confirm a destination first.') $('save-status').textContent = '';
     document.querySelectorAll('[data-camera]').forEach(button => {
@@ -231,23 +241,48 @@
       Math.max(0,Math.min(Math.ceil(height),Math.floor(window.innerHeight))) + 'px');
   }
 
+  function voiceControls() {
+    const voice = state.voice;
+    const phase = voiceAction === 'stop' ? 'stopping' : voiceAction === 'pause' ? 'pausing'
+      : ['start','resume'].includes(voiceAction) && !voice.active ? 'connecting' : voice.phase;
+    const session = voice.active || voice.paused || !!voiceAction || !terminalVoicePhases.has(phase);
+    return {phase, session,
+      start:connected && !session,
+      pause:connected && !['pausing','stopping'].includes(phase)
+        && (voice.active || ['start','resume'].includes(voiceAction) || phase === 'connecting'),
+      resume:connected && voice.paused && phase === 'paused' && !voiceAction,
+      stop:connected && session && voiceAction !== 'stop'};
+  }
+
   function renderVoice() {
     const voice = state.voice;
-    const phase = stopPending ? 'stopping' : startPending && !voice.active ? 'connecting' : voice.phase;
-    const active = voice.active || startPending || stopPending;
-    const viewportActive = !['complete','error'].includes(phase);
+    const controls = voiceControls(), phase = controls.phase;
+    const viewportActive = !terminalVoicePhases.has(phase);
     const transition = viewportActive !== voiceViewportActive;
     const scrollOffset = transition ? (voiceViewportActive ? shell.scrollTop : window.scrollY) : 0;
     document.body.dataset.voice = phase;
+    document.body.dataset.voiceActive = String(voice.active);
     $('voice-phase').textContent = phase === 'stopping' ? 'Stopping conversation…' : phase === 'connecting' ? 'Connecting to Rici…'
-      : voice.message || (active ? 'Rici is with you' : 'Ready when you are');
-    $('voice-hint').textContent = active ? 'Your KORLIX conversation continues in this room.' : 'Talk to Rici or type a destination.';
-    $('talk-button').disabled = !connected || active;
-    $('talk-label').textContent = active ? (phase === 'connecting' ? 'Connecting…' : phase === 'stopping' ? 'Finishing…' : 'Rici is with you') : 'Talk to Rici';
-    $('talk-detail').textContent = active ? (phase === 'listening' ? 'Microphone on' : phase === 'speaking' ? 'Rici is speaking' : phase === 'thinking' ? 'Thinking with you' : 'Conversation active') : 'Start conversation';
-    $('stop-button').disabled = !connected || !active || stopPending;
-    $('stop-label').textContent = stopPending ? 'Stopping…' : 'Stop conversation';
-    $('rici-presence').textContent = phase === 'listening' ? 'Listening' : phase === 'speaking' ? 'Speaking' : phase === 'thinking' ? 'Thinking' : active ? 'Connected' : 'Ready';
+      : phase === 'pausing' ? 'Pausing conversation…' : phase === 'paused' ? 'Conversation paused'
+      : voice.message || (controls.session ? 'Rici is with you' : 'Ready when you are');
+    $('voice-hint').textContent = phase === 'paused' ? 'Microphone off. Resume when you’re ready.'
+      : phase === 'pausing' ? 'Turning off the microphone and audio…'
+      : controls.session ? 'Your KORLIX conversation continues in this room.' : 'Talk to Rici or type a destination.';
+    $('talk-button').disabled = !controls.start;
+    $('talk-label').textContent = phase === 'paused' ? 'Conversation paused' : controls.session
+      ? (phase === 'connecting' ? 'Connecting…' : phase === 'stopping' ? 'Finishing…' : phase === 'pausing' ? 'Pausing…' : 'Rici is with you') : 'Talk to Rici';
+    $('talk-detail').textContent = phase === 'paused' ? 'Microphone off' : controls.session
+      ? (phase === 'listening' ? 'Microphone on' : phase === 'speaking' ? 'Rici is speaking' : phase === 'thinking' ? 'Thinking with you' : 'Conversation controls below') : 'Start conversation';
+    $('pause-button').disabled = !controls.pause;
+    $('pause-button').setAttribute('aria-busy',String(phase === 'pausing'));
+    $('pause-label').textContent = phase === 'pausing' ? 'Pausing…' : 'Pause';
+    $('resume-button').disabled = !controls.resume;
+    $('resume-button').setAttribute('aria-busy',String(voiceAction === 'resume'));
+    $('stop-button').disabled = !controls.stop;
+    $('stop-button').setAttribute('aria-busy',String(voiceAction === 'stop'));
+    $('stop-label').textContent = voiceAction === 'stop' ? 'Stopping…' : 'Stop';
+    $('rici-presence').textContent = phase === 'listening' ? 'Listening' : phase === 'speaking' ? 'Speaking' : phase === 'thinking' ? 'Thinking'
+      : phase === 'paused' ? 'Paused' : phase === 'pausing' ? 'Pausing' : phase === 'stopping' ? 'Stopping' : controls.session ? 'Connecting' : 'Ready';
     measureVoiceDock();
     if (transition) {
       voiceViewportActive = viewportActive;
@@ -261,13 +296,13 @@
     }
   }
 
-  function syncVoiceGuards() {
-    if (state.voice.active || state.voice.phase === 'complete' || state.voice.phase === 'error') {
-      startPending = false; clearTimeout(startTimer);
-    }
-    if (!state.voice.active && (state.voice.phase === 'complete' || state.voice.phase === 'error')) {
-      stopPending = false; clearTimeout(stopTimer);
-    }
+  function syncVoiceGuards(previousVoice) {
+    const voice = state.voice;
+    const running = voice.active && ['listening','thinking','speaking'].includes(voice.phase);
+    const becameTerminal = terminalVoicePhases.has(voice.phase) && previousVoice && !terminalVoicePhases.has(previousVoice.phase);
+    if ((['start','resume'].includes(voiceAction) && running)
+      || (voiceAction === 'pause' && voice.phase === 'paused' && previousVoice?.phase !== 'paused')
+      || becameTerminal) voiceAction = '';
   }
 
   function renderTranscripts() {
@@ -368,6 +403,7 @@
   window.KorlixProjectionConnect = connection => {
     if (!isObject(connection) || !clip(connection.nonce,512)) return;
     if (nonce && nonce !== connection.nonce) {
+      voiceEpoch++; voiceAction = '';
       requests.forEach(request => { clearTimeout(request.timer); request.reject(new Error('The projection connection was renewed. Please try again.')); });
       requests.clear(); disposeFrame();
     }
@@ -380,11 +416,11 @@
   window.KorlixProjectionReceive = message => {
     if (!connected || !isObject(message)) return;
     if (message.type === 'snapshot') {
-      const previousId = state.selectedPlace?.id;
+      const previousId = state.selectedPlace?.id, previousVoice = state.voice;
       state = normalize(message.state);
       syncTranscripts(message.state);
       if (previousId !== state.selectedPlace?.id) { lastSavedPlace = ''; $('save-status').textContent = ''; }
-      localNotice = ''; localNoticeKind = ''; syncVoiceGuards(); render();
+      localNotice = ''; localNoticeKind = ''; syncVoiceGuards(previousVoice); render();
     } else if (message.type === 'reply') {
       const id = typeof message.id === 'string' ? message.id : '';
       const request = requests.get(id); if (!request) return;
@@ -393,8 +429,10 @@
       else request.resolve(message.data);
     } else if (message.type === 'voice') {
       const phase = phases.has(message.phase) ? message.phase : 'complete';
-      state.voice = voiceValue({active:!['complete','error'].includes(phase),phase,message:message.message});
-      syncVoiceGuards(); renderVoice();
+      const previousVoice = state.voice;
+      state.voice = voiceValue({...message,phase,
+        active:typeof message.active === 'boolean' ? message.active : !terminalVoicePhases.has(phase) && phase !== 'paused'});
+      syncVoiceGuards(previousVoice); renderVoice();
     } else if (message.type === 'transcript' && clip(message.text,6000)) {
       const entry = {role:['user','you'].includes(message.role) ? 'user' : 'assistant',text:clip(message.text,6000)};
       const last = transcripts.at(-1);
@@ -461,34 +499,46 @@
     } finally { busy.save = false; renderPlace(); }
   });
 
-  $('talk-button').addEventListener('click',async () => {
-    if (state.voice.active || startPending || stopPending) return;
-    startPending = true; notice(''); renderVoice();
-    startTimer = setTimeout(() => {
-      if (startPending) { startPending = false; renderVoice(); notice('Rici’s connection status was not received. Please try again.','error'); }
-    },90000);
+  $('directions-button').addEventListener('click',async () => {
+    if (!connected || !state.selectedPlace || !state.config.directionsAvailable || busy.directions) return;
+    // Send only the destination the user entered. The native review screen lets
+    // them confirm the full address before opening their chosen maps app.
+    const query = state.selectedPlace.userQuery.trim();
+    busy.directions = true; notice(''); renderPlace();
     try {
-      const result = await send('startVoice');
-      if (typeof result?.active === 'boolean' && startPending) {
-        state.voice = {active:result.active,phase:result.active ? 'listening' : 'complete',message:result.active ? 'Rici is listening' : 'Microphone off'};
-        syncVoiceGuards(); renderVoice();
-      }
-    } catch (error) { startPending = false; clearTimeout(startTimer); renderVoice(); fail(error); }
+      const result = await send('directions',{query});
+      if (result?.ok === false) throw new Error(clip(result.answer,1500) || 'Directions could not be opened. Please try again.');
+      notice(clip(result?.answer,1500) || 'Review the full address and choose a maps app for directions.');
+    } catch (error) { fail(error); }
+    finally { busy.directions = false; renderPlace(); }
   });
 
-  $('stop-button').addEventListener('click',async () => {
-    if (stopPending || (!state.voice.active && !startPending)) return;
-    stopPending = true; startPending = false; clearTimeout(startTimer); renderVoice();
-    stopTimer = setTimeout(() => {
-      if (stopPending) { stopPending = false; renderVoice(); notice('Stop has not been confirmed. Please tap Stop conversation again.','error'); }
-    },65000);
+  async function changeVoice(action) {
+    if (!voiceControls()[action]) return;
+    // Pause and Stop supersede an in-flight connection. A late start/resume
+    // reply cannot change the newer user intent or reactivate this surface.
+    const epoch = ++voiceEpoch;
+    voiceAction = action; notice(''); renderVoice();
     try {
-      const result = await send('stopVoice');
-      if (result?.active === false) {
-        state.voice = {active:false,phase:'complete',message:'Microphone off'}; syncVoiceGuards(); renderVoice();
-      }
-    } catch (error) { stopPending = false; clearTimeout(stopTimer); renderVoice(); fail(error); }
-  });
+      const result = await send(action + 'Voice');
+      if (epoch !== voiceEpoch || voiceAction !== action) return;
+      if (typeof result?.active !== 'boolean') throw new Error('The conversation status was not received. Please try again.');
+      if (action === 'stop' && result.active) throw new Error('Stop has not been confirmed. Please tap Stop again.');
+      if (action === 'pause' && result.active) throw new Error('Pause has not been confirmed. Please tap Pause again.');
+      const paused = result.paused === true;
+      state.voice = voiceValue({active:result.active, paused, phase:paused ? 'paused' : result.active ? 'listening' : 'complete',
+        message:paused ? 'Conversation paused' : result.active ? 'Rici is listening' : 'Microphone off'});
+      voiceAction = ''; renderVoice();
+    } catch (error) {
+      if (epoch !== voiceEpoch || voiceAction !== action) return;
+      voiceAction = ''; renderVoice(); fail(error);
+    }
+  }
+
+  $('talk-button').addEventListener('click',() => changeVoice('start'));
+  $('pause-button').addEventListener('click',() => changeVoice('pause'));
+  $('resume-button').addEventListener('click',() => changeVoice('resume'));
+  $('stop-button').addEventListener('click',() => changeVoice('stop'));
 
   // The globe is intentionally illustrative. No canvas shapes are represented
   // as geocoded locations, satellite imagery, street view, or a live feed.

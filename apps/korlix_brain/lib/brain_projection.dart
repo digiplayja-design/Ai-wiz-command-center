@@ -21,6 +21,9 @@ class BrainProjection extends ChangeNotifier {
     required this.onStartVoice,
     required this.onStopVoice,
     required this.onSave,
+    this.onPauseVoice,
+    this.onResumeVoice,
+    this.onDirections,
   });
 
   final String backendUrl;
@@ -29,6 +32,9 @@ class BrainProjection extends ChangeNotifier {
   final VoidCallback onClose;
   final Future<void> Function() onStartVoice;
   final Future<void> Function() onStopVoice;
+  final Future<void> Function()? onPauseVoice;
+  final Future<void> Function()? onResumeVoice;
+  final void Function(String destination)? onDirections;
   final Future<bool> Function(String text, bool fromVoice) onSave;
 
   bool _disposed = false;
@@ -139,7 +145,8 @@ class BrainProjection extends ChangeNotifier {
     if (event['type'] == 'voice') {
       final phase = event['phase'];
       _voice = {
-        'active': !{'complete', 'error', 'idle'}.contains(phase),
+        'active': !{'complete', 'error', 'idle', 'paused'}.contains(phase),
+        'paused': event['paused'] == true || phase == 'paused',
         'phase': phase,
         'message': event['message'],
       };
@@ -214,6 +221,7 @@ class BrainProjection extends ChangeNotifier {
         'rendererUrl': renderer,
         'mapAvailable': data['mapAvailable'] == true && renderer != null,
         'geocodingAvailable': data['geocodingAvailable'] == true,
+        'directionsAvailable': data['directionsAvailable'] == true,
         'answersAvailable': data['answersAvailable'] == true,
         if (data['answerCredits'] is num)
           'answerCredits': data['answerCredits'],
@@ -338,6 +346,18 @@ class BrainProjection extends ChangeNotifier {
         _changed();
       }
     }
+  }
+
+  Future<Map<String, dynamic>> directions(String query) async {
+    query = _text(query, 300, empty: true);
+    final generation = _generation;
+    await _ensureConfig();
+    if (!_current(generation)) return _result('That directions request was canceled.', ok: false);
+    if (_config['directionsAvailable'] != true || onDirections == null) {
+      return _result('Address routing is not enabled for this account.', ok: false);
+    }
+    onDirections!(query);
+    return _result('Review the full address on screen and choose Apple Maps or Google Maps for directions.');
   }
 
   Map<String, dynamic> select(String placeId) {
@@ -583,6 +603,15 @@ class BrainProjection extends ChangeNotifier {
         _room = room as String;
         _changed();
         return null;
+      case 'directions':
+        return directions(_text(payload['query'] ?? _place?['userQuery'] ?? '', 300, empty: true));
+      case 'pauseVoice':
+        cancelPending();
+        if (onPauseVoice != null) await onPauseVoice!();
+        return {'active': _voice['active'] == true, 'paused': _voice['paused'] == true};
+      case 'resumeVoice':
+        if (onResumeVoice != null) await onResumeVoice!();
+        return {'active': _voice['active'] == true, 'paused': _voice['paused'] == true};
       case 'search':
         return search(_text(payload['query'], 500));
       case 'select':
@@ -708,6 +737,13 @@ class BrainProjection extends ChangeNotifier {
       if (index != null && index >= 0 && index < _candidates.length) {
         return select(_candidates[index]['id'] as String);
       }
+    }
+    final route = RegExp(
+      r'^(?:route to|navigate to|(?:give|show) me directions to|directions to)\s+(.+)',
+      caseSensitive: false,
+    ).firstMatch(command);
+    if (route != null && onDirections != null) {
+      return directions(route.group(1)!.replaceAll(RegExp(r'[.!?]+$'), '').trim());
     }
     final destination = RegExp(
       r'^(?:go to|take me to|fly to|navigate to|find the address|search for)\s+(.+)',

@@ -19,13 +19,15 @@ async function fixture(page) {
     window.testSaveResponse = 'success';
     window.testResearchCalls = 0;
     window.testHoldStart = false;
+    window.testHoldPause = false;
+    window.testHoldResume = false;
     window.testHoldStop = false;
     window.testGeocodingProvider = 'Test geocoder';
     window.projectionState = {
       open:true,room:'command',loading:false,selectedPlace:null,candidates:[],answer:null,notice:'',
       camera:{sequence:0,operation:'reset'},
-      config:{rendererUrl:null,mapAvailable:false,geocodingAvailable:true,answersAvailable:true,answerCredits:4,answerCostLabel:'4 credits per successful sourced lookup.'},
-      voice:{active:false,phase:'complete',message:'Ready when you are'}
+      config:{rendererUrl:null,mapAvailable:false,geocodingAvailable:true,directionsAvailable:true,answersAvailable:true,answerCredits:4,answerCostLabel:'4 credits per successful sourced lookup.'},
+      voice:{active:false,paused:false,phase:'complete',message:'Ready when you are'}
     };
     window.sendSnapshot = () => window.KorlixProjectionReceive({type:'snapshot',state:window.projectionState});
     window.Projection = {postMessage:raw => {
@@ -37,8 +39,8 @@ async function fixture(page) {
         case 'room': state.room=command.payload.room; window.sendSnapshot(); return reply({room:state.room});
         case 'search':
           state.candidates = [
-            {id:'fixture-a',label:'First destination candidate',address:'A location fixture for UI testing',latitude:40.71,longitude:-74,provider:window.testGeocodingProvider},
-            {id:'fixture-b',label:'Second destination candidate',address:'A different location fixture for UI testing',latitude:40.72,longitude:-73.98,provider:window.testGeocodingProvider,partialMatch:true}
+            {id:'fixture-a',label:'First destination candidate',address:'A location fixture for UI testing',userQuery:command.payload.query,latitude:40.71,longitude:-74,provider:window.testGeocodingProvider},
+            {id:'fixture-b',label:'Second destination candidate',address:'A different location fixture for UI testing',userQuery:command.payload.query,latitude:40.72,longitude:-73.98,provider:window.testGeocodingProvider,partialMatch:true}
           ];
           state.notice='Choose a matching destination to confirm.'; window.sendSnapshot(); return reply({requiresConfirmation:true});
         case 'select':
@@ -54,6 +56,7 @@ async function fixture(page) {
           state.answer={text:'This is a sourced response fixture, not a claim about a real place. [1]',scope:'Confirmed destination',date:'2026-11-07',sources:[{title:'Test source',url:'https://example.com/source',date:'2026-11-07'}]};
           window.sendSnapshot(); return reply({answered:true});
         case 'camera': state.camera={...state.camera,sequence:state.camera.sequence+1,operation:command.payload.operation}; window.sendSnapshot(); return reply({moved:true});
+        case 'directions': return reply({ok:true,answer:'Review the full address and choose a maps app for directions.'});
         case 'savePlace':
           if(window.testFailSave)return reply(null,'Storage is unavailable. Your note has not been saved.');
           if(window.testSaveResponse==='null')return reply(null);
@@ -63,10 +66,18 @@ async function fixture(page) {
           return reply({saved:true});
         case 'startVoice':
           if(window.testHoldStart)return;
-          state.voice={active:true,phase:'listening',message:'Rici is listening'}; window.sendSnapshot(); return reply({active:true});
+          state.voice={active:true,paused:false,phase:'listening',message:'Rici is listening'}; window.sendSnapshot(); return reply({active:true,paused:false});
+        case 'pauseVoice':
+          state.voice={active:true,paused:false,phase:'pausing',message:'Pausing conversation'}; window.sendSnapshot();
+          if(window.testHoldPause)return;
+          state.voice={active:false,paused:true,phase:'paused',message:'Conversation paused'}; window.sendSnapshot(); return reply({active:false,paused:true});
+        case 'resumeVoice':
+          state.voice={active:true,paused:false,phase:'connecting',message:'Connecting to Rici'}; window.sendSnapshot();
+          if(window.testHoldResume)return;
+          state.voice={active:true,paused:false,phase:'listening',message:'Rici is listening'}; window.sendSnapshot(); return reply({active:true,paused:false});
         case 'stopVoice':
           if(window.testHoldStop)return;
-          state.voice={active:false,phase:'complete',message:'Microphone off'}; window.sendSnapshot(); return reply({active:false});
+          state.voice={active:false,paused:false,phase:'complete',message:'Microphone off'}; window.sendSnapshot(); return reply({active:false,paused:false});
         default:return reply({ok:true});
       }
     }};
@@ -80,6 +91,20 @@ async function fixture(page) {
 
 async function settleLayout(page) {
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+}
+
+async function assertVoiceControls(page,label) {
+  await settleLayout(page);
+  const controls=await page.evaluate(()=>['pause-button','resume-button','stop-button'].map(id=>{
+    const button=document.getElementById(id),box=button.getBoundingClientRect();
+    return {id,name:button.getAttribute('aria-label'),width:box.width,height:box.height,top:box.top,bottom:box.bottom,
+      viewportHeight:innerHeight,hittable:document.elementFromPoint(box.x+box.width/2,box.y+box.height/2)?.closest('button')===button};
+  }));
+  for(const control of controls) {
+    assert.ok(control.name&&control.width>=44&&control.height>=44,'Labeled 44px control at '+label+': '+JSON.stringify(control));
+    assert.ok(control.top>=0&&control.bottom<=control.viewportHeight&&control.hittable,'Visible reachable control at '+label+': '+control.id);
+  }
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'Voice controls fit '+label);
 }
 
 async function settleRendererLayout(page,renderer,label) {
@@ -182,6 +207,10 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
       assert.equal(await page.locator('#world-caption-text').textContent(),'Illustrative globe · connect a map provider to explore');
       assert.equal(await page.evaluate(()=>window.projectionCommands.some(c=>c.action==='startVoice')),false,'Opening must not start a second conversation');
       assert.equal(await page.locator('#talk-button').isEnabled(),true);
+      assert.equal(await page.locator('#pause-button').isEnabled(),false);
+      assert.equal(await page.locator('#resume-button').isEnabled(),false);
+      assert.equal(await page.locator('#stop-button').isEnabled(),false);
+      assert.equal(await page.locator('#directions-button').isEnabled(),false,'Directions require a confirmed destination');
       assert.equal(await page.locator('[data-camera="closer"]').isEnabled(),false,'Unconfigured illustration is not a working map');
       if(screenDirectory){fs.mkdirSync(screenDirectory,{recursive:true});await page.screenshot({path:path.join(screenDirectory,`projection-command-${width}.png`),fullPage:true});}
       await page.locator('#room-discovery').click();
@@ -214,6 +243,22 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
       assert.equal(await page.locator('#place-source').isVisible(),false,'Non-Google selected data does not carry Google attribution');
       assert.equal(await page.locator('#place-match').isVisible(),true,'The partial-match warning survives selection');
       assert.equal(await page.locator('#place-match').textContent(),'Check address — partial match');
+      await page.locator('#destination-input').fill('An unconfirmed replacement query');
+      const cameraBeforeDirections=await page.evaluate(()=>window.projectionState.camera);
+      await page.locator('#directions-button').click();
+      await page.waitForFunction(()=>document.querySelector('#projection-notice').textContent.includes('Review the full address'));
+      assert.deepEqual(await page.evaluate(()=>window.projectionCommands.filter(c=>c.action==='directions').at(-1).payload),{query:'An ambiguous address'},'Directions review uses the confirmed userQuery, not provider labels or unsent search input');
+      assert.deepEqual(await page.evaluate(()=>window.projectionState.camera),cameraBeforeDirections,'Opening address review does not move or replace the map');
+      assert.equal(await page.evaluate(()=>window.projectionCommands.some(c=>['startVoice','resumeVoice'].includes(c.action))),false,'Directions do not start or resume voice');
+      const directionsBounds=await page.locator('#directions-button').boundingBox();
+      assert.ok(directionsBounds&&directionsBounds.width>=44&&directionsBounds.height>=44,'Directions has a 44px touch target at '+width);
+      await page.evaluate(()=>{window.projectionState.config.directionsAvailable=false;window.sendSnapshot();});
+      assert.equal(await page.locator('#directions-button').isEnabled(),false,'Routing entitlement is required independently of the map');
+      assert.equal(await page.locator('#directions-help').textContent(),'Address routing is not enabled for this account.');
+      await page.evaluate(()=>{window.projectionState.config.directionsAvailable=true;delete window.projectionState.selectedPlace.userQuery;window.sendSnapshot();});
+      await page.locator('#directions-button').click();
+      await page.waitForFunction(()=>window.projectionCommands.filter(c=>c.action==='directions').length===2);
+      assert.deepEqual(await page.evaluate(()=>window.projectionCommands.filter(c=>c.action==='directions').at(-1).payload),{query:''},'Missing userQuery opens manual address review without substituting a provider address');
       assert.equal(await page.locator('#question-help').textContent(),'4 credits per successful sourced lookup.');
       await page.locator('[data-question]').first().click();
       await page.locator('.source-button').waitFor();
@@ -262,12 +307,77 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
       });
       assert.equal(await page.locator('.transcript-message strong').first().textContent(),'You','Native you/rici roles retain the correct speaker');
       assert.equal(await page.locator('.transcript-message p').last().textContent(),'Native snapshot response.');
+      await assertVoiceControls(page,'listening-'+width);
+      assert.equal(await page.locator('#pause-button').isEnabled(),true);
+      assert.equal(await page.locator('#resume-button').isEnabled(),false);
+      await page.evaluate(()=>window.testHoldPause=true);
+      await page.locator('#pause-button').click();
+      assert.equal(await page.locator('body').getAttribute('data-voice'),'pausing');
+      assert.equal(await page.locator('#pause-button').isEnabled(),false,'Pause is guarded during shutdown');
+      assert.equal(await page.locator('#resume-button').isEnabled(),false,'Resume waits for confirmed pause');
+      assert.equal(await page.locator('#stop-button').isEnabled(),true,'Stop remains available while pausing');
+      await page.evaluate(()=>{
+        window.projectionState.voice={active:false,paused:true,phase:'paused',message:'Conversation paused'};
+        window.KorlixProjectionReceive({type:'voice',...window.projectionState.voice});
+        const command=window.projectionCommands.filter(c=>c.action==='pauseVoice').at(-1);
+        window.KorlixProjectionReceive({type:'reply',id:command.id,data:{active:false,paused:true}});
+      });
+      assert.equal(await page.locator('body').getAttribute('data-voice'),'paused','Direct native paused events retain their phase');
+      assert.equal(await page.locator('body').getAttribute('data-voice-active'),'false','Paused is not treated as an active microphone');
+      assert.equal(await page.locator('#talk-button').isEnabled(),false,'A paused conversation uses Resume');
+      assert.equal(await page.locator('#resume-button').isEnabled(),true);
+      assert.equal(await page.locator('#stop-button').isEnabled(),true,'Stop works while paused');
+      await assertVoiceControls(page,'paused-'+width);
+      const voiceStartsBeforeNavigation=await page.evaluate(()=>window.projectionCommands.filter(c=>['startVoice','resumeVoice'].includes(c.action)).length);
+      await page.locator('#room-command').click();
+      assert.equal(await page.locator('body').getAttribute('data-voice'),'paused','Changing rooms preserves pause');
+      await assertVoiceControls(page,'paused-command-'+width);
       await page.locator('#close-projection').click();
       assert.equal(await page.evaluate(()=>window.projectionCommands.filter(c=>c.action==='close').length),1);
       assert.equal(await page.evaluate(()=>window.projectionCommands.filter(c=>c.action==='stopVoice').length),0,'Closing projection does not stop the existing voice session');
+      assert.equal(await page.evaluate(()=>window.projectionCommands.filter(c=>['startVoice','resumeVoice'].includes(c.action)).length),voiceStartsBeforeNavigation,'Room navigation and Close do not automatically resume voice');
       await page.locator('#stop-button').click();
       await page.waitForFunction(()=>document.querySelector('#voice-phase').textContent==='Microphone off');
       assert.equal(await page.evaluate(()=>window.projectionCommands.filter(c=>c.action==='stopVoice').length),1);
+
+      await page.evaluate(()=>{window.testHoldStart=false;window.testHoldPause=false;});
+      await page.locator('#talk-button').click();
+      await page.waitForFunction(()=>document.body.dataset.voice==='listening');
+      await page.locator('#pause-button').click();
+      await page.waitForFunction(()=>document.body.dataset.voice==='paused');
+      await page.locator('#resume-button').click();
+      await page.waitForFunction(()=>document.body.dataset.voice==='listening');
+      assert.equal(await page.locator('#pause-button').isEnabled(),true,'A successful explicit Resume restores Pause');
+      assert.equal(await page.locator('#resume-button').isEnabled(),false);
+      assert.equal(await page.evaluate(()=>window.projectionTimeouts.filter(entry=>entry.action==='resumeVoice').at(-1).timeout),90000,'Resume receives the same connection budget as Start');
+      await page.locator('#pause-button').click();
+      await page.waitForFunction(()=>document.body.dataset.voice==='paused');
+      await page.evaluate(()=>window.testHoldResume=true);
+      await page.locator('#resume-button').click();
+      await page.evaluate(()=>{document.querySelector('#resume-button').click();document.querySelector('#resume-button').click();});
+      assert.equal(await page.evaluate(()=>window.projectionCommands.filter(c=>c.action==='resumeVoice').length),2,'Duplicate Resume is blocked while connecting');
+      assert.equal(await page.locator('body').getAttribute('data-voice'),'connecting');
+      assert.equal(await page.locator('#stop-button').isEnabled(),true,'Stop cancels a pending Resume');
+      await assertVoiceControls(page,'resuming-'+width);
+      await page.evaluate(()=>window.testHoldStop=true);
+      await page.locator('#stop-button').click();
+      await page.evaluate(()=>window.KorlixProjectionReceive({type:'voice',active:true,paused:false,phase:'speaking',message:'A late audio update'}));
+      assert.equal(await page.locator('body').getAttribute('data-voice'),'stopping','An in-flight voice event cannot undo Stop');
+      assert.equal(await page.locator('#pause-button').isEnabled(),false);
+      assert.equal(await page.locator('#resume-button').isEnabled(),false);
+      await page.evaluate(()=>{
+        window.projectionState.voice={active:false,paused:false,phase:'complete',message:'Microphone off'};window.sendSnapshot();
+        for(const action of ['stopVoice','resumeVoice']) {
+          const command=window.projectionCommands.filter(c=>c.action===action).at(-1);
+          window.KorlixProjectionReceive({type:'reply',id:command.id,data:{active:action==='resumeVoice',paused:false}});
+        }
+      });
+      await settleLayout(page);
+      assert.equal(await page.locator('body').getAttribute('data-voice'),'complete','A late successful Resume reply cannot revive a stopped conversation');
+      assert.equal(await page.locator('body').getAttribute('data-voice-active'),'false');
+      assert.equal(await page.locator('#talk-button').isEnabled(),true);
+      assert.equal(await page.locator('#resume-button').isEnabled(),false);
+      assert.equal(await page.locator('#stop-button').isEnabled(),false);
       assert.equal(await page.evaluate(()=>window.projectionCommands.every(c=>/^\d+$/.test(c.id)&&c.nonce==='test-session-nonce-123456789')),true,'Every bridge command carries the session nonce and decimal ID');
 
       await page.evaluate(()=>{
@@ -431,6 +541,13 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
           await alignRendererInViewport(page);
           await assertClearRendererSurface(page,`active-${label}`,{activeVoice:true,capture:true});
           await page.evaluate(()=>{
+            window.projectionState.voice={active:false,paused:true,phase:'paused',message:'Conversation paused'};window.sendSnapshot();
+          });
+          await settleRendererLayout(page,renderer,`paused-${label}`);
+          await alignRendererInViewport(page);
+          await assertClearRendererSurface(page,`paused-${label}`,{activeVoice:true});
+          await assertVoiceControls(page,`paused-map-${label}`);
+          await page.evaluate(()=>{
             window.scrollBeforeStop=document.querySelector('.projection-shell').scrollTop;
             window.projectionState.voice={active:false,phase:'complete',message:'Microphone off'};window.sendSnapshot();
           });
@@ -450,6 +567,6 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
     }
     await page.close();
     assert.deepEqual(errors,[],'No uncaught browser errors');
-    console.log('Projection UI passed: five viewport sizes, both rooms, explicit place confirmation, Google address attribution without a map, source safety, cost disclosure, save failure/success, voice continuity, duplicate-start prevention, close/stop separation, renderer origin isolation, unobstructed provider surfaces while loading/ready, separate provider popups, active-dock clearance with scroll preservation, and no credential transfer.');
+    console.log('Projection UI passed: five viewport sizes, both rooms, explicit place confirmation, reviewed userQuery directions with account entitlement, Google address attribution without a map, source safety, cost disclosure, save failure/success, separate 44px Pause/Resume/Stop controls, explicit resume, cancellation of pending resume, stale reply protection, close/stop separation, renderer origin isolation, unobstructed provider surfaces while loading/ready and paused, separate provider popups, dock clearance with scroll preservation, and no credential transfer.');
   } finally { await browser.close(); }
 })().catch(error=>{console.error(error);process.exitCode=1;});

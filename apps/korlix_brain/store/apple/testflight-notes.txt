@@ -1,7 +1,13 @@
-KORLIX Brain+Voice 1.0.1 (14) — billing candidate
+KORLIX Brain+Voice 1.0.2 — conversation controls and knowledge tools
 
-Adds Plan & AI GAS from Home and Account. The approved plan is $34.99/month with 60 Live Conversation minutes, Personal Brain and Train My AI. Three optional AI GAS packs add 60, 120 or 180 Live minutes for $30, $55 or $80. Localized store prices are shown at checkout. Included minutes reset each billing period; purchased AI GAS carries over. Deep Think keeps its existing account limits.
+Pause, Resume and Stop are separate controls in conversation and Projection views. Pause closes microphone audio and the active usage session. Resume reconnects in the same mode with recent conversation context after the previous session is confirmed closed. Stop clears resumable context. Live Conversation also has refreshed authentication for usage reports, reliable heartbeat timing and clearer balance/session errors.
 
-Purchasing remains unavailable until store products and server readiness are verified. This candidate alone does not activate billing or change the existing Live allowance. Designated store test accounts must verify purchase, restore, renewal, all three GAS packs, cancellation, refunds, account switching and Stop returning unused reserved time before activation.
+Upload PDF from Home or the Memory/Training file action. Choose Memory, Training, or both; review and edit the extracted knowledge before approving a save. Existing text, Markdown, DOCX, CSV and JSON imports remain available. Training imports append to current instructions after review.
 
-The working automatic welcome, music, Risi (Ree-see) pronunciation, Live Conversation, Deep Think and transcript Save/Share/Delete are preserved. Please retest opening Home, Skip/Replay, immediate Talk to Rici and Stop.
+Camera Ask uses the same image-analysis service as KORLIX AI: take or select up to three photos, choose an analysis mode, ask follow-ups, and copy, share or report the answer. Camera Ask uses the existing shared credit allowance and answer history. It does not automatically save Memory or Training.
+
+Directions access is enabled for the requested support account. Enter or speak the complete destination, choose driving/walking/transit, review it, and open Apple or Google Maps. The map app confirms the address match before navigation. Embedded Projection imagery still depends on separately verified map-provider configuration.
+
+Device checks: try Pause during speech, Resume, Stop while connecting, sign-out/account switching, a network interruption, and a long Live Conversation. Verify microphone/speaker shutdown, restored context, current balance, PDF review/save, camera permission and capture, and both Maps choices. New native behavior must be tested on physical iOS and Android devices before store release.
+
+Existing account, plan, AI GAS, welcome, ambience, and transcript controls are preserved. This candidate does not activate store billing or submit an App Store release.

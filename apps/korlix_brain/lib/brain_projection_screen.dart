@@ -22,12 +22,15 @@ class BrainProjectionBridge {
     'close',
     'room',
     'search',
+    'directions',
     'select',
     'camera',
     'ask',
     'savePlace',
     'startVoice',
     'stopVoice',
+    'pauseVoice',
+    'resumeVoice',
     'openSource',
     'rendererReady',
   };
@@ -45,6 +48,7 @@ class BrainProjectionBridge {
           _seen.contains(id) ||
           (_pending.length >= 8 &&
               action != 'stopVoice' &&
+              action != 'pauseVoice' &&
               action != 'close')) {
         return null;
       }

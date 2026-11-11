@@ -42,3 +42,43 @@ body[data-voice]:not([data-voice="complete"]):not([data-voice="error"]) main{pad
 
 .candidate-button .partial-match-warning,.place-banner .partial-match-warning{display:block;color:#e0bd84;font-size:10px;line-height:1.5;margin-top:5px}
 .map-data-credit{display:block;margin-top:6px;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.4;font-style:normal;font-weight:400;letter-spacing:normal;text-transform:none;white-space:nowrap;color:#fff}
+
+/* Directions are reviewed in the app, outside the provider-owned map. */
+.directions-panel{display:flex;align-items:center;gap:12px;padding:10px 16px;border-top:1px solid var(--line)}
+.directions-panel p{margin:0;font-size:10px;line-height:1.5;color:var(--muted);overflow-wrap:anywhere}
+.directions-button{display:flex;align-items:center;justify-content:center;gap:7px;min-width:110px;min-height:44px;padding:8px 12px;border:1px solid #bba17955;border-radius:5px;background:#8b714d20;color:#ecd5b4;font-size:12px;flex-shrink:0}
+.directions-button svg{width:16px;height:16px}
+.directions-button:hover:enabled{border-color:var(--gold);background:#8b714d35}
+
+/* Keep each conversation action visible, including while paused. */
+.voice-dock{gap:16px}
+.voice-identity strong{overflow-wrap:anywhere}
+.voice-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;flex-shrink:0}
+.voice-actions .voice-control{display:flex;align-items:center;justify-content:center;gap:6px;min-width:78px;min-height:44px;padding:8px;border:1px solid #bba1cc50;border-radius:6px;background:#ad91c410;color:#e0d7e6;font-size:11px;line-height:1.3}
+.voice-actions .voice-control svg{width:14px;height:14px}
+.voice-actions .voice-control span{min-width:0;overflow-wrap:anywhere}
+.voice-actions .voice-control:hover:enabled{background:#ad91c425;border-color:#cdb8e3}
+.voice-actions .resume-button{color:#b6edef;border-color:#5adbe573;background:#236e791c}
+.voice-actions .stop-button{color:#e8b7c0;border-color:#bd656b70;background:#97434f18}
+.voice-actions .stop-button:hover:enabled{background:#97434f29;border-color:#dc8c8c}
+body[data-voice="paused"] .voice-wave i{background:#bba1cc;animation:none}
+@media(max-width:790px){
+  .voice-dock{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 14px}
+  .voice-identity{grid-column:1;min-width:0;gap:9px;padding:0;border:0}
+  .voice-identity strong{max-width:none}
+  .voice-actions{grid-column:1 / -1;width:100%}
+  .talk-button{min-width:0;width:auto;max-width:190px;min-height:52px}
+}
+@media(max-width:560px){
+  .voice-dock{gap:10px;padding:12px}
+  .voice-identity div>span{display:none}
+  .voice-identity strong{font-size:11px}
+  .voice-wave{margin:0;width:16px;gap:2px}
+  .talk-button{padding:6px 10px;gap:7px;max-width:146px}
+  .talk-button strong{font-size:10px}
+  .talk-button small{font-size:8px}
+  .talk-microphone{width:27px;height:27px;flex-shrink:0}
+  .voice-actions .voice-control{min-width:0;font-size:11px;padding:8px 6px}
+  .directions-panel{gap:9px;padding:10px 12px}
+  .directions-panel p{font-size:10px}
+}

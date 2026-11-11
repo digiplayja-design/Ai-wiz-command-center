@@ -25,12 +25,13 @@ class BrainVoiceSessionGate {
     'savePlace',
     'imageryAge',
     'liveView',
+    'directions',
   ];
   static const projectionValueLimit = 1000;
   static const projectionTool = <String, dynamic>{
     'type': 'function',
     'name': 'control_projection',
-    'description': 'Control Projection Mode or ask about the selected place when the user explicitly requests it. The app checks the original user transcript before acting.',
+    'description': 'Control Projection Mode, ask about the selected place, or prepare directions when the user explicitly requests it. Use directions for route to, navigate to, or directions to an address. The app checks the original user transcript before acting.',
     'parameters': {
       'type': 'object',
       'properties': {
@@ -43,7 +44,7 @@ class BrainVoiceSessionGate {
   };
   static const projectionInstructions =
       '# Projection capability for this client\n'
-      'This client adds control_projection alongside remember_in_brain. Earlier references to having only the memory tool do not include this optional capability. Projection Mode is a view inside KORLIX. Use control_projection only for the user\'s explicit projection, map, place, camera or room request, or a question about the selected place. Use an empty value when no value is needed. When the user confirms a displayed place or chooses a displayed result, use action search with their original confirmation as value, for example "yes, that is the place" or "choose the first result". The app validates the original user transcript. For an explicit request to remember or save this place, address, building or location, use action savePlace. All ordinary memory commands still use remember_in_brain. Relay the returned answer and its scope/source limits accurately. Never describe map imagery as live video or invent a location, camera feed, date, population, mayor, crime statistic or building record. If a tool fails or has no verified data, say so. Do not start or stop the voice session when opening or closing Projection Mode.';
+      'This client adds control_projection alongside remember_in_brain. Earlier references to having only the memory tool do not include this optional capability. Projection Mode is a view inside KORLIX. Use control_projection only for the user\'s explicit projection, map, place, camera or room request, or a question about the selected place. Use an empty value when no value is needed. When the user confirms a displayed place or chooses a displayed result, use action search with their original confirmation as value, for example "yes, that is the place" or "choose the first result". The app validates the original user transcript. For an explicit route to, navigate to, or directions to a destination, use action directions with that destination. This opens a route review screen; the user starts navigation with a tap. Do not claim navigation has started. For an explicit request to remember or save this place, address, building or location, use action savePlace. All ordinary memory commands still use remember_in_brain. Relay the returned answer and its scope/source limits accurately. Never describe map imagery as live video or invent a location, camera feed, date, population, mayor, crime statistic or building record. If a tool fails or has no verified data, say so. Do not start or stop the voice session when opening or closing Projection Mode.';
 
   Map<String, dynamic> get configuration => mode.isLive
       ? {

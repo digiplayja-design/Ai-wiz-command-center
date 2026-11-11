@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:korlix_receipt_core/privacy/korlix_third_party_ai_consent.dart';
 import 'package:share_plus/share_plus.dart';
@@ -12,6 +11,11 @@ import 'package:webview_flutter_android/webview_flutter_android.dart';
 import 'package:webview_flutter_wkwebview/webview_flutter_wkwebview.dart';
 
 import 'brain_api.dart';
+import 'brain_documents.dart';
+import 'brain_documents_screen.dart';
+import 'brain_camera_ask.dart';
+import 'brain_camera_ask_screen.dart';
+import 'brain_directions.dart';
 import 'brain_auth.dart';
 import 'brain_repository.dart';
 import 'brain_voice.dart';
@@ -92,6 +96,11 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
       onStopVoice: () async {
         await _dispatch('stopVoice', {});
       },
+      onPauseVoice: () => _dispatch('pauseVoice', {}).then((_) {}),
+      onResumeVoice: () => _dispatch('resumeVoice', {}).then((_) {}),
+      onDirections: (query) => unawaited(_openDirections(query).catchError((Object _) {
+        _emit({'type': 'notice', 'message': 'Directions could not open. Please try again.'});
+      })),
       onSave: _saveProjectionPlace,
     );
     _voice = BrainVoice(
@@ -162,6 +171,8 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.resumed) {
       unawaited(_welcome.stop(dismiss: false).catchError((Object _) {}));
+    } else {
+      unawaited(_voice.refreshUsage());
     }
     _emit({
       'type': 'appLifecycle',
@@ -229,6 +240,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
       if (!RegExp(r'^\d{1,10}$').hasMatch(id) || !_inFlight.add(id)) return;
       if (_inFlight.length > 12 &&
           value['action'] != 'stopVoice' &&
+          value['action'] != 'pauseVoice' &&
           value['action'] != 'stopWelcome') {
         throw const BrainApiException(
           'Please wait for the current actions to finish.',
@@ -289,10 +301,40 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
       await _voice.stop();
       return null;
     }
+    if (action == 'pauseVoice') {
+      ++_voiceStartRequest;
+      _captureStarting = false;
+      _projection.cancelPending();
+      await _voice.pause();
+      return {'active': _voice.active, 'paused': _voice.paused};
+    }
     if (widget.auth.session == null) {
       throw const BrainApiException('Please sign in again.');
     }
     switch (action) {
+      case 'resumeVoice':
+        final request = ++_voiceStartRequest;
+        _captureStarting = true;
+        try {
+          await _welcome.stop();
+          await _stopDictation();
+          if (await _consent('Resume Rici', {
+            KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts,
+            KorlixThirdPartyAiDataCategory.agentTrainingAndMemory,
+          }) && !_disposed && mounted && request == _voiceStartRequest) {
+            await _voice.resume();
+          }
+          return {'active': _voice.active, 'paused': _voice.paused};
+        } finally {
+          if (request == _voiceStartRequest) _captureStarting = false;
+        }
+      case 'cameraAsk':
+        return _openCameraAsk();
+      case 'openDocuments':
+        return _openDocuments('both');
+      case 'directions':
+        await _openDirections('');
+        return null;
       case 'openProjection':
         _projection.open();
         return {'open': true};
@@ -417,7 +459,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
         return null;
       case 'pickFile':
         await _welcome.stop();
-        return _pickFile(_kind(data));
+        return _openDocuments(_kind(data));
       case 'account':
         await _welcome.stop();
         await _account();
@@ -578,90 +620,67 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
     }
   }
 
-  Future<Map<String, dynamic>> _pickFile(String kind) async {
-    if (_pickerBusy) {
-      throw const BrainApiException(
-        'Please finish the current file import first.',
-      );
-    }
+  Future<void> _pauseForFeature() async {
+    ++_voiceStartRequest;
+    _captureStarting = false;
+    await _welcome.stop();
+    await _stopDictation();
+    if (_voice.active) await _voice.pause();
+  }
+
+  Future<Map<String, dynamic>> _openDocuments(String kind) async {
+    if (_pickerBusy) throw const BrainApiException('Finish the open tool first.');
     _pickerBusy = true;
     final revision = widget.auth.revision;
     try {
-      await _stopDictation();
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['pdf', 'txt', 'md', 'docx', 'csv', 'json'],
-        allowMultiple: false,
-        withData: true,
-      );
-      if (result == null) return {'canceled': true};
-      if (!mounted || revision != widget.auth.revision) {
-        throw const BrainApiException(
-          'Your account changed. Choose the file again.',
-        );
-      }
-      final file = result.files.single;
-      if (file.size > 10 * 1024 * 1024 ||
-          file.bytes == null ||
-          file.bytes!.isEmpty) {
-        throw const BrainApiException(
-          'Choose a nonempty document smaller than 10 MB.',
-        );
-      }
-      if (!await _consent('Analyze a Brain document', {
-        KorlixThirdPartyAiDataCategory.filesAndDocuments,
-        KorlixThirdPartyAiDataCategory.agentTrainingAndMemory,
-      })) {
-        return {'canceled': true};
-      }
-      if (!mounted || revision != widget.auth.revision) {
-        throw const BrainApiException('Your account changed.');
-      }
-      final analysis = await _api.analyze(kind, file.name, file.bytes!);
-      if (!mounted) return {'canceled': true};
-      String text;
-      if (kind == 'training') {
-        text = analysis['trainingDraft']?.toString() ?? '';
-      } else {
-        final suggestions = (analysis['suggestions'] as List? ?? [])
-            .whereType<Map>()
-            .map((m) => m['content']?.toString() ?? '')
-            .where((s) => s.isNotEmpty)
-            .toList();
-        if (suggestions.isEmpty) {
-          throw const BrainApiException(
-            'No durable memories were found. Try another file or type a memory.',
-          );
-        }
-        final selected = await showDialog<String>(
-          context: context,
-          builder: (context) => SimpleDialog(
-            title: const Text('Choose a memory to review'),
-            children: [
-              for (final suggestion in suggestions)
-                SimpleDialogOption(
-                  onPressed: () => Navigator.pop(context, suggestion),
-                  child: Text(suggestion),
-                ),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-            ],
-          ),
-        );
-        if (selected == null) return {'canceled': true};
-        text = selected;
-      }
-      if (text.trim().isEmpty) {
-        throw const BrainApiException(
-          'No draft was returned. Try another document.',
-        );
-      }
-      return {'text': text, 'filename': file.name};
-    } finally {
-      _pickerBusy = false;
-    }
+      await _pauseForFeature();
+      if (!mounted || _disposed || revision != widget.auth.revision) return {'canceled':true};
+      await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => BrainDocumentScreen(
+        repository: _repository,
+        initialDestination: kind == 'memory' ? BrainDocumentDestination.memory
+            : kind == 'training' ? BrainDocumentDestination.training : BrainDocumentDestination.both,
+        requestConsent: () => _consent('Analyze a Brain document', {
+          KorlixThirdPartyAiDataCategory.filesAndDocuments,
+          KorlixThirdPartyAiDataCategory.agentTrainingAndMemory,
+        }),
+        onSaved: (snapshot) => _emit({'type':'brainSnapshot','snapshot':snapshot}),
+      )));
+      return {'imported':true};
+    } finally { _pickerBusy = false; }
+  }
+
+  Future<Object?> _openCameraAsk() async {
+    if (_pickerBusy) throw const BrainApiException('Finish the open tool first.');
+    _pickerBusy = true;
+    final revision = widget.auth.revision;
+    try {
+      await _pauseForFeature();
+      if (!mounted || _disposed || revision != widget.auth.revision) return null;
+      final client = BrainCameraAskClient(_api);
+      await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => BrainCameraAskScreen(
+        client: client,
+        ensureConsent: (context) => KorlixThirdPartyAiConsent.ensure(
+          context: context, featureName: 'Camera Ask',
+          providers: {KorlixThirdPartyAiProvider.openAi},
+          dataCategories: {KorlixThirdPartyAiDataCategory.imagesAndPhotos,
+            KorlixThirdPartyAiDataCategory.typedTextAndPrompts},
+        ),
+      )));
+      return null;
+    } finally { _pickerBusy = false; }
+  }
+
+  Future<void> _openDirections(String query) async {
+    if (_pickerBusy || !mounted || _disposed || widget.auth.session == null) return;
+    _pickerBusy = true;
+    final revision = widget.auth.revision;
+    try {
+      await _pauseForFeature();
+      if (!mounted || _disposed || revision != widget.auth.revision) return;
+      await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => BrainDirectionsScreen(
+        api: _api, initialDestination: query, beforeOpen: _pauseForFeature,
+      )));
+    } finally { _pickerBusy = false; }
   }
 
   Future<Map<String, dynamic>> _report(String text) async {
