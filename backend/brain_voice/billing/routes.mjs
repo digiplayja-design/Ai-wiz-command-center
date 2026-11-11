@@ -2,6 +2,11 @@ import {fail,UUID} from '../../web_billing/core.mjs';
 import {BRAIN_CATALOG,brainAccountId,productFor} from './catalog.mjs';
 import {brainProviders} from './providers.mjs';
 
+const errorStatus = error => {
+  const status = error?.statusCode ?? error?.status;
+  return Number.isInteger(status) && status >= 400 && status < 600 ? status : 503;
+};
+
 export function createBrainBilling({database,requireUser,environment=process.env,provider=brainProviders(environment),fetcher=fetch,autoStart=true,store}={}) {
   const enabled=()=>environment.KORLIX_BRAIN_BILLING_ENABLED==='true';
   const call=store||async function(actor,action,p={}) {
@@ -37,7 +42,7 @@ export function createBrainBilling({database,requireUser,environment=process.env
       if(previous&&now<previous.until){if(++previous.n>30)fail('Please wait a minute before retrying.',429);}else rate.set(user.id,{n:1,until:now+60000});
       if(rate.size>10000)for(const[k,v]of rate)if(v.until<now)rate.delete(k);
       await fn(req,res,user);
-    }catch(error){res.status(error.statusCode||503).json({error:error.statusCode?error.message:'Store verification is temporarily unavailable. Please retry.'});}
+    }catch(error){const status=errorStatus(error);res.status(status).json({error:status<500?error.message:'Store verification is temporarily unavailable. Please retry.'});}
   };
   function register(app) {
     app.get('/api/brain/billing/health',(_req,res)=>res.json({enabled:enabled(),appleReady:!!provider.ready('apple'),googleReady:!!provider.ready('google'),catalogVersion:'brain_monthly_60_gas_60_120_180_v1'}));
@@ -68,7 +73,7 @@ export function createBrainBilling({database,requireUser,environment=process.env
         if(!UUID.test(decoded.appAccountToken||''))fail('Unknown store account.',409);
         await sync(decoded.appAccountToken,{provider:'apple',productId:decoded.productId,purchaseId:decoded.transactionId});
         res.json({accepted:true});
-      }catch(error){res.status(error.statusCode||503).json({error:'Store notification could not be applied.'});}
+      }catch(error){res.status(errorStatus(error)).json({error:'Store notification could not be applied.'});}
     });
   }
   async function hangup(session) {
