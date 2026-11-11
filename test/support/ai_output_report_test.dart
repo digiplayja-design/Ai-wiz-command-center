@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 const reportId = 'korlix_report_23a1fa12-e789-4f38-bc1c-701df956d510';
 final endpoint = Uri.https('reports.example.test', '/api/report-output');
@@ -86,6 +87,11 @@ class _DialogFixture {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  PackageInfo.setMockInitialValues(
+    appName: 'KORLIX AI', packageName: 'com.example.korlix',
+    version: '12.0.5', buildNumber: '145', buildSignature: '',
+  );
   for (final status in [200, 202]) {
     test(
       'HTTP $status confirms a durable receipt and sends actual context once',
@@ -107,6 +113,7 @@ void main() {
         expect(body['outputSummary'], 'Saved response');
         expect(body['reason'], 'False or misleading');
         expect(body['details'], 'The statement is incorrect.');
+        expect(body['appVersion'], '12.0.5+145');
         expect(body.containsKey('userId'), isFalse);
         expect(body.containsKey('userEmail'), isFalse);
       },

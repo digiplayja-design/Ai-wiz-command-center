@@ -9,6 +9,7 @@ import 'korlix_live_convo_agent.dart';
 import '../theme/korlix_action_button.dart';
 import '../theme/korlix_action_grid.dart';
 import 'korlix_live_convo_agent_client.dart';
+import '../support/korlix_automated_support_panel.dart';
 
 // KORLIX_AGENT_EMAIL_UI_BUILD133_BEGIN
 
@@ -506,6 +507,7 @@ class _KorlixAgentEmailApi {
 
       throw KorlixLiveConvoAgentClientException(
         message,
+        statusCode: response.statusCode,
         code: _emailText(responseMap, const <String>[
           'code',
         ], fallback: 'agent_email_request_failed'),
@@ -3197,6 +3199,7 @@ class _KorlixLiveConvoAgentEmailSheetState
       (icon: Icons.people_alt_rounded, label: 'Recipients'),
       (icon: Icons.drafts_rounded, label: 'Drafts'),
       (icon: Icons.auto_mode_rounded, label: 'Automation'),
+      (icon: Icons.support_agent_rounded, label: 'Support'),
     ];
 
     return SingleChildScrollView(
@@ -3252,6 +3255,13 @@ class _KorlixLiveConvoAgentEmailSheetState
 
       case 3:
         return _ruleList();
+
+      case 4:
+        return KorlixAutomatedSupportPanel(
+          request: _api.request,
+          assertCurrentAccount: widget.client.assertCurrentAccount,
+          accent: _accent,
+        );
 
       case 0:
       default:
@@ -3395,6 +3405,7 @@ class _KorlixLiveConvoAgentEmailSheetState
                   ),
                 ),
                 _sectionSelector(),
+                if (_section != 4)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                   child: TextField(
@@ -3434,7 +3445,7 @@ class _KorlixLiveConvoAgentEmailSheetState
                     ),
                   ),
                 ),
-                if (_error != null)
+                if (_error != null && _section != 4)
                   Container(
                     width: double.infinity,
                     margin: const EdgeInsets.fromLTRB(14, 2, 14, 8),
@@ -3467,7 +3478,7 @@ class _KorlixLiveConvoAgentEmailSheetState
                     ),
                   ),
                 Expanded(
-                  child: _loading
+                  child: _loading && _section != 4
                       ? Center(child: CircularProgressIndicator(color: _accent))
                       : _selectedSection(),
                 ),
