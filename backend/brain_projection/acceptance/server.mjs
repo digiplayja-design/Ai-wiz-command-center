@@ -13,6 +13,7 @@ export function acceptanceMapPolicy(value) {
   return ["default-src 'none'",
     `script-src 'nonce-${value}' 'strict-dynamic' 'self' https://maps.googleapis.com https://maps.gstatic.com 'unsafe-eval' blob:`,
     `style-src 'self' 'nonce-${value}' https://fonts.googleapis.com`,
+    "style-src-attr 'unsafe-inline'",
     "img-src 'self' https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.googleusercontent.com data: blob:",
     "connect-src 'self' https://*.googleapis.com https://*.google.com https://*.gstatic.com data: blob:",
     "font-src https://fonts.gstatic.com", "worker-src blob:", "frame-src https://*.google.com",

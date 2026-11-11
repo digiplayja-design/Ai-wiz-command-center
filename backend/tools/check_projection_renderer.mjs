@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
+import {randomBytes} from 'node:crypto';
 import {mkdir, writeFile} from 'node:fs/promises';
 import {createServer} from 'node:http';
 import {createRequire} from 'node:module';
 import {resolve} from 'node:path';
 import {Script} from 'node:vm';
-import express from 'express';
-import {registerProjectionRenderer, MAPS_JS_CHANNEL} from '../brain_projection/renderer.mjs';
+import {registerProjectionRenderer, rendererPolicy, MAPS_JS_CHANNEL} from '../brain_projection/renderer.mjs';
 
 // CI CONTRACT FIXTURES, NOT THE GOOGLE SDK. Google Maps JavaScript requires an
 // owner-provisioned valid key. This test runs the real local renderer, headers,
@@ -98,7 +98,106 @@ function installMaps3dContractFixture(mode) {
 const sdkFixture = mode => `(${installMaps3dContractFixture.toString()})(${JSON.stringify(mode)});`;
 for (const mode of modes) new Script(sdkFixture(mode), {filename: `maps3d-${mode}-fixture.js`});
 
+// This separate synthetic page exercises the browser's own CSP enforcement.
+// It does not load, replace or intercept any Google SDK code.
+function installCspEnforcementFixture() {
+  const fixture = window.__projectionCspFixture = {kind: 'synthetic-csp-enforcement-fixture',
+    liveProviderVerified: false, trustedScriptExecuted: true, unauthorizedScriptExecuted: false,
+    dynamicPadding: [], violations: [], completed: false};
+  document.addEventListener('securitypolicyviolation', event => {
+    fixture.violations.push({directive: event.effectiveDirective, blockedURI: event.blockedURI, disposition: event.disposition});
+  });
+  const attributeProbe = document.getElementById('style-attribute-probe');
+  const elementProbe = document.getElementById('style-element-probe');
+  fixture.baseline = {padding: getComputedStyle(attributeProbe).paddingLeft, height: getComputedStyle(elementProbe).height};
+  // Individual CSSOM property assignments can bypass the attribute inline check;
+  // setAttribute reproduces the operation that the real iPad CSP rejected.
+  for (const padding of [37, 43]) {
+    attributeProbe.setAttribute('style', `padding-left: ${padding}px`);
+    fixture.dynamicPadding.push(getComputedStyle(attributeProbe).paddingLeft);
+  }
+  const style = document.createElement('style');
+  style.id = 'unnonced-style-probe';
+  style.textContent = '#style-element-probe{height:991px!important}';
+  document.head.append(style);
+  const script = document.createElement('script');
+  script.id = 'unnonced-script-probe';
+  script.textContent = 'window.__projectionCspFixture.unauthorizedScriptExecuted = true;';
+  document.body.append(script);
+  requestAnimationFrame(() => {
+    fixture.finalStyle = {padding: getComputedStyle(attributeProbe).paddingLeft, height: getComputedStyle(elementProbe).height};
+    fixture.completed = true;
+  });
+}
+
+const cspFixture = `(${installCspEnforcementFixture.toString()})();`;
+new Script(cspFixture, {filename: 'csp-enforcement-fixture.js'});
+
+async function checkCspEnforcement(browser, origin, report, artifactDirectory, nonces) {
+  const result = report.cspEnforcement = {validationKind: 'synthetic-csp-enforcement-fixture', fixture: true,
+    liveProviderVerified: false, providerNetworkRequests: 0, unexpectedRequests: [], pageErrors: [], consoleErrors: []};
+  const context = await browser.newContext({bypassCSP: false, serviceWorkers: 'block'});
+  await context.routeWebSocket('**/*', socket => {
+    result.unexpectedRequests.push({kind: 'websocket'}); socket.close();
+  });
+  await context.route('**/*', route => {
+    const url = new URL(route.request().url());
+    if (url.origin === origin) return route.continue();
+    result.unexpectedRequests.push({kind: 'blocked', origin: url.origin});
+    return route.abort('blockedbyclient');
+  });
+  const page = await context.newPage();
+  page.on('pageerror', error => result.pageErrors.push(error.message));
+  page.on('console', message => { if (message.type() === 'error') result.consoleErrors.push(message.text()); });
+  page.setDefaultTimeout(10000);
+  try {
+    const response = await page.goto(`${origin}/__projection_ci/csp.html`, {waitUntil: 'load'});
+    assert.equal(response.status(), 200);
+    const policy = (await response.allHeaders())['content-security-policy'];
+    const nonce = /script-src[^;]*'nonce-([^']+)'/.exec(policy)?.[1];
+    assert.ok(nonce && !nonces.has(nonce), 'The CSP fixture needs a fresh response nonce.');
+    nonces.add(nonce);
+    assert.equal(policy, rendererPolicy(nonce), 'The fixture must use the actual isolated renderer policy.');
+    await page.waitForFunction(() => window.__projectionCspFixture?.completed && window.__projectionCspFixture.violations.length >= 2);
+    result.observed = await page.evaluate(() => ({...window.__projectionCspFixture,
+      unnoncedStyle: !document.getElementById('unnonced-style-probe').hasAttribute('nonce'),
+      unnoncedScript: !document.getElementById('unnonced-script-probe').hasAttribute('nonce'),
+      googleSdkAbsent: typeof window.google === 'undefined'}));
+    const observed = result.observed;
+    assert.equal(observed.kind, 'synthetic-csp-enforcement-fixture');
+    assert.equal(observed.liveProviderVerified, false);
+    assert.equal(observed.googleSdkAbsent, true);
+    assert.equal(observed.trustedScriptExecuted, true, 'The matching nonced bootstrap must run.');
+    assert.deepEqual(observed.baseline, {padding: '11px', height: '19px'}, 'The matching nonced stylesheet must apply.');
+    assert.deepEqual(observed.dynamicPadding, ['37px', '43px'], 'Both dynamic style attribute updates must apply.');
+    assert.deepEqual(observed.finalStyle, {padding: '43px', height: '19px'}, 'An unnonced style element must not override the baseline.');
+    assert.equal(observed.unnoncedStyle, true);
+    assert.equal(observed.unnoncedScript, true);
+    assert.equal(observed.unauthorizedScriptExecuted, false, 'An unnonced inline script must not execute.');
+    assert.deepEqual([...observed.violations].sort((a, b) => a.directive.localeCompare(b.directive)), [
+      {directive: 'script-src-elem', blockedURI: 'inline', disposition: 'enforce'},
+      {directive: 'style-src-elem', blockedURI: 'inline', disposition: 'enforce'},
+    ], 'Only the two deliberately denied elements may produce CSP violations.');
+    // Keep expected denials confined to this page. Ordinary renderer scenarios
+    // retain their zero-CSP-violation and strict console-error checks unchanged.
+    assert.ok(result.consoleErrors.every(message =>
+      /^(Applying inline style violates|Refused to apply inline style because it violates) /.test(message) ||
+      /^(Executing inline script violates|Refused to execute inline script because it violates) /.test(message)),
+    `Unexpected CSP-fixture console errors: ${JSON.stringify(result.consoleErrors)}`);
+    assert.deepEqual(result.pageErrors, []);
+    assert.deepEqual(result.unexpectedRequests, [], 'The CSP fixture must not request any provider or external resource.');
+    result.passed = true;
+    console.log('PASS synthetic CSP enforcement fixture: style attributes apply; unnonced style/script elements blocked; liveProviderVerified=false; forwarded external requests=0');
+  } catch (error) {
+    result.error = error.stack || error.message;
+    result.observed = await page.evaluate(() => window.__projectionCspFixture).catch(() => null);
+    await page.screenshot({path: resolve(artifactDirectory, 'fixture-csp-enforcement-failure.png')}).catch(() => {});
+    throw error;
+  } finally { await context.close(); }
+}
+
 async function main() {
+  const {default: express} = await import('express');
   const require = createRequire(process.env.KORLIX_PROJECTION_BROWSER_DEPS
     ? resolve(process.env.KORLIX_PROJECTION_BROWSER_DEPS, 'package.json') : import.meta.url);
   const {chromium} = require('playwright');
@@ -116,6 +215,17 @@ async function main() {
   app.disable('x-powered-by');
   registerProjectionRenderer(app, {environment});
   app.get('/favicon.ico', (_req, res) => res.status(204).end());
+  app.get('/__projection_ci/csp.html', (_req, res) => {
+    const nonce = randomBytes(18).toString('base64url');
+    res.set({'Content-Security-Policy': rendererPolicy(nonce), 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'})
+      .type('html').send(`<!doctype html><html lang="en"><head><meta charset="utf-8">
+      <link rel="icon" href="data:,"><title>Synthetic CSP enforcement fixture</title>
+      <style nonce="${nonce}">body{font:16px system-ui;margin:24px}#style-attribute-probe{padding-left:11px}#style-element-probe{height:19px}</style>
+      </head><body><h1>Synthetic CSP enforcement fixture</h1>
+      <p>No Google SDK, credentials, geographic imagery or live provider verification.</p>
+      <div id="style-attribute-probe">Dynamic style attribute probe</div><div id="style-element-probe"></div>
+      <script nonce="${nonce}">${cspFixture}</script></body></html>`);
+  });
   app.get('/__projection_ci/host.html', (_req, res) => res.type('html').send(`<!doctype html>
     <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
     <link rel="icon" href="data:,"><title>Projection maps3d contract fixture</title>
@@ -133,6 +243,7 @@ async function main() {
 
   try {
     browser = await chromium.launch({headless: true, args: ['--disable-background-networking']});
+    await checkCspEnforcement(browser, origin, report, artifactDirectory, nonces);
     async function scenario(mode) {
       for (const name of Object.keys(environment)) delete environment[name];
       Object.assign(environment, {BRAIN_PROJECTION_MAPS_JS_BROWSER_KEY: browserKey,
@@ -372,7 +483,7 @@ async function main() {
 }
 
 if (process.argv.length === 3 && process.argv[2] === '--fixture-only') {
-  console.log('PASS maps3d fixture syntax only; no browser, real SDK or provider requests; liveProviderVerified=false.');
+  console.log('PASS maps3d and CSP fixture syntax only; no browser, real SDK or provider requests; liveProviderVerified=false.');
 } else if (process.argv.length === 2) {
   await main();
 } else {

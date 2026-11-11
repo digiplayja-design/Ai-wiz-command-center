@@ -366,7 +366,10 @@ test('hosted renderer is public and map-only, with fresh matching script/style n
   const scriptPolicy = policy.split('; ').find(directive => directive.startsWith('script-src '));
   assert.ok(scriptPolicy.includes(`'nonce-${nonces[0]}' 'strict-dynamic'`));
   assert.doesNotMatch(scriptPolicy, /unsafe-inline|https:\/\/\*|https:(?: |$)|data:/);
-  assert.ok(policy.includes(`style-src 'self' 'nonce-${nonces[0]}' https://fonts.googleapis.com`));
+  assert.equal(policy.split('; ').find(directive => directive.startsWith('style-src ')),
+    `style-src 'self' 'nonce-${nonces[0]}' https://fonts.googleapis.com`);
+  assert.equal(policy.split('; ').find(directive => directive.startsWith('style-src-attr ')),
+    "style-src-attr 'unsafe-inline'");
   assert.match(policy, /object-src 'none'; base-uri 'none'; form-action 'none'/);
   assert.doesNotMatch(html, /<script[^>]*src="https:/, 'Runtime installs authentication/error handlers before inserting the SDK');
   const next = await fetch(f.base + '/brain-projection/earth.html');

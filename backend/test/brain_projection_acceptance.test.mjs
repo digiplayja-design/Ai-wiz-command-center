@@ -74,6 +74,26 @@ test('negative frame sets document and header no-referrer while retaining nonce 
   assert.equal(acceptanceMapPolicy('abcdefghijklmnopqrstuvwxyz'), rendererPolicy('abcdefghijklmnopqrstuvwxyz'));
 });
 
+test('style-attribute compatibility is confined to map documents; shell and element protections remain strict', async t => {
+  const request = await serve(t, {browserKey: candidate});
+  for (const path of ['/frame/standard', '/frame/no-referrer', '/', '/no-referrer']) {
+    const response = await request(path);
+    const directives = response.headers.get('content-security-policy').split('; ');
+    const script = directives.find(value => value.startsWith('script-src '));
+    const style = directives.find(value => value.startsWith('style-src '));
+    assert.match(script, /'nonce-[A-Za-z0-9_-]+' 'strict-dynamic'/, path);
+    assert.match(style, /'nonce-[A-Za-z0-9_-]+'/, path);
+    assert.doesNotMatch(script, /'unsafe-inline'/, path);
+    assert.doesNotMatch(style, /'unsafe-inline'/, path);
+    const attributes = directives.find(value => value.startsWith('style-src-attr '));
+    if (path.startsWith('/frame/')) {
+      assert.equal(attributes, "style-src-attr 'unsafe-inline'", path);
+    } else {
+      assert.equal(attributes, undefined, 'The shell retains its nonce-only style policy');
+    }
+  }
+});
+
 test('released renderer assets are served byte-for-byte through a fixed allowlist', async t => {
   const request = await serve(t, {browserKey: candidate});
   for (const filename of ['earth.mjs', 'camera.mjs', 'earth.css']) {
