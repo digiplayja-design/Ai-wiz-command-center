@@ -30,6 +30,7 @@ import {
   korlixAgentEmailScheduleTimezone,
   korlixAgentEmailScheduleType,
 } from "./korlix_agent_email_schedule_k134b.mjs";
+import {legacyResendWebhookSecret, supportLegacyWebhookEnabled} from './automated_support/secrets.mjs';
 
 const PREFIX = "/api/live-convo/agents/:agentId/email";
 
@@ -1003,6 +1004,7 @@ export function createKorlixAgentEmailDeliveryService({
   provider = null,
   now = () => new Date(),
   randomUUID = () => crypto.randomUUID(),
+  onResendEmailReceived = null,
 } = {}) {
   if (!store) {
     fail(
@@ -2722,9 +2724,7 @@ export function createKorlixAgentEmailDeliveryService({
     },
 
     async processResendWebhook({ rawBody, headers }) {
-      const secret =
-        envText(environment, "KORLIX_AGENT_EMAIL_RESEND_WEBHOOK_SECRET", 1000) ||
-        envText(environment, "RESEND_WEBHOOK_SECRET", 1000);
+      const secret = legacyResendWebhookSecret(environment);
       const verified = verifyKorlixAgentEmailResendWebhook({
         rawBody,
         headers,
@@ -2733,6 +2733,21 @@ export function createKorlixAgentEmailDeliveryService({
       });
       const event = objectValue(verified.event);
       const eventType = line(event.type, 100).toLowerCase();
+      // Reuse this endpoint only when explicitly enabled. The original raw-body
+      // signature and timestamp check above remains the sole trust boundary;
+      // support cannot route an unsigned event or bypass legacy delivery logic.
+      if (eventType === "email.received" && supportLegacyWebhookEnabled(environment)) {
+        if (typeof onResendEmailReceived !== "function") {
+          fail("Support replies are temporarily unavailable. Please retry.",
+            "agent_email_support_bridge_unavailable",503);
+        }
+        const result = await onResendEmailReceived(event);
+        if (typeof result?.ignored !== "boolean") {
+          fail("Support replies are temporarily unavailable. Please retry.",
+            "agent_email_support_bridge_unavailable",503);
+        }
+        return Object.freeze({accepted:true,matched:result?.ignored === false,eventType,support:true});
+      }
       const data = objectValue(event.data);
       const providerMessageId = line(data.email_id ?? data.emailId, 240);
       if (!DELIVERY_EVENTS.has(eventType) || !providerMessageId) {
@@ -3144,6 +3159,7 @@ export function installKorlixAgentEmailDeliveryRoutes(
     schedulerNow = null,
     schedulerSetTimeout = globalThis.setTimeout,
     schedulerClearTimeout = globalThis.clearTimeout,
+    onResendEmailReceived = null,
   } = {},
 ) {
   if (
@@ -3171,6 +3187,7 @@ export function installKorlixAgentEmailDeliveryRoutes(
     provider: resend,
     now,
     randomUUID,
+    onResendEmailReceived,
   });
   const autopilotScheduler =
     createKorlixAgentEmailAutopilotScheduler({

@@ -1,5 +1,6 @@
 import {createHmac, timingSafeEqual} from 'node:crypto';
 import {validateTransactionalEmailAddress} from '../fieldproof/email_provider.mjs';
+import {supportThreadSecret} from './secrets.mjs';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const API = 'https://api.resend.com';
@@ -18,8 +19,8 @@ export class SupportProviderError extends Error {
 const fail = (code, options) => {throw new SupportProviderError(code, options);};
 
 function secret(environment) {
-  const key = environment.KORLIX_SUPPORT_THREAD_SECRET;
-  if (typeof key !== 'string' || key.length < 32 || key.length > 4096) fail('support_reply_routing_unavailable');
+  const key = supportThreadSecret(environment);
+  if (!key) fail('support_reply_routing_unavailable');
   return key;
 }
 function compactId(id) {
