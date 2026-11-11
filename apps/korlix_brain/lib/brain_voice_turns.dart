@@ -12,6 +12,7 @@ class BrainVoiceTurns {
     required this.emit,
     required this.isCurrent,
     required this.saved,
+    this.onProjection,
   }) {
     _speech = BrainSpeechQueue(
       send,
@@ -32,6 +33,12 @@ class BrainVoiceTurns {
   final void Function(Map<String, dynamic>) emit;
   final bool Function() isCurrent;
   final Future<void> Function(Map<String, dynamic>) saved;
+  final Future<Map<String, dynamic>?> Function(
+    String turnId,
+    String transcript,
+    Map<String, dynamic>? arguments,
+  )?
+  onProjection;
   final _items = <String, _Turn>{};
   final _order = <String>[];
   final _seen = <String>{};
@@ -122,6 +129,22 @@ class BrainVoiceTurns {
           });
         }
         try {
+          if (onProjection != null && turn.epoch == _epoch) {
+            // The controller handles only an explicit projection/place intent;
+            // ordinary conversation and ordinary memories return null. It owns
+            // explicit place-note writes, so never repeat the saved callback.
+            final projection = await onProjection!(id, turn.text!, null);
+            if (!current) break;
+            if (projection?['handled'] == true) {
+              if (turn.epoch != _epoch) continue;
+              final answer = projection!['answer'];
+              if (answer is! String || answer.trim().isEmpty) {
+                throw StateError('Missing projection answer');
+              }
+              _speech.add(answer, turn.epoch, id);
+              continue;
+            }
+          }
           var streamedText = '';
           final buffer = BrainSpeechBuffer((text) {
             if (current && turn.epoch == _epoch) {

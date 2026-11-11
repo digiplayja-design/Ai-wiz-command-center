@@ -33,12 +33,11 @@
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<!-- Native media dependencies reference these APIs; the document and audio-only
-	     flows do not request these permissions merely because the keys exist. -->
+	<!-- Camera Ask requests media access only after the user chooses a photo action. -->
 	<key>NSCameraUsageDescription</key>
-	<string>Camera access is used only when you choose to capture content to attach to a memory or training document.</string>
+	<string>Take a photo in Camera Ask so Rici can answer the question you choose to ask about it.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Photo access is used only when you choose a photo to attach to a memory or training document.</string>
+	<string>Choose photos in Camera Ask so Rici can describe, read, translate, compare, or answer your questions about them.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Location access is used only for optional location information on a photo attachment. Voice conversations and saving memories do not require your location.</string>
 	<key>NSMicrophoneUsageDescription</key>

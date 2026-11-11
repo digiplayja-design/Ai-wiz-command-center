@@ -1,8 +1,14 @@
 name: KORLIX Brain+Voice mobile validation
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [release/korlix-brain-store-20261101]
+    paths:
+      - apps/korlix_brain/**
+      - packages/korlix_receipt_core/**
+      - .github/workflows/korlix-brain-validation.yml
   push:
-    branches: [feature/korlix-brain-voice-20261031]
+    branches: [feature/korlix-brain-voice-20261031, feature/brain-projection-20261107]
     paths:
       - apps/korlix_brain/**
       - packages/korlix_receipt_core/**
@@ -15,7 +21,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: korlix-brain-${{ github.ref }}
+  group: korlix-brain-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 env:
   BOT: 'true'
@@ -24,6 +30,34 @@ env:
   DART_SUPPRESS_ANALYTICS: 'true'
   COCOAPODS_DISABLE_STATS: 'true'
 jobs:
+  projection-ui:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Install isolated browser test dependencies
+        run: |
+          npm install --prefix "$RUNNER_TEMP/projection-browser" --no-audit --no-fund playwright@1.56.1
+          "$RUNNER_TEMP/projection-browser/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Check responsive Projection and original home interactions
+        env:
+          PROJECTION_SCREENSHOTS: projection-screenshots
+        run: |
+          export NODE_PATH="$RUNNER_TEMP/projection-browser/node_modules"
+          node apps/korlix_brain/tools/check_projection.cjs
+          node apps/korlix_brain/tools/check_ui.cjs
+          node apps/korlix_brain/tools/check_controls.cjs
+          node apps/korlix_brain/tools/check_ambience.cjs
+          node apps/korlix_brain/tools/check_welcome.cjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: korlix-brain-projection-screenshots
+          path: projection-screenshots
+          if-no-files-found: warn
+          retention-days: 14
   release-identity:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
