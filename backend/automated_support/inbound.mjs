@@ -14,6 +14,80 @@ function mailbox(value) {
   try {return validateTransactionalEmailAddress(named ? named[1].trim() : value.trim());}
   catch {return null;}
 }
+
+function recipientHeaderMailboxes(value) {
+  // Support the ordinary mailbox-list syntax used in replies. Unsupported or
+  // incomplete syntax disables recovery for the whole list; never take a
+  // matching prefix from a truncated or malformed recipient header.
+  if (typeof value !== 'string' || value.length > 4000) return null;
+  const unfolded = value.replace(/\r\n[ \t]+/g,' ');
+  if (/[\x00-\x08\x0a-\x1f\x7f]/.test(unfolded)) return null;
+  const parts = [];
+  let start = 0, quoted = false, escaped = false, angle = false;
+  for (let index = 0; index < unfolded.length; index++) {
+    const character = unfolded[index];
+    if (quoted) {
+      if (escaped) escaped = false;
+      else if (character === '\\') escaped = true;
+      else if (character === '"') quoted = false;
+      continue;
+    }
+    if (character === '"') quoted = true;
+    else if (character === '<') {if (angle) return null; angle = true;}
+    else if (character === '>') {if (!angle) return null; angle = false;}
+    else if (character === ',' && !angle) {
+      parts.push(unfolded.slice(start,index).trim()); start = index + 1;
+      if (parts.length >= 100) return null;
+    }
+  }
+  if (quoted || escaped || angle) return null;
+  parts.push(unfolded.slice(start).trim());
+  const addresses = [];
+  for (const part of parts) {
+    if (!part) return null;
+    const named = /^([^<>]*)<([^<>]+)>$/.exec(part);
+    if (named) {
+      const display = named[1].trim();
+      if (display.startsWith('"')) {
+        if (!/^"(?:[^"\\]|\\.)*"$/.test(display)) return null;
+      } else if (/["():;,\\\[\]]/.test(display)) return null;
+    }
+    const parsed = mailbox(part);
+    if (!parsed) return null;
+    addresses.push(parsed);
+  }
+  return addresses;
+}
+
+function supportReceivingRecipients(email) {
+  const actual = [
+    ...(Array.isArray(email.to) ? email.to : []),
+    ...(Array.isArray(email.received_for) ? email.received_for : []),
+  ];
+  if (actual.length > 100) return [];
+  const canonical = [...new Set(actual.map(mailbox).filter(Boolean))];
+  const normalized = new Set(canonical.map(value => value.toLowerCase()));
+  const headers = email.headers;
+  if (!headers || typeof headers !== 'object' || Array.isArray(headers)) return canonical;
+  const entries = Object.entries(headers);
+  if (entries.length > 200) return canonical;
+  const recovered = [], seen = new Set();
+  for (const [name,value] of entries) {
+    const kind = name.toLowerCase();
+    if (kind !== 'to' && kind !== 'cc') continue;
+    if (seen.has(kind)) return canonical;
+    seen.add(kind);
+    const addresses = recipientHeaderMailboxes(value);
+    if (!addresses || recovered.length + addresses.length > 100) return canonical;
+    recovered.push(...addresses);
+  }
+  // Resend can lowercase its canonical recipients while retaining original
+  // casing in To/Cc. Headers may recover casing only for a mailbox already in
+  // that canonical set. They cannot introduce a new receiving destination.
+  // Exact HMAC verification below still applies to every candidate.
+  return [...new Set([...canonical,...recovered.filter(value => normalized.has(value.toLowerCase()))])];
+}
+
 function headersOf(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
   const result = Object.create(null);
@@ -84,10 +158,7 @@ export function createAutomatedSupportInboundProcessor({
         return {ignored:true};
       }
       if (isAutomated(email,profiles)) return {ignored:true};
-      const recipients = [...new Set([
-        ...(Array.isArray(email.to) ? email.to : []),
-        ...(Array.isArray(email.received_for) ? email.received_for : []),
-      ].map(mailbox).filter(Boolean))];
+      const recipients = supportReceivingRecipients(email);
       const matches = recipients.map(value => matchSupportReplyAddress(value,profiles,environment)).filter(Boolean);
       const unique = new Map(matches.map(match => [match.profile.id + ':' + match.caseId,match]));
       // One email addressed to several cases is ambiguous; never copy it into
