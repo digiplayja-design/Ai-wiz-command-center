@@ -171,3 +171,34 @@ An independent database check at 04:59:46 UTC confirmed one Sent message, zero P
 Outbound provider delivery is verified. The actual inbound return to the support case is still unverified. The next step is for the owner to reply to the delivered message from the same `korlix@korlixdeveloper.com` mailbox with the requested test phrase, preserving its signed Reply-To address. The restored `receivingVerified=false` flag means the app will initially ignore case ingestion, even if Resend receives that reply.
 
 After the actual incoming message is verified in Resend, enroll `receivingVerified=true` while keeping `KORLIX_AUTOMATED_SUPPORT_ENABLED=false`, `KORLIX_AUTOMATED_SUPPORT_PAUSED=true`, and the profile Paused. Once that configuration deployment is stable, replay only the exact authenticated `email.received` event through Resend's existing retry control. Confirm that it attaches to case `304b40a5-48e7-49a7-99e1-13222a7b7231` and that a repeated delivery is deduplicated. This pending verification sends no further outbound email. Receipt in Resend and attachment to the original case must both be checked before declaring the round trip complete. Automatic support remains off.
+
+## Receiving verification and recipient-casing fix — November 11, 2026
+
+The owner replied from `korlix@korlixdeveloper.com` with the requested phrase, “KORLIX support test received”. Resend received that message as `cd6d8194-051b-4ced-924b-c0a940f7c4a9` at `2026-11-11T04:57:48.145851Z`. The associated provider event is `msg_3LwlZpDQgPnmKbsQER0xpKeuanH`. Its original webhook attempt returned HTTP 200 with `matched=false`; provider receipt alone did not prove attachment to the support case.
+
+Investigation found that Resend lowercased its canonical recipient value while the original To header preserved the mixed-case signed case address. The existing HMAC verifier correctly rejected the altered token. [PR #53](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/53), merged as `35e4fe9f47be214e9b6d61e05eac46c1410d1d3f`, adds bounded recovery of original casing from To/Cc only when the entire normalized mailbox already matches a canonical receiving recipient. The recovered address must still pass exact HMAC verification, single-case ambiguity checking, enrolled profile ownership and immutable reporter matching. Header values cannot establish sender authentication. No secret or token format changed.
+
+The fix passed all 51 automated-support tests, including synthetic regressions for the observed recipient shape, unrelated header-only tokens, multiple cases, forged casing, malformed headers and unchanged sender authentication. No actual receiving address or real message payload was embedded in those regression fixtures.
+
+The receiving-only environment update set `receivingVerified=true` and retained `dailyCap=20`, `KORLIX_AUTOMATED_SUPPORT_ENABLED=false`, `KORLIX_AUTOMATED_SUPPORT_PAUSED=true`, and profile Paused. Render deployment `dep-dbpvia95efls7396vcmg` became live at `2026-11-11T05:12:47.174Z` on the merged fix commit. The prior deployment `dep-dbpvb80n74is7397e910` was deactivated.
+
+The deployed enrollment fingerprint was `ba071cffbff66b39f202a217c3fca81052f4a0bb2f102556ededcb5f407fa35f`, with `updated_at=2026-11-11T05:13:39.025Z`. Independent checks at 05:14:03 and 05:14:48 UTC confirmed that configuration was stable before replay.
+
+The exact existing event `msg_3LwlZpDQgPnmKbsQER0xpKeuanH` was replayed once using Resend's existing provider control. The refreshed provider UI showed two attempts in total: the original attempt and this one replay. The replay returned HTTP 200 with `matched=true`. No additional outbound message was sent or needed.
+
+An independent database check at `2026-11-11T05:15:58Z` confirmed the reply was attached to the original support case:
+
+| Record | Verified value |
+| --- | --- |
+| Support case | `304b40a5-48e7-49a7-99e1-13222a7b7231` |
+| Inbound support message | `03df7612-0ae1-4749-91ce-e10ebe2e9ac4` |
+| Incoming Resend message | `cd6d8194-051b-4ced-924b-c0a940f7c4a9` |
+| Message type / status | `customer_reply` / `received` |
+| Sender authentication | `verified` |
+| Stored timestamp | `2026-11-11T05:15:15.511Z` |
+| Case state / conversation version | `needs_review` / `1` |
+| Case automation pause | `true` |
+
+Exactly one inbound customer-reply record existed. The immutable, verified reporter remained `korlix@korlixdeveloper.com`. The profile remained Paused with `automatic_since=null`. Global outbound totals were Claimed 1, Sent 1, Pending 0, Sending 0 and Uncertain 0: there was no duplicate inbound record and no additional outbound message.
+
+**The controlled email round trip is complete:** the one approved support message was delivered, the owner's actual reply was received by Resend, and that reply reached the same support case for human review. Automatic sending remains disabled and paused; Automatic mode was never enabled during this verification.
