@@ -35,7 +35,7 @@ jobs:
           node --check tools/check_projection_renderer.mjs
           node --check tools/check_projection_provider.mjs
           node tools/check_projection_renderer.mjs --fixture-only
-          node --test test/brain_projection.test.mjs test/brain_directions.test.mjs test/brain_projection_renderer.test.mjs test/brain_projection_provider_check.test.mjs test/brain_voice.test.mjs test/brain_live.test.mjs test/brain_billing.test.mjs test/brain_billing_errors.test.mjs test/brain_billing_meter_fallback.test.mjs test/brain_developer_live_access.test.mjs test/developer_access.test.mjs test/auth_session_security.test.mjs
+          node --test test/brain_projection.test.mjs test/brain_directions.test.mjs test/brain_projection_renderer.test.mjs test/brain_projection_provider_check.test.mjs test/brain_projection_acceptance.test.mjs test/brain_voice.test.mjs test/brain_live.test.mjs test/brain_billing.test.mjs test/brain_billing_errors.test.mjs test/brain_billing_meter_fallback.test.mjs test/brain_developer_live_access.test.mjs test/developer_access.test.mjs test/auth_session_security.test.mjs
       - name: Install pinned browser dependencies outside the repository
         run: |
           npm install --prefix "$RUNNER_TEMP/projection-renderer-browser" --no-audit --no-fund --ignore-scripts playwright@1.56.1
