@@ -1,4 +1,4 @@
-import {classifyObservation, sanitizeEvidence} from './evidence.mjs';
+import {cameraControlsReady, classifyObservation, sanitizeEvidence} from './evidence.mjs';
 
 const get = id => document.getElementById(id);
 const negative = document.querySelector('meta[name="acceptance-mode"]').content === 'no-referrer';
@@ -11,14 +11,13 @@ const checkboxes = [...document.querySelectorAll('.checks input')];
 get('origin').textContent = location.origin;
 
 function resetReport() {
-  report = {acceptanceVersion: 1, origin: location.origin, scenario: negative ? 'no-referrer' : 'standard',
+  report = {acceptanceVersion: 2, origin: location.origin, scenario: negative ? 'no-referrer' : 'standard',
     productionActivation: false, overallVerification: 'NOT_ESTABLISHED', startedAt: null, closedAt: null,
     rendererStatus: 'not-started', observation: 'NOT_PERFORMED', cameraCommands: [], sdk: null, tester: {}};
   for (const checkbox of checkboxes) { checkbox.checked = false; checkbox.disabled = true; }
 }
 function render() {
   const sdk = report.sdk;
-  const errors = Boolean(sdk?.mapError || sdk?.loaderError || sdk?.pageError || sdk?.cspViolations || sdk?.providerErrorCodes?.length);
   if (negative) {
     report.tester.googleSdkAndAuthorizationRequestsHadNoReferer = get('headers-confirmed').checked;
   } else {
@@ -28,9 +27,18 @@ function render() {
   report.observation = classifyObservation(report, negative);
   get('verdict').textContent = report.observation.replaceAll('_', ' ');
   get('evidence').textContent = JSON.stringify(report, null, 2);
-  const ready = Boolean(frame && report.rendererStatus === 'ready' && sdk?.steady && !errors);
+  const ready = Boolean(frame && cameraControlsReady(report));
   for (const button of document.querySelectorAll('[data-operation]')) button.disabled = !ready;
   for (const checkbox of checkboxes) checkbox.disabled = negative ? !Boolean(sdk?.loader) : !(ready && report.cameraCommands.includes('flyTo'));
+  get('camera-status').textContent = ready ? 'Camera controls ready. Fly to the landmark and check movement.'
+    : !frame ? 'Load the test map to enable camera controls.'
+      : report.rendererStatus === 'error' ? 'Camera controls unavailable because the renderer reported a failure.'
+        : sdk?.mapError || sdk?.loaderError || sdk?.pageError || sdk?.providerErrorCodes?.length
+          ? 'Camera controls unavailable. Review the recorded errors in Sanitized evidence.'
+          : 'Waiting for the map to finish rendering before enabling camera controls.';
+  get('policy-status').hidden = !sdk?.cspViolations;
+  get('policy-status').textContent = sdk?.cspViolations
+    ? `${sdk.cspViolations} security-policy event${sdk.cspViolations === 1 ? '' : 's'} recorded. Camera testing can continue when the scene is ready; the overall test remains pending policy review. Details are in Sanitized evidence.` : '';
 }
 function stop() {
   if (!frame) return;

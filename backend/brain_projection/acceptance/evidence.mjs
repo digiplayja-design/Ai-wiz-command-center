@@ -1,5 +1,54 @@
 const authCodes = new Set(['RefererNotAllowedMapError', 'RefererDeniedMapError', 'InvalidKeyMapError', 'MissingKeyMapError', 'ExpiredKeyMapError',
   'ApiNotActivatedMapError', 'ApiTargetBlockedMapError', 'BillingNotEnabledMapError', 'ClientBillingNotEnabledMapError', 'ProjectDeniedMapError', 'OverQuotaMapError']);
+const cspDirectives = new Set(['default-src', 'script-src', 'script-src-elem', 'script-src-attr', 'style-src', 'style-src-elem', 'style-src-attr',
+  'connect-src', 'img-src', 'font-src', 'worker-src', 'child-src', 'frame-src', 'frame-ancestors', 'media-src', 'manifest-src',
+  'object-src', 'base-uri', 'form-action', 'require-trusted-types-for', 'trusted-types']);
+const resourceKinds = new Set(['unknown', 'inline', 'eval', 'wasm-eval', 'data', 'blob', 'self', 'google-maps', 'google-static',
+  'google-fonts', 'google-api', 'google', 'extension', 'external']);
+const dispositionKinds = new Set(['enforce', 'report']);
+
+function resourceKind(value, ownOrigin) {
+  if (typeof value !== 'string' || !value || value.length > 8192) return 'unknown';
+  if (['inline', 'eval', 'wasm-eval'].includes(value)) return value;
+  let url;
+  try { url = new URL(value); } catch { return 'unknown'; }
+  if (url.protocol === 'blob:') return 'blob';
+  if (url.protocol === 'data:') return 'data';
+  if (['chrome-extension:', 'moz-extension:', 'safari-web-extension:'].includes(url.protocol)) return 'extension';
+  if (!['https:', 'http:'].includes(url.protocol)) return 'unknown';
+  if (url.origin === ownOrigin) return 'self';
+  const host = url.hostname;
+  const inDomain = domain => host === domain || host.endsWith(`.${domain}`);
+  if (host === 'maps.googleapis.com') return 'google-maps';
+  if (host === 'fonts.googleapis.com' || host === 'fonts.gstatic.com') return 'google-fonts';
+  if (inDomain('gstatic.com')) return 'google-static';
+  if (inDomain('googleapis.com')) return 'google-api';
+  if (inDomain('google.com') || inDomain('googleusercontent.com')) return 'google';
+  return 'external';
+}
+
+function sanitizeCspEvent(value) {
+  return {effectiveDirective: cspDirectives.has(value?.effectiveDirective) ? value.effectiveDirective : 'unknown',
+    disposition: dispositionKinds.has(value?.disposition) ? value.disposition : 'unknown',
+    blockedResource: resourceKinds.has(value?.blockedResource) ? value.blockedResource : 'unknown',
+    sourceResource: resourceKinds.has(value?.sourceResource) ? value.sourceResource : 'unknown'};
+}
+
+// Only fixed labels leave the frame: never URL paths, origins, credentials,
+// snippets, the nonce-bearing policy, or browser/referrer metadata.
+export function summarizeCspViolation(event, ownOrigin) {
+  return sanitizeCspEvent({effectiveDirective: event?.effectiveDirective, disposition: event?.disposition,
+    blockedResource: resourceKind(event?.blockedURI, ownOrigin), sourceResource: resourceKind(event?.sourceFile, ownOrigin)});
+}
+
+// Interaction gathers evidence; it is not an acceptance verdict. A CSP event
+// stays blocking in classifyObservation without locking a usable map's controls.
+export function cameraControlsReady(report) {
+  const sdk = report?.sdk;
+  return Boolean(report && !report.closedAt && report.rendererStatus === 'ready' && sdk?.steady === true &&
+    !sdk.mapError && !sdk.loaderError && !sdk.pageError && !sdk.providerErrorCodes?.length);
+}
+
 export const sdkVersion = value => typeof value === 'string' && /^\d{1,3}(?:\.\d{1,4}){1,3}[a-z]?$/.test(value) ? value : null;
 export function providerErrorCode(values) {
   for (const value of values) {
@@ -22,6 +71,7 @@ export function sanitizeEvidence(value, negative) {
     steadyEvents: count(value.steadyEvents), animationEnds: count(value.animationEnds),
     mapError: value.mapError === true, loaderError: value.loaderError === true, pageError: value.pageError === true,
     cspViolations: count(value.cspViolations),
+    cspEvents: Array.isArray(value.cspEvents) ? value.cspEvents.slice(0, 8).map(sanitizeCspEvent) : [],
     providerErrorCodes: Array.isArray(value.providerErrorCodes) ? value.providerErrorCodes.filter(code => authCodes.has(code) || code === 'GoogleMapsError').slice(0, 12) : [],
     documentReferrerPolicy: negative ? 'no-referrer' : 'strict-origin-when-cross-origin'};
 }

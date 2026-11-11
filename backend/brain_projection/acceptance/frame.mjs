@@ -1,4 +1,4 @@
-import {providerErrorCode, sdkVersion} from './evidence.mjs';
+import {providerErrorCode, sdkVersion, summarizeCspViolation} from './evidence.mjs';
 
 // Observe the public loader insertion. Only the explicitly labeled negative
 // document changes its referrer policy, immediately before native insertion.
@@ -28,7 +28,7 @@ function runFrame() {
   const configured = document.querySelector('meta[name="acceptance-configured"]').content === 'true';
   const evidence = {mode: negative ? 'no-referrer' : 'standard', started: false, loader: null, sdkVersion: null,
     steady: false, everSteady: false, steadyEvents: 0, animationEnds: 0, mapError: false, loaderError: false, pageError: false,
-    cspViolations: 0, providerErrorCodes: [], documentReferrerPolicy: negative ? 'no-referrer' : 'strict-origin-when-cross-origin'};
+    cspViolations: 0, cspEvents: [], providerErrorCodes: [], documentReferrerPolicy: negative ? 'no-referrer' : 'strict-origin-when-cross-origin'};
   let closed = false, restoreLoader = () => {};
   const publish = () => {
     evidence.sdkVersion = sdkVersion(window.google?.maps?.version);
@@ -56,7 +56,12 @@ function runFrame() {
   map.addEventListener('gmp-error', () => { evidence.mapError = true; publish(); }, true);
   window.addEventListener('error', () => { evidence.pageError = true; publish(); });
   window.addEventListener('unhandledrejection', () => { evidence.pageError = true; publish(); });
-  document.addEventListener('securitypolicyviolation', () => { evidence.cspViolations = Math.min(100, evidence.cspViolations + 1); publish(); });
+  document.addEventListener('securitypolicyviolation', event => {
+    evidence.cspViolations = Math.min(100, evidence.cspViolations + 1);
+    const detail = summarizeCspViolation(event, location.origin);
+    if (evidence.cspEvents.length < 8 && !evidence.cspEvents.some(value => JSON.stringify(value) === JSON.stringify(detail))) evidence.cspEvents.push(detail);
+    publish();
+  });
   async function start() {
     if (closed || evidence.started || !configured) return;
     evidence.started = true;
