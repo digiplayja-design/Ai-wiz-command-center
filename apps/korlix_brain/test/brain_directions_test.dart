@@ -89,6 +89,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(events,isEmpty);
     expect(find.text('Open Google Maps?'),findsOneWidget);
+    expect(find.byType(CircularProgressIndicator),findsNothing);
     await tester.tap(find.text('Open directions'));
     await tester.pumpAndSettle();
     expect(events,['pause','launch:www.google.com']);
@@ -109,6 +110,8 @@ void main() {
     await tester.ensureVisible(find.text('Google Maps directions'));
     await tester.tap(find.text('Google Maps directions'));
     await tester.pumpAndSettle();
+    expect(find.text('Open Google Maps?'),findsOneWidget);
+    expect(find.byType(CircularProgressIndicator),findsNothing);
     navigator.currentState!.push(MaterialPageRoute<void>(
       builder:(_) => const Scaffold(body:Center(child:Text('Unrelated page'))),
     ));

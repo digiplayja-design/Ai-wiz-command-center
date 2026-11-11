@@ -188,12 +188,24 @@ void main() {
         pickPhotos: (_, _) async => [photo]),
     ));
     await t.pumpAndSettle();
+    expect(t.takeException(), isNull);
+    Future<void> reveal(Finder target) async {
+      // Photo previews and answers change this lazy list's height. Revisit the
+      // top, then scroll until the real control is built and can be tapped.
+      final scrollable = find.byType(Scrollable).first;
+      t.state<ScrollableState>(scrollable).position.jumpTo(0);
+      await t.pumpAndSettle();
+      await t.scrollUntilVisible(target, 160, scrollable: scrollable);
+      await t.pumpAndSettle();
+      expect(target, findsOneWidget);
+      expect(t.takeException(), isNull);
+    }
     Future<void> tap(String label) async {
       final target = find.text(label);
-      await t.ensureVisible(target);
-      await t.pumpAndSettle();
+      await reveal(target);
       await t.tap(target);
       await t.pumpAndSettle();
+      expect(t.takeException(), isNull);
     }
     await tap('Take photo');
     expect(find.text('Photo 1'), findsOneWidget);
@@ -203,8 +215,9 @@ void main() {
     consent = true;
     await tap('Ask Rici');
     expect(h.uploads.length, 1);
+    await reveal(find.text('Report'));
     expect(find.text('Report'), findsOneWidget);
-    await t.ensureVisible(find.byType(TextField));
+    await reveal(find.byType(TextField));
     await t.enterText(find.byType(TextField), 'What number should I check?');
     await tap('Ask follow-up');
     expect(h.uploads.length, 2);

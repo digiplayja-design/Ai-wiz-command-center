@@ -346,18 +346,31 @@ class _BrainCameraAskScreenState extends State<BrainCameraAskScreen> {
                   onSelected: _busy ? null : (_) => setState(() => _mode = mode)),
             ]),
             const SizedBox(height: 14),
-            Wrap(spacing: 16, runSpacing: 10, children: [
-              SizedBox(width: 170, child: DropdownButtonFormField<String>(
-                initialValue: _language, decoration: const InputDecoration(labelText: 'Answer language'),
-                items: const [DropdownMenuItem(value: 'en', child: Text('English')), DropdownMenuItem(value: 'es', child: Text('Spanish')), DropdownMenuItem(value: 'fr', child: Text('French'))],
-                onChanged: _busy ? null : (v) => setState(() => _language = v ?? 'en'),
-              )),
-              SizedBox(width: 150, child: DropdownButtonFormField<String>(
-                initialValue: _detail, decoration: const InputDecoration(labelText: 'Detail'),
-                items: const [DropdownMenuItem(value: 'Brief', child: Text('Brief')), DropdownMenuItem(value: 'Detailed', child: Text('Detailed'))],
-                onChanged: _busy ? null : (v) => setState(() => _detail = v ?? 'Brief'),
-              )),
-            ]),
+            LayoutBuilder(builder: (context, constraints) {
+              final width = constraints.maxWidth < 400
+                  ? constraints.maxWidth : (constraints.maxWidth - 16) / 2;
+              return Wrap(spacing: 16, runSpacing: 10, children: [
+                SizedBox(width: width, child: DropdownButtonFormField<String>(
+                  initialValue: _language, isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Answer language'),
+                  items: const [
+                    DropdownMenuItem(value: 'en', child: Text('English', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                    DropdownMenuItem(value: 'es', child: Text('Spanish', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                    DropdownMenuItem(value: 'fr', child: Text('French', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  ],
+                  onChanged: _busy ? null : (v) => setState(() => _language = v ?? 'en'),
+                )),
+                SizedBox(width: width, child: DropdownButtonFormField<String>(
+                  initialValue: _detail, isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Detail'),
+                  items: const [
+                    DropdownMenuItem(value: 'Brief', child: Text('Brief', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                    DropdownMenuItem(value: 'Detailed', child: Text('Detailed', maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  ],
+                  onChanged: _busy ? null : (v) => setState(() => _detail = v ?? 'Brief'),
+                )),
+              ]);
+            }),
             const SizedBox(height: 16),
             TextField(controller: _question, focusNode: _focus, enabled: !_busy,
               minLines: 2, maxLines: 5, maxLength: 2000,

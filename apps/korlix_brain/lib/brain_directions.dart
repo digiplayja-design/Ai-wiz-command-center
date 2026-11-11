@@ -62,7 +62,7 @@ class BrainDirectionsScreen extends StatefulWidget {
 class _BrainDirectionsScreenState extends State<BrainDirectionsScreen> {
   late final TextEditingController _destination;
   late final int _ownerRevision;
-  bool _checking = true, _allowed = false, _busy = false;
+  bool _checking = true, _allowed = false, _busy = false, _confirming = false;
   Route<dynamic>? _confirmationRoute;
   String _mode = 'driving';
   String? _error;
@@ -88,6 +88,7 @@ class _BrainDirectionsScreenState extends State<BrainDirectionsScreen> {
       _destination.clear();
       _allowed = false;
       _busy = false;
+      _confirming = false;
       _checking = false;
       _error = 'Your account changed. Close this screen and open directions again.';
     });
@@ -131,6 +132,9 @@ class _BrainDirectionsScreenState extends State<BrainDirectionsScreen> {
           data['mode'] != mode || data['requiresConfirmation'] != true) {
         throw const BrainApiException('The directions could not be verified. Please try again.');
       }
+      // Keep the controls locked, but no work is pending while the user reviews
+      // the address. Do not animate a loading indicator behind this dialog.
+      setState(() => _confirming = true);
       final approved = await showDialog<bool>(context: context, builder: (context) {
         _confirmationRoute = ModalRoute.of(context);
         if (!_current) {
@@ -144,6 +148,7 @@ class _BrainDirectionsScreenState extends State<BrainDirectionsScreen> {
         );
       });
       _confirmationRoute = null;
+      if (mounted) setState(() => _confirming = false);
       if (approved != true || !_current) return;
       await widget.beforeOpen();
       if (!_current) return;
@@ -160,7 +165,7 @@ class _BrainDirectionsScreenState extends State<BrainDirectionsScreen> {
             ? error.message : 'Directions could not open. Please try again.');
       }
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) setState(() { _busy = false; _confirming = false; });
     }
   }
 
@@ -200,7 +205,7 @@ class _BrainDirectionsScreenState extends State<BrainDirectionsScreen> {
       const SizedBox(height: 12),
       OutlinedButton.icon(onPressed: _allowed && !_busy ? () => _open(true) : null,
         icon: const Icon(Icons.navigation_outlined), label: const Text('Apple Maps directions')),
-      if (_busy) const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator())),
+      if (_busy && !_confirming) const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator())),
       const SizedBox(height: 16),
       const Text('Rici pauses before Maps opens. Return to Brain + Voice and tap Resume when you are ready.'),
       if (!_checking && !_allowed && _current) TextButton(onPressed: () {

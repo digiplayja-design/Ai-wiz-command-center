@@ -14,7 +14,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 String token() {
   String part(Object data) =>
       base64Url.encode(utf8.encode(jsonEncode(data))).replaceAll('=', '');
-  return '${part({'alg': 'none'})}.${part({'iss': 'https://auth.example.test', 'sub': 'brain-fixture', 'exp': DateTime.now().add(const Duration(hours: 1)).millisecondsSinceEpoch ~/ 1000})}.fixture';
+  return '${part({'alg': 'none'})}.${part({'iss': 'https://auth.example.test', 'sub': 'brain-fixture', 'session_id': 'brain-session-fixture', 'exp': DateTime.now().add(const Duration(hours: 1)).millisecondsSinceEpoch ~/ 1000})}.fixture';
 }
 
 http.Response response(Object data, [int status = 200]) =>
