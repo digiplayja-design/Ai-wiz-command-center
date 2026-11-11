@@ -32,11 +32,16 @@ export function rendererPolicy(nonce) {
   // only after authentication/error handlers are installed; the SDK inherits
   // script/style nonces. No unsafe-inline script allowance or broad HTTPS
   // script fallback is needed. This applies only to the isolated map document.
+  // The SDK also sets dynamic style attributes (observed on iPad). Nonces
+  // cannot authorize attributes: allow those here, while style elements stay
+  // subject to the existing style-src policy. This permits all style attributes
+  // in this static document, which accepts no user-supplied HTML.
   // https://developers.google.com/maps/documentation/javascript/content-security-policy
   return [
     "default-src 'none'",
     `script-src 'nonce-${nonce}' 'strict-dynamic' 'self' https://maps.googleapis.com https://maps.gstatic.com 'unsafe-eval' blob:`,
     `style-src 'self' 'nonce-${nonce}' https://fonts.googleapis.com`,
+    "style-src-attr 'unsafe-inline'",
     "img-src 'self' https://*.googleapis.com https://*.gstatic.com https://*.google.com https://*.googleusercontent.com data: blob:",
     "connect-src 'self' https://*.googleapis.com https://*.google.com https://*.gstatic.com data: blob:",
     "font-src https://fonts.gstatic.com", "worker-src blob:",

@@ -11,7 +11,7 @@ const checkboxes = [...document.querySelectorAll('.checks input')];
 get('origin').textContent = location.origin;
 
 function resetReport() {
-  report = {acceptanceVersion: 2, origin: location.origin, scenario: negative ? 'no-referrer' : 'standard',
+  report = {acceptanceVersion: 3, origin: location.origin, scenario: negative ? 'no-referrer' : 'standard',
     productionActivation: false, overallVerification: 'NOT_ESTABLISHED', startedAt: null, closedAt: null,
     rendererStatus: 'not-started', observation: 'NOT_PERFORMED', cameraCommands: [], sdk: null, tester: {}};
   for (const checkbox of checkboxes) { checkbox.checked = false; checkbox.disabled = true; }

@@ -42,7 +42,15 @@ Every camera command clears the visual checkboxes. A later nonsteady event inval
 
 Camera availability is separate from a successful observation. A ready, currently steady scene with no map, loader, page or provider errors can accept camera commands even when a CSP event has been recorded. Visual checkboxes become available after **Fly to landmark** under that same interaction condition. A CSP event continues to prevent `POSITIVE_OBSERVATION_COMPLETE`; enabling camera testing never clears or waives that event. The page explains both the control state and any pending policy review.
 
-Evidence version 2 includes up to eight distinct CSP event summaries. Effective directives, dispositions, and blocked/source resource categories are fixed labels, sanitized both when recorded and when the parent receives them. No blocked/source URL, hostname, path, query, fragment, policy text, nonce, referrer or code sample is exported. The aggregate count remains recorded separately. Actual CSP headers and the production renderer assets are unchanged.
+Evidence version 3 retains up to eight distinct CSP event summaries. Effective directives, dispositions, and blocked/source resource categories are fixed labels, sanitized both when recorded and when the parent receives them. No blocked/source URL, hostname, path, query, fragment, policy text, nonce, referrer or code sample is exported. The aggregate count is capped at 100; a value of 100 means at least 100 events, not 100 distinct problems.
+
+### Dynamic map styles
+
+The map document's CSP includes `style-src-attr 'unsafe-inline'`. The real iPad run of Maps JavaScript 3.65.14a rendered the landmark and completed camera animations, but reported enforced `style-src-attr` violations from Google Maps. This directive permits the SDK's dynamic style attributes. Nonces authorize style elements, not attributes; adding more Google domains would not authorize inline attributes either. See [CSP style-src-attr](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/style-src-attr) and [Google's nonce-based CSP guidance](https://developers.google.com/maps/documentation/javascript/content-security-policy).
+
+This allowance applies to **all inline style attributes in the static map document**, not just attributes created by Google. That document accepts no user-supplied HTML and consumes no application credentials. Its existing script and style-element policies, network destinations and denied device capabilities remain intact. The acceptance shell does not receive this allowance. A same-origin iframe with `allow-scripts` and `allow-same-origin` is not a complete security boundary; keep the static map-only design.
+
+The production renderer and acceptance frame use the same policy in source, but deploying this service does not deploy the production backend. After an update, reload the page and start a **fresh** test. Old reports retain their violations. Version 3 still requires zero CSP events for a positive observation; no events are ignored or reclassified as successful.
 
 ## Deliberate no-referrer check
 
@@ -64,4 +72,4 @@ Evidence stays in the tester's browser and can be copied as sanitized JSON. The 
 node --test backend/test/brain_projection_acceptance.test.mjs
 ```
 
-These tests cover isolation, missing/invalid configuration, exact asset bytes, request allowlists, nonce/CSP parity, deliberate negative-policy application and evidence classification/redaction. They use no real key or Google request and do not establish live-provider acceptance.
+These tests cover isolation, missing/invalid configuration, exact asset bytes, request allowlists, nonce/CSP parity and shell separation, deliberate negative-policy application and evidence classification/redaction. The browser fixture in `backend/tools/check_projection_renderer.mjs` additionally checks real CSP enforcement: dynamic style attributes apply, while unnonced style blocks and parser-inserted inline scripts remain blocked. The existing `strict-dynamic` script policy permits non-parser-inserted scripts created by trusted code, so a dynamically appended script would not test this denial. These checks use no real key or Google request and do not establish live-provider acceptance.
