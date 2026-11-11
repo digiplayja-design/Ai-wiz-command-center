@@ -202,3 +202,20 @@ An independent database check at `2026-11-11T05:15:58Z` confirmed the reply was 
 Exactly one inbound customer-reply record existed. The immutable, verified reporter remained `korlix@korlixdeveloper.com`. The profile remained Paused with `automatic_since=null`. Global outbound totals were Claimed 1, Sent 1, Pending 0, Sending 0 and Uncertain 0: there was no duplicate inbound record and no additional outbound message.
 
 **The controlled email round trip is complete:** the one approved support message was delivered, the owner's actual reply was received by Resend, and that reply reached the same support case for human review. Automatic sending remains disabled and paused; Automatic mode was never enabled during this verification.
+
+## Production acknowledgment activation — November 11, 2026
+
+After the successful controlled round trip, the owner explicitly approved production acknowledgments for new KORLIX AI reports from verified users. The authorized scope is one reviewed-template acknowledgment per eligible new report, sent from `support@korlixdeveloper.com`, with a cap of 20 handoffs per rolling 24 hours. Incoming customer replies continue to enter Needs review; activation does not authorize automatic issue resolution or open-ended troubleshooting responses.
+
+Only `KORLIX_AUTOMATED_SUPPORT_ENABLED=true` and `KORLIX_AUTOMATED_SUPPORT_PAUSED=false` were changed for activation. The receiving-ready profile, dedicated thread secret and `dailyCap=20` were retained. Render deployment `dep-dbpvml8ae00c73crru3g` became live at `2026-11-11T05:22:01.160833Z` on release commit `b873e7aa6a534fc5da11b41bfa28e26664425299`. The prior deployment `dep-dbpvia95efls7396vcmg` was deactivated before the mode transition.
+
+The existing mode-setting RPC ran in a guarded transaction and set profile `korlix-ai` to Automatic at `2026-11-11T05:23:17.090716Z` (November 11 at 12:23 AM EST), recording that value as `automatic_since`. The guards confirmed the owner's account was email-confirmed and unbanned, there were no pending owner replies or Sending/Uncertain messages, and both completed synthetic cases retained their automation pause. The enrollment fingerprint remained `ba071cffbff66b39f202a217c3fca81052f4a0bb2f102556ededcb5f407fa35f`; sender and receiving verification remained true.
+
+An independent audit at `2026-11-11T05:24:16Z`, approximately 59 seconds after activation and after a worker interval, confirmed:
+
+- Profile mode remained Automatic. Both `automatic_since` and `updated_at` remained `2026-11-11T05:23:17.090716Z`, and the enrollment fingerprint still matched.
+- Both completed synthetic cases remained `automation_paused=true`, predated activation, and each had zero acknowledgment claims.
+- There were no post-activation message claims and no historical or test-message sends. Global outbound totals remained Claimed 1 and Sent 1, with Pending 0, Sending 0 and Uncertain 0; the one sent message was the previously approved connection test.
+- The report-intake backlog was zero. No new test report or email was generated for activation.
+
+**Production acknowledgments are active for eligible new KORLIX AI reports.** The activation timestamp excludes older report acknowledgments, the rolling 24-hour cap remains 20, and incoming customer replies continue to require human review. The completed synthetic cases remain paused. This documentation-only record does not deploy code or change any runtime setting.
