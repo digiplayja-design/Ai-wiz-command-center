@@ -1,0 +1,54 @@
+name: Brain Projection API and maps3d contract fixtures
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [release/signup-plan-intent-20261021]
+    paths: ['backend/**', '.github/workflows/brain-projection-api.yml']
+  push:
+    branches: [feature/brain-projection-api-20261107, release/signup-plan-intent-20261021]
+    paths: ['backend/**', '.github/workflows/brain-projection-api.yml']
+permissions:
+  contents: read
+concurrency:
+  group: brain-projection-api-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+jobs:
+  regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install locked backend dependencies
+        working-directory: backend
+        run: npm ci --ignore-scripts
+      - name: Check Projection, authentication, voice and shared-meter regressions
+        working-directory: backend
+        run: |
+          node --check server.js
+          node --check tools/check_projection_renderer.mjs
+          node --check tools/check_projection_provider.mjs
+          node tools/check_projection_renderer.mjs --fixture-only
+          node --test test/brain_projection.test.mjs test/brain_directions.test.mjs test/brain_projection_renderer.test.mjs test/brain_projection_provider_check.test.mjs test/brain_voice.test.mjs test/brain_live.test.mjs test/brain_billing.test.mjs test/brain_billing_errors.test.mjs test/brain_billing_meter_fallback.test.mjs test/auth_session_security.test.mjs
+      - name: Install pinned browser dependencies outside the repository
+        run: |
+          npm install --prefix "$RUNNER_TEMP/projection-renderer-browser" --no-audit --no-fund --ignore-scripts playwright@1.56.1
+          "$RUNNER_TEMP/projection-renderer-browser/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Check maps3d adapter fixtures under production nonce CSP (no live provider verification)
+        env:
+          KORLIX_PROJECTION_BROWSER_DEPS: ${{ runner.temp }}/projection-renderer-browser
+          PROJECTION_RENDERER_ARTIFACTS: projection-renderer-artifacts
+        run: node backend/tools/check_projection_renderer.mjs
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: brain-projection-maps3d-contract-fixtures
+          path: projection-renderer-artifacts
+          if-no-files-found: warn
+          retention-days: 14

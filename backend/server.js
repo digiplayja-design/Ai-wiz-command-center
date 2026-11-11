@@ -3,6 +3,8 @@ import {createBrainBilling} from './brain_voice/billing/routes.mjs';
 import {checkBrainModelAccess} from './brain_voice/model_access.mjs';
 import {createBrainVoice, brainSpeechConfig, isBrainVoice, brainProfile, BRAIN_PROFILES, BRAIN_MODEL, BRAIN_EFFORT, BRAIN_PROTOCOL} from './brain_voice/core.mjs';
 import {streamBrainTurn} from './brain_voice/stream.mjs';
+import {registerBrainProjection} from './brain_projection/routes.mjs';
+import {canUseBrainDirections} from './brain_projection/directions.mjs';
 import {registerMagicApple} from './magic_camera/apple.mjs';
 import {registerMagicBilling, MAGIC_PACKAGE} from './magic_camera/billing.mjs';
 import {magicAuthAlias} from './magic_camera/auth.mjs';
@@ -269,6 +271,7 @@ const port = process.env.PORT || 8787;
 
 app.use(cors());
 app.use('/api/onboarding/events', express.json({limit: '8kb'}));
+app.use('/api/brain-projection', express.json({limit: '8kb'}));
 app.use(express.json({
   limit: "5mb",
   verify: (req, _res, buffer) => {
@@ -5790,20 +5793,25 @@ function korlixLiveConvoAgentModelProofV1() {
   };
 }
 
+function korlixLiveConvoErrorStatusV1(error) {
+  const status = error?.statusCode ?? error?.status;
+  return Number.isInteger(status) && status >= 400 && status < 600
+    ? status
+    : 500;
+}
+
 function korlixLiveConvoAgentErrorV1(
   res,
   error,
   fallback,
 ) {
-  const statusCode = Number.isInteger(error?.statusCode)
-    ? error.statusCode
-    : 500;
+  const statusCode = korlixLiveConvoErrorStatusV1(error);
 
   const publicMessage = statusCode >= 500
     ? fallback
     : (
         korlixLiveConvoAgentTextV1(
-          error?.message,
+          getKorlixUserFacingError(error),
           500,
         ) || fallback
       );
@@ -9395,13 +9403,13 @@ app.post("/api/live-convo/usage", async (req, res) => {
       "KORLIX_LIVE_CONVO_BUILD129_USAGE_POST_FAILED",
       error
     );
-    return res.status(error?.statusCode || 500).json({
+    const status = korlixLiveConvoErrorStatusV1(error);
+    return res.status(status).json({
       ok: false,
       code: "live_convo_usage_report_failed",
-      error:
-        error?.statusCode === 401
-          ? getKorlixUserFacingError(error)
-          : "Could not record LIVE CONVO usage right now.",
+      error: status < 500
+        ? getKorlixUserFacingError(error)
+        : "Could not record LIVE CONVO usage right now.",
     });
   }
 });
@@ -9507,10 +9515,13 @@ app.use("/api/live-convo/session", async (req, res, next) => {
       "KORLIX_LIVE_CONVO_BUILD129_RESERVATION_FAILED",
       error
     );
-    return res.status(error?.statusCode || 500).json({
+    const status = korlixLiveConvoErrorStatusV1(error);
+    return res.status(status).json({
       ok: false,
       code: "live_convo_reservation_failed",
-      error: getKorlixUserFacingError(error),
+      error: status < 500
+        ? getKorlixUserFacingError(error)
+        : "Could not reserve voice minutes right now. Please try again.",
     });
   }
 });
@@ -9528,6 +9539,23 @@ const brainVoice = createBrainVoice({
   saveMemory: ({userId, body}) => korlixAgentSaveMemoryV1({client: korlixLiveConvoAgentPersistenceClientV1(), userId, agentId: 'general', body}),
   reportUsage: ({userId, body, limits}) => korlixRecordVoiceUsage({user: {id: userId}, body, limits, entitlement: korlixLiveConvoBuild131EntitlementForUser({id: userId})}),
 });
+// Projection research reuses the existing typed-search allowance. It does not
+// reserve, end, or charge Brain voice sessions; maps/camera controls are separate.
+const projectionSearchCredits = calculateCredits({liveSearchNeeded: true, fileRequested: false});
+registerBrainProjection(app, {requireUser, environment: process.env, answerCredits: projectionSearchCredits,
+  directionsAccess: user => canUseBrainDirections(supabaseAdmin, user.id),
+  clientFactory: () => new OpenAI({apiKey: process.env.OPENAI_API_KEY, maxRetries: 0}),
+  access: async user => {
+    const profile = await getOrCreateProfile(user), usageCounter = await getOrCreateUsageCounter(user.id);
+    if (!profile || !usageCounter) throw Object.assign(new Error('Search allowance unavailable'), {statusCode: 503});
+    return checkUsageAllowed({profile, usageCounter, creditsNeeded: projectionSearchCredits});
+  },
+  charge: async user => {
+    const usageCounter = await getOrCreateUsageCounter(user.id);
+    if (!usageCounter) throw Object.assign(new Error('Search allowance unavailable'), {statusCode: 503});
+    await incrementUsage({usageCounter, liveSearchUsed: true, fileRequested: false, creditsNeeded: projectionSearchCredits});
+  },
+});
 app.get('/api/brain-voice/health', (_req, res) => res.json({ok: true,
   enabled: korlixLiveConvoEnabledV1(), protocol: BRAIN_PROTOCOL,
   model: BRAIN_MODEL, reasoningEffort: BRAIN_EFFORT,
@@ -9539,6 +9567,12 @@ app.get('/api/brain-voice/health', (_req, res) => res.json({ok: true,
   spokenName: 'Rici', quickConnectionReplies: true, identityPolicy: 'brain-rici-v1',
   apiKeyConfigured: Boolean(korlixLiveConvoEnvStringV1('OPENAI_API_KEY')),
 }));
+app.post('/api/brain-voice/resume', korlixLiveConvoAgentRouteV1(
+  'This conversation could not be resumed. Start a new conversation.',
+  async ({req, res, user}) => {
+    const {sessionId, context} = req.body || {};
+    return res.json(brainVoice.resume({userId: user.id, sessionId, context}));
+  }));
 app.post('/api/brain-voice/turn', korlixLiveConvoAgentRouteV1(
   'Rici could not complete that turn. Please try again.',
   async ({req, res, user}) => {
@@ -9735,11 +9769,13 @@ app.post(
         error
       );
 
-      return res.status(500).json({
+      const status = korlixLiveConvoErrorStatusV1(error);
+      return res.status(status).json({
         ok: false,
         code: "live_convo_session_error",
-        error: "LIVE CONVO session creation failed.",
-        details: error?.message || String(error),
+        error: status < 500
+          ? getKorlixUserFacingError(error)
+          : "LIVE CONVO session creation failed.",
       });
     }
   }
