@@ -1,0 +1,36 @@
+{
+  "acceptanceVersion": 3,
+  "origin": "https://korlix-projection-check-20261111.onrender.com",
+  "scenario": "no-referrer",
+  "productionActivation": false,
+  "overallVerification": "NOT_ESTABLISHED",
+  "startedAt": "2026-11-12T02:33:05.238Z",
+  "closedAt": null,
+  "rendererStatus": "ready",
+  "observation": "NEGATIVE_CHECK_FAILED_SCENE_RENDERED",
+  "cameraCommands": [],
+  "sdk": {
+    "started": true,
+    "loader": {
+      "channel": "quarterly",
+      "loading": "async",
+      "authorizationReferrerPolicy": "origin",
+      "scriptReferrerPolicy": "no-referrer"
+    },
+    "sdkVersion": "3.65.14a",
+    "steady": true,
+    "everSteady": true,
+    "steadyEvents": 3,
+    "animationEnds": 0,
+    "mapError": false,
+    "loaderError": false,
+    "pageError": false,
+    "cspViolations": 0,
+    "cspEvents": [],
+    "providerErrorCodes": [],
+    "documentReferrerPolicy": "no-referrer"
+  },
+  "tester": {
+    "googleSdkAndAuthorizationRequestsHadNoReferer": false
+  }
+}

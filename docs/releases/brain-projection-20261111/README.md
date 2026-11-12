@@ -39,6 +39,16 @@ This prepares production configuration without asserting provider verification o
 
 ## Established scope and remaining work
 
+### No-referrer observation and test limitation
+
+The owner's next [version 3 report](ipad-no-referrer-v3-20261112.json) began at `2026-11-12T02:33:05.238Z` (November 11 at 9:33 PM US Eastern). It records a steady scene with no captured errors or CSP violations on the same approved acceptance origin, even though the frame and initial SDK loader were configured with `no-referrer`. The report retains `NEGATIVE_CHECK_FAILED_SCENE_RENDERED`; it is not changed into a passing restriction check. The unchecked network-header attestation means those headers were not verified, not that they were present or absent.
+
+Inspection of the live HTTP responses confirmed an additional harness gap: version 3's outer `/no-referrer` page still sent `strict-origin-when-cross-origin`, although its inner frame sent `no-referrer`. The iframe navigation had no explicit policy. Version 4 applies `no-referrer` consistently to that outer page and iframe navigation. This corrects incoming navigation-referrer handling; it does not guarantee a Google authorization denial.
+
+The [SDK source audit](no-referrer-source-review-20261112.md) found an explicit page-origin field in the versioned Maps JavaScript 3.65.14a authentication and 3D-configuration request builders. Removing the HTTP `Referer` header does not remove `location.origin` or that request field. Therefore rendering on an already approved origin is insufficient evidence that website restrictions are broken. This source finding does not establish the iPad's actual request bytes or Google's server-side decision.
+
+Version 4 provides a separate wrong-origin scenario for a controlled HTTPS host absent from the saved key allowlist. Its denial observation requires a specific `RefererNotAllowedMapError`, no steady scene, the normal loader policies, and explicit confirmation that the tested origin is unapproved. It cannot convert a graphics, billing, quota, loader, or generic error into proof of a website restriction. Neither scenario activates production.
+
 The allowed acceptance-origin rendering observation is complete and does not need to be repeated merely because `overallVerification` remains `NOT_ESTABLISHED`. That field intentionally does not certify the whole production rollout.
 
 The production origin and key restrictions still require their own evidence under the [activation runbook](../../../backend/brain_projection/README.md): the approved production host, disallowed-origin and missing-referrer behavior, and the API allowlist. Native iPhone/Android WebView rendering, closure/backgrounding, attribution links, and microphone continuity remain separate device checks. Private server-side geocoding configuration is independent of map rendering and the existing account-bound Directions entitlement.

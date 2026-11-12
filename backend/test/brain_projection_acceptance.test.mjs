@@ -74,9 +74,59 @@ test('negative frame sets document and header no-referrer while retaining nonce 
   assert.equal(acceptanceMapPolicy('abcdefghijklmnopqrstuvwxyz'), rendererPolicy('abcdefghijklmnopqrstuvwxyz'));
 });
 
+test('scenario shells and frames deliver matching referrer policies and mode metadata', async t => {
+  // These are actual local HTTP response checks with a synthetic key. Reading
+  // the HTML starts no SDK and makes no claim about Google's authorization.
+  const request = await serve(t, {browserKey: candidate});
+  for (const [path, policy, mode] of [
+    ['/no-referrer', 'no-referrer', 'no-referrer'], ['/frame/no-referrer', 'no-referrer', 'no-referrer'],
+    ['/', 'strict-origin-when-cross-origin', 'standard'], ['/frame/standard', 'strict-origin-when-cross-origin', 'standard'],
+    ['/wrong-origin', 'strict-origin-when-cross-origin', 'wrong-origin'], ['/frame/wrong-origin', 'strict-origin-when-cross-origin', 'wrong-origin'],
+  ]) {
+    const response = await request(path);
+    assert.equal(response.status, 200, path);
+    assert.equal(response.headers.get('referrer-policy'), policy, path);
+    assert.equal(response.headers.get('cache-control'), 'no-store', path);
+    const html = await response.text();
+    const metaPolicies = [...html.matchAll(/<meta\s+name="referrer"\s+content="([^"]+)"/g)].map(match => match[1]);
+    assert.deepEqual(metaPolicies, [policy], `${path} must contain one matching document policy`);
+    const metaModes = [...html.matchAll(/<meta\s+name="acceptance-mode"\s+content="([^"]+)"/g)].map(match => match[1]);
+    assert.deepEqual(metaModes, [mode], `${path} must identify its own acceptance scenario`);
+    assert.doesNotMatch(html, /<iframe|<script[^>]+(?:earth\.mjs|maps\.googleapis\.com)/, path);
+    if (!path.startsWith('/frame/')) assert.equal(html.includes(candidate), false, 'The shell must not expose the candidate key');
+  }
+});
+
+test('wrong-origin check requires the allowlist observation and waits for explicit map loading', async t => {
+  const request = await serve(t, {browserKey: candidate});
+  const shell = await (await request('/wrong-origin')).text();
+  assert.match(shell, /<input\b(?=[^>]*\bid="origin-unapproved-confirmed")(?=[^>]*\btype="checkbox")[^>]*>/);
+  assert.doesNotMatch(shell, /<input\b[^>]*\bid="(?:headers|imagery)-confirmed"/);
+  assert.equal(shell.includes(candidate), false);
+  assert.doesNotMatch(shell, /<iframe|maps\.googleapis\.com|<script[^>]+earth\.mjs/);
+  assert.match(shell, /id="start"/);
+
+  const response = await request('/frame/wrong-origin');
+  const frame = await response.text();
+  assert.match(frame, /Waiting for an explicit test/);
+  assert.equal(frame.includes(`content="${candidate}"`), true);
+  assert.doesNotMatch(frame, /<script[^>]+(?:earth\.mjs|maps\.googleapis\.com)/);
+  const token = /script-src 'nonce-([^']+)'/.exec(response.headers.get('content-security-policy'))[1];
+  assert.equal(response.headers.get('content-security-policy'), rendererPolicy(token));
+  assert.equal(response.headers.get('permissions-policy'), 'camera=(), microphone=(), geolocation=(), payment=()');
+
+  const unconfigured = await serve(t);
+  const unconfiguredShell = await (await unconfigured('/wrong-origin')).text();
+  assert.match(unconfiguredShell, /id="start" disabled/);
+  assert.doesNotMatch(unconfiguredShell, /<iframe|maps\.googleapis\.com|<script[^>]+earth\.mjs/);
+  const unconfiguredFrame = await (await unconfigured('/frame/wrong-origin')).text();
+  assert.match(unconfiguredFrame, /name="korlix-map-key" content=""/);
+  assert.match(unconfiguredFrame, /id="begin" disabled/);
+});
+
 test('style-attribute compatibility is confined to map documents; shell and element protections remain strict', async t => {
   const request = await serve(t, {browserKey: candidate});
-  for (const path of ['/frame/standard', '/frame/no-referrer', '/', '/no-referrer']) {
+  for (const path of ['/frame/standard', '/frame/no-referrer', '/frame/wrong-origin', '/', '/no-referrer', '/wrong-origin']) {
     const response = await request(path);
     const directives = response.headers.get('content-security-policy').split('; ');
     const script = directives.find(value => value.startsWith('script-src '));
@@ -147,6 +197,16 @@ function report() {
     sdk: {steady: true, everSteady: true, sdkVersion: '3.65.13a', animationEnds: 0,
       loader: {channel: 'quarterly', loading: 'async', authorizationReferrerPolicy: 'origin', scriptReferrerPolicy: 'strict-origin-when-cross-origin'}, providerErrorCodes: []},
     tester: {imageryAndControlsConfirmed: true, attributionAndLinksConfirmed: true}};
+}
+
+function wrongOriginReport() {
+  const value = report();
+  value.rendererStatus = 'error';
+  value.cameraCommands = [];
+  Object.assign(value.sdk, {steady: false, everSteady: false, mapError: true,
+    documentReferrerPolicy: 'strict-origin-when-cross-origin', providerErrorCodes: ['RefererNotAllowedMapError']});
+  value.tester = {currentOriginAbsentFromKeyAllowlist: true};
+  return value;
 }
 
 test('positive evidence requires current steady, exact loader contract and independent landmark/attribution review', () => {
@@ -256,19 +316,114 @@ test('CSP evidence is bounded and independently sanitized again at the frame bou
 });
 
 test('negative proof needs a specific referrer denial and observed absent headers; ToS/generic errors remain inconclusive', () => {
-  const value = report();
-  value.rendererStatus = 'error'; value.sdk.steady = false; value.sdk.everSteady = false;
-  value.sdk.loader.scriptReferrerPolicy = 'no-referrer'; value.sdk.documentReferrerPolicy = 'no-referrer';
-  value.tester.googleSdkAndAuthorizationRequestsHadNoReferer = true;
-  for (const code of ['RefererDeniedMapError', 'BillingNotEnabledMapError', 'GoogleMapsError']) {
-    value.sdk.providerErrorCodes = [code]; assert.equal(classifyObservation(value, true), 'INCONCLUSIVE');
+  for (const mode of [true, 'no-referrer']) {
+    const value = report();
+    value.rendererStatus = 'error'; value.sdk.steady = false; value.sdk.everSteady = false;
+    value.sdk.loader.scriptReferrerPolicy = 'no-referrer'; value.sdk.documentReferrerPolicy = 'no-referrer';
+    value.tester.googleSdkAndAuthorizationRequestsHadNoReferer = true;
+    for (const code of ['RefererDeniedMapError', 'BillingNotEnabledMapError', 'GoogleMapsError']) {
+      value.sdk.providerErrorCodes = [code]; assert.equal(classifyObservation(value, mode), 'INCONCLUSIVE', String(mode));
+    }
+    value.sdk.providerErrorCodes = ['RefererNotAllowedMapError'];
+    assert.equal(classifyObservation(value, mode), 'NO_REFERRER_DENIAL_OBSERVED', String(mode));
+    value.tester.googleSdkAndAuthorizationRequestsHadNoReferer = false;
+    assert.equal(classifyObservation(value, mode), 'INCONCLUSIVE', String(mode));
+    value.sdk.everSteady = true;
+    assert.equal(classifyObservation(value, mode), 'NEGATIVE_CHECK_FAILED_SCENE_RENDERED', String(mode));
   }
-  value.sdk.providerErrorCodes = ['RefererNotAllowedMapError'];
-  assert.equal(classifyObservation(value, true), 'NO_REFERRER_DENIAL_OBSERVED');
-  value.tester.googleSdkAndAuthorizationRequestsHadNoReferer = false;
-  assert.equal(classifyObservation(value, true), 'INCONCLUSIVE');
-  value.sdk.everSteady = true;
-  assert.equal(classifyObservation(value, true), 'NEGATIVE_CHECK_FAILED_SCENE_RENDERED');
+});
+
+test('wrong-origin denial requires the complete loader contract, no steady scene and explicit allowlist confirmation', () => {
+  assert.equal(classifyObservation(wrongOriginReport(), 'wrong-origin'), 'WRONG_ORIGIN_DENIAL_OBSERVED');
+  const cases = [
+    ['missing SDK evidence', value => { value.sdk = null; }],
+    ['missing loader', value => { value.sdk.loader = null; }],
+    ...['loading', 'ready', 'not-started', undefined].map(status => [`renderer status ${status}`, value => { value.rendererStatus = status; }]),
+    ...['steady', 'everSteady'].flatMap(key => [
+      [`missing ${key}`, value => { delete value.sdk[key]; }],
+      [`null ${key}`, value => { value.sdk[key] = null; }],
+      [`nonboolean ${key}`, value => { value.sdk[key] = 0; }],
+    ]),
+    ...['channel', 'loading', 'authorizationReferrerPolicy', 'scriptReferrerPolicy'].flatMap(key => [
+      [`unexpected loader ${key}`, value => { value.sdk.loader[key] = 'unexpected'; }],
+      [`missing loader ${key}`, value => { delete value.sdk.loader[key]; }],
+    ]),
+    ['no-referrer loader policy', value => { value.sdk.loader.scriptReferrerPolicy = 'no-referrer'; }],
+    ['no-referrer document policy', value => { value.sdk.documentReferrerPolicy = 'no-referrer'; }],
+    ['missing document policy', value => { delete value.sdk.documentReferrerPolicy; }],
+    ['missing tester evidence', value => { value.tester = null; }],
+    ['missing allowlist confirmation', value => { delete value.tester.currentOriginAbsentFromKeyAllowlist; }],
+    ['unchecked allowlist confirmation', value => { value.tester.currentOriginAbsentFromKeyAllowlist = false; }],
+    ['truthy nonboolean confirmation', value => { value.tester.currentOriginAbsentFromKeyAllowlist = 'true'; }],
+    ['other scenario confirmations', value => { value.tester = {googleSdkAndAuthorizationRequestsHadNoReferer: true,
+      imageryAndControlsConfirmed: true, attributionAndLinksConfirmed: true}; }],
+  ];
+  for (const [name, mutate] of cases) {
+    const value = wrongOriginReport(); mutate(value);
+    assert.equal(classifyObservation(value, 'wrong-origin'), 'INCONCLUSIVE', name);
+  }
+  const notStarted = wrongOriginReport(); delete notStarted.startedAt;
+  assert.equal(classifyObservation(notStarted, 'wrong-origin'), 'NOT_PERFORMED');
+});
+
+test('wrong-origin blank maps, unrelated provider errors and mixed denial codes remain inconclusive', () => {
+  const cases = [
+    ['GL-only map error', []], ['missing codes', undefined], ['null codes', null],
+    ['generic SDK error', ['GoogleMapsError']], ['terms-of-service denial', ['RefererDeniedMapError']],
+    ...['BillingNotEnabledMapError', 'ClientBillingNotEnabledMapError', 'InvalidKeyMapError', 'MissingKeyMapError',
+      'ExpiredKeyMapError', 'ApiNotActivatedMapError', 'ApiTargetBlockedMapError'].map(code => [code, [code]]),
+    ['mixed billing and referrer denial', ['RefererNotAllowedMapError', 'BillingNotEnabledMapError']],
+    ['mixed invalid key and referrer denial', ['InvalidKeyMapError', 'RefererNotAllowedMapError']],
+    ['mixed generic and referrer denial', ['RefererNotAllowedMapError', 'GoogleMapsError']],
+    ['duplicate referrer denials', ['RefererNotAllowedMapError', 'RefererNotAllowedMapError']],
+    ['raw string instead of code array', 'RefererNotAllowedMapError'],
+    ['array-like object instead of code array', {0: 'RefererNotAllowedMapError', length: 1}],
+  ];
+  for (const [name, codes] of cases) {
+    const value = wrongOriginReport(); value.sdk.providerErrorCodes = codes;
+    assert.equal(classifyObservation(value, 'wrong-origin'), 'INCONCLUSIVE', name);
+  }
+  for (const error of ['loaderError', 'pageError']) {
+    const value = wrongOriginReport(); value.sdk.providerErrorCodes = []; value.sdk[error] = true;
+    assert.equal(classifyObservation(value, 'wrong-origin'), 'INCONCLUSIVE', error);
+  }
+});
+
+test('any current or earlier steady scene fails the wrong-origin control even with other incomplete evidence', () => {
+  for (const [steady, everSteady] of [[true, false], [false, true], [true, true]]) {
+    for (const incomplete of [false, true]) {
+      const value = wrongOriginReport(); Object.assign(value.sdk, {steady, everSteady});
+      if (incomplete) {
+        value.sdk.loader = null; value.sdk.providerErrorCodes = [];
+        value.tester.currentOriginAbsentFromKeyAllowlist = false;
+      }
+      assert.equal(classifyObservation(value, 'wrong-origin'), 'WRONG_ORIGIN_CHECK_FAILED_SCENE_RENDERED',
+        `steady=${steady}, everSteady=${everSteady}, incomplete=${incomplete}`);
+    }
+  }
+});
+
+test('wrong-origin evidence keeps standard referrer metadata and excludes unsanitized fields', () => {
+  const loader = report().sdk.loader;
+  const raw = {started: true, loader: {...loader, src: `https://example.test/?key=${candidate}`, key: candidate},
+    sdkVersion: '3.65.14a', steady: false, everSteady: false, documentReferrerPolicy: candidate,
+    providerErrorCodes: [candidate, 'RefererNotAllowedMapError', 'PretendKeyMapError'],
+    rawError: candidate, authorization: candidate, referrer: candidate, origin: candidate,
+    requestHeaders: {Referer: candidate}, tester: {currentOriginAbsentFromKeyAllowlist: true}};
+  const clean = sanitizeEvidence(raw, 'wrong-origin');
+  assert.equal(clean.documentReferrerPolicy, 'strict-origin-when-cross-origin');
+  assert.deepEqual(clean.loader, loader);
+  assert.equal(clean.sdkVersion, '3.65.14a');
+  assert.deepEqual(clean.providerErrorCodes, ['RefererNotAllowedMapError']);
+  for (const key of ['rawError', 'authorization', 'referrer', 'origin', 'requestHeaders', 'tester']) {
+    assert.equal(Object.hasOwn(clean, key), false, key);
+  }
+  assert.equal(JSON.stringify(clean).includes(candidate), false);
+  assert.doesNotMatch(JSON.stringify(clean), /https?:|example\.test/);
+  assert.deepEqual(sanitizeEvidence(clean, 'wrong-origin'), clean);
+  for (const [mode, policy] of [[false, 'strict-origin-when-cross-origin'], [true, 'no-referrer'], ['no-referrer', 'no-referrer']]) {
+    assert.equal(sanitizeEvidence(raw, mode).documentReferrerPolicy, policy, String(mode));
+  }
 });
 
 test('exported evidence excludes credentials, URLs, raw errors and unexpected provider strings', () => {

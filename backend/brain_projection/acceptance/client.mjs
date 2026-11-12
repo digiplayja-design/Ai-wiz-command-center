@@ -1,7 +1,9 @@
 import {cameraControlsReady, classifyObservation, sanitizeEvidence} from './evidence.mjs';
 
 const get = id => document.getElementById(id);
-const negative = document.querySelector('meta[name="acceptance-mode"]').content === 'no-referrer';
+const mode = document.querySelector('meta[name="acceptance-mode"]').content;
+const noReferrer = mode === 'no-referrer', wrongOrigin = mode === 'wrong-origin';
+const negative = noReferrer || wrongOrigin;
 const configured = document.querySelector('meta[name="acceptance-configured"]').content === 'true';
 const operations = new Set(['flyTo', 'closer', 'farther', 'left', 'right', 'reset']);
 const landmark = {id: 'acceptance-ferry-building', label: 'San Francisco Ferry Building', latitude: 37.7955, longitude: -122.3937};
@@ -11,20 +13,22 @@ const checkboxes = [...document.querySelectorAll('.checks input')];
 get('origin').textContent = location.origin;
 
 function resetReport() {
-  report = {acceptanceVersion: 3, origin: location.origin, scenario: negative ? 'no-referrer' : 'standard',
+  report = {acceptanceVersion: 4, origin: location.origin, scenario: mode,
     productionActivation: false, overallVerification: 'NOT_ESTABLISHED', startedAt: null, closedAt: null,
     rendererStatus: 'not-started', observation: 'NOT_PERFORMED', cameraCommands: [], sdk: null, tester: {}};
   for (const checkbox of checkboxes) { checkbox.checked = false; checkbox.disabled = true; }
 }
 function render() {
   const sdk = report.sdk;
-  if (negative) {
+  if (noReferrer) {
     report.tester.googleSdkAndAuthorizationRequestsHadNoReferer = get('headers-confirmed').checked;
+  } else if (wrongOrigin) {
+    report.tester.currentOriginAbsentFromKeyAllowlist = get('origin-unapproved-confirmed').checked;
   } else {
     report.tester.imageryAndControlsConfirmed = get('imagery-confirmed').checked;
     report.tester.attributionAndLinksConfirmed = get('attribution-confirmed').checked;
   }
-  report.observation = classifyObservation(report, negative);
+  report.observation = classifyObservation(report, mode);
   get('verdict').textContent = report.observation.replaceAll('_', ' ');
   get('evidence').textContent = JSON.stringify(report, null, 2);
   const ready = Boolean(frame && cameraControlsReady(report));
@@ -54,14 +58,15 @@ get('start').addEventListener('click', () => {
   stop(); resetReport();
   report.startedAt = new Date().toISOString();
   frame = document.createElement('iframe');
-  frame.title = negative ? 'No-referrer map acceptance' : 'Allowed-origin map acceptance';
+  frame.title = wrongOrigin ? 'Wrong-origin map acceptance' : noReferrer ? 'No-referrer map acceptance' : 'Allowed-origin map acceptance';
   frame.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox');
   frame.allow = "camera 'none'; microphone 'none'; geolocation 'none'";
+  frame.referrerPolicy = noReferrer ? 'no-referrer' : 'strict-origin-when-cross-origin';
   const current = frame;
   frame.addEventListener('load', () => {
     if (frame === current) current.contentWindow.postMessage({type: 'korlix-acceptance-start'}, location.origin);
   }, {once: true});
-  frame.src = negative ? '/frame/no-referrer' : '/frame/standard';
+  frame.src = `/frame/${mode}`;
   get('stage').replaceChildren(frame);
   get('start').disabled = true; get('stop').disabled = false;
   get('status').textContent = 'Running the explicit SDK check…';
@@ -82,10 +87,11 @@ window.addEventListener('message', event => {
   const data = event.data;
   if (data?.type === 'korlix-projection-status' && ['loading', 'ready', 'error'].includes(data.status)) {
     report.rendererStatus = data.status;
-    get('status').textContent = data.status === 'ready' ? 'The SDK reported a steady scene. Complete the visual checks below.'
+    get('status').textContent = data.status === 'ready' ? negative
+      ? 'The SDK reported a steady scene. This check did not observe a denial.' : 'The SDK reported a steady scene. Complete the visual checks below.'
       : data.status === 'error' ? 'The renderer reported a failure. Review the sanitized evidence below.' : 'Google SDK scene is loading…';
   } else if (data?.type === 'korlix-acceptance-evidence' && data.evidence?.mode === report.scenario) {
-    report.sdk = sanitizeEvidence(data.evidence, negative);
+    report.sdk = sanitizeEvidence(data.evidence, mode);
   }
   render();
 });
