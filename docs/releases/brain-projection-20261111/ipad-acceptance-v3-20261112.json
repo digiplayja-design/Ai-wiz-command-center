@@ -1,0 +1,55 @@
+{
+  "acceptanceVersion": 3,
+  "origin": "https://korlix-projection-check-20261111.onrender.com",
+  "scenario": "standard",
+  "productionActivation": false,
+  "overallVerification": "NOT_ESTABLISHED",
+  "startedAt": "2026-11-12T00:51:12.919Z",
+  "closedAt": null,
+  "rendererStatus": "ready",
+  "observation": "POSITIVE_OBSERVATION_COMPLETE",
+  "cameraCommands": [
+    "flyTo",
+    "closer",
+    "farther",
+    "closer",
+    "closer",
+    "left",
+    "right",
+    "reset",
+    "reset",
+    "closer",
+    "flyTo",
+    "flyTo",
+    "flyTo",
+    "flyTo",
+    "flyTo",
+    "closer",
+    "flyTo"
+  ],
+  "sdk": {
+    "started": true,
+    "loader": {
+      "channel": "quarterly",
+      "loading": "async",
+      "authorizationReferrerPolicy": "origin",
+      "scriptReferrerPolicy": "strict-origin-when-cross-origin"
+    },
+    "sdkVersion": "3.65.14a",
+    "steady": true,
+    "everSteady": true,
+    "steadyEvents": 29,
+    "animationEnds": 14,
+    "mapError": false,
+    "loaderError": false,
+    "pageError": false,
+    "cspViolations": 0,
+    "cspEvents": [],
+    "providerErrorCodes": [],
+    "documentReferrerPolicy": "strict-origin-when-cross-origin"
+  },
+  "tester": {
+    "imageryAndControlsConfirmed": true,
+    "attributionAndLinksConfirmed": true
+  }
+}
