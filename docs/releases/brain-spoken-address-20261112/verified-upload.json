@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-11-12T23:27:26Z",
+  "sourceUpload": {
+    "codemagicBuildId": "6af6466c10a05158d8122e55",
+    "workflow": "korlix-brain-ios-testflight",
+    "commit": "c7817628b9825eef0ee81487a098ac3fde954003",
+    "bundleId": "com.korlix.brain",
+    "version": "1.0.2",
+    "buildNumber": "21"
+  },
+  "sourceTree": "0bf3b6e0da003f14d11dd5863d5ffdb9e42148b9",
+  "publishingStatus": "uploaded",
+  "publishingStatusBasis": "observed_successful_apple_upload",
+  "appleUploadId": "6ce93e8f-16a6-47be-beff-805f5ab40fe7",
+  "uploadObservation": {
+    "basis": "parent_observed_codemagic_publishing_ui",
+    "sourceBranch": "release/brain-spoken-address-c781762",
+    "observedAtDescription": "Approximately 2026-11-12 23:22 UTC",
+    "uploadSucceededAt": "2026-11-12T23:14:23.677Z",
+    "appleUploadResult": "UPLOAD SUCCEEDED with no errors",
+    "transferredBytes": 34891394,
+    "codemagicTerminalStatusObserved": true,
+    "codemagicTerminalStatus": "finished",
+    "terminalStatusObservedAtDescription": "Approximately 2026-11-12 23:25 UTC",
+    "codemagicLastObservedStageBeforeCompletion": "post_processing"
+  },
+  "sourceCi": {
+    "basis": "parent_observed_exact_source_ci",
+    "runId": "43324793588",
+    "sourceCommit": "c7817628b9825eef0ee81487a098ac3fde954003",
+    "conclusion": "success",
+    "successfulJobs": 4,
+    "flutterTestsPassed": 245,
+    "releaseIdentityTestsPassed": 23,
+    "mergeContentIdenticalToTestedSource": true
+  },
+  "ipa": {
+    "sha256": "90fdc3f18e9c8f7021fed8dbc5c3c53fd596546c572c37a33721fbd6b3a1a275",
+    "bytes": 34891394,
+    "infoPlist": {
+      "CFBundleIdentifier": "com.korlix.brain",
+      "CFBundleShortVersionString": "1.0.2",
+      "CFBundleVersion": "21",
+      "CFBundleSupportedPlatforms": [
+        "iPhoneOS"
+      ],
+      "MinimumOSVersion": "15.0",
+      "DTPlatformName": "iphoneos"
+    },
+    "verificationReport": {
+      "file": "BrainVoice-verification.json",
+      "sha256": "b7c47169f8ae10d39e28c01f5ece1c725e62e42f88b239056625c21a850d010c",
+      "reportedSignatureVerified": true,
+      "reportedProfileType": "app_store"
+    }
+  },
+  "testflightDelivery": {
+    "status": "pending_assignment_and_readback",
+    "verified": false
+  },
+  "sourceAttestedByApple": false,
+  "appleBuildObservation": {
+    "basis": "parent_observed_codemagic_post_processing_ui",
+    "appleBuildId": "6ce93e8f-16a6-47be-beff-805f5ab40fe7",
+    "buildLocated": true,
+    "whatToTestLocalizationUpdated": true,
+    "localizationId": "cd80b463-264c-409e-87de-3a84c6cb0bc9",
+    "processingStateObserved": false,
+    "internalGroupDeliveryVerified": false
+  },
+  "independentInspection": {
+    "file": "voice-route-independent-build21-inspection.json",
+    "reportSha256": "cd28f6cef32da3d593226212e4cb24f268b051127fc9983b82a1358f2f87df52",
+    "reportJson": "{\n  \"schemaVersion\": 1,\n  \"result\": \"passed\",\n  \"checkedAt\": \"2026-11-12T23:23:01Z\",\n  \"inspector\": \"voice_route_diagnosis\",\n  \"expectedSource\": {\n    \"commit\": \"c7817628b9825eef0ee81487a098ac3fde954003\",\n    \"tree\": \"0bf3b6e0da003f14d11dd5863d5ffdb9e42148b9\"\n  },\n  \"ipa\": {\n    \"file\": \"BrainVoice.ipa\",\n    \"bytes\": 34891394,\n    \"sha256\": \"90fdc3f18e9c8f7021fed8dbc5c3c53fd596546c572c37a33721fbd6b3a1a275\",\n    \"mainAppPlistCount\": 1,\n    \"infoPlistPath\": \"Payload/Runner.app/Info.plist\",\n    \"infoPlist\": {\n      \"CFBundleIdentifier\": \"com.korlix.brain\",\n      \"CFBundleShortVersionString\": \"1.0.2\",\n      \"CFBundleVersion\": \"21\",\n      \"CFBundleSupportedPlatforms\": [\n        \"iPhoneOS\"\n      ],\n      \"DTPlatformName\": \"iphoneos\",\n      \"MinimumOSVersion\": \"15.0\"\n    }\n  },\n  \"projectionAssets\": [\n    {\n      \"candidatePath\": \"apps/korlix_brain/assets/web/projection.html\",\n      \"ipaPath\": \"Payload/Runner.app/Frameworks/App.framework/flutter_assets/assets/web/projection.html\",\n      \"bytes\": 14664,\n      \"sha256\": \"c8ccbfe30714e9e6fa993ee2d7b910d35463c7c4fdb172511f4f48e433b93138\",\n      \"exactBytesMatch\": true\n    },\n    {\n      \"candidatePath\": \"apps/korlix_brain/assets/web/projection.js\",\n      \"ipaPath\": \"Payload/Runner.app/Frameworks/App.framework/flutter_assets/assets/web/projection.js\",\n      \"bytes\": 44036,\n      \"sha256\": \"edce336625983fe242c30f4099e6b728e1348424c79eeab23d55c67cc72db707\",\n      \"exactBytesMatch\": true\n    },\n    {\n      \"candidatePath\": \"apps/korlix_brain/assets/web/projection.css\",\n      \"ipaPath\": \"Payload/Runner.app/Frameworks/App.framework/flutter_assets/assets/web/projection.css\",\n      \"bytes\": 39550,\n      \"sha256\": \"d4e4697ef96bc07d32e3cc99ee3638d888bb52ef2f366ffd074c806528ffcc83\",\n      \"exactBytesMatch\": true\n    }\n  ],\n  \"verificationArtifact\": {\n    \"file\": \"BrainVoice-verification.json\",\n    \"archiveMember\": \"artifacts/BrainVoice-verification.json\",\n    \"sha256\": \"b7c47169f8ae10d39e28c01f5ece1c725e62e42f88b239056625c21a850d010c\",\n    \"archiveBytesMatch\": true,\n    \"identitySizeChecksumMatch\": true,\n    \"report\": {\n      \"CFBundleIdentifier\": \"com.korlix.brain\",\n      \"CFBundleShortVersionString\": \"1.0.2\",\n      \"CFBundleVersion\": \"21\",\n      \"bytes\": 34891394,\n      \"sha256\": \"90fdc3f18e9c8f7021fed8dbc5c3c53fd596546c572c37a33721fbd6b3a1a275\",\n      \"profile_type\": \"app_store\",\n      \"signature_verified\": true,\n      \"production_push_required\": false\n    }\n  },\n  \"signatureChecks\": {\n    \"pipelineReportedVerified\": true,\n    \"pipelineReportedProfileType\": \"app_store\",\n    \"codeSignatureResourcesPresent\": true,\n    \"embeddedProvisioningProfilePresent\": true,\n    \"codeSignatureCryptographicallyReverifiedLocally\": false\n  },\n  \"limits\": {\n    \"nativeSourceCommitAttestedByIpa\": false,\n    \"appleProcessingVerified\": false,\n    \"testFlightDeliveryVerified\": false,\n    \"remoteRequestsMade\": false\n  },\n  \"parentObservedUploadContext\": {\n    \"codemagicBuildId\": \"6af6466c10a05158d8122e55\",\n    \"altoolObservedAt\": \"2026-11-12T23:14:23.677Z\",\n    \"altoolResult\": \"UPLOAD SUCCEEDED with no errors\",\n    \"appleUploadId\": \"6ce93e8f-16a6-47be-beff-805f5ab40fe7\",\n    \"transferredBytes\": 34891394,\n    \"codemagicTerminalStatusNotVerifiedByThisInspection\": true\n  }\n}\n"
+  }
+}

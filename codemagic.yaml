@@ -783,3 +783,35 @@ workflows:
             --assign --output artifacts/brain-projection-voice-repair-testflight-assignment.json
     artifacts:
       - artifacts/brain-projection-voice-repair-testflight-assignment.json
+
+  korlix-brain-testflight-assign-spoken-address-21:
+    name: KORLIX Brain+Voice — spoken address internal TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    # Manual only. Exact verified native build: 21. Native source floor: 21.
+    # Native source: c7817628b9825eef0ee81487a098ac3fde954003
+    # Native tree: 0bf3b6e0da003f14d11dd5863d5ffdb9e42148b9
+    # Exact-source CI 43324793588 passed; actual IPA and successful Apple upload reviewed.
+    # Codemagic finished and found the uploaded Apple build; eligibility/delivery need read-back.
+    # Fixed source, upload and independently inspected IPA pins are required.
+    # No latest-build fallback, environment override or substitution of builds 17–20.
+    # Preflight must fail before release tools or managed credentials are initialized.
+    # The only allowed write adds the exact verified build to the existing group.
+    # No tester invitation, upload, compliance change, review or public release.
+    scripts:
+      - name: Validate exact internal delivery guards
+        script: |
+          set -euo pipefail
+          python3 -B -m unittest discover -s scripts/tests -p 'test_brain_spoken_address_testflight_assignment.py' -v
+          python3 -B -c 'import runpy; runpy.run_path("scripts/assign_brain_spoken_address_testflight_build.py")["require_verified_source_upload"]()'
+      - name: Assign verified build to existing internal testers
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.brain-spoken-address-testflight-tools"
+          "$CM_BUILD_DIR/.brain-spoken-address-testflight-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+          "$CM_BUILD_DIR/.brain-spoken-address-testflight-tools/bin/python" scripts/assign_brain_spoken_address_testflight_build.py \
+            --assign --output artifacts/brain-spoken-address-testflight-assignment.json
+    artifacts:
+      - artifacts/brain-spoken-address-testflight-assignment.json
