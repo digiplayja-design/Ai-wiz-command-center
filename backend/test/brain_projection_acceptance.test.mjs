@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import {request as httpRequest} from 'node:http';
+import {runInNewContext} from 'node:vm';
 import {createAcceptanceServer, acceptanceMapPolicy, acceptancePort} from '../brain_projection/acceptance/server.mjs';
 import {observeLoader} from '../brain_projection/acceptance/frame.mjs';
-import {cameraControlsReady, classifyObservation, sanitizeEvidence, providerErrorCode, summarizeCspViolation} from '../brain_projection/acceptance/evidence.mjs';
+import {cameraControlsReady, classifyObservation, rendererObservation, sanitizeEvidence, providerErrorCode, summarizeCspViolation} from '../brain_projection/acceptance/evidence.mjs';
 import {rendererPolicy} from '../brain_projection/renderer.mjs';
 import {API_RESTRICTION_ENDPOINT, createApiRestrictionProbe, summarizeApiRestriction} from '../brain_projection/acceptance/api-restriction.mjs';
 
@@ -238,7 +239,7 @@ test('style-attribute compatibility is confined to map documents; shell and elem
 
 test('released renderer assets are served byte-for-byte through a fixed allowlist', async t => {
   const request = await serve(t, {browserKey: candidate});
-  for (const filename of ['earth.mjs', 'camera.mjs', 'earth.css']) {
+  for (const filename of ['earth.mjs', 'camera.mjs', 'street.mjs', 'earth.css']) {
     const response = await request(`/brain-projection/${filename}`);
     assert.equal(response.status, 200);
     assert.equal(await response.text(), await readFile(new URL(`../brain_projection/public/${filename}`, import.meta.url), 'utf8'));
@@ -529,4 +530,114 @@ test('exported evidence excludes credentials, URLs, raw errors and unexpected pr
   assert.equal(providerErrorCode([`Google Maps JavaScript API error: RefererNotAllowedMapError https://example.test/?key=${candidate}`]), 'RefererNotAllowedMapError');
   assert.equal(providerErrorCode([`Google Maps JavaScript API error: FakeSecretMapError ${candidate}`]), 'GoogleMapsError');
   assert.equal(providerErrorCode([new Error(candidate)]), null);
+});
+
+test('Street acceptance requires current imagery and independent visual review without inventing Earth steady evidence', () => {
+  const value = report();
+  Object.assign(value, {acceptanceVersion: 5, viewMode: 'street', rendererReason: 'ready', cameraSequence: 1, everReady: true});
+  Object.assign(value.sdk, {steady: false, everSteady: false});
+  assert.equal(cameraControlsReady(value), true);
+  assert.equal(classifyObservation(value, 'standard'), 'POSITIVE_OBSERVATION_COMPLETE');
+  for (const mutate of [
+    r => { r.rendererReason = 'awaiting-destination'; }, r => { r.rendererStatus = 'loading'; },
+    r => { r.rendererStatus = 'error'; r.rendererReason = 'no-coverage'; },
+    r => { r.viewMode = 'earth'; }, r => { r.viewMode = 'unexpected'; },
+    r => { r.sdk.sdkVersion = null; }, r => { r.sdk.loader = null; },
+    r => { r.tester.imageryAndControlsConfirmed = false; },
+    r => { r.tester.attributionAndLinksConfirmed = false; }, r => { r.sdk.cspViolations = 1; },
+  ]) {
+    const changed = structuredClone(value); mutate(changed);
+    assert.equal(classifyObservation(changed, 'standard'), 'VISUAL_OR_SDK_REVIEW_PENDING');
+  }
+  value.viewMode = 'earth'; value.sdk.steady = true;
+  assert.equal(classifyObservation(value, 'standard'), 'POSITIVE_OBSERVATION_COMPLETE');
+});
+
+test('Street readiness prevents a later negative restriction verdict even when no Earth steady event exists', () => {
+  const value = wrongOriginReport();
+  Object.assign(value, {viewMode: 'street', rendererReason: 'unavailable', everReady: true});
+  assert.equal(classifyObservation(value, 'wrong-origin'), 'WRONG_ORIGIN_CHECK_FAILED_SCENE_RENDERED');
+  value.sdk.loader.scriptReferrerPolicy = 'no-referrer'; value.sdk.documentReferrerPolicy = 'no-referrer';
+  value.tester.googleSdkAndAuthorizationRequestsHadNoReferer = true;
+  assert.equal(classifyObservation(value, 'no-referrer'), 'NEGATIVE_CHECK_FAILED_SCENE_RENDERED');
+  value.everReady = false;
+  assert.equal(classifyObservation(value, 'no-referrer'), 'NO_REFERRER_DENIAL_OBSERVED');
+});
+
+test('acceptance status ignores stale sequences, other views and transport-only ready without exporting raw text', () => {
+  const value = {viewMode: 'street', cameraSequence: 3};
+  const message = {type: 'korlix-projection-status', viewMode: 'street', sequence: 3, status: 'ready', reason: 'ready', message: candidate};
+  assert.deepEqual(rendererObservation(value, message), {status: 'ready', reason: 'ready'});
+  for (const patch of [
+    {sequence: 2}, {sequence: 4}, {sequence: '3'}, {sequence: undefined}, {viewMode: 'earth'}, {viewMode: undefined},
+    {reason: 'awaiting-destination'}, {reason: candidate}, {type: 'korlix-projection-transport-ready'},
+    {status: 'ready', reason: 'loading'}, {status: 'error', reason: 'ready'},
+  ]) assert.equal(rendererObservation(value, {...message, ...patch}), null);
+  for (const reason of ['no-coverage', 'unavailable', 'interrupted']) {
+    assert.deepEqual(rendererObservation(value, {...message, status: 'error', reason}), {status: 'error', reason});
+  }
+});
+
+test('acceptance client starts Street after transport and keeps Stop and mode switches available through loading and no coverage', async () => {
+  class Element {
+    constructor(dataset = {}) { this.dataset = dataset; this.listeners = {}; this.disabled = false; this.checked = false; this.textContent = ''; this.attributes = {}; }
+    addEventListener(name, fn) { this.listeners[name] = fn; }
+    setAttribute(name, value) { this.attributes[name] = value; }
+    replaceChildren(value) { this.child = value; }
+    remove() {}
+    click() { if (!this.disabled) this.listeners.click?.(); }
+  }
+  const ids = new Map(), messages = [], events = {};
+  const get = id => { if (!ids.has(id)) ids.set(id, new Element()); return ids.get(id); };
+  const operations = ['flyTo', 'closer', 'farther', 'left', 'right', 'reset', 'zoomInContinuous', 'zoomOutContinuous', 'stopCamera']
+    .map(operation => new Element({operation}));
+  const modes = ['street', 'earth'].map(viewMode => new Element({viewMode}));
+  const checks = ['imagery-confirmed', 'attribution-confirmed'].map(get);
+  const origin = 'https://acceptance.example';
+  const document = {
+    getElementById: get,
+    querySelector: selector => ({content: selector.includes('acceptance-mode') ? 'standard' : 'true'}),
+    querySelectorAll: selector => selector === '.checks input' ? checks : selector === '[data-operation]' ? operations : modes,
+    createElement: () => Object.assign(new Element(), {contentWindow: {postMessage: (data, target) => messages.push({data, target})}}),
+  };
+  const source = await readFile(new URL('../brain_projection/acceptance/client.mjs', import.meta.url), 'utf8');
+  runInNewContext(source.replace(/^import[^\n]+\n/, ''), {document, window: {addEventListener: (name, fn) => { events[name] = fn; }},
+    location: {origin}, navigator: {}, cameraControlsReady, classifyObservation, rendererObservation, sanitizeEvidence});
+  const read = () => JSON.parse(get('evidence').textContent);
+  const button = operation => operations.find(value => value.dataset.operation === operation);
+  get('start').click();
+  const frame = get('stage').child;
+  const emit = (data, overrides = {}) => events.message({source: frame.contentWindow, origin, data, ...overrides});
+  assert.equal(button('flyTo').disabled, true);
+  emit({type: 'korlix-projection-transport-ready'}, {origin: 'https://untrusted.example'});
+  assert.equal(messages.length, 0);
+  emit({type: 'korlix-projection-transport-ready'});
+  const first = messages.at(-1);
+  assert.equal(first.target, origin); assert.equal(first.data.camera.operation, 'flyTo'); assert.equal(first.data.camera.viewMode, 'street');
+  assert.equal(first.data.place.latitude, 37.7955); assert.equal(first.data.place.longitude, -122.3937);
+  assert.equal(button('closer').disabled, true); assert.equal(button('stopCamera').disabled, false);
+  assert.equal(modes[1].disabled, false); assert.equal(read().everReady, false);
+  emit({type: 'korlix-projection-transport-ready'});
+  assert.equal(messages.filter(value => value.data.type === 'korlix-projection-camera').length, 1);
+  emit({type: 'korlix-acceptance-evidence', evidence: {...report().sdk, mode: 'standard', started: true, steady: false, everSteady: false}});
+  const status = (viewMode, sequence, state, reason) => ({type: 'korlix-projection-status', viewMode, sequence, status: state, reason});
+  emit(status('street', 1, 'ready', 'awaiting-destination'));
+  assert.equal(button('closer').disabled, true); assert.equal(read().everReady, false);
+  emit(status('street', 1, 'ready', 'ready'));
+  assert.equal(button('closer').disabled, false); assert.equal(read().everReady, true);
+  modes[1].click();
+  assert.equal(read().viewMode, 'earth'); assert.equal(button('closer').disabled, true);
+  emit(status('street', 1, 'ready', 'ready'));
+  assert.equal(read().rendererStatus, 'loading');
+  button('stopCamera').click();
+  assert.equal(messages.filter(value => value.data.type === 'korlix-projection-camera').at(-1).data.camera.operation, 'stopCamera');
+  emit(status('earth', 3, 'error', 'interrupted'));
+  assert.equal(read().rendererReason, 'interrupted'); assert.equal(modes[0].disabled, false);
+  modes[0].click();
+  emit(status('street', 4, 'error', 'no-coverage'));
+  assert.equal(read().viewMode, 'street'); assert.equal(read().rendererReason, 'no-coverage');
+  assert.equal(button('closer').disabled, true); assert.equal(button('stopCamera').disabled, false); assert.equal(modes[1].disabled, false);
+  get('stop').click();
+  assert.equal(button('stopCamera').disabled, true); assert.equal(modes[1].disabled, true);
+  assert.ok(read().closedAt);
 });

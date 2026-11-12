@@ -28,6 +28,7 @@ const assets = new Map([
   ['/acceptance/api-restriction.mjs', new URL('./api-restriction.mjs', import.meta.url)],
   ['/brain-projection/earth.mjs', new URL('../public/earth.mjs', import.meta.url)],
   ['/brain-projection/camera.mjs', new URL('../public/camera.mjs', import.meta.url)],
+  ['/brain-projection/street.mjs', new URL('../public/street.mjs', import.meta.url)],
   ['/brain-projection/earth.css', new URL('../public/earth.css', import.meta.url)],
 ]);
 
@@ -65,9 +66,10 @@ ${wrongOrigin ? '<p class="notice">Use this check from a controlled HTTPS origin
 <div class="actions"><button class="primary" id="start"${keyPresent ? '' : ' disabled'}>Load test map</button><button id="stop" disabled>Close test map</button></div>
 <p id="status" role="status" aria-live="polite">Not started.</p></section>
 <div class="stage" id="stage"><p>The map test will appear here after you press Load test map.</p></div>
-<section class="panel"><h2>Camera checks</h2><p>Use the San Francisco Ferry Building, a public landmark. Confirm the scene visually; provider coverage is not assumed from a successful script load.</p>
+<section class="panel"><h2>Camera checks</h2><p>Street View opens at the San Francisco Ferry Building, a public landmark. Check the recorded street-level view aimed toward the building, then choose 3D Earth and repeat the checks. Coverage is not assumed from a successful script load, and an unavailable street view will not switch modes automatically.</p>
 <p id="camera-status" role="status">Load the test map to enable camera controls.</p><p id="policy-status" class="notice" role="status" hidden></p>
-<div class="actions" id="camera-controls"><button data-operation="flyTo" disabled>Fly to landmark</button><button data-operation="closer" disabled>Closer</button><button data-operation="farther" disabled>Farther</button><button data-operation="left" disabled>Left</button><button data-operation="right" disabled>Right</button><button data-operation="reset" disabled>Reset</button></div></section>
+<div class="actions" aria-label="Imagery view"><button data-view-mode="street" aria-pressed="true" disabled>Street View</button><button data-view-mode="earth" aria-pressed="false" disabled>3D Earth</button></div>
+<div class="actions" id="camera-controls"><button data-operation="flyTo" disabled>Return to landmark</button><button data-operation="closer" disabled>Closer</button><button data-operation="farther" disabled>Farther</button><button data-operation="left" disabled>Left</button><button data-operation="right" disabled>Right</button><button data-operation="reset" disabled>Reset</button><button data-operation="zoomInContinuous" disabled>Keep zooming in</button><button data-operation="zoomOutContinuous" disabled>Keep zooming out</button><button data-operation="stopCamera" disabled>Stop movement</button></div></section>
 <section class="panel checks"><h2>Tester observations</h2>
 ${wrongOrigin ? '<label><input id="origin-unapproved-confirmed" type="checkbox" disabled>I inspected the current key\'s website restrictions and confirmed that the exact origin displayed above is not allowed by any entry, including wildcards.</label><p>The renderer must report a failure with RefererNotAllowedMapError under the normal loader contract, without ever rendering a steady scene. This manual confirmation does not change any key setting.</p>' : negative ? '<label><input id="headers-confirmed" type="checkbox" disabled>I inspected the relevant Google SDK and authorization requests and confirmed their Referer header was absent.</label><p>A specific referrer-denial code must also be captured below. An unchecked box means the headers are unverified. Use the separate wrong-origin check to test a genuinely unapproved website; this service does not forge a referrer or alter SDK authorization data.</p>' : '<label><input id="imagery-confirmed" type="checkbox" disabled>I can identify real geographic imagery at the landmark and the camera controls work.</label><label><input id="attribution-confirmed" type="checkbox" disabled>Google attribution is unobscured and its legal links work, including at a narrow viewport.</label>'}
 <p id="verdict" role="status">No observation recorded.</p><p>These observations do not establish all API restrictions, quotas or iPhone/Android WebView behavior. The production verification gate remains unchanged.</p></section>
@@ -82,7 +84,7 @@ function frame({key, mode, token}) {
 <meta name="acceptance-mode" content="${mode}"><meta name="acceptance-configured" content="${Boolean(key)}"><title>Projection map acceptance frame</title>
 <link rel="stylesheet" href="/brain-projection/earth.css" nonce="${token}"><style nonce="${token}" id="korlix-sdk-style-nonce"></style>
 <script type="module" src="/acceptance/frame.mjs" nonce="${token}"></script></head>
-<body><div id="imagery-label">Acceptance test · Recorded 3D imagery, not live cameras · Capture date unavailable</div>
+<body><div id="imagery-label">Acceptance test · Recorded Street View · Capture date unavailable · Not live</div>
 <button id="begin"${key ? '' : ' disabled'}>Load test map</button><div id="map-state" role="status" aria-live="polite">${key ? 'Waiting for an explicit test.' : 'Acceptance browser key is not configured.'}</div><main id="map" aria-label="Recorded geographic imagery"></main></body></html>`;
 }
 

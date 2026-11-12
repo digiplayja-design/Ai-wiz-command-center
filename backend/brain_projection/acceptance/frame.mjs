@@ -79,7 +79,11 @@ function runFrame() {
   }
   document.getElementById('begin').addEventListener('click', start);
   window.addEventListener('message', event => {
-    if (event.source === parent && event.origin === location.origin && event.data?.type === 'korlix-acceptance-start') void start();
+    if (event.source !== parent || event.origin !== location.origin) return;
+    if (event.data?.type === 'korlix-acceptance-start') void start();
+    // Street View has no maps3d steady event. Refresh the public SDK version
+    // after a renderer status without manufacturing any provider observation.
+    if (event.data?.type === 'korlix-acceptance-refresh-evidence' && evidence.started) publish();
   });
   window.addEventListener('pagehide', () => { closed = true; restoreLoader(); console.error = originalError; }, {once: true});
   publish();

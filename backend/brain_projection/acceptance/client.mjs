@@ -1,11 +1,11 @@
-import {cameraControlsReady, classifyObservation, sanitizeEvidence} from './evidence.mjs';
+import {cameraControlsReady, classifyObservation, rendererObservation, sanitizeEvidence} from './evidence.mjs';
 
 const get = id => document.getElementById(id);
 const mode = document.querySelector('meta[name="acceptance-mode"]').content;
 const noReferrer = mode === 'no-referrer', wrongOrigin = mode === 'wrong-origin';
 const negative = noReferrer || wrongOrigin;
 const configured = document.querySelector('meta[name="acceptance-configured"]').content === 'true';
-const operations = new Set(['flyTo', 'closer', 'farther', 'left', 'right', 'reset']);
+const operations = new Set(['flyTo', 'closer', 'farther', 'left', 'right', 'reset', 'zoomInContinuous', 'zoomOutContinuous', 'stopCamera']);
 const landmark = {id: 'acceptance-ferry-building', label: 'San Francisco Ferry Building', latitude: 37.7955, longitude: -122.3937};
 let frame = null, sequence = 0;
 let report;
@@ -13,9 +13,10 @@ const checkboxes = [...document.querySelectorAll('.checks input')];
 get('origin').textContent = location.origin;
 
 function resetReport() {
-  report = {acceptanceVersion: 4, origin: location.origin, scenario: mode,
+  report = {acceptanceVersion: 5, origin: location.origin, scenario: mode,
     productionActivation: false, overallVerification: 'NOT_ESTABLISHED', startedAt: null, closedAt: null,
-    rendererStatus: 'not-started', observation: 'NOT_PERFORMED', cameraCommands: [], sdk: null, tester: {}};
+    transportReady: false, viewMode: 'street', cameraSequence: 0, rendererStatus: 'not-started', rendererReason: null,
+    everReady: false, cameraOutcome: null, observation: 'NOT_PERFORMED', cameraCommands: [], cameraHistory: [], sdk: null, tester: {}};
   for (const checkbox of checkboxes) { checkbox.checked = false; checkbox.disabled = true; }
 }
 function render() {
@@ -32,14 +33,25 @@ function render() {
   get('verdict').textContent = report.observation.replaceAll('_', ' ');
   get('evidence').textContent = JSON.stringify(report, null, 2);
   const ready = Boolean(frame && cameraControlsReady(report));
-  for (const button of document.querySelectorAll('[data-operation]')) button.disabled = !ready;
+  const transport = Boolean(frame && report.transportReady && !report.closedAt);
+  for (const button of document.querySelectorAll('[data-operation]')) {
+    button.disabled = ['flyTo', 'stopCamera'].includes(button.dataset.operation) ? !transport : !ready;
+  }
+  for (const button of document.querySelectorAll('[data-view-mode]')) {
+    button.disabled = !transport;
+    button.setAttribute('aria-pressed', String(button.dataset.viewMode === report.viewMode));
+  }
   for (const checkbox of checkboxes) checkbox.disabled = negative ? !Boolean(sdk?.loader) : !(ready && report.cameraCommands.includes('flyTo'));
-  get('camera-status').textContent = ready ? 'Camera controls ready. Fly to the landmark and check movement.'
+  const viewName = report.viewMode === 'street' ? 'Street View' : '3D Earth';
+  get('camera-status').textContent = ready ? viewName + ' controls ready. Check movement and record this view’s visual observations.'
     : !frame ? 'Load the test map to enable camera controls.'
-      : report.rendererStatus === 'error' ? 'Camera controls unavailable because the renderer reported a failure.'
+      : report.rendererStatus === 'error' ? report.rendererReason === 'no-coverage'
+        ? 'Street-level imagery is unavailable here. Choose 3D Earth explicitly or retry the landmark.'
+        : 'This view is unavailable. Retry the landmark or choose the other view.'
         : sdk?.mapError || sdk?.loaderError || sdk?.pageError || sdk?.providerErrorCodes?.length
           ? 'Camera controls unavailable. Review the recorded errors in Sanitized evidence.'
-          : 'Waiting for the map to finish rendering before enabling camera controls.';
+          : transport ? 'Waiting for imagery. Stop movement and view selection remain available.'
+            : 'Waiting for the renderer connection before sending the public landmark.';
   get('policy-status').hidden = !sdk?.cspViolations;
   get('policy-status').textContent = sdk?.cspViolations
     ? `${sdk.cspViolations} security-policy event${sdk.cspViolations === 1 ? '' : 's'} recorded. Camera testing can continue when the scene is ready; the overall test remains pending policy review. Details are in Sanitized evidence.` : '';
@@ -73,23 +85,51 @@ get('start').addEventListener('click', () => {
   render();
 });
 get('stop').addEventListener('click', stop);
-for (const button of document.querySelectorAll('[data-operation]')) button.addEventListener('click', () => {
-  const operation = button.dataset.operation;
-  if (!frame || button.disabled || !operations.has(operation)) return;
-  const camera = {operation, sequence: ++sequence, ...(operation === 'flyTo' ? {height: 850, pitch: -50} : {})};
+function sendCamera(operation, viewMode = report.viewMode) {
+  if (!frame || !report.transportReady || !operations.has(operation) || !['street', 'earth'].includes(viewMode)) return;
+  if (!['flyTo', 'stopCamera'].includes(operation) && !cameraControlsReady(report)) return;
+  const camera = {operation, sequence: ++sequence, viewMode, ...(operation === 'flyTo' ? {height: 850, pitch: -50} : {})};
+  report.cameraSequence = camera.sequence;
+  report.cameraOutcome = null;
+  if (operation === 'flyTo') {
+    report.viewMode = viewMode;
+    report.rendererStatus = 'loading'; report.rendererReason = 'loading';
+    report.cameraCommands = [];
+  }
   for (const checkbox of checkboxes) checkbox.checked = false;
   frame.contentWindow.postMessage({type: 'korlix-projection-camera', camera, ...(operation === 'flyTo' ? {place: landmark} : {})}, location.origin);
   if (report.cameraCommands.length < 100) report.cameraCommands.push(operation);
+  if (report.cameraHistory.length < 100) report.cameraHistory.push({operation, sequence: camera.sequence, viewMode});
   render();
+}
+for (const button of document.querySelectorAll('[data-operation]')) button.addEventListener('click', () => {
+  if (!button.disabled) sendCamera(button.dataset.operation);
+});
+for (const button of document.querySelectorAll('[data-view-mode]')) button.addEventListener('click', () => {
+  if (!button.disabled) sendCamera('flyTo', button.dataset.viewMode);
 });
 window.addEventListener('message', event => {
   if (!frame || event.source !== frame.contentWindow || event.origin !== location.origin) return;
   const data = event.data;
-  if (data?.type === 'korlix-projection-status' && ['loading', 'ready', 'error'].includes(data.status)) {
-    report.rendererStatus = data.status;
-    get('status').textContent = data.status === 'ready' ? negative
-      ? 'The SDK reported a steady scene. This check did not observe a denial.' : 'The SDK reported a steady scene. Complete the visual checks below.'
-      : data.status === 'error' ? 'The renderer reported a failure. Review the sanitized evidence below.' : 'Google SDK scene is loading…';
+  if (data?.type === 'korlix-projection-transport-ready') {
+    if (!report.transportReady) {
+      report.transportReady = true;
+      sendCamera('flyTo', 'street');
+    }
+  } else if (data?.type === 'korlix-projection-status') {
+    const observed = rendererObservation(report, data);
+    if (!observed) return;
+    report.rendererStatus = observed.status; report.rendererReason = observed.reason;
+    if (observed.status === 'ready') report.everReady = true;
+    get('status').textContent = observed.status === 'ready' ? negative
+      ? 'The renderer reported imagery ready. This check did not observe a denial.' : 'The selected view is ready. Complete its visual checks below.'
+      : observed.status === 'error' ? 'The selected view reported a failure. Review the sanitized evidence below.' : 'The selected view is loading…';
+    frame.contentWindow.postMessage({type: 'korlix-acceptance-refresh-evidence'}, location.origin);
+  } else if (data?.type === 'korlix-projection-camera-status') {
+    if (data.sequence !== report.cameraSequence || data.viewMode !== report.viewMode ||
+        !((data.state === 'stopped' && ['stopped', 'interrupted'].includes(data.reason)) ||
+          (data.state === 'limit' && ['closest', 'farthest'].includes(data.reason)))) return;
+    report.cameraOutcome = {state: data.state, reason: data.reason, sequence: data.sequence, viewMode: data.viewMode};
   } else if (data?.type === 'korlix-acceptance-evidence' && data.evidence?.mode === report.scenario) {
     report.sdk = sanitizeEvidence(data.evidence, mode);
   }

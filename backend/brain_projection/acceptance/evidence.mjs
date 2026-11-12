@@ -46,9 +46,30 @@ export function summarizeCspViolation(event, ownOrigin) {
 
 // Interaction gathers evidence; it is not an acceptance verdict. A CSP event
 // stays blocking in classifyObservation without locking a usable map's controls.
+function currentViewReady(report) {
+  if (report?.rendererStatus !== 'ready') return false;
+  // Preserve the original maps3d report contract. Version 5 identifies the
+  // requested view explicitly; transport readiness never supplies imagery.
+  if (report.viewMode === undefined) return report.sdk?.steady === true;
+  if (report.rendererReason !== 'ready') return false;
+  return report.viewMode === 'street' || (report.viewMode === 'earth' && report.sdk?.steady === true);
+}
+
+// The caller has already checked the sending frame and its origin. Only a
+// current destination/operation may change this view's status, and all strings
+// copied into evidence come from this fixed vocabulary, never provider text.
+export function rendererObservation(report, value) {
+  if (value?.type !== 'korlix-projection-status' || !['street', 'earth'].includes(value.viewMode) ||
+      value.viewMode !== report.viewMode || !Number.isSafeInteger(value.sequence) || value.sequence < 1 ||
+      value.sequence !== report.cameraSequence || !['loading', 'ready', 'error'].includes(value.status)) return null;
+  const allowed = {loading: ['loading'], ready: ['ready'], error: ['unavailable', 'no-coverage', 'interrupted']};
+  if (!allowed[value.status].includes(value.reason)) return null;
+  return {status: value.status, reason: value.reason};
+}
+
 export function cameraControlsReady(report) {
   const sdk = report?.sdk;
-  return Boolean(report && !report.closedAt && report.rendererStatus === 'ready' && sdk?.steady === true &&
+  return Boolean(report && !report.closedAt && sdk && currentViewReady(report) &&
     !sdk.mapError && !sdk.loaderError && !sdk.pageError && !sdk.providerErrorCodes?.length);
 }
 
@@ -85,7 +106,7 @@ export function classifyObservation(report, mode) {
   const scenario = acceptanceMode(mode ?? report.scenario);
   if (!acceptanceModes.has(scenario)) return 'INCONCLUSIVE';
   if (scenario === 'wrong-origin') {
-    if (sdk?.everSteady || sdk?.steady) return 'WRONG_ORIGIN_CHECK_FAILED_SCENE_RENDERED';
+    if (report.everReady === true || sdk?.everSteady || sdk?.steady) return 'WRONG_ORIGIN_CHECK_FAILED_SCENE_RENDERED';
     // The page origin must actually be unapproved. Suppressing a header on an
     // approved origin is a separate probe and cannot supply this confirmation.
     return report.rendererStatus === 'error' && sdk?.steady === false && sdk?.everSteady === false &&
@@ -96,7 +117,7 @@ export function classifyObservation(report, mode) {
       ? 'WRONG_ORIGIN_DENIAL_OBSERVED' : 'INCONCLUSIVE';
   }
   if (scenario === 'no-referrer') {
-    if (sdk?.everSteady || sdk?.steady) return 'NEGATIVE_CHECK_FAILED_SCENE_RENDERED';
+    if (report.everReady === true || sdk?.everSteady || sdk?.steady) return 'NEGATIVE_CHECK_FAILED_SCENE_RENDERED';
     // RefererDeniedMapError is a terms-of-service block, not referrer proof.
     return report.rendererStatus === 'error' && sdk?.providerErrorCodes?.includes('RefererNotAllowedMapError') &&
       sdk?.loader?.scriptReferrerPolicy === 'no-referrer' && sdk.documentReferrerPolicy === 'no-referrer' &&
@@ -104,7 +125,7 @@ export function classifyObservation(report, mode) {
       ? 'NO_REFERRER_DENIAL_OBSERVED' : 'INCONCLUSIVE';
   }
   const errors = Boolean(sdk?.mapError || sdk?.loaderError || sdk?.pageError || sdk?.cspViolations || sdk?.providerErrorCodes?.length);
-  return sdk?.steady && sdkVersion(sdk.sdkVersion) && sdk?.loader?.channel === 'quarterly' && sdk.loader.loading === 'async' &&
+  return currentViewReady(report) && sdkVersion(sdk?.sdkVersion) && sdk?.loader?.channel === 'quarterly' && sdk.loader.loading === 'async' &&
     sdk.loader.authorizationReferrerPolicy === 'origin' && sdk.loader.scriptReferrerPolicy === 'strict-origin-when-cross-origin' &&
     report.rendererStatus === 'ready' && !errors && report.cameraCommands.includes('flyTo') &&
     tester.imageryAndControlsConfirmed === true && tester.attributionAndLinksConfirmed === true
