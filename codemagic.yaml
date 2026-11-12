@@ -749,3 +749,37 @@ workflows:
       - $CM_BUILD_DIR/apps/korlix_brain/artifacts/BrainVoice-upload-certificate.pem
     # First upload is performed in the dedicated Play record. No automatic
     # publishing, tester invitations, or billing activation is configured here.
+
+  korlix-brain-testflight-assign-projection-voice-repair-20:
+    name: KORLIX Brain+Voice — projection voice repair internal TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    environment:
+      xcode: 26.6
+    # Manual only, no custom inputs. Source build floor: 20.
+    # Exact source CI passed; Apple read-back reconciled the ambiguous publishing result.
+    # Fixed reviewed pins bind the inspected IPA and completed reconciliation report.
+    # Never select a latest-build fallback or substitute previous build 19.
+    # Requires the fixed independently reviewed upload record and its pinned hash.
+    # Reconciled report bytes/hash/job/source and the exact VALID Apple build are required.
+    # Original Codemagic failed publishing remains recorded; no new upload is attempted.
+    # Workflow environment cannot assert verification or override delivery identity.
+    # Adds only the build relationship to the existing KORLIX Brain Internal group.
+    # Does not upload, submit review, attach an App Store version or invite testers.
+    scripts:
+      - name: Validate exact internal delivery guards
+        script: |
+          set -euo pipefail
+          python3 -m unittest discover -s scripts/tests -p 'test_brain_projection_voice_repair_testflight_assignment.py' -v
+          python3 -c 'import runpy; runpy.run_path("scripts/assign_brain_projection_voice_repair_testflight_build.py")["require_verified_source_upload"]()'
+      - name: Assign verified build to existing internal testers
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.brain-projection-voice-repair-testflight-tools"
+          "$CM_BUILD_DIR/.brain-projection-voice-repair-testflight-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+          "$CM_BUILD_DIR/.brain-projection-voice-repair-testflight-tools/bin/python" scripts/assign_brain_projection_voice_repair_testflight_build.py \
+            --assign --output artifacts/brain-projection-voice-repair-testflight-assignment.json
+    artifacts:
+      - artifacts/brain-projection-voice-repair-testflight-assignment.json

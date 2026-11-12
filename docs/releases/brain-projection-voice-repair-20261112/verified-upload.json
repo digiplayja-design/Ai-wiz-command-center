@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-11-12T20:58:35Z",
+  "sourceUpload": {
+    "codemagicBuildId": "6af61eea10a05158d8122017",
+    "workflow": "korlix-brain-ios-testflight",
+    "commit": "6202cd06d94dae7eaf9fea097d63254de51a357e",
+    "bundleId": "com.korlix.brain",
+    "version": "1.0.2",
+    "buildNumber": "20"
+  },
+  "sourceTree": "68796631186a3c1c74a845625df6b742c50e4f9c",
+  "publishingStatus": "uploaded",
+  "publishingStatusBasis": "apple_readback_after_ambiguous_upload",
+  "appleUploadId": "5963290e-11c2-486e-a723-05f931c43e5a",
+  "uploadObservation": {
+    "codemagicBuildId": "6af61eea10a05158d8122017",
+    "codemagicTerminalStatus": "failed",
+    "codemagicFailureStage": "publishing",
+    "altoolResult": "UPLOAD SUCCEEDED with no errors",
+    "appleUploadId": "5963290e-11c2-486e-a723-05f931c43e5a",
+    "transferredBytes": 34887077
+  },
+  "appleReconciliation": {
+    "job": {
+      "codemagicBuildId": "6af625f210a05158d81222d4",
+      "workflow": "korlix-brain-reconcile-projection-voice-upload-20",
+      "commit": "39dd9fcca99f143646dd6d2b7e89b11c28afee01"
+    },
+    "jobStatus": "finished",
+    "reportJson": "{\n  \"schemaVersion\": 1,\n  \"checkedAt\": \"2026-11-12T20:57:16.424525+00:00\",\n  \"purpose\": \"reconcile_ambiguous_upload\",\n  \"readOnly\": true,\n  \"uploadContext\": {\n    \"codemagicBuildId\": \"6af61eea10a05158d8122017\",\n    \"codemagicIndex\": 25,\n    \"workflow\": \"korlix-brain-ios-testflight\",\n    \"sourceCommit\": \"6202cd06d94dae7eaf9fea097d63254de51a357e\",\n    \"sourceTree\": \"68796631186a3c1c74a845625df6b742c50e4f9c\",\n    \"observedAppleUploadId\": \"5963290e-11c2-486e-a723-05f931c43e5a\",\n    \"observedAltoolResult\": \"UPLOAD SUCCEEDED with no errors\",\n    \"observedCodemagicResult\": \"failed_publishing_after_Apple_500_errors\",\n    \"inspectedIpaSha256\": \"294f224bb177ba38022e287be4bb76f020f3affb5701f0e2991e0a20d33151e2\",\n    \"inspectedIpaBytes\": 34887077\n  },\n  \"appId\": \"6829319523\",\n  \"bundleId\": \"com.korlix.brain\",\n  \"version\": \"1.0.2\",\n  \"buildNumber\": \"20\",\n  \"sourceAttestedByApple\": false,\n  \"deliveryVerified\": false,\n  \"returnedBuildCount\": 1,\n  \"exactBuildPresent\": true,\n  \"presenceStatus\": \"found\",\n  \"processingVerified\": true,\n  \"appleBuildId\": \"5963290e-11c2-486e-a723-05f931c43e5a\",\n  \"platform\": \"IOS\",\n  \"processingState\": \"VALID\",\n  \"expired\": false,\n  \"observedUploadIdMatchesBuildId\": true,\n  \"internalBuildState\": \"READY_FOR_BETA_TESTING\",\n  \"existingGroup\": {\n    \"groupId\": \"ae86d9a2-5bdf-4f3d-910b-aa532675951f\",\n    \"groupName\": \"KORLIX Brain Internal\",\n    \"isInternalGroup\": true,\n    \"buildLinked\": false\n  }\n}\n",
+    "reportSha256": "0c2cfe68f07cbe2e7907b0a969cf2c1a92d45bcd3654ee9006fe64ff2af96f00"
+  },
+  "ipa": {
+    "sha256": "294f224bb177ba38022e287be4bb76f020f3affb5701f0e2991e0a20d33151e2",
+    "bytes": 34887077,
+    "infoPlist": {
+      "CFBundleIdentifier": "com.korlix.brain",
+      "CFBundleShortVersionString": "1.0.2",
+      "CFBundleVersion": "20",
+      "CFBundleSupportedPlatforms": [
+        "iPhoneOS"
+      ],
+      "MinimumOSVersion": "15.0"
+    }
+  }
+}
