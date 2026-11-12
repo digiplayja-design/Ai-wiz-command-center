@@ -17,7 +17,7 @@ Only these environment variables are read:
 - `PORT`: the listening port.
 - `BRAIN_PROJECTION_ACCEPTANCE_BROWSER_KEY`: the candidate public, website-restricted Maps JavaScript API key.
 
-The acceptance key has no fallback to any production key or setting. Initially deploy without a key: the public page identifies its exact origin and shows setup required, and `/health` stays healthy. After an authorized owner configures the key for that origin and securely supplies it to this acceptance service, an explicit **Load test map** button starts the SDK. Root pages never include the key, and no Google SDK loads merely by opening a page, including direct frame URLs. The candidate browser key is necessarily present in the map frame when configured; it is not a private server credential.
+The acceptance key has no fallback to any production key or setting. Initially deploy without a key: the public page identifies its exact origin and shows setup required, and `/health` stays healthy. After an authorized owner configures the key for that origin and securely supplies it to this acceptance service, an explicit **Load test map** button starts the SDK. Map-test shell pages never include the key, and no Google SDK loads merely by opening a page, including direct frame URLs. The candidate browser key is necessarily present in the map frame and the separate API-probe document when configured; it is not a private server credential.
 
 ### Candidate key restrictions
 
@@ -68,11 +68,21 @@ Open `/wrong-origin` on that unapproved host and press **Load test map**. It use
 
 The wrong-origin observation requires an actual renderer error with `RefererNotAllowedMapError`, no current or previous steady scene, the expected loader/policy configuration, and that origin-allowlist attestation. A rendered scene fails the check. Generic errors, missing WebGL support, billing or quota failures, disabled APIs, and terms-of-service blocks do not establish a website restriction. Copy the sanitized report for review; this service still cannot verify all production requirements or activate production.
 
-API allowlist denial, project quotas/billing review, and Android/iPhone WebView acceptance remain separate observations. Never use a synthetic fixture or a deployment flag as live-provider evidence.
+Project quotas/billing review and Android/iPhone WebView acceptance remain separate observations. Never use a synthetic fixture or a deployment flag as live-provider evidence.
+
+## API allowlist probe
+
+Open `/api-restriction` on the already approved acceptance origin, then press **Check API restriction** once. This is a separate read-only browser test, with no Maps SDK or account session. It calls the documented [public Identity Toolkit v1 configuration endpoint](https://docs.cloud.google.com/identity-platform/docs/reference/rest/v1/TopLevel/getProjects) using the existing acceptance key in `X-Goog-Api-Key`, a [documented system parameter](https://docs.cloud.google.com/apis/docs/system-parameters). It sends no body, OAuth token or cookies, and follows no redirects. No service or key permission is enabled by this test.
+
+The browser applies its real `strict-origin-when-cross-origin` referrer policy. The probe does not set a forged Referer header, override the referrer source, or claim to measure outgoing headers from page JavaScript. One explicit fetch attempt is allowed per page load, with a 15-second deadline and a 64 KiB response limit; a browser-generated CORS preflight may precede it. No response content other than the whitelisted error classification is exported, including if the request unexpectedly succeeds.
+
+The observation requires HTTP 403, error code 403, `PERMISSION_DENIED`, and exactly one `google.rpc.ErrorInfo` entry with domain `googleapis.com`, reason `API_KEY_SERVICE_BLOCKED`, and service `identitytoolkit.googleapis.com`. Google [defines the service and HTTP-referrer errors separately](https://github.com/googleapis/googleapis/blob/master/google/api/error_reason.proto). A disabled API, missing referrer, billing, quota, malformed or mixed response stays inconclusive. The source's focused tests exercise these distinctions using synthetic responses only.
+
+This probe exists because the earlier server-side Geocoding request returned `SERVICE_DISABLED` and the public Identity Toolkit request without a Referer returned `API_KEY_HTTP_REFERRER_BLOCKED`. Neither response established the key's API allowlist. The new browser request isolates that question without changing the owner's saved restrictions. The service's current API enablement is not assumed from a Firebase key's default allowlist.
 
 ## Evidence and production boundary
 
-Evidence stays in the tester's browser and can be copied as sanitized JSON. The export contains no key text, raw errors, request URLs or headers. Do not substitute a full network archive containing the candidate key for this sanitized report. Closing the map removes its iframe; closing/reloading the page clears evidence. No evidence is submitted to this service.
+Evidence stays in the tester's browser and can be copied as sanitized JSON. The map export contains no key text, raw errors, request URLs or headers. The API-probe export additionally names its fixed public endpoint, without a query or credential; it does not capture actual outgoing headers. Do not substitute a full network archive containing the candidate key for these sanitized reports. Closing the map removes its iframe; closing/reloading the page clears evidence. No evidence is submitted to this service.
 
 `overallVerification` remains `NOT_ESTABLISHED` and `productionActivation` remains `false`, even after a positive local observation. This service never reads or writes `BRAIN_PROJECTION_MAPS_JS_RESTRICTIONS_VERIFIED` and does not deploy or modify the production backend. Success on this isolated acceptance origin does not prove the production origin is allowed. The actual production renderer and Android/iPhone WebViews still need their own allowed-origin, referrer, imagery, controls and lifecycle checks before an authorized owner sets the production verification flag. The owner must separately review all required observations before any production activation.
 

@@ -71,4 +71,23 @@ The allowed acceptance-origin rendering observation is complete and does not nee
 
 Unapproved-origin denial is now observed on the controlled host above. Remaining evidence under the [activation runbook](../../../backend/brain_projection/README.md) includes the approved production host, actual missing-referrer request behavior, disallowed-API rejection, and the applicable billing/usage review. Native iPhone/Android WebView rendering, closure/backgrounding, attribution links, and microphone continuity remain separate device checks. Private server-side geocoding configuration is independent of map rendering and the existing account-bound Directions entitlement.
 
+### Initial API allowlist probes on November 12
+
+Two read-only requests used the same existing public acceptance browser key, supplied only in the `X-Goog-Api-Key` header. Neither sent a Referer, Origin, OAuth credential, cookie or request body; redirects were rejected and no request was automatically retried. The key and raw provider response were not persisted.
+
+| Request | Actual response | Interpretation |
+| --- | --- | --- |
+| [Geocoding v4, public Ferry Building coordinate](geocoding-api-restriction-20261112.json), completed `2026-11-12T03:07:03.886Z` | HTTP 403 / `PERMISSION_DENIED`; `SERVICE_DISABLED` for `geocoding-backend.googleapis.com` | That API is disabled for this request's project; the key's API restriction remains unproven. |
+| [Public Identity Toolkit v1 configuration](identity-toolkit-api-restriction-20261112.json), completed `2026-11-12T03:09:58.620Z` | HTTP 403 / `PERMISSION_DENIED`; `API_KEY_HTTP_REFERRER_BLOCKED` for `identitytoolkit.googleapis.com` | Google denied the website-referrer check; this does not establish the separate API restriction. |
+
+Both records remain `API_RESTRICTION_CHECK_INCONCLUSIVE`. No API was enabled and no key restriction or production setting changed. The isolated acceptance service now includes an explicit browser-only `/api-restriction` probe so the request can originate on the actual approved website with its natural browser referrer. Preparing that probe is not a passing live observation.
+
+### Native candidate audit
+
+The native release branch `release/korlix-brain-store-20261101` was checked on November 12 and remains at `f2b339d89f910243c39b9920b1389a1e1b5290d6`, version `1.0.2+15`. Its app and workflow files match tested PR head `b3476487253701bf50a99344afd92b518e9151c7`. [PR 55](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/55) records 164 passing Flutter tests, clean analysis, and successful signed Android and iOS candidates. The requested Pause/Resume/Stop, PDF Memory/Training review, Camera Ask, account-bound Directions and live-session repairs are in that candidate. This source/build evidence does not establish real-device microphone or speaker behavior.
+
+The [Android debug APK artifact](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/42969561224/artifacts/13833401145) was confirmed unexpired through November 25. The GitHub iOS artifact is a simulator app. The separately [signed iOS candidate](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6af405fe6f37641a0017a661) was built for App Store distribution; its current TestFlight availability was not verified. No store upload or tester notification occurred during this audit.
+
+The installed native candidate accepts only the configured backend origin and exact `/brain-projection/earth.html` path with no query or fragment. It has no acceptance-host or ticket preview override. Its configuration is cached per workspace, so a future backend activation requires a full app restart to refresh the inactive response. A controlled native test before global activation requires an explicit test-build change; pointing the whole app's backend at the isolated acceptance server would break its authenticated API flow. No validation rule was relaxed and no pilot capability was added in this audit.
+
 This result establishes interactive recorded 3D geography in the tested browser. It does not establish a live camera feed, headset/WebXR support, or production activation. Keep the production verification flag unset or false until the required production observations have been completed and reviewed.
