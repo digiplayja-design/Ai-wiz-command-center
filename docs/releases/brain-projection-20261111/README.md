@@ -69,7 +69,7 @@ The no-referrer runbook and offline preflight description now require actual hea
 
 The allowed acceptance-origin rendering observation is complete and does not need to be repeated merely because `overallVerification` remains `NOT_ESTABLISHED`. That field intentionally does not certify the whole production rollout.
 
-Unapproved-origin denial is now observed on the controlled host above. Remaining evidence under the [activation runbook](../../../backend/brain_projection/README.md) includes the approved production host, actual missing-referrer request behavior, disallowed-API rejection, and the applicable billing/usage review. Native iPhone/Android WebView rendering, closure/backgrounding, attribution links, and microphone continuity remain separate device checks. Private server-side geocoding configuration is independent of map rendering and the existing account-bound Directions entitlement.
+Unapproved-origin denial is now observed on the controlled host above, and disallowed-API rejection is recorded below. Remaining evidence under the [activation runbook](../../../backend/brain_projection/README.md) includes the approved production host, actual missing-referrer request behavior, and the applicable billing/usage review. Native iPhone/Android WebView rendering, closure/backgrounding, attribution links, and microphone continuity remain separate device checks. Private server-side geocoding configuration is independent of map rendering and the existing account-bound Directions entitlement.
 
 ### Initial API allowlist probes on November 12
 
@@ -82,11 +82,41 @@ Two read-only requests used the same existing public acceptance browser key, sup
 
 Both records remain `API_RESTRICTION_CHECK_INCONCLUSIVE`. No API was enabled and no key restriction or production setting changed. The isolated acceptance service now includes an explicit browser-only `/api-restriction` probe so the request can originate on the actual approved website with its natural browser referrer. Preparing that probe is not a passing live observation.
 
+### Live disallowed-API denial observed
+
+The [approved-origin browser check](https://korlix-projection-check-20261111.onrender.com/api-restriction) was run once in the connected cloud Chrome browser at `2026-11-12T03:21:55.651Z` and completed at `2026-11-12T03:21:55.935Z`. Its [unaltered sanitized report](cloud-browser-api-restriction-20261112.json) records `DISALLOWED_API_DENIAL_OBSERVED`: HTTP 403, error code 403, `PERMISSION_DENIED`, and the single Google `ErrorInfo` reason `API_KEY_SERVICE_BLOCKED` for `identitytoolkit.googleapis.com`, domain `googleapis.com`. The [displayed browser result](cloud-browser-api-restriction-20261112.jpg) preserves the observation.
+
+The page made one GET fetch to Google's public project-configuration endpoint, using the existing public Maps browser key in `X-Goog-Api-Key`. It sent no OAuth credentials, cookies or request body, rejected redirects, and performed no automatic retries. The browser applied its normal `strict-origin-when-cross-origin` policy; the code did not override Referer or Origin. This page does not capture actual outgoing request headers, and its report explicitly retains `actualRefererHeader: NOT_CAPTURED_BY_PAGE`. Browser-generated CORS preflight is separate from the single fetch attempt.
+
+This establishes a real API-allowlist denial for the tested Identity Toolkit endpoint from the approved website. It does not assert rejection for every Google API, validate a private Geocoding key, establish native WebView behavior, or enable production. The two earlier inconclusive raw-HTTP reports remain unchanged.
+
+Probe provenance:
+
+- Code commit: `30a52a45354e0e18df5dc79f5f1ef483933b31c1`; tree: `bd24b3845d1b3f08a2524ad681efffc4361a4914`.
+- [PR 64](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/64) merged into the release branch as `255f9b02da312186ac6f31366ab0398c84ee8be7` with the same tree.
+- [CI run 43146781882](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43146781882), job `130946342559`, passed the required backend and browser regression checks; 24 focused acceptance tests also passed locally. These fixtures are separate from this live provider result.
+- Acceptance Render deploy `dep-dbqiv38ae00c738hpf60` on service `srv-dbq3uo3rjlhs73b62qf0` reached `live` at `2026-11-12T03:16:56.866616Z`.
+- Report SHA-256: `5620c4fd1a339022293339539157cbbb441d0537c3351341dd98d3084858d0ce`; screenshot SHA-256: `e1808a38b7a883716e06e1e9228bca799a4a6d9bf190b844d8fe351540917838`.
+
+No Google settings, production environment variables or production deployment were changed during this check. `productionActivation` remains false and `overallVerification` remains `NOT_ESTABLISHED`.
+
+### Bounded browser header audit
+
+`backend/tools/capture_projection_live_headers.mjs` measures one fresh Chromium visit to the approved acceptance `/no-referrer` page and one explicit Load action. It records headers only from CDP `Network.requestWillBeSentExtraInfo`, reducing them immediately to Referer presence and a fixed allowlist of public origins. SDK bootstrap, authentication and 3D configuration endpoints are recognized by fixed path names; URL queries, credential values, cookies, arbitrary headers, request/response bodies, raw browser errors, HAR, tracing and video are not exported.
+
+Redirect request IDs are correlated only when their extra-info expectations and event counts are complete. Missing or contradictory extra-info events, cached responses, unmatched recognized requests, truncation, capture failures and resource limits leave the header characterization inconclusive. The report preserves the observed scene state separately from the state after Close. It never changes the page's unchecked tester attestation, asserts overall verification, or modifies the production activation gate.
+
+The browser uses a local HTTPS CONNECT boundary that allows only this acceptance hostname and Google resource domains on port 443. TLS stays end to end; the boundary does not inspect or rewrite HTTP headers or CORS preflights. QUIC is disabled for that boundary, and the transport difference is explicitly recorded. This is a Chromium diagnostic run, not a measurement of the owner's iPad or a substitute for native device acceptance.
+
+The separate `brain-projection-live-headers.yml` workflow is limited to the dated test branch, with an explicit manual trigger and push paths restricted to its three audit files. Documentation/evidence commits do not trigger another provider run. It uses read-only repository permissions, pinned actions and Playwright 1.56.1, with bounded time, request, event and connection counts. The existing offline provider checks remain offline. Nineteen focused synthetic tests passed before any live execution; independent code review found no remaining blockers. A successful workflow alone is not a passing restriction result: review the sanitized report's actual observations.
+
 ### Native candidate audit
 
 The native release branch `release/korlix-brain-store-20261101` was checked on November 12 and remains at `f2b339d89f910243c39b9920b1389a1e1b5290d6`, version `1.0.2+15`. Its app and workflow files match tested PR head `b3476487253701bf50a99344afd92b518e9151c7`. [PR 55](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/55) records 164 passing Flutter tests, clean analysis, and successful signed Android and iOS candidates. The requested Pause/Resume/Stop, PDF Memory/Training review, Camera Ask, account-bound Directions and live-session repairs are in that candidate. This source/build evidence does not establish real-device microphone or speaker behavior.
 
 The [Android debug APK artifact](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/42969561224/artifacts/13833401145) was confirmed unexpired through November 25. The GitHub iOS artifact is a simulator app. The separately [signed iOS candidate](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6af405fe6f37641a0017a661) was built for App Store distribution; its current TestFlight availability was not verified. No store upload or tester notification occurred during this audit.
+
+The existing `korlix-brain-ios-testflight` workflow was subsequently selected in Codemagic for the exact tested commit `b3476487253701bf50a99344afd92b518e9151c7`, with SSH/VNC disabled. The [prepared upload screenshot](brain-testflight-upload-prepared-20261112.jpg) records this selection. The final Start action was not executed; upload approval is pending. The selected workflow rebuilds and verifies the IPA, checks the exact `com.korlix.brain` Apple record, and chooses an available build number before uploading to App Store Connect. Its publishing configuration does not submit an App Store review or automatically assign a TestFlight group. This preparation is not evidence that a new build has been uploaded or is installable in TestFlight.
 
 The installed native candidate accepts only the configured backend origin and exact `/brain-projection/earth.html` path with no query or fragment. It has no acceptance-host or ticket preview override. Its configuration is cached per workspace, so a future backend activation requires a full app restart to refresh the inactive response. A controlled native test before global activation requires an explicit test-build change; pointing the whole app's backend at the isolated acceptance server would break its authenticated API flow. No validation rule was relaxed and no pilot capability was added in this audit.
 
