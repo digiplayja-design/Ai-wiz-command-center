@@ -17,12 +17,12 @@ export function rendererDocument(environment = process.env, {nonce = newNonce()}
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="referrer" content="strict-origin-when-cross-origin"><meta name="korlix-map-key" content="${escapeAttribute(key)}">
 <meta name="korlix-map-channel" content="${MAPS_JS_CHANNEL}">
-<title>KORLIX Projection map</title>
+<title>KORLIX property view</title>
 <link rel="stylesheet" href="/brain-projection/earth.css" nonce="${nonce}">
 <style nonce="${nonce}" id="korlix-sdk-style-nonce"></style>
 <script type="module" src="/brain-projection/earth.mjs" nonce="${nonce}"></script></head>
-<body><div id="imagery-label">Recorded 3D imagery · Capture date unavailable</div>
-<div id="map-state" role="status" aria-live="polite">${key ? 'Connecting recorded 3D imagery…' : 'Geographic imagery is not connected yet.'}</div>
+<body><div id="imagery-label">Recorded Street View · Capture date unavailable · Not live</div>
+<div id="map-state" role="status" aria-live="polite">${key ? 'Preparing recorded street-level imagery…' : 'Geographic imagery is not connected yet.'}</div>
 <main id="map" aria-label="Recorded geographic imagery"></main></body></html>`;
 }
 
@@ -62,7 +62,7 @@ export function registerProjectionRenderer(app, {environment = process.env} = {}
     const nonce = newNonce();
     headers(res, rendererPolicy(nonce)).type('html').send(rendererDocument(environment, {nonce}));
   });
-  for (const filename of ['earth.mjs', 'camera.mjs', 'earth.css']) {
+  for (const filename of ['earth.mjs', 'camera.mjs', 'street.mjs', 'earth.css']) {
     app.get(`/brain-projection/${filename}`, async (_req, res) => {
       try {
         const content = await readFile(new URL(`./public/${filename}`, import.meta.url), 'utf8');
