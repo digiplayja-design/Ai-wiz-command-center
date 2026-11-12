@@ -6,6 +6,9 @@ const cspDirectives = new Set(['default-src', 'script-src', 'script-src-elem', '
 const resourceKinds = new Set(['unknown', 'inline', 'eval', 'wasm-eval', 'data', 'blob', 'self', 'google-maps', 'google-static',
   'google-fonts', 'google-api', 'google', 'extension', 'external']);
 const dispositionKinds = new Set(['enforce', 'report']);
+const acceptanceModes = new Set(['standard', 'no-referrer', 'wrong-origin']);
+// Preserve existing callers while browser reports use explicit scenario names.
+const acceptanceMode = value => value === true ? 'no-referrer' : value === false || value === undefined ? 'standard' : value;
 
 function resourceKind(value, ownOrigin) {
   if (typeof value !== 'string' || !value || value.length > 8192) return 'unknown';
@@ -59,7 +62,7 @@ export function providerErrorCode(values) {
   return null;
 }
 
-export function sanitizeEvidence(value, negative) {
+export function sanitizeEvidence(value, mode) {
   if (!value || typeof value !== 'object') return null;
   const count = v => Number.isInteger(v) && v >= 0 ? Math.min(100, v) : 0;
   const loader = value.loader;
@@ -73,13 +76,26 @@ export function sanitizeEvidence(value, negative) {
     cspViolations: count(value.cspViolations),
     cspEvents: Array.isArray(value.cspEvents) ? value.cspEvents.slice(0, 8).map(sanitizeCspEvent) : [],
     providerErrorCodes: Array.isArray(value.providerErrorCodes) ? value.providerErrorCodes.filter(code => authCodes.has(code) || code === 'GoogleMapsError').slice(0, 12) : [],
-    documentReferrerPolicy: negative ? 'no-referrer' : 'strict-origin-when-cross-origin'};
+    documentReferrerPolicy: acceptanceMode(mode) === 'no-referrer' ? 'no-referrer' : 'strict-origin-when-cross-origin'};
 }
 
-export function classifyObservation(report, negative) {
+export function classifyObservation(report, mode) {
   const sdk = report.sdk, tester = report.tester;
   if (!report.startedAt) return 'NOT_PERFORMED';
-  if (negative) {
+  const scenario = acceptanceMode(mode ?? report.scenario);
+  if (!acceptanceModes.has(scenario)) return 'INCONCLUSIVE';
+  if (scenario === 'wrong-origin') {
+    if (sdk?.everSteady || sdk?.steady) return 'WRONG_ORIGIN_CHECK_FAILED_SCENE_RENDERED';
+    // The page origin must actually be unapproved. Suppressing a header on an
+    // approved origin is a separate probe and cannot supply this confirmation.
+    return report.rendererStatus === 'error' && sdk?.steady === false && sdk?.everSteady === false &&
+      Array.isArray(sdk?.providerErrorCodes) && sdk.providerErrorCodes.length === 1 && sdk.providerErrorCodes[0] === 'RefererNotAllowedMapError' &&
+      sdk?.loader?.channel === 'quarterly' && sdk.loader.loading === 'async' &&
+      sdk.loader.authorizationReferrerPolicy === 'origin' && sdk.loader.scriptReferrerPolicy === 'strict-origin-when-cross-origin' &&
+      sdk.documentReferrerPolicy === 'strict-origin-when-cross-origin' && tester?.currentOriginAbsentFromKeyAllowlist === true
+      ? 'WRONG_ORIGIN_DENIAL_OBSERVED' : 'INCONCLUSIVE';
+  }
+  if (scenario === 'no-referrer') {
     if (sdk?.everSteady || sdk?.steady) return 'NEGATIVE_CHECK_FAILED_SCENE_RENDERED';
     // RefererDeniedMapError is a terms-of-service block, not referrer proof.
     return report.rendererStatus === 'error' && sdk?.providerErrorCodes?.includes('RefererNotAllowedMapError') &&

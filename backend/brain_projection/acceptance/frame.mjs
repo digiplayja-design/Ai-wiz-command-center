@@ -1,7 +1,7 @@
 import {providerErrorCode, sdkVersion, summarizeCspViolation} from './evidence.mjs';
 
-// Observe the public loader insertion. Only the explicitly labeled negative
-// document changes its referrer policy, immediately before native insertion.
+// Observe the public loader insertion. Only the no-referrer probe changes its
+// policy; standard and wrong-origin checks preserve the production loader.
 export function observeLoader({document: doc, negative, onLoader}) {
   const head = doc.head;
   const originalAppend = head.append, originalAppendChild = head.appendChild;
@@ -24,9 +24,10 @@ export function observeLoader({document: doc, negative, onLoader}) {
 }
 
 function runFrame() {
-  const negative = document.querySelector('meta[name="acceptance-mode"]').content === 'no-referrer';
+  const mode = document.querySelector('meta[name="acceptance-mode"]').content;
+  const negative = mode === 'no-referrer';
   const configured = document.querySelector('meta[name="acceptance-configured"]').content === 'true';
-  const evidence = {mode: negative ? 'no-referrer' : 'standard', started: false, loader: null, sdkVersion: null,
+  const evidence = {mode, started: false, loader: null, sdkVersion: null,
     steady: false, everSteady: false, steadyEvents: 0, animationEnds: 0, mapError: false, loaderError: false, pageError: false,
     cspViolations: 0, cspEvents: [], providerErrorCodes: [], documentReferrerPolicy: negative ? 'no-referrer' : 'strict-origin-when-cross-origin'};
   let closed = false, restoreLoader = () => {};

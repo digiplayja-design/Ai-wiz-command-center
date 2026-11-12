@@ -28,9 +28,9 @@ For the candidate key's website restrictions, copy the exact HTTPS origin displa
 1. The literal origin, with no trailing slash or path.
 2. The same literal origin with `/*` appended.
 
-The literal origin is required by the loader's `auth_referrer_policy=origin`; the pair covers the exact host according to [Google's browser restriction guidance](https://docs.cloud.google.com/api-keys/docs/add-restrictions-api-keys) and [Maps loader guidance](https://developers.google.com/maps/documentation/javascript/load-maps-js-api). Use only the actual assigned acceptance hostname, never `*.onrender.com`. Keep the candidate and production browser keys separate.
+The literal origin is required by the loader's `auth_referrer_policy=origin`; the pair covers the exact host according to [Google's browser restriction guidance](https://docs.cloud.google.com/api-keys/docs/add-restrictions-api-keys) and [Maps loader guidance](https://developers.google.com/maps/documentation/javascript/load-maps-js-api). Use only the actual assigned allowed acceptance hostname, never `*.onrender.com`.
 
-For comparison, the separate production browser key's exact-host entries are `https://chee-chai-chee-backend.onrender.com` and `https://chee-chai-chee-backend.onrender.com/*`. These are not the candidate key's acceptance-host entries. No credentials or restrictions are created or changed by this service.
+In the current rollout, the owner explicitly saved both the production and allowed acceptance host pairs on the same public Maps JavaScript key; see the [release record](../../../docs/releases/brain-projection-20261111/README.md). The production pair is `https://chee-chai-chee-backend.onrender.com` and `https://chee-chai-chee-backend.onrender.com/*`. The independent wrong-origin check must use that same candidate key from a controlled host absent from its allowlist. Do not add the denial-test host to the key. Private server-side geocoding credentials remain separate. No credentials or restrictions are created or changed by this service.
 
 ## What runs
 
@@ -42,7 +42,7 @@ Every camera command clears the visual checkboxes. A later nonsteady event inval
 
 Camera availability is separate from a successful observation. A ready, currently steady scene with no map, loader, page or provider errors can accept camera commands even when a CSP event has been recorded. Visual checkboxes become available after **Fly to landmark** under that same interaction condition. A CSP event continues to prevent `POSITIVE_OBSERVATION_COMPLETE`; enabling camera testing never clears or waives that event. The page explains both the control state and any pending policy review.
 
-Evidence version 3 retains up to eight distinct CSP event summaries. Effective directives, dispositions, and blocked/source resource categories are fixed labels, sanitized both when recorded and when the parent receives them. No blocked/source URL, hostname, path, query, fragment, policy text, nonce, referrer or code sample is exported. The aggregate count is capped at 100; a value of 100 means at least 100 events, not 100 distinct problems.
+Evidence version 4 retains the previous bounded CSP summaries and adds the wrong-origin scenario. Effective directives, dispositions, and blocked/source resource categories are fixed labels, sanitized both when recorded and when the parent receives them. No blocked/source URL, hostname, path, query, fragment, policy text, nonce, referrer or code sample is exported. The aggregate count is capped at 100; a value of 100 means at least 100 events, not 100 distinct problems. At most eight distinct CSP summaries are retained.
 
 ### Dynamic map styles
 
@@ -50,15 +50,25 @@ The map document's CSP includes `style-src-attr 'unsafe-inline'`. The real iPad 
 
 This allowance applies to **all inline style attributes in the static map document**, not just attributes created by Google. That document accepts no user-supplied HTML and consumes no application credentials. Its existing script and style-element policies, network destinations and denied device capabilities remain intact. The acceptance shell does not receive this allowance. A same-origin iframe with `allow-scripts` and `allow-same-origin` is not a complete security boundary; keep the static map-only design.
 
-The production renderer and acceptance frame use the same policy in source, but deploying this service does not deploy the production backend. After an update, reload the page and start a **fresh** test. Old reports retain their violations. Version 3 still requires zero CSP events for a positive observation; no events are ignored or reclassified as successful.
+The production renderer and acceptance frame use the same policy in source, but deploying this service does not deploy the production backend. After an update, reload the page and start a **fresh** test. Old reports retain their violations. Version 4 still requires zero CSP events for a positive observation; no events are ignored or reclassified as successful. The completed version 3 allowed-origin observation remains valid within its original scope.
 
-## Deliberate no-referrer check
+## No-referrer diagnostic
 
-Open `/no-referrer`, then press **Load test map**. Both the negative frame's HTTP header and meta policy are `no-referrer`. A clearly isolated test observer additionally overrides the exact Google SDK loader script's explicit `referrerPolicy` immediately before `head.append`/`appendChild`; otherwise the unchanged production loader would override the document policy. The positive view never changes this property. The observer preserves native insertion behavior and does not forge an allowed referrer.
+Open `/no-referrer`, then press **Load test map**. Version 4 sets the shell and frame HTTP headers and meta policies to `no-referrer`, and applies that policy to the iframe navigation before setting its source. A clearly isolated test observer additionally overrides the exact Google SDK loader script's explicit `referrerPolicy` immediately before `head.append`/`appendChild`; otherwise the unchanged production loader would override the document policy. The standard and wrong-origin views never change this loader property. The observer preserves native insertion behavior and does not forge an allowed referrer.
+
+This changes referrer policies, not the page's own origin. The exact SDK version used in the iPad run also supplies the origin explicitly in its authentication and 3D-configuration request messages; see the [source review](../../../docs/releases/brain-projection-20261111/no-referrer-source-review-20261112.md). A scene rendered on an approved host under this diagnostic does **not** establish an unrestricted key. The exported policy fields describe configuration, not measured request headers. Version 3's outer shell/navigation gap is corrected, but that correction does not promise a provider denial.
 
 Inspect the browser's actual relevant Google SDK and authorization request headers, including requests beyond the first loader. The page cannot observe cross-origin request headers itself. Check the header-observation box only if those requests omit `Referer`. The negative result remains **INCONCLUSIVE** until both that observation and `RefererNotAllowedMapError` exist. `RefererDeniedMapError` is a terms-of-service enforcement error and is not accepted as referrer-restriction evidence. Any observed steady scene causes the negative test to fail even if a later error occurs.
 
-Wrong-origin testing requires a controlled HTTPS origin that is absent from the candidate key's current allowlist. This same acceptance host can supply that observation before its exact-host pair is authorized: the owner can initially allow only the production-origin pair on the separate candidate key, record `RefererNotAllowedMapError` from this unapproved test host together with the then-current restrictions, then add the acceptance-host pair and rerun positive and no-referrer checks. This requires no second service and no forged headers; the page does not automatically classify or claim a wrong-origin result. API allowlist denial, project quotas/billing review, and Android/iPhone WebView acceptance remain separate observations. Never use a synthetic fixture or a deployment flag as evidence.
+## Wrong-origin denial check
+
+Deploy the same isolated acceptance server on a separately controlled HTTPS origin absent from the candidate key's current allowlist. Configure the same candidate public browser key used in the completed positive check. Leave Google's saved restrictions intact and do not add this new hostname. No private credential, account access, production activation setting, database, or provider proxy is needed.
+
+Open `/wrong-origin` on that unapproved host and press **Load test map**. It uses the normal production SDK loader, origin-scoped authorization, and `strict-origin-when-cross-origin` policies. Confirm the origin-allowlist checkbox only after establishing that the displayed origin is absent from the key's current saved website restrictions. This is an attestation of the configuration, not a key-management action.
+
+The wrong-origin observation requires an actual renderer error with `RefererNotAllowedMapError`, no current or previous steady scene, the expected loader/policy configuration, and that origin-allowlist attestation. A rendered scene fails the check. Generic errors, missing WebGL support, billing or quota failures, disabled APIs, and terms-of-service blocks do not establish a website restriction. Copy the sanitized report for review; this service still cannot verify all production requirements or activate production.
+
+API allowlist denial, project quotas/billing review, and Android/iPhone WebView acceptance remain separate observations. Never use a synthetic fixture or a deployment flag as live-provider evidence.
 
 ## Evidence and production boundary
 
