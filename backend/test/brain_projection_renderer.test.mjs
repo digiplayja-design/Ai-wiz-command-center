@@ -48,9 +48,9 @@ async function flush() {
   for (let index = 0; index < 8; index++) await Promise.resolve();
 }
 function fakeBrowser({key = 'public-test-key', loadLibrary, constructorThrows = false, reducedMotion = false} = {}) {
-  const posts = [], events = new Map(), timers = new Map(), scripts = [];
+  const posts = [], events = new Map(), documentEvents = new Map(), timers = new Map(), frames = new Map(), scripts = [];
   const state = {hidden: false, textContent: ''};
-  let nextTimer = 0;
+  let nextTimer = 0, nextFrame = 0, frameTime = 0;
   const calls = {maps: [], loads: [], flights: [], stops: 0, order: []};
   class Map3DElement {
     constructor(options) {
@@ -84,9 +84,17 @@ function fakeBrowser({key = 'public-test-key', loadLibrary, constructorThrows = 
       events.get(name).add(callback);
     },
     removeEventListener: (name, callback) => events.get(name)?.delete(callback),
+    requestAnimationFrame(callback) { const id = ++nextFrame; frames.set(id, callback); return id; },
+    cancelAnimationFrame: id => frames.delete(id),
     setTimeout(callback, milliseconds) { const id = ++nextTimer; timers.set(id, {callback, milliseconds}); return id; },
     clearTimeout: id => timers.delete(id)};
   const doc = {
+    visibilityState: 'visible',
+    addEventListener(name, callback) {
+      if (!documentEvents.has(name)) documentEvents.set(name, new Set());
+      documentEvents.get(name).add(callback);
+    },
+    removeEventListener: (name, callback) => documentEvents.get(name)?.delete(callback),
     getElementById(name) {
       if (name === 'map-state') return state;
       if (name === 'map') return container;
@@ -104,7 +112,15 @@ function fakeBrowser({key = 'public-test-key', loadLibrary, constructorThrows = 
     head: {append(script) { scripts.push(script); }},
   };
   const emit = (name, value) => { for (const callback of [...(events.get(name) || [])]) callback(value); };
-  return {window: win, document: doc, posts, state, container, calls, events, timers, scripts, library, emit,
+  const emitDocument = (name, value) => { for (const callback of [...(documentEvents.get(name) || [])]) callback(value); };
+  const advanceFrame = (milliseconds = 16) => {
+    frameTime += milliseconds;
+    const callbacks = [...frames.values()];
+    frames.clear();
+    for (const callback of callbacks) callback(frameTime);
+  };
+  return {window: win, document: doc, posts, state, container, calls, events, documentEvents, timers, frames, scripts,
+    library, emit, emitDocument, advanceFrame,
     loadLibrary(args) { calls.loads.push(args); return loadLibrary ? loadLibrary(args) : Promise.resolve(library); }};
 }
 const statusPosts = fixture => fixture.posts.filter(post => post[0].type === 'korlix-projection-status');
@@ -112,7 +128,9 @@ const statuses = fixture => statusPosts(fixture).map(post => post[0].status);
 function assertClean(f) {
   assert.equal(f.events.get('message')?.size, 0);
   assert.equal(f.events.get('pagehide')?.size, 0);
+  assert.equal(f.documentEvents.get('visibilitychange')?.size, 0);
   assert.equal(f.timers.size, 0);
+  assert.equal(f.frames.size, 0);
   assert.ok(f.calls.maps.every(map => map.removed));
   assert.ok(f.calls.maps.every(map => [...map.listeners.values()].every(listeners => listeners.size === 0)));
 }
@@ -184,7 +202,7 @@ test('renderer remains loading until its own documented steady event reports com
   assert.equal(map.options.mode, 'SATELLITE');
   assert.equal(map.options.defaultUIHidden, true);
   assert.deepEqual(map.options.center, initialCameraOptions().center);
-  assert.equal(map.options.minAltitude, 25);
+  assert.equal(map.options.minAltitude, 1);
   assert.equal(map.options.maxAltitude, 40000000);
   assert.deepEqual(statuses(f), ['loading'], 'SDK import and construction do not imply imagery loaded');
   map.emit('gmp-steadystate', {isSteady: true});
@@ -343,7 +361,7 @@ test('camera ranges, horizon tilt and headings are bounded, with instant motion 
   assert.equal(f.calls.flights.at(-1).endCamera.tilt, 85);
   assert.equal(f.calls.flights.at(-1).endCamera.heading, 0);
   assert.equal(f.calls.flights.at(-1).durationMillis, 0);
-  Object.assign(map, {range: 35, tilt: 0});
+  Object.assign(map, {range: 1, tilt: 0});
   const count = f.calls.flights.length;
   controller.apply({camera: {operation: 'closer'}, place: null});
   assert.equal(f.calls.flights.length, count);
@@ -352,7 +370,7 @@ test('camera ranges, horizon tilt and headings are bounded, with instant motion 
   assert.equal(f.calls.flights.length, count);
   Object.assign(map, {range: 400, tilt: 85});
   controller.apply({camera: {operation: 'closer'}, place: null});
-  assert.ok(f.calls.flights.at(-1).endCamera.range >= 25 / Math.cos(85 * Math.PI / 180));
+  assert.ok(f.calls.flights.at(-1).endCamera.range >= 1 / Math.cos(85 * Math.PI / 180));
   controller.dispose();
   controller.apply({camera, place: selected});
   assert.equal(f.calls.flights.length, count + 1);
@@ -397,5 +415,262 @@ test('superseded flight errors are ignored; current flight failures fail the ren
   await flush();
   assert.deepEqual(statuses(f), ['loading', 'ready', 'error']);
   assert.doesNotMatch(JSON.stringify(f.posts), /secret|provider.invalid/);
+  assertClean(f);
+});
+
+const cameraStatuses = f => f.posts.filter(post => post[0].type === 'korlix-projection-camera-status').map(post => post[0]);
+function sendCamera(f, sequence, operation, extra = {}) {
+  f.emit('message', message(f.window.parent, {data: {type: 'korlix-projection-camera',
+    camera: {sequence, operation, ...extra}, place: null}}));
+}
+function controllerFixture(options = {}) {
+  const f = fakeBrowser(), map = new f.library.Map3DElement(initialCameraOptions());
+  const notices = [], errors = [];
+  const controller = createCameraController({map, requestFrame: callback => f.window.requestAnimationFrame(callback),
+    cancelFrame: id => f.window.cancelAnimationFrame(id), onStatus: value => notices.push(value),
+    onError: () => errors.push('failed'), ...options});
+  const apply = (sequence, operation, extra = {}) => controller.apply({camera: {sequence, operation, ...extra}, place: null});
+  return {...f, map, controller, notices, errors, apply};
+}
+
+test('continuous and stop operations preserve the source/sequence protocol; a stop needs no place', () => {
+  const parent = {}, context = {parent, ownOrigin: origin};
+  for (const operation of ['zoomInContinuous', 'zoomOutContinuous', 'stopCamera']) {
+    const event = message(parent, {data: {type: 'korlix-projection-camera', camera: {sequence: 9, operation}, place: null}});
+    assert.deepEqual(parseCameraMessage(event, context), {camera: {sequence: 9, operation}, place: null});
+    assert.equal(parseCameraMessage(event, {...context, lastSequence: 9}), null);
+    assert.equal(parseCameraMessage({...event, source: {}}, context), null);
+  }
+  assert.ok(parseCameraMessage(message(parent, {data: {type: 'korlix-projection-camera', camera: {...camera, height: 1}}}), context));
+  assert.equal(parseCameraMessage(message(parent, {data: {type: 'korlix-projection-camera', camera: {...camera, height: .99}}}), context), null);
+});
+
+test('continuous zoom keeps actual geography, changes only range, and stops with no queued camera work', () => {
+  const f = controllerFixture();
+  const view = {center: {lat: 39.1, lng: -106.4, altitude: 4395}, range: 1000, heading: 5, tilt: 50, roll: 0};
+  Object.assign(f.map, view);
+  f.apply(1, 'zoomInContinuous');
+  assert.equal(f.frames.size, 1);
+  f.advanceFrame();
+  f.advanceFrame(1000);
+  assert.ok(Math.abs(f.map.range - 1000 * Math.exp(-.8 * .064)) < 1e-9,
+    'A suspended frame advances at most 64 ms of motion, without a large jump.');
+  for (let step = 0; step < 30; step++) f.advanceFrame();
+  assert.ok(f.map.range < 1000);
+  assert.deepEqual({...f.map.center}, view.center);
+  assert.equal(f.map.heading, view.heading);
+  assert.equal(f.map.tilt, view.tilt);
+  assert.equal(f.calls.flights.length, 0, 'Continuous motion does not stack flyCameraTo animations.');
+  const stoppedRange = f.map.range;
+  f.apply(2, 'stopCamera');
+  assert.equal(f.frames.size, 0);
+  for (let step = 0; step < 20; step++) f.advanceFrame();
+  assert.equal(f.map.range, stoppedRange);
+  assert.deepEqual(f.notices, [{state: 'stopped', reason: 'stopped', sequence: 2}]);
+  assert.deepEqual(f.errors, []);
+  f.controller.dispose();
+});
+
+test('superseded rAF callbacks cannot move the camera or lose a newer cancellable frame', () => {
+  const f = controllerFixture();
+  f.map.range = 1000;
+  f.apply(1, 'zoomInContinuous');
+  f.advanceFrame();
+  const staleFrame = [...f.frames.values()][0];
+  f.apply(2, 'zoomOutContinuous');
+  staleFrame(100);
+  assert.equal(f.map.range, 1000);
+  assert.equal(f.frames.size, 1);
+  f.advanceFrame();
+  f.advanceFrame();
+  assert.ok(f.map.range > 1000);
+  f.apply(3, 'stopCamera');
+  assert.equal(f.frames.size, 0, 'The newer frame remains cancellable after a stale callback fires.');
+  const stoppedRange = f.map.range;
+  staleFrame(200);
+  assert.equal(f.map.range, stoppedRange);
+  assert.deepEqual(f.notices, [{state: 'stopped', reason: 'stopped', sequence: 3}]);
+  f.controller.dispose();
+});
+
+test('late asynchronous animation cancellation cannot restart continuous zoom after stop or disposal', async () => {
+  const f = controllerFixture(), pending = [];
+  f.map.stopResult = () => {const task = deferred(); pending.push(task); return task.promise;};
+  f.apply(1, 'zoomInContinuous');
+  f.apply(2, 'stopCamera');
+  pending[0].resolve();
+  await flush();
+  assert.equal(f.frames.size, 0);
+  pending[1].resolve();
+  await flush();
+  assert.deepEqual(f.notices, [{state: 'stopped', reason: 'stopped', sequence: 2}]);
+  f.apply(3, 'zoomOutContinuous');
+  f.apply(4, 'stopCamera');
+  pending[3].resolve();
+  pending[2].reject(Error('key=private stale SDK rejection'));
+  await flush();
+  assert.equal(f.frames.size, 0);
+  assert.deepEqual(f.errors, []);
+  assert.deepEqual(f.notices.at(-1), {state: 'stopped', reason: 'stopped', sequence: 4});
+  f.apply(5, 'zoomInContinuous');
+  f.controller.dispose();
+  pending[4].resolve();
+  pending[5].reject(Error('ignored close rejection'));
+  await flush();
+  assert.equal(f.frames.size, 0);
+  assert.deepEqual(f.errors, []);
+});
+
+test('continuous zoom reaches finite close/far bounds and never pulls a closer SDK camera outward', () => {
+  for (const tilt of [0, 40, 85]) {
+    const f = controllerFixture(), minimum = 1 / Math.cos(tilt * Math.PI / 180);
+    Object.assign(f.map, {range: minimum * 2, tilt});
+    f.apply(1, 'zoomInContinuous');
+    for (let step = 0; step < 100 && f.frames.size; step++) {
+      const previous = f.map.range;
+      f.advanceFrame(32);
+      assert.ok(f.map.range <= previous && f.map.range >= minimum);
+    }
+    assert.equal(f.frames.size, 0);
+    assert.equal(f.map.range, minimum);
+    assert.deepEqual(f.notices, [{state: 'limit', reason: 'closest', sequence: 1}]);
+    Object.assign(f.map, {range: 39999999, tilt: 0});
+    f.apply(2, 'zoomOutContinuous');
+    f.advanceFrame(); f.advanceFrame();
+    assert.equal(f.map.range, 40000000);
+    assert.equal(f.frames.size, 0);
+    assert.deepEqual(f.notices.at(-1), {state: 'limit', reason: 'farthest', sequence: 2});
+    f.map.range = .5;
+    f.apply(3, 'zoomInContinuous');
+    f.advanceFrame();
+    assert.equal(f.map.range, .5, 'Reaching our bound cannot force an outward camera jump.');
+    assert.equal(f.frames.size, 0);
+    f.controller.dispose();
+  }
+});
+
+test('a stricter SDK camera clamp stops continuous requests instead of spinning indefinitely', () => {
+  const f = controllerFixture();
+  Object.defineProperty(f.map, 'range', {configurable: true, get: () => 100, set: () => {}});
+  f.apply(1, 'zoomInContinuous');
+  for (let step = 0; step < 100 && f.frames.size; step++) f.advanceFrame(16);
+  assert.equal(f.frames.size, 0);
+  assert.deepEqual(f.notices, [{state: 'limit', reason: 'closest', sequence: 1}]);
+  assert.deepEqual(f.errors, []);
+  f.controller.dispose();
+});
+
+test('gesture-created ranges outside app bounds return smoothly instead of snapping across the scene', () => {
+  const f = controllerFixture();
+  Object.assign(f.map, {range: 50000000, tilt: 0});
+  f.apply(1, 'zoomInContinuous');
+  f.advanceFrame(); f.advanceFrame();
+  assert.ok(f.map.range < 50000000 && f.map.range > 40000000);
+  f.apply(2, 'stopCamera');
+  f.map.range = .5;
+  f.apply(3, 'zoomOutContinuous');
+  f.advanceFrame(); f.advanceFrame();
+  assert.ok(f.map.range > .5 && f.map.range < 1);
+  f.apply(4, 'stopCamera');
+  f.map.range = 0;
+  f.apply(5, 'zoomOutContinuous');
+  f.advanceFrame(); f.advanceFrame();
+  assert.ok(f.map.range >= 1 && f.map.range < 2, 'A zero-range SDK camera can recover to a positive standoff.');
+  f.controller.dispose();
+});
+
+test('each discrete camera command cancels continuous motion while retaining its existing flight behavior', () => {
+  for (const operation of ['closer', 'farther', 'left', 'right', 'reset', 'flyTo']) {
+    const f = controllerFixture();
+    Object.assign(f.map, {range: 1000, heading: 5, tilt: 40});
+    f.apply(1, 'zoomInContinuous');
+    f.advanceFrame(); f.advanceFrame();
+    const range = f.map.range;
+    f.apply(2, operation, operation === 'flyTo' ? {latitude: 40.7, longitude: -73.9} : {});
+    assert.equal(f.frames.size, 0);
+    assert.equal(f.calls.flights.length, 1);
+    const flight = f.calls.flights[0];
+    if (operation === 'closer') assert.equal(flight.endCamera.range, range * .65);
+    if (operation === 'farther') assert.equal(flight.endCamera.range, range * 1.35);
+    if (operation === 'left') assert.equal(flight.endCamera.heading, 347);
+    if (operation === 'right') assert.equal(flight.endCamera.heading, 23);
+    if (operation === 'flyTo') assert.deepEqual(flight.endCamera.center, {lat: 40.7, lng: -73.9, altitude: 0});
+    if (operation === 'reset') assert.deepEqual(flight.endCamera.center, initialCameraOptions().center);
+    f.controller.dispose();
+  }
+});
+
+test('pointer, touch and wheel cancel motion once, with sanitized sequence-aware statuses and full cleanup', async () => {
+  for (const input of ['pointerdown', 'touchstart', 'wheel']) {
+    const f = fakeBrowser(), runtime = mountProjectionRenderer(f);
+    await flush();
+    const map = f.calls.maps[0];
+    map.emit('gmp-steadychange', {isSteady: true});
+    Object.assign(map, {range: 1000, tilt: 40});
+    sendCamera(f, 1, 'zoomInContinuous');
+    f.advanceFrame(); f.advanceFrame();
+    map.emit(input);
+    assert.equal(f.frames.size, 0);
+    const stopCount = f.calls.stops;
+    map.emit(input); map.emit('pointerdown');
+    assert.equal(f.calls.stops, stopCount, 'Repeated native input must not repeatedly stop SDK gesture handling.');
+    assert.deepEqual(cameraStatuses(f), [{type: 'korlix-projection-camera-status', state: 'stopped', reason: 'interrupted', sequence: 1}]);
+    sendCamera(f, 2, 'zoomOutContinuous');
+    f.advanceFrame(); f.advanceFrame();
+    assert.equal(f.frames.size, 1);
+    f.document.visibilityState = 'hidden';
+    f.emitDocument('visibilitychange');
+    assert.equal(f.frames.size, 0);
+    assert.equal(cameraStatuses(f).at(-1).sequence, 2);
+    f.document.visibilityState = 'visible';
+    f.emitDocument('visibilitychange');
+    assert.equal(f.frames.size, 0, 'Showing the document cannot resume a cancelled voice command.');
+    sendCamera(f, 3, 'zoomInContinuous');
+    f.advanceFrame(); f.advanceFrame();
+    f.emit('pagehide');
+    assertClean(f);
+    runtime.dispose();
+    assert.doesNotMatch(JSON.stringify(cameraStatuses(f)), /center|latitude|longitude|label|key|http/);
+  }
+});
+
+test('stop and hidden-document commands remove queued motion before a late SDK or steady event', async () => {
+  for (const phase of ['import', 'steady']) {
+    for (const cause of ['stopCamera', 'visibility']) {
+      const pending = deferred(), f = fakeBrowser({loadLibrary: () => pending.promise});
+      const runtime = mountProjectionRenderer(f);
+      if (phase === 'steady') { pending.resolve(f.library); await flush(); }
+      sendCamera(f, 1, 'zoomInContinuous');
+      if (cause === 'stopCamera') sendCamera(f, 2, 'stopCamera');
+      else {
+        f.document.visibilityState = 'hidden';
+        f.emitDocument('visibilitychange');
+        sendCamera(f, 2, 'zoomOutContinuous');
+        f.document.visibilityState = 'visible';
+        f.emitDocument('visibilitychange');
+      }
+      pending.resolve(f.library);
+      await flush();
+      f.calls.maps[0].emit('gmp-steadychange', {isSteady: true});
+      assert.equal(f.frames.size, 0);
+      assert.equal(f.calls.flights.length, 0);
+      assert.deepEqual(cameraStatuses(f).at(-1), {type: 'korlix-projection-camera-status', state: 'stopped',
+        reason: cause === 'stopCamera' ? 'stopped' : 'interrupted', sequence: 2});
+      runtime.dispose();
+      assertClean(f);
+    }
+  }
+});
+
+test('invalid public camera state during continuous movement fails once and releases the frame', async () => {
+  const f = fakeBrowser();
+  mountProjectionRenderer(f);
+  await flush();
+  const map = f.calls.maps[0];
+  map.emit('gmp-steadychange', {isSteady: true});
+  sendCamera(f, 1, 'zoomInContinuous');
+  map.range = NaN;
+  f.advanceFrame();
+  assert.deepEqual(statuses(f), ['loading', 'ready', 'error']);
   assertClean(f);
 });
