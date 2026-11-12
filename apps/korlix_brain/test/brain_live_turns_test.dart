@@ -515,7 +515,7 @@ void main() {
     });
 
     test(
-      'late ASR waits for a previously requested tool continuation',
+      'expired ASR cannot move the view or replace a pending tool continuation',
       () async {
         final h = Harness(
           recognizes: recognizes,
@@ -526,6 +526,10 @@ void main() {
         await h.live.responseDone(done('auto1'));
         expect(h.requests, isEmpty);
         expect(
+          h.events.where((event) => event['code'] == 'transcription_timeout'),
+          hasLength(1),
+        );
+        expect(
           acknowledgements(h).length,
           1,
           reason:
@@ -533,12 +537,11 @@ void main() {
         );
         h.live.accept('one', 'Stop zooming');
         await flush();
-        expect(h.projections.length, 1);
+        expect(h.projections, isEmpty);
         expect(
           acknowledgements(h).length,
           1,
-          reason:
-              'Do not overlap the continuation still awaiting response.created',
+          reason: 'A retired transcript cannot create a second spoken reply',
         );
         h.live.responseStarted({
           'id': 'tool-follow',
@@ -546,22 +549,17 @@ void main() {
         });
         await flush();
         expect(
-          h.sent
-              .where((e) => e['type'] == 'response.cancel')
-              .single['response_id'],
-          'tool-follow',
+          h.sent.where((event) => event['type'] == 'response.cancel'),
+          isEmpty,
         );
-        await h.live.responseDone(
-          automaticDone('tool-follow', status: 'cancelled'),
-        );
+        await h.live.responseDone(automaticDone('tool-follow'));
         await flush();
-        expect(acknowledgements(h).length, 2);
+        expect(acknowledgements(h).length, 1);
         expect(
-          acknowledgements(h)
-              .last['response']['metadata']['brain_projection_direct'],
-          'true',
+          h.events.where((event) => event['type'] == 'transcript'),
+          isEmpty,
         );
-        expect(h.projections.length, 1);
+        expect(h.projections, isEmpty);
         h.live.dispose();
       },
     );
