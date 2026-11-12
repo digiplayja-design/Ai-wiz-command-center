@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseCameraMessage, createCameraController, initialCameraOptions} from '../brain_projection/public/camera.mjs';
+import {parseCameraMessage, createCameraController, initialCameraOptions, destinationCamera} from '../brain_projection/public/camera.mjs';
 import {mountProjectionRenderer, loadGoogleMapsLibrary} from '../brain_projection/public/earth.mjs';
 import {headingToProperty, capturedMonth, requestPanorama} from '../brain_projection/public/street.mjs';
 
@@ -430,9 +430,16 @@ function surfaceFixture({key = 'public-fixture-key', sdkDeferred = null, maxZoom
     ready(status = 'OK', pano = this.pano) { this.pano = pano; this.status = status; this.emit('status_changed'); }
   }
   class Map3DElement extends Element {
-    constructor(options) { super('gmp-map-3d'); this.options = options; Object.assign(this, options); this.flights = []; this.stops = 0; calls.maps.push(this); }
+    constructor(options) {
+      super('gmp-map-3d');
+      if ('altitudeMode' in options) throw Error('altitudeMode belongs to CameraOptions, not Map3DElementOptions.');
+      this.options = options; Object.assign(this, options); this.flights = []; this.stops = 0; calls.maps.push(this);
+    }
     stopCameraAnimation() { this.stops++; }
-    flyCameraTo(value) { this.flights.push(value); Object.assign(this, value.endCamera); }
+    flyCameraTo(value) {
+      if (!this.isConnected) throw Error('The map must be mounted before its destination flight.');
+      this.flights.push(value); Object.assign(this, value.endCamera);
+    }
     steady() { this.emit('gmp-steadychange', {isSteady: true}); }
   }
   const api = {importLibrary(name) {
@@ -691,6 +698,27 @@ test('Earth loads only on explicit selection; Street return restores recorded pa
   runtime.dispose(); assertSurfaceClean(f);
 });
 
+test('Earth keeps animation altitudeMode out of its constructor and flies to a terrain-relative destination after mounting', async () => {
+  const f = surfaceFixture(), runtime = mountProjectionRenderer(f);
+  f.send(1, 'flyTo', {viewMode: 'earth', height: 850, pitch: -50}); await flush();
+  assert.equal(latestView(f).status, 'loading');
+  assert.equal(f.calls.maps.length, 1);
+  const map = f.calls.maps[0];
+  assert.equal('altitudeMode' in map.options, false);
+  assert.equal(map.isConnected, true);
+  assert.equal(map.flights.length, 1);
+  assert.deepEqual(map.flights[0].endCamera, destinationCamera({...selected, height: 850, pitch: -50}));
+  assert.equal(map.flights[0].endCamera.altitudeMode, 'RELATIVE_TO_GROUND');
+  Object.assign(map, map.options);
+  map.steady();
+  assert.equal(latestView(f).status, 'loading', 'A steady constructor scene does not establish the requested destination.');
+  Object.assign(map, map.flights[0].endCamera);
+  map.steady();
+  assert.equal(latestView(f).status, 'ready');
+  assert.equal(latestView(f).viewMode, 'earth');
+  runtime.dispose();
+});
+
 test('unknown dates stay unavailable and user panorama navigation cannot leave stale capture metadata', async () => {
   assert.equal(capturedMonth('2026-13'), null); assert.equal(capturedMonth('<script>'), null);
   const f = surfaceFixture(), runtime = await openStreetFixture(f), pano = f.calls.panoramas[0];
@@ -782,7 +810,7 @@ test('Stop, pointer and background interrupt an Earth destination flight before 
     f.send(1, 'flyTo', {viewMode: 'earth'}); await flush(); f.calls.maps[0].steady();
     f.send(2, 'flyTo', {viewMode: 'earth'}, {...selected, latitude: 40.71}); await flush();
     const map = f.calls.maps[0], previousStops = map.stops;
-    assert.equal(map.flights.length, 1); assert.equal(latestView(f).status, 'loading');
+    assert.equal(map.flights.length, 2); assert.equal(latestView(f).status, 'loading');
     if (cause === 'stop') f.send(3, 'stopCamera', {viewMode: 'earth'}, null);
     else if (cause === 'pointer') f.gestures();
     else f.hidden(true);

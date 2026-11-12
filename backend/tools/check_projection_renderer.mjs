@@ -81,7 +81,11 @@ function installImageryContractFixture(mode) {
     setPano(id) { this.id = id; this.status = 'UNKNOWN_ERROR'; this.emit('pano_changed'); this.loadIfVisible(); }
   }
   class Map3DElement extends HTMLElement {
-    constructor(options) { super(); Object.assign(this, options); fixture.maps++; map = this; panel(this, '3D Earth'); }
+    constructor(options) {
+      super();
+      if ('altitudeMode' in options) throw Error('altitudeMode belongs to CameraOptions, not Map3DElementOptions.');
+      Object.assign(this, options); fixture.maps++; map = this; panel(this, '3D Earth');
+    }
     connectedCallback() { requestAnimationFrame(() => this.steady()); }
     steady() { const event = new Event('gmp-steadychange'); Object.defineProperty(event, 'isSteady', {value: true}); this.dispatchEvent(event); }
     stopCameraAnimation() { fixture.stops++; }
