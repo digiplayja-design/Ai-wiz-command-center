@@ -18,6 +18,25 @@ This is user-supplied device evidence, not an independently instrumented or cryp
 
 The service deployment identifies the code being served; the copied report itself does not carry a commit SHA. This documentation change does not modify the application, environment, credentials, or activation flag.
 
+## Production configuration prepared on November 11
+
+The owner supplied Google Cloud screenshots showing the `KORLIX Brain Projection Web` key restricted to **Maps JavaScript API only** and **Websites**, then confirmed the corrected website entries were saved:
+
+- `https://chee-chai-chee-backend.onrender.com`
+- `https://chee-chai-chee-backend.onrender.com/*`
+- `https://korlix-projection-check-20261111.onrender.com`
+- `https://korlix-projection-check-20261111.onrender.com/*`
+
+The owner also confirmed there were no `BRAIN_PROJECTION` variables on production service `srv-d8csvkkp3tds73emfikg`. The existing public browser key served by the successful acceptance environment was transferred into `BRAIN_PROJECTION_MAPS_JS_BROWSER_KEY` on that production service. The same Maps JavaScript browser key is used for the two exact first-party hosts in this rollout; a private server geocoding credential remains separate. No credential value is stored in this record.
+
+`BRAIN_PROJECTION_MAPS_JS_RESTRICTIONS_VERIFIED` was explicitly set to the string `false`. These two settings were merged into the service environment, preserving unrelated settings. No canonical-origin variable was added: the application can use Render's documented `RENDER_EXTERNAL_URL` when no explicit override is present. No Geocoding key was configured.
+
+The environment update initiated Render deployment `dep-dbqi7kijnfac738p5pt0` at release commit `1b5fb96a8ed9296fbb0b6faa4ceaa412fa89adfb`, which reached `live` at `2026-11-12T02:27:02.029Z` (November 11 at 9:27 PM US Eastern). Its application code is unchanged from the tested CSP fix; the intervening release commit adds only the successful acceptance evidence.
+
+Post-deployment HTTP checks returned 200 for `/api/health` and `/brain-projection/earth.html`. The health response reported a healthy backend. The map document retained an empty browser-key field, the inactive message, the tested map-style CSP allowance, and `strict-origin-when-cross-origin` referrer policy.
+
+This prepares production configuration without asserting provider verification or activating the public map. The screenshots establish the owner's saved restriction settings, not the results of denied-request or production-device tests.
+
 ## Established scope and remaining work
 
 The allowed acceptance-origin rendering observation is complete and does not need to be repeated merely because `overallVerification` remains `NOT_ESTABLISHED`. That field intentionally does not certify the whole production rollout.
