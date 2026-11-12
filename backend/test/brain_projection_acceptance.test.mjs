@@ -578,7 +578,7 @@ test('acceptance status ignores stale sequences, other views and transport-only 
   }
 });
 
-test('acceptance client starts Street after transport and keeps Stop and mode switches available through loading and no coverage', async () => {
+async function acceptanceClientFixture(scenario = 'standard') {
   class Element {
     constructor(dataset = {}) { this.dataset = dataset; this.listeners = {}; this.disabled = false; this.checked = false; this.textContent = ''; this.attributes = {}; }
     addEventListener(name, fn) { this.listeners[name] = fn; }
@@ -592,11 +592,11 @@ test('acceptance client starts Street after transport and keeps Stop and mode sw
   const operations = ['flyTo', 'closer', 'farther', 'left', 'right', 'reset', 'zoomInContinuous', 'zoomOutContinuous', 'stopCamera']
     .map(operation => new Element({operation}));
   const modes = ['street', 'earth'].map(viewMode => new Element({viewMode}));
-  const checks = ['imagery-confirmed', 'attribution-confirmed'].map(get);
+  const checks = (scenario === 'wrong-origin' ? ['origin-unapproved-confirmed'] : ['imagery-confirmed', 'attribution-confirmed']).map(get);
   const origin = 'https://acceptance.example';
   const document = {
     getElementById: get,
-    querySelector: selector => ({content: selector.includes('acceptance-mode') ? 'standard' : 'true'}),
+    querySelector: selector => ({content: selector.includes('acceptance-mode') ? scenario : 'true'}),
     querySelectorAll: selector => selector === '.checks input' ? checks : selector === '[data-operation]' ? operations : modes,
     createElement: () => Object.assign(new Element(), {contentWindow: {postMessage: (data, target) => messages.push({data, target})}}),
   };
@@ -605,6 +605,11 @@ test('acceptance client starts Street after transport and keeps Stop and mode sw
     location: {origin}, navigator: {}, cameraControlsReady, classifyObservation, rendererObservation, sanitizeEvidence});
   const read = () => JSON.parse(get('evidence').textContent);
   const button = operation => operations.find(value => value.dataset.operation === operation);
+  return {get, read, button, modes, messages, events, origin};
+}
+
+test('acceptance client starts Street after transport and keeps Stop and mode switches available through loading and no coverage', async () => {
+  const {get, read, button, modes, messages, events, origin} = await acceptanceClientFixture();
   get('start').click();
   const frame = get('stage').child;
   const emit = (data, overrides = {}) => events.message({source: frame.contentWindow, origin, data, ...overrides});
@@ -640,4 +645,43 @@ test('acceptance client starts Street after transport and keeps Stop and mode sw
   get('stop').click();
   assert.equal(button('stopCamera').disabled, true); assert.equal(modes[1].disabled, true);
   assert.ok(read().closedAt);
+});
+
+test('queued Street readiness survives a mode switch and blocks a later denial without changing current controls', async () => {
+  const {get, read, button, modes, events, origin} = await acceptanceClientFixture('wrong-origin');
+  get('start').click();
+  const frame = get('stage').child;
+  const emit = (data, overrides = {}) => events.message({source: frame.contentWindow, origin, data, ...overrides});
+  emit({type: 'korlix-projection-transport-ready'});
+  modes[1].click();
+  const ready = {type: 'korlix-projection-status', status: 'ready', reason: 'ready', viewMode: 'street', sequence: 1};
+  for (const patch of [{sequence: 0}, {sequence: 3}, {sequence: 1.5}, {sequence: '1'}, {viewMode: 'unknown'}, {reason: 'awaiting-destination'}]) {
+    emit({...ready, ...patch}); assert.equal(read().everReady, false);
+  }
+  emit(ready, {source: {}}); emit(ready, {origin: 'https://untrusted.example'});
+  assert.equal(read().everReady, false);
+  emit(ready);
+  assert.equal(read().everReady, true);
+  assert.equal(read().viewMode, 'earth'); assert.equal(read().rendererStatus, 'loading'); assert.equal(read().rendererReason, 'loading');
+  assert.equal(button('closer').disabled, true); assert.equal(button('stopCamera').disabled, false);
+  emit({type: 'korlix-acceptance-evidence', evidence: {...wrongOriginReport().sdk, mode: 'wrong-origin', started: true}});
+  emit({type: 'korlix-projection-status', status: 'error', reason: 'unavailable', viewMode: 'earth', sequence: 2});
+  get('origin-unapproved-confirmed').checked = true; get('origin-unapproved-confirmed').listeners.change();
+  assert.equal(read().observation, 'WRONG_ORIGIN_CHECK_FAILED_SCENE_RENDERED');
+  assert.equal(read().rendererStatus, 'error'); assert.equal(read().viewMode, 'earth'); assert.equal(button('closer').disabled, true);
+
+  // The diagnostic history is bounded; readiness evidence must still cover
+  // commands sent after that history fills, and reset for a new frame session.
+  get('stop').click(); get('start').click();
+  const next = get('stage').child;
+  const emitNext = data => events.message({source: next.contentWindow, origin, data});
+  emitNext({type: 'korlix-projection-transport-ready'});
+  for (let i = 0; i < 101; i++) modes[0].click();
+  const priorSequence = read().cameraSequence;
+  modes[1].click();
+  assert.equal(read().cameraHistory.length, 100); assert.equal(read().everReady, false);
+  emit(ready); assert.equal(read().everReady, false);
+  emitNext({...ready, sequence: priorSequence});
+  assert.equal(read().everReady, true); assert.equal(read().viewMode, 'earth'); assert.equal(read().rendererStatus, 'loading');
+  assert.equal(button('closer').disabled, true);
 });

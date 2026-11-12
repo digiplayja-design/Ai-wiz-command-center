@@ -117,10 +117,15 @@ window.addEventListener('message', event => {
       sendCamera('flyTo', 'street');
     }
   } else if (data?.type === 'korlix-projection-status') {
+    // A queued ready response may describe imagery shown before a later mode
+    // switch. Preserve that historical evidence without enabling stale controls.
+    const historicalReady = data.status === 'ready' && data.reason === 'ready' &&
+      ['street', 'earth'].includes(data.viewMode) && Number.isSafeInteger(data.sequence) &&
+      data.sequence >= 1 && data.sequence <= report.cameraSequence;
+    if (historicalReady) report.everReady = true;
     const observed = rendererObservation(report, data);
-    if (!observed) return;
+    if (!observed) { if (historicalReady) render(); return; }
     report.rendererStatus = observed.status; report.rendererReason = observed.reason;
-    if (observed.status === 'ready') report.everReady = true;
     get('status').textContent = observed.status === 'ready' ? negative
       ? 'The renderer reported imagery ready. This check did not observe a denial.' : 'The selected view is ready. Complete its visual checks below.'
       : observed.status === 'error' ? 'The selected view reported a failure. Review the sanitized evidence below.' : 'The selected view is loading…';
