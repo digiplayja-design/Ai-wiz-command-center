@@ -22,11 +22,11 @@ function nativeFixture() {
   fixture.reply = (message, data, error) => window.KorlixBrainReceive({
     type: 'reply', id: message.id, data, error,
   });
-  fixture.finish = (action, data) => {
+  fixture.finish = (action, data, error) => {
     const message = fixture.held[action];
     if (!message) throw new Error(`No held ${action}`);
     delete fixture.held[action];
-    fixture.reply(message, data);
+    fixture.reply(message, data, error);
   };
   window.Korlix = {postMessage(raw) {
     const message = JSON.parse(raw);
@@ -271,6 +271,68 @@ async function geometry(page, width) {
       assert.equal(await page.locator('#cinema-kb-stop-voice').isEnabled(), true);
       await page.locator('#cinema-kb-stop-voice').click();
       await state(page, false, false);
+
+      // A native startup failure must remain on the conversation screen after
+      // the later bridge reply. It must not disappear behind "Microphone off".
+      const startupFailure = 'Voice setup could not be confirmed. Tap Start conversation to retry.';
+      await page.evaluate(() => window.controlsFixture.hold.startVoice = true);
+      for (const bridgeError of [undefined, 'Could not complete this action.']) {
+        await page.locator('#cinema-kb-replay-demo').click();
+        await state(page, true, false);
+        await page.evaluate(({message, error}) => {
+          window.controlsFixture.emit('complete', {paused: false, message});
+          window.controlsFixture.finish('startVoice', {active: false}, error);
+        }, {message: startupFailure, error: bridgeError});
+        await state(page, false, false);
+        assert.equal(await page.locator('#cinema-kb-voice-phase').textContent(), startupFailure,
+          'Start reply preserves the native startup failure');
+        assert.equal(await page.locator('#cinema-kb-live-phase').textContent(), startupFailure);
+        assert.equal(await page.locator('#cinema-kb-replay-demo').isEnabled(), true);
+      }
+
+      // Errors before native voice events also need persistent text, and retry
+      // must start one independent conversation after the failed attempt.
+      const microphoneFailure = 'Microphone access is needed to talk. Allow access and try again.';
+      await page.locator('#cinema-kb-replay-demo').click();
+      await page.evaluate(error => window.controlsFixture.finish('startVoice', null, error), microphoneFailure);
+      await state(page, false, false);
+      assert.equal(await page.locator('#cinema-kb-voice-phase').textContent(), microphoneFailure,
+        'Bridge-only startup errors remain visible');
+      await page.evaluate(() => window.controlsFixture.hold.startVoice = false);
+      await page.locator('#cinema-kb-replay-demo').click();
+      await listening(page);
+      await page.locator('#cinema-kb-pause-voice').click();
+      await state(page, false, true);
+
+      const resumeFailure = 'The conversation could not be restored. Tap Resume to try again.';
+      await page.evaluate(() => window.controlsFixture.hold.resumeVoice = true);
+      await page.locator('#cinema-kb-resume-voice').click();
+      await page.evaluate(message => {
+        window.controlsFixture.emit('paused', {paused: true, message});
+        window.controlsFixture.finish('resumeVoice', null, 'Could not complete this action.');
+      }, resumeFailure);
+      await state(page, false, true);
+      assert.equal(await page.locator('#cinema-kb-voice-phase').textContent(), resumeFailure,
+        'Resume reply preserves the native reason for remaining paused');
+      assert.equal(await page.locator('#cinema-kb-resume-voice').isEnabled(), true);
+
+      await page.locator('#cinema-kb-resume-voice').click();
+      await page.evaluate(error => window.controlsFixture.finish('resumeVoice', null, error), resumeFailure);
+      await state(page, false, true);
+      assert.equal(await page.locator('#cinema-kb-voice-phase').textContent(), resumeFailure,
+        'Bridge-only resume errors remain visible');
+
+      // A delayed failure belongs to its canceled attempt; it must not replace
+      // the user's later Stop state or make the stopped session resumable.
+      await page.locator('#cinema-kb-resume-voice').click();
+      await state(page, true, true);
+      await page.locator('#cinema-kb-stop-voice').click();
+      await state(page, false, false);
+      await page.evaluate(error => window.controlsFixture.finish('resumeVoice', null, error), resumeFailure);
+      assert.equal(await page.locator('#cinema-kb-voice-phase').textContent(), 'Fixture complete');
+      await state(page, false, false);
+      assert.equal(await page.locator('#cinema-kb-resume-voice').isDisabled(), true);
+      await page.evaluate(() => window.controlsFixture.hold.resumeVoice = false);
 
       if (process.env.UI_SCREENSHOTS) {
         fs.mkdirSync(process.env.UI_SCREENSHOTS, {recursive: true});

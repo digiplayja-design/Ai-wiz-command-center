@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show appBuildName, appBuildNumber;
 import 'package:korlix_receipt_core/privacy/korlix_third_party_ai_consent.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:speech_to_text/speech_to_text.dart';
@@ -182,7 +183,9 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
         state == AppLifecycleState.detached) {
       unawaited(_stopDictation());
     }
-    if (state == AppLifecycleState.detached) unawaited(_voice.stop());
+    if (state == AppLifecycleState.detached) {
+      unawaited(_voice.stop(reason: 'app_detached'));
+    }
   }
 
   void _emit(Map<String, dynamic> event) {
@@ -556,7 +559,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
       await _stopDictation();
       return;
     }
-    await _voice.stop();
+    await _voice.stop(reason: 'dictation_started');
     if (!mounted || _disposed) return;
     final available = await _speech.initialize(
       onError: (_) {
@@ -736,7 +739,9 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
             ListTile(
               title: const Text('KORLIX Brain+Voice'),
               subtitle: Text(
-                '${widget.auth.session?.email ?? 'Your account'}\nVersion 1.0.1 · Build 14',
+                '${widget.auth.session?.email ?? 'Your account'}\n'
+                '${appBuildName == null ? 'Version information unavailable' : 'Version $appBuildName'}'
+                '${appBuildNumber == null ? '' : ' · Build $appBuildNumber'}',
               ),
             ),
             const Padding(
@@ -779,7 +784,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
     if (action == 'billing') {
       await _openBilling();
     } else if (action == 'signout') {
-      await _voice.stop();
+      await _voice.stop(reason: 'account_changed');
       await _stopDictation();
       await widget.auth.signOut();
     } else if (action == 'delete') {
@@ -831,7 +836,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
     unawaited(_welcome.dispose().catchError((Object _) {}));
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_speech.cancel());
-    unawaited(_voice.stop().whenComplete(_api.dispose));
+    unawaited(_voice.stop(reason: 'workspace_disposed').whenComplete(_api.dispose));
     super.dispose();
   }
 
@@ -840,7 +845,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
     _captureStarting = false;
     await _welcome.stop();
     await _stopDictation();
-    await _voice.stop();
+    await _voice.stop(reason: 'billing_opened');
     if (!mounted || _disposed) return;
     unawaited(_billing.refresh());
     await Navigator.of(context).push(

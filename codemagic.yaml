@@ -637,6 +637,7 @@ workflows:
             node tools/check_ui.cjs
           PLAYWRIGHT_MODULE="$CM_BUILD_DIR/.brain-ui-tools/node_modules/playwright" \
             node tools/check_controls.cjs
+          node tools/check_voice_status.cjs
           PLAYWRIGHT_MODULE="$CM_BUILD_DIR/.brain-ui-tools/node_modules/playwright" \
             PROJECTION_SCREENSHOTS="$CM_BUILD_DIR/apps/korlix_brain/artifacts/ui" \
             node tools/check_projection.cjs

@@ -120,6 +120,189 @@ void main() {
     });
   });
 
+  group('Projection capability refresh', () {
+    test(
+      'a genuine reopening refreshes previously unavailable services',
+      () async {
+        var reads = 0;
+        final refreshed = Completer<Map<String, dynamic>>();
+        final f = Fixture(
+          request: (method, path, body) async {
+            if (path.endsWith('/config')) {
+              if (++reads == 1) return <String, dynamic>{};
+              return refreshed.future;
+            }
+            return {
+              'candidates': [place],
+            };
+          },
+        );
+        addTearDown(f.projection.dispose);
+        f.projection.open();
+        final unavailable = await f.projection.search('10 Downing Street');
+        expect(unavailable['ok'], false);
+        expect(
+          unavailable['answer'],
+          contains('Address search is not connected yet'),
+        );
+        f.projection.open(room: 'discovery');
+        await f.projection.dispatch('room', {'room': 'command'});
+        expect(reads, 1, reason: 'An open view and room changes share config');
+
+        f.projection.close();
+        f.projection.open();
+        expect((f.projection.snapshot['config'] as Map)['checking'], true);
+        final lookup = f.projection.search(
+          '10 Downing Street, London SW1A 2AA',
+        );
+        expect(reads, 2, reason: 'Search joins this opening’s config request');
+        refreshed.complete(config);
+        expect((await lookup)['ok'], true);
+        expect((f.projection.snapshot['config'] as Map)['mapAvailable'], true);
+        expect((f.projection.snapshot['config'] as Map)['checking'], false);
+        expect(f.projection.snapshot['selectedPlace'], isNull);
+        expect(f.projection.snapshot['candidates'], hasLength(1));
+        expect(f.opens, 2);
+        expect(f.starts, 0);
+        expect(f.stops, 0);
+      },
+    );
+
+    for (final oldFails in [false, true]) {
+      for (final oldFinishesFirst in [false, true]) {
+        test(
+          'stale config ${oldFails ? 'failure' : 'success'} ${oldFinishesFirst ? 'before' : 'after'} the new request is ignored',
+          () async {
+            final old = Completer<Map<String, dynamic>>();
+            final current = Completer<Map<String, dynamic>>();
+            var reads = 0;
+            final f = Fixture(
+              request: (method, path, body) async {
+                if (path.endsWith('/config')) {
+                  return ++reads == 1 ? old.future : current.future;
+                }
+                return {
+                  'candidates': [place],
+                };
+              },
+            );
+            addTearDown(f.projection.dispose);
+            f.projection.open();
+            f.projection.close();
+            f.projection.open();
+
+            void finishOld() {
+              if (oldFails) {
+                old.completeError(StateError('old request failed'));
+              } else {
+                old.complete(<String, dynamic>{});
+              }
+            }
+
+            if (oldFinishesFirst) {
+              finishOld();
+              await Future<void>.delayed(Duration.zero);
+              expect(
+                (f.projection.snapshot['config'] as Map)['checking'],
+                true,
+              );
+            }
+            final lookup = f.projection.search('Current destination');
+            expect(
+              reads,
+              2,
+              reason: 'An old finalizer cannot clear the new pending request',
+            );
+            current.complete(config);
+            await lookup;
+            final before = jsonEncode(f.projection.snapshot);
+            if (!oldFinishesFirst) {
+              finishOld();
+              await Future<void>.delayed(Duration.zero);
+            }
+            expect(jsonEncode(f.projection.snapshot), before);
+            expect(
+              (f.projection.snapshot['config'] as Map)['mapAvailable'],
+              true,
+            );
+            expect((f.projection.snapshot['config'] as Map)['checking'], false);
+            expect(reads, 2);
+          },
+        );
+      }
+    }
+
+    test(
+      'a failed refresh does not reuse previously enabled capabilities',
+      () async {
+        var reads = 0;
+        var resolves = 0;
+        final f = Fixture(
+          request: (method, path, body) async {
+            if (path.endsWith('/config')) {
+              if (++reads == 1) return config;
+              throw StateError('refresh unavailable');
+            }
+            resolves++;
+            return {
+              'candidates': [place],
+            };
+          },
+        );
+        addTearDown(f.projection.dispose);
+        f.projection.open();
+        await f.projection.search('First destination');
+        f.projection.close();
+        f.projection.open();
+        expect((await f.projection.search('Second destination'))['ok'], false);
+        final current = f.projection.snapshot['config'] as Map;
+        expect(current['rendererUrl'], isNull);
+        expect(current['mapAvailable'], false);
+        expect(current['geocodingAvailable'], false);
+        expect(current['checking'], false);
+        expect(current['checkFailed'], true);
+        expect(resolves, 1);
+        f.projection.open(room: 'discovery');
+        await f.projection.search('Another attempt in the same opening');
+        expect(
+          reads,
+          2,
+          reason: 'Failed checks also remain scoped to one opening',
+        );
+        f.projection.close();
+        f.projection.open();
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          reads,
+          3,
+          reason: 'Closing and reopening retries a failed check',
+        );
+      },
+    );
+
+    test('close and dispose ignore pending configuration completion', () async {
+      for (final dispose in [false, true]) {
+        final pending = Completer<Map<String, dynamic>>();
+        final f = Fixture(request: (_, _, _) => pending.future);
+        var notifications = 0;
+        f.projection.addListener(() => notifications++);
+        f.projection.open();
+        if (dispose) {
+          f.projection.dispose();
+        } else {
+          f.projection.close();
+          addTearDown(f.projection.dispose);
+        }
+        final before = jsonEncode(f.projection.snapshot);
+        final count = notifications;
+        pending.complete(config);
+        await Future<void>.delayed(Duration.zero);
+        expect(jsonEncode(f.projection.snapshot), before);
+        expect(notifications, count);
+      }
+    });
+  });
+
   group('Place state and evidence', () {
     test(
       'camera waits for the renderer and readiness resets on errors and reopen',
@@ -369,6 +552,187 @@ void main() {
   });
 
   group('Original voice transcript', () {
+    test('VR aliases open and close without starting a conversation', () async {
+      final f = Fixture();
+      addTearDown(f.projection.dispose);
+      expect(
+        (await f.projection.voiceTurn(
+          'open-vr',
+          'Rici, enter VR',
+          null,
+        ))?['ok'],
+        true,
+      );
+      expect(f.projection.isOpen, true);
+      expect(
+        (await f.projection.voiceTurn('close-vr', 'Close VR', null))?['ok'],
+        true,
+      );
+      expect(f.projection.isOpen, false);
+      expect(f.starts, 0);
+      expect(f.stops, 0);
+      for (final phrase in [
+        'Do not open VR',
+        'How do I enter VR?',
+        '"Open VR" is an example',
+      ]) {
+        await f.projection.voiceTurn(phrase, phrase, {'action': 'open'});
+      }
+      expect(f.opens, 1);
+    });
+
+    test('explicit address display preserves the full original address and confirmation', () async {
+      const address = '14360 Jupiter Rd, Apt 4B, Brooklyn, NY 10012';
+      for (final phrase in [
+        'Rici, show me $address',
+        'Please show $address in 3D.',
+        'Risi, could you please show me $address in 3-D?',
+      ]) {
+        final queries = <String>[];
+        final f = Fixture(
+          request: (method, path, body) async {
+            if (path.endsWith('/config')) return config;
+            queries.add(body!['query'] as String);
+            return {
+              'candidates': [place],
+            };
+          },
+        );
+        addTearDown(f.projection.dispose);
+        await f.projection.voiceTurn('show-address', phrase, {
+          'action': 'search',
+          'value': 'Brooklyn',
+        });
+        expect(queries, [address], reason: phrase);
+        expect(f.projection.isOpen, true);
+        expect(f.projection.snapshot['selectedPlace'], isNull);
+        expect((f.projection.snapshot['camera'] as Map)['operation'], 'reset');
+        expect(f.projection.snapshot['candidates'], hasLength(1));
+        await f.projection.voiceTurn(
+          'confirm-address',
+          'Yes that is the place',
+          null,
+        );
+        expect(
+          (f.projection.snapshot['selectedPlace'] as Map)['userQuery'],
+          address,
+        );
+        expect((f.projection.snapshot['camera'] as Map)['operation'], 'flyTo');
+        expect(f.starts, 0);
+      }
+    });
+
+    test(
+      'address display is recognized without model tool arguments',
+      () async {
+        final f = Fixture();
+        addTearDown(f.projection.dispose);
+        final result = await f.projection.voiceTurn(
+          'show-local',
+          'Show 10 Downing Street, London SW1A 2AA in 3D',
+          null,
+        );
+        expect(result?['ok'], true);
+        expect(
+          (f.projection.snapshot['candidates'] as List).single['userQuery'],
+          '10 Downing Street, London SW1A 2AA',
+        );
+        expect(f.projection.snapshot['selectedPlace'], isNull);
+      },
+    );
+
+    test(
+      'street names containing live or research words remain addresses',
+      () async {
+        final queries = <String>[];
+        final f = Fixture(
+          request: (method, path, body) async {
+            if (path.endsWith('/config')) return config;
+            queries.add(body!['query'] as String);
+            return {
+              'candidates': [place],
+            };
+          },
+        );
+        addTearDown(f.projection.dispose);
+        const addresses = [
+          '123 Live Oak Road, Live Oak, FL 32060',
+          '10 New Street, New York, NY 10004',
+          '45 History Lane, Apt 2B, London SW1A 2AA',
+          '123 Main Street, Newport News, VA 23601',
+          '123 Main Street Newport News VA 23601',
+        ];
+        for (final address in addresses) {
+          final result = await f.projection.voiceTurn(
+            address,
+            'Show me $address',
+            null,
+          );
+          expect(result?['ok'], true, reason: address);
+        }
+        expect(queries, addresses);
+        expect(f.projection.snapshot['selectedPlace'], isNull);
+      },
+    );
+
+    test(
+      'show requests for research or media cannot become address lookups',
+      () async {
+        final f = Fixture();
+        addTearDown(f.projection.dispose);
+        f.projection.open();
+        const phrases = [
+          'Show me 3 facts about 10 Downing Street',
+          'Show me 3 photos of 10 Downing Street',
+          'Show me 10 Downing Street history',
+        'Show me 10 Downing Street, history',
+          'Show me 10 Downing Street history of the street',
+          'Show me 10 Downing Street, history of the street',
+          'Show me 3 buildings in Downing Street',
+          'Show me 3D printing examples',
+          'Do not show me 10 Downing Street',
+          'How do I show 10 Downing Street in 3D?',
+          '"Show me 10 Downing Street" is an example',
+        ];
+        for (final phrase in phrases) {
+          await f.projection.voiceTurn(phrase, phrase, {
+            'action': 'search',
+            'value': '10 Downing Street',
+          });
+        }
+        expect(f.requests.where((path) => path.endsWith('/resolve')), isEmpty);
+        expect(f.projection.snapshot['selectedPlace'], isNull);
+      },
+    );
+
+    test(
+      'live camera address requests keep the explicit unavailable response',
+      () async {
+        final f = Fixture();
+        addTearDown(f.projection.dispose);
+        f.projection.open();
+        for (final phrase in [
+          'Show me a live view of 10 Downing Street',
+          'Show me 10 Downing Street live camera imagery',
+          'Show me 10 Downing Street live camera on the road',
+          'Show me 10 Downing Street, live camera on the road',
+          'Show 10 Downing Street real-time video in 3D',
+        ]) {
+          final result = await f.projection.voiceTurn(phrase, phrase, {
+            'action': 'search',
+            'value': '10 Downing Street',
+          });
+          expect(result?['isLive'], false);
+          expect(
+            result?['answer'],
+            contains('no connected, permitted live camera'),
+          );
+        }
+        expect(f.requests.where((path) => !path.endsWith('/config')), isEmpty);
+        expect(f.projection.snapshot['selectedPlace'], isNull);
+      },
+    );
+
     test('existing Risi and Ree-see aliases can open projection', () async {
       for (final alias in ['Risi', 'Ree-see', 'Ree see']) {
         final f = Fixture();
