@@ -749,3 +749,27 @@ workflows:
       - $CM_BUILD_DIR/apps/korlix_brain/artifacts/BrainVoice-upload-certificate.pem
     # First upload is performed in the dedicated Play record. No automatic
     # publishing, tester invitations, or billing activation is configured here.
+
+  korlix-brain-reconcile-projection-voice-upload-20:
+    name: KORLIX Brain+Voice — read-only build 20 upload reconciliation
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    # Manual GET-only observation of exact com.korlix.brain 1.0.2 build 20.
+    # Does not rebuild, upload, assign, invite, change compliance, submit or release.
+    # No Flutter or Xcode setup is needed for this Python-only observation.
+    scripts:
+      - name: Validate read-only upload reconciliation guards
+        script: |
+          set -euo pipefail
+          python3 -m unittest discover -s scripts/tests -p 'test_brain_projection_voice_upload_reconciliation.py' -v
+      - name: Read exact Apple build and existing group relationship
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.brain-upload-reconciliation-tools"
+          "$CM_BUILD_DIR/.brain-upload-reconciliation-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+          "$CM_BUILD_DIR/.brain-upload-reconciliation-tools/bin/python" scripts/reconcile_brain_projection_voice_upload.py \
+            --check-group --output artifacts/brain-projection-voice-upload-reconciliation.json
+    artifacts:
+      - artifacts/brain-projection-voice-upload-reconciliation.json
