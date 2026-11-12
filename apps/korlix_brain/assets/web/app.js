@@ -803,6 +803,7 @@
   let training='', memories=[], pending=null, deletion=null, canUndo=false;
   let memorySource='Typed entry',trainingSource='Typed instructions';
   let voiceActive=false, voicePaused=false, voicePausing=false, voiceStopping=false, voiceStarting=false, lastUserTranscript='', ready=false, writing=false;
+  let voicePhase='complete';
   let requestNumber=0, voiceRequestEpoch=0;
   const requests=new Map();
   const transcriptMessages=new Map(), savedMessages=new Map(), transcriptBusy=new Set();
@@ -814,7 +815,8 @@
     const id=String(++requestNumber);
     return new Promise((resolve,reject)=>{
       const timeout=['pickFile','openDocuments','cameraAsk','directions'].includes(action)?3600000:['startVoice','resumeVoice'].includes(action)?90000:65000;
-      const timer=setTimeout(()=>{requests.delete(id);reject(new Error('The response was interrupted. Refresh My Brain before trying a change again.'));},timeout);
+      const interrupted=action==='startVoice'?'Rici could not finish connecting. Tap Start conversation to try again.':action==='resumeVoice'?'Rici could not finish reconnecting. Tap Resume to try again.':'The response was interrupted. Refresh My Brain before trying a change again.';
+      const timer=setTimeout(()=>{requests.delete(id);reject(new Error(interrupted));},timeout);
       requests.set(id,{resolve,reject,timer});
       window.Korlix.postMessage(JSON.stringify({id,action,payload}));
     });
@@ -829,8 +831,9 @@
       if(['complete','error','paused'].includes(message.phase)){voiceStarting=false;voicePausing=false;}
       if(['complete','error'].includes(message.phase))voiceStopping=false;
       if(voiceStopping&&!['complete','error'].includes(message.phase))message={...message,phase:'stopping',message:'Stopping conversation…'};
+      voicePhase=message.phase;
       const index=phases.findIndex(p=>p.key===message.phase);
-      if(index>=0)setPhase(index);else if(message.phase==='paused')setPhase(3);
+      if(index>=0)setPhase(index);else if(['paused','error'].includes(message.phase))setPhase(3);
       voiceActive=!['complete','error','paused'].includes(message.phase);
       voicePaused=message.phase==='paused'||message.paused===true;
       if(['complete','error'].includes(message.phase))voicePaused=false;
@@ -1028,12 +1031,14 @@
     voiceStarting=true;
     window.KorlixBrainReceive({type:'voice',phase:'connecting',message:'Connecting to Rici…'});
     native('startVoice',{mode:root.querySelector('input[name="brain-voice-mode"]:checked')?.value||'live'}).then(result=>{
-      // Consent can be declined without creating a voice session.
-      if(epoch===voiceRequestEpoch&&result?.active===false)
+      // Consent can be declined without creating a voice session. Native
+      // terminal events carry startup failures and must survive this reply.
+      if(epoch===voiceRequestEpoch&&result?.active===false&&voicePhase==='connecting')
         window.KorlixBrainReceive({type:'voice',phase:'complete',message:'Microphone off'});
     }).catch(error=>{
       if(epoch!==voiceRequestEpoch)return;
-      window.KorlixBrainReceive({type:'voice',phase:'complete',message:'Microphone off'});fail(error);
+      if(voicePhase==='connecting')window.KorlixBrainReceive({type:'voice',phase:'error',message:error.message||'Rici could not connect. Tap Start conversation to try again.'});
+      fail(error);
     }).finally(()=>{if(epoch===voiceRequestEpoch)voiceStarting=false;});
   }
   function pauseVoice(){
@@ -1056,10 +1061,11 @@
     window.KorlixBrainReceive({type:'voice',phase:'connecting',paused:true,message:'Resuming Rici…'});
     native('resumeVoice').then(result=>{
       if(epoch!==voiceRequestEpoch)return;
-      if(result?.active===false&&(!result.paused||voiceActive))window.KorlixBrainReceive({type:'voice',phase:result.paused?'paused':'complete',paused:result.paused===true,message:result.paused?'Paused · microphone off':'Microphone off'});
+      if(result?.active===false&&voicePhase==='connecting')window.KorlixBrainReceive({type:'voice',phase:result.paused?'paused':'complete',paused:result.paused===true,message:result.paused?'Paused · microphone off':'Microphone off'});
     }).catch(error=>{
       if(epoch!==voiceRequestEpoch)return;
-      window.KorlixBrainReceive({type:'voice',phase:'paused',paused:true,message:'Resume interrupted · tap Resume again'});fail(error);
+      if(voicePhase==='connecting')window.KorlixBrainReceive({type:'voice',phase:'paused',paused:true,message:error.message||'Rici could not reconnect. Tap Resume to try again.'});
+      fail(error);
     }).finally(()=>{if(epoch===voiceRequestEpoch)voiceStarting=false;});
   }
   function toggleVoice(){voicePaused?resumeVoice():voiceActive?stopVoice():startVoice();}
