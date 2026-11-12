@@ -66,7 +66,7 @@
             </div>
 
             <div class="scene-crosshair" aria-hidden="true"><span></span><span></span></div>
-            <div class="world-caption" id="world-caption"><span class="caption-line"></span><span id="world-caption-text">Illustrative globe · connect a map provider to explore</span></div>
+            <div class="world-caption" id="world-caption"><span class="caption-line"></span><span id="world-caption-text">Checking 3D imagery…</span></div>
 
             <div class="camera-controls" role="group" aria-label="Map camera controls">
               <button type="button" data-camera="closer" aria-label="Go closer to the building" title="Go closer"><svg><use href="#icon-plus"/></svg></button>
@@ -80,11 +80,11 @@
             <div class="place-banner" id="place-banner" hidden><span class="place-pin"><svg><use href="#icon-pin"/></svg></span><div><span class="eyebrow">SELECTED PLACE</span><strong id="place-label"></strong><span id="place-address"></span><span id="place-match" class="partial-match-warning" hidden>Check address — partial match</span><span id="place-source" class="map-data-credit" translate="no" hidden>Google Maps</span></div><span class="place-confirmed">Confirmed</span></div>
           </div>
 
-          <section class="destination-panel" aria-label="Find a destination">
+          <section class="destination-panel" aria-label="Explore an address in 3D">
+            <label class="destination-label" for="destination-input">Explore address in 3D</label>
             <form id="search-form" class="search-form" role="search">
               <svg class="search-icon"><use href="#icon-search"/></svg>
-              <label class="sr-only" for="destination-input">Address, city, or place</label>
-              <input id="destination-input" type="search" maxlength="300" placeholder="Where would you like to go?" autocomplete="off" enterkeyhint="search">
+              <input id="destination-input" type="search" maxlength="300" placeholder="Enter a full address or place" autocomplete="off" enterkeyhint="search">
               <button type="submit" id="search-button" aria-label="Find destination"><span>Explore</span><svg><use href="#icon-arrow"/></svg></button>
             </form>
             <div id="search-help" class="search-help"><span>Say “Go to…” or enter an address.</span><span>Confirm a result before traveling.</span></div>
@@ -99,7 +99,7 @@
           <div class="rici-heading"><span class="rici-orb"><svg><use href="#icon-brain"/></svg></span><div><span class="eyebrow">YOUR EXPLORATION COMPANION</span><h2>Rici</h2></div><span class="rici-presence" id="rici-presence">Ready</span></div>
           <section class="answer-panel" aria-label="Rici response"><span class="eyebrow answer-label">A WORLD OF POSSIBILITIES</span><div id="answer-text" class="answer-text" aria-live="polite">Your Command Center is open. Where would you like to explore?</div><p id="answer-context" class="answer-context" hidden></p><div id="answer-sources" class="answer-sources" hidden></div></section>
 
-          <section class="ask-section" aria-label="Ask about this place"><h3>Look a little deeper</h3><div class="question-chips"><button type="button" data-question="What is located next to this address?">What’s nearby?<svg><use href="#icon-arrow"/></svg></button><button type="button" data-question="When was this building built?">Building history<svg><use href="#icon-arrow"/></svg></button><button type="button" data-question="What do you know about the crime rate in this area?">Area crime data<svg><use href="#icon-arrow"/></svg></button><button type="button" data-question="Show me a live view of this address.">Live view?<svg><use href="#icon-arrow"/></svg></button></div><form id="question-form" class="question-form"><label class="sr-only" for="question-input">Ask Rici about this place</label><input id="question-input" maxlength="1000" placeholder="Ask Rici about this place…" autocomplete="off"><button type="submit" id="question-button" aria-label="Ask Rici"><svg><use href="#icon-arrow"/></svg></button></form><p id="question-help" class="section-help">Select a destination to ask about its surroundings.</p></section>
+          <section class="ask-section" aria-label="Ask about this place"><h3>Look a little deeper</h3><div class="question-chips"><button type="button" data-question="What is located next to this address?">What’s nearby?<svg><use href="#icon-arrow"/></svg></button><button type="button" data-question="When was this building built?">Building history<svg><use href="#icon-arrow"/></svg></button><button type="button" data-question="What do you know about the crime rate in this area?">Area crime data<svg><use href="#icon-arrow"/></svg></button><button type="button" data-question="Show me a live view of this address.">Live camera availability<svg><use href="#icon-arrow"/></svg></button></div><form id="question-form" class="question-form"><label class="sr-only" for="question-input">Ask Rici about this place</label><input id="question-input" maxlength="1000" placeholder="Ask Rici about this place…" autocomplete="off"><button type="submit" id="question-button" aria-label="Ask Rici"><svg><use href="#icon-arrow"/></svg></button></form><p id="question-help" class="section-help">Select a destination to ask about its surroundings.</p></section>
 
           <details class="conversation-details" id="conversation-details"><summary><span>Conversation</span><span id="transcript-count">0 messages</span></summary><div id="transcript-list" class="transcript-list"><p class="section-help">Your conversation with Rici will appear here.</p></div></details>
 

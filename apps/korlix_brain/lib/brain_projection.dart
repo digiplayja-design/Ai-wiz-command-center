@@ -45,17 +45,22 @@ class BrainProjection extends ChangeNotifier {
   String _room = 'command';
   String _notice = 'Say “Rici, project virtual reality” to explore together.';
   int _generation = 0;
+  int _configGeneration = 0;
   int _cameraSequence = 0;
   Map<String, dynamic>? _place;
   List<Map<String, dynamic>> _candidates = [];
   Map<String, dynamic>? _answer;
   Map<String, dynamic> _camera = {'sequence': 0, 'operation': 'reset'};
-  Map<String, dynamic> _config = {
+  static Map<String, dynamic> _emptyConfig() => {
     'rendererUrl': null,
     'mapAvailable': false,
     'geocodingAvailable': false,
+    'directionsAvailable': false,
     'answersAvailable': false,
+    'checking': false,
+    'checkFailed': false,
   };
+  Map<String, dynamic> _config = _emptyConfig();
   Map<String, dynamic> _voice = {
     'active': false,
     'phase': 'complete',
@@ -103,6 +108,11 @@ class BrainProjection extends ChangeNotifier {
       _room = room!;
     }
     if (!_open) {
+      // Capabilities can change while the view is closed. A new opening owns
+      // its own request; an older response must never configure this view.
+      _resetConfig();
+      ++_generation;
+      _loading = false;
       _rendererReady = false;
       _rendererStatus = 'loading';
       if (_place != null) {
@@ -122,7 +132,7 @@ class BrainProjection extends ChangeNotifier {
       onOpen();
     }
     _changed();
-    unawaited(_ensureConfig());
+    if (_open) unawaited(_ensureConfig());
   }
 
   void close() {
@@ -132,6 +142,7 @@ class BrainProjection extends ChangeNotifier {
     _open = false;
     _rendererReady = false;
     _rendererStatus = 'loading';
+    _resetConfig();
     cancelPending();
     onClose();
   }
@@ -201,19 +212,40 @@ class BrainProjection extends ChangeNotifier {
     return uri.toString();
   }
 
+  void _resetConfig() {
+    ++_configGeneration;
+    _configPending = null;
+    _configured = false;
+    _config = _emptyConfig();
+  }
+
+  bool _currentConfig(int generation) =>
+      !_disposed && generation == _configGeneration;
+
   Future<void> _ensureConfig() {
     if (_configured || _disposed) {
       return Future.value();
     }
-    return _configPending ??= _loadConfig().whenComplete(() {
-      _configPending = null;
+    if (_configPending != null) {
+      return _configPending!;
+    }
+    final generation = _configGeneration;
+    _config = {..._config, 'checking': true, 'checkFailed': false};
+    _notice = 'Checking address search and 3D imagery…';
+    final pending = _loadConfig(generation).whenComplete(() {
+      if (_currentConfig(generation)) {
+        _configPending = null;
+      }
     });
+    _configPending = pending;
+    _changed();
+    return pending;
   }
 
-  Future<void> _loadConfig() async {
+  Future<void> _loadConfig(int generation) async {
     try {
       final data = await request('GET', '/api/brain-projection/config', null);
-      if (_disposed) {
+      if (!_currentConfig(generation)) {
         return;
       }
       final renderer = checkedRenderer(data['rendererUrl']);
@@ -223,20 +255,32 @@ class BrainProjection extends ChangeNotifier {
         'geocodingAvailable': data['geocodingAvailable'] == true,
         'directionsAvailable': data['directionsAvailable'] == true,
         'answersAvailable': data['answersAvailable'] == true,
+        'checking': false,
+        'checkFailed': false,
         if (data['answerCredits'] is num)
           'answerCredits': data['answerCredits'],
         if (data['answerCostLabel'] is String)
           'answerCostLabel': data['answerCostLabel'],
       };
       _configured = true;
-      _notice = _config['mapAvailable'] == true
-          ? 'Explore recorded 3D imagery. Live cameras are a separate source.'
-          : 'Earth imagery is not connected yet. Your Rici conversation is available.';
+      if (_config['mapAvailable'] == true &&
+          _config['geocodingAvailable'] == true) {
+        _notice =
+            'Explore recorded 3D imagery. Live cameras are a separate source.';
+      } else if (_config['geocodingAvailable'] == true) {
+        _notice = '3D imagery is not connected yet. You can still look up and confirm an address.';
+      } else if (_config['mapAvailable'] == true) {
+        _notice = '3D imagery is available. Address search is not connected yet. You can still talk to Rici.';
+      } else {
+        _notice = 'Address search and 3D imagery are not connected yet. You can still talk to Rici.';
+      }
     } catch (_) {
-      if (_disposed) {
+      if (!_currentConfig(generation)) {
         return;
       }
-      _notice = 'Projection services are not available on this server yet. You can still talk to Rici.';
+      _config = {..._emptyConfig(), 'checkFailed': true};
+      _configured = true;
+      _notice = 'Could not check address search and 3D imagery. Close and reopen Projection to try again. You can still talk to Rici.';
     }
     _changed();
   }
@@ -298,7 +342,9 @@ class BrainProjection extends ChangeNotifier {
         return _result('That lookup was canceled.', ok: false);
       }
       if (_config['geocodingAvailable'] != true) {
-        _notice = 'Address lookup is not connected yet. No destination has been selected.';
+        _notice = _config['checkFailed'] == true
+            ? 'Could not check address search. Close and reopen Projection to try again. No destination has been selected.'
+            : 'Address search is not connected yet. No destination has been selected. You can still talk to Rici.';
         return _result(_notice, ok: false);
       }
       final data = await request('POST', '/api/brain-projection/resolve', {
@@ -352,12 +398,19 @@ class BrainProjection extends ChangeNotifier {
     query = _text(query, 300, empty: true);
     final generation = _generation;
     await _ensureConfig();
-    if (!_current(generation)) return _result('That directions request was canceled.', ok: false);
+    if (!_current(generation)) {
+      return _result('That directions request was canceled.', ok: false);
+    }
     if (_config['directionsAvailable'] != true || onDirections == null) {
-      return _result('Address routing is not enabled for this account.', ok: false);
+      return _result(
+        'Address routing is not enabled for this account.',
+        ok: false,
+      );
     }
     onDirections!(query);
-    return _result('Review the full address on screen and choose Apple Maps or Google Maps for directions.');
+    return _result(
+      'Review the full address on screen and choose Apple Maps or Google Maps for directions.',
+    );
   }
 
   Map<String, dynamic> select(String placeId) {
@@ -395,7 +448,11 @@ class BrainProjection extends ChangeNotifier {
     }
     if (_config['mapAvailable'] != true) {
       return _result(
-        'Earth imagery is not connected yet, so I cannot move the view.',
+        _config['checking'] == true
+            ? '3D imagery is still connecting. I cannot move the view yet.'
+            : _config['checkFailed'] == true
+            ? 'Could not check 3D imagery. Close and reopen Projection to try again.'
+            : '3D imagery is not connected yet. You can still talk to Rici.',
         ok: false,
       );
     }
@@ -604,14 +661,26 @@ class BrainProjection extends ChangeNotifier {
         _changed();
         return null;
       case 'directions':
-        return directions(_text(payload['query'] ?? _place?['userQuery'] ?? '', 300, empty: true));
+        return directions(
+          _text(
+            payload['query'] ?? _place?['userQuery'] ?? '',
+            300,
+            empty: true,
+          ),
+        );
       case 'pauseVoice':
         cancelPending();
         if (onPauseVoice != null) await onPauseVoice!();
-        return {'active': _voice['active'] == true, 'paused': _voice['paused'] == true};
+        return {
+          'active': _voice['active'] == true,
+          'paused': _voice['paused'] == true,
+        };
       case 'resumeVoice':
         if (onResumeVoice != null) await onResumeVoice!();
-        return {'active': _voice['active'] == true, 'paused': _voice['paused'] == true};
+        return {
+          'active': _voice['active'] == true,
+          'paused': _voice['paused'] == true,
+        };
       case 'search':
         return search(_text(payload['query'], 500));
       case 'select':
@@ -673,27 +742,78 @@ class BrainProjection extends ChangeNotifier {
     return future;
   }
 
+  static String? _displayAddress(String command) {
+    final show = RegExp(
+      r'^show( me)?\s+(.+)$',
+      caseSensitive: false,
+    ).firstMatch(command);
+    if (show == null) return null;
+    var address = show.group(2)!.replaceAll(RegExp(r'[.!?]+$'), '').trim();
+    final in3d = RegExp(r'\s+in\s+3[ -]?d$', caseSensitive: false);
+    if (show.group(1) == null && !in3d.hasMatch(address)) return null;
+    address = address.replaceFirst(in3d, '').trim();
+
+    // “Show me” also starts research and media requests. Only accept a direct
+    // numbered street address here; other places still use “go to” or search.
+    // Keep the entire address, including unit, city and postal code, and never
+    // substitute a model-proposed substring for these original user words.
+    final street = RegExp(
+      r'^\d+[a-z]?(?:[-/]\d+[a-z]?)?\s+(?:[a-z0-9.\x27’\-]+\s+){1,8}?(?:street|st|avenue|ave|road|rd|drive|dr|lane|ln|boulevard|blvd|court|ct|place|pl|terrace|ter|way|circle|cir|square|sq|parkway|pkwy|highway|hwy|route|rte|trail|trl|crescent|cres|close|row|walk)\b',
+      caseSensitive: false,
+    ).firstMatch(address);
+    if (street == null) return null;
+    if (RegExp(
+      r'^\d+\s+(?:[a-z]+\s+){0,2}(?:facts?|photos?|pictures?|images?|videos?|details?|reasons?|examples?|reviews?|things|buildings|houses|homes)\s+(?:of|about|near|on|in|for)\b',
+      caseSensitive: false,
+    ).hasMatch(address)) {
+      return null;
+    }
+    // Look for question phrasing after the street name, not isolated keywords
+    // inside an address: “Live Oak Road” and “Newport News” are valid names.
+    final remainder = address.substring(street.end);
+    if (RegExp(
+      r'\b(?:live|real[ -]?time)\b.*\b(?:view|camera|feed|video|imagery)\b|\b(?:facts?|photos?|pictures?|images?|videos?|details?|information|history|weather|news|crime|statistics|reasons?|examples?|reviews?|directions|population)\s+(?:of|about|on|for|in|near|from)\b|\b(?:show|tell|give)\s+me\b|\b(?:do not|don\x27t|don’t|never|instead)\b',
+      caseSensitive: false,
+    ).hasMatch(remainder)) {
+      return null;
+    }
+    if (RegExp(
+      r'^[\s.,]*(?:[\x27’]s\s+)?(?:(?:the|its)\s+)?(?:facts?|photos?|pictures?|images?|videos?|details?|information|history|weather|news|crime|statistics|reasons?|examples?|reviews?|directions|population)(?:\s+please)?$',
+      caseSensitive: false,
+    ).hasMatch(remainder)) {
+      return null;
+    }
+    return address;
+  }
+
   Future<Map<String, dynamic>?> _voiceTurn(
     String transcript,
     Map<String, dynamic>? arguments,
   ) async {
     final text = transcript.trim();
     final lower = text.toLowerCase();
-    final command = lower
+    final originalCommand = text
         .replaceFirst(
-          RegExp(r'^(?:(?:hey|okay|ok)\s+)?(?:rici|risi|ree[ -]?see)[, :]?\s+'),
+          RegExp(
+            r'^(?:(?:hey|okay|ok)\s+)?(?:rici|risi|ree[ -]?see)[, :]?\s+',
+            caseSensitive: false,
+          ),
           '',
         )
         .replaceFirst(
-          RegExp(r'^(?:please\s+|(?:can|could|would) you (?:please )?)'),
+          RegExp(
+            r'^(?:please\s+|(?:can|could|would) you (?:please )?)',
+            caseSensitive: false,
+          ),
           '',
         );
+    final command = originalCommand.toLowerCase();
     final action = arguments?['action'];
     final openIntent = RegExp(
-      r'^(?:project|open|start|enter|show(?: me)?)\s+(?:(?:the|a|my)\s+)?(?:virtual reality|projection(?: mode)?|command center|discovery theat(?:er|re))(?:[.!? ]|$)',
+      r'^(?:project|open|start|enter|show(?: me)?)\s+(?:(?:the|a|my)\s+)?(?:vr|virtual reality|projection(?: mode)?|command center|discovery theat(?:er|re))(?:[.!? ]|$)',
     ).hasMatch(command);
     final closeIntent = RegExp(
-      r'^(?:close|exit|leave|dismiss)\s+(?:the\s+)?(?:projection|virtual reality|room)\b',
+      r'^(?:close|exit|leave|dismiss)\s+(?:the\s+)?(?:projection|vr|virtual reality|room)\b',
     ).hasMatch(command);
     final placeSave = RegExp(
       r'^(?:save|remember)\s+(?:(?:this|the|selected)\s+(?:place|address|building|location)|(?:this|this note|a note)\s+(?:about|for)\s+(?:this|the|selected)\s+(?:place|address|building|location))\b',
@@ -741,20 +861,24 @@ class BrainProjection extends ChangeNotifier {
     final route = RegExp(
       r'^(?:route to|navigate to|(?:give|show) me directions to|directions to)\s+(.+)',
       caseSensitive: false,
-    ).firstMatch(command);
+    ).firstMatch(originalCommand);
     if (route != null && onDirections != null) {
-      return directions(route.group(1)!.replaceAll(RegExp(r'[.!?]+$'), '').trim());
+      return directions(
+        route.group(1)!.replaceAll(RegExp(r'[.!?]+$'), '').trim(),
+      );
     }
     final destination = RegExp(
       r'^(?:go to|take me to|fly to|navigate to|find the address|search for)\s+(.+)',
       caseSensitive: false,
-    ).firstMatch(command);
-    if (destination != null) {
+    ).firstMatch(originalCommand);
+    final displayAddress = _displayAddress(originalCommand);
+    if (destination != null || displayAddress != null) {
       open();
       // Keep the whole user destination, including street, city and postal code.
       // The model cannot silently replace it with a shorter substring.
       return search(
-        destination.group(1)!.replaceAll(RegExp(r'[.!?]+$'), '').trim(),
+        displayAddress ??
+            destination!.group(1)!.replaceAll(RegExp(r'[.!?]+$'), '').trim(),
       );
     }
     if (!_open) {
@@ -830,6 +954,8 @@ class BrainProjection extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     ++_generation;
+    ++_configGeneration;
+    _configPending = null;
     _voiceTurns.clear();
     super.dispose();
   }

@@ -204,7 +204,27 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
       page.on('pageerror',error=>errors.push(error.message));
       await fixture(page);
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'No horizontal overflow at '+width);
-      assert.equal(await page.locator('#world-caption-text').textContent(),'Illustrative globe · connect a map provider to explore');
+      assert.equal(await page.locator('#world-caption-text').textContent(),'3D imagery is not connected yet.');
+      assert.equal(await page.locator('label[for="destination-input"]').textContent(),'Explore address in 3D');
+      assert.equal(await page.locator('label[for="destination-input"]').isVisible(),true,'Address exploration is visibly labeled at '+width);
+      assert.equal(await page.locator('#search-button').isEnabled(),true,'Address lookup is available independently of 3D imagery');
+      await page.evaluate(()=>{window.projectionState.config.checking=true;window.sendSnapshot();});
+      assert.equal(await page.locator('#search-button').isEnabled(),false,'Address lookup waits for fresh capabilities');
+      assert.equal(await page.locator('#search-help').first().textContent(),'Checking address search…Confirm a result before traveling.');
+      assert.equal(await page.locator('#world-caption-text').textContent(),'Checking 3D imagery…');
+      await page.locator('#destination-input').fill('10 Downing Street, London SW1A 2AA');
+      await page.locator('#search-form').evaluate(form=>form.requestSubmit());
+      assert.equal(await page.evaluate(()=>window.projectionCommands.some(c=>c.action==='search')),false,'Submitting during refresh cannot use stale capabilities');
+      await page.evaluate(()=>{window.projectionState.config.checking=false;window.projectionState.config.geocodingAvailable=false;window.sendSnapshot();});
+      assert.equal(await page.locator('#search-button').isEnabled(),false);
+      assert.match(await page.locator('#search-help').textContent(),/Address search is not connected yet/);
+      assert.match(await page.locator('#world-caption-text').textContent(),/3D imagery is not connected yet/);
+      await page.evaluate(()=>{window.projectionState.config.checkFailed=true;window.sendSnapshot();});
+      assert.match(await page.locator('#search-help').textContent(),/Could not check address search\. Close and reopen Projection to try again\./);
+      assert.match(await page.locator('#world-caption-text').textContent(),/Could not check 3D imagery/);
+      await page.evaluate(()=>{window.projectionState.config.checkFailed=false;window.projectionState.config.geocodingAvailable=true;window.sendSnapshot();});
+      assert.equal(await page.locator('#search-button').isEnabled(),true,'A refreshed address service re-enables search');
+      await page.locator('#destination-input').fill('');
       assert.equal(await page.evaluate(()=>window.projectionCommands.some(c=>c.action==='startVoice')),false,'Opening must not start a second conversation');
       assert.equal(await page.locator('#talk-button').isEnabled(),true);
       assert.equal(await page.locator('#pause-button').isEnabled(),false);
@@ -222,6 +242,7 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
 
       await page.evaluate(()=>{window.projectionState.config.answersAvailable=false;window.sendSnapshot();});
       const liveChip=page.locator('[data-question]').last();
+      assert.equal(await liveChip.textContent(),'Live camera availability');
       assert.equal(await liveChip.isEnabled(),true,'Local live-view status is available without a research service or destination');
       assert.equal(await page.locator('[data-question]').first().isEnabled(),false,'Sourced questions still require research availability');
       await liveChip.click();
