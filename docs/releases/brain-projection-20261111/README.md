@@ -69,7 +69,7 @@ The no-referrer runbook and offline preflight description now require actual hea
 
 The allowed acceptance-origin rendering observation is complete and does not need to be repeated merely because `overallVerification` remains `NOT_ESTABLISHED`. That field intentionally does not certify the whole production rollout.
 
-Unapproved-origin denial is now observed on the controlled host above, and disallowed-API rejection is recorded below. Remaining evidence under the [activation runbook](../../../backend/brain_projection/README.md) includes the approved production host, actual missing-referrer request behavior, and the applicable billing/usage review. Native iPhone/Android WebView rendering, closure/backgrounding, attribution links, and microphone continuity remain separate device checks. Private server-side geocoding configuration is independent of map rendering and the existing account-bound Directions entitlement.
+Unapproved-origin denial is now observed on the controlled host above; disallowed-API rejection and an instrumented Chromium no-referrer run are recorded below. Remaining evidence under the [activation runbook](../../../backend/brain_projection/README.md) includes the approved production host and the applicable billing/usage review. The Chromium capture does not measure the owner's earlier iPad requests. Native iPhone/Android WebView rendering, request behavior, closure/backgrounding, attribution links, and microphone continuity remain separate device checks. Private server-side geocoding configuration is independent of map rendering and the existing account-bound Directions entitlement.
 
 ### Initial API allowlist probes on November 12
 
@@ -109,6 +109,32 @@ Redirect request IDs are correlated only when their extra-info expectations and 
 The browser uses a local HTTPS CONNECT boundary that allows only this acceptance hostname and Google resource domains on port 443. TLS stays end to end; the boundary does not inspect or rewrite HTTP headers or CORS preflights. QUIC is disabled for that boundary, and the transport difference is explicitly recorded. This is a Chromium diagnostic run, not a measurement of the owner's iPad or a substitute for native device acceptance.
 
 The separate `brain-projection-live-headers.yml` workflow is limited to the dated test branch, with an explicit manual trigger and push paths restricted to its three audit files. Documentation/evidence commits do not trigger another provider run. It uses read-only repository permissions, pinned actions and Playwright 1.56.1, with bounded time, request, event and connection counts. The existing offline provider checks remain offline. Nineteen focused synthetic tests passed before any live execution; independent code review found no remaining blockers. A successful workflow alone is not a passing restriction result: review the sanitized report's actual observations.
+
+### Live Chromium no-referrer measurement
+
+The [unaltered instrumented report](ci-chromium-no-referrer-headers-20261112.json) began at `2026-11-12T03:32:00.210Z` and ran for 8,237 ms. It used Chromium `141.0.7390.37`, Playwright `1.56.1` and the actual Google Maps JavaScript SDK `3.65.14a` on acceptance version 4. One Load action was performed with no navigation or scene retries. The page reported a ready, steady scene, zero CSP violations, no map/loader/page errors and no provider error code. Its Close action was recorded at `2026-11-12T03:32:07.748Z`; the pre-close and post-close evidence remain separate.
+
+CDP request extra-info measured these three recognized requests, each with complete single-hop correlation, no cache/service-worker response and no HTTP `Referer` header:
+
+| Recognized request | Method | Network response | Measured Referer |
+| --- | --- | --- | --- |
+| Maps SDK bootstrap (`/maps/api/js`) | GET | 200 | Absent |
+| Maps 3D configuration (`GetMap3DConfig`) preflight | OPTIONS | 200 | Absent |
+| Maps 3D configuration (`GetMap3DConfig`) | POST | 200 | Absent |
+
+No separate `AuthenticationService.Authenticate` request was observed in this run. All three recognized requests were covered; the CDP-only preflight was included. The report records 307 Playwright requests, 309 CDP requests and 1,545 CDP events, with no resource limit or incomplete correlation. The CONNECT boundary recorded 16 connection attempts and three blocked connections; it did not intercept TLS or modify HTTP headers. The blocked destinations and purposes were not retained. These observations describe this bounded CI browser configuration, including its transport boundary; they do not describe every Google request or the owner's iPad. Ready/steady is renderer telemetry and does not establish a visual, controls or attribution observation in this run.
+
+The measured result is `ALL_OBSERVED_RECOGNIZED_REQUESTS_OMITTED_REFERER`. The scene still reached ready on an approved origin. This is consistent with the earlier SDK source finding that the SDK can include page-origin data separately from the HTTP Referer header; it does not identify Google's exact authorization decision. The independently observed wrong-origin denial remains the website-restriction check. No checkbox attestation was changed, no missing-referrer denial is claimed, and `providerVerified: false`, `productionActivation: false` and `overallVerification: NOT_ESTABLISHED` remain in the report.
+
+Capture provenance:
+
+- Tested commit: `905887afd2d0666173f87039fb10ce9d534e6657`; tree: `f54c8d75ee1b2dfb87f142bf589943c980412eb1`.
+- [PR 65](https://github.com/digiplayja-design/Ai-wiz-command-center/pull/65) merged the reviewed audit and API-denial evidence into the release branch as `5d65c4abb0fcaf2dcf22915e0a359f1dc342a5ff`. This source merge did not deploy production or rerun the isolated provider capture.
+- [Live workflow run 43148787188](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43148787188), job `130952800077`, completed successfully, including all 19 offline audit tests.
+- [Regression run 43148793828](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43148793828), job `130952821174`, passed all 167 backend tests, the browser CSP enforcement fixture and nine maps3d contract scenarios. Those browser fixtures forwarded no external provider requests.
+- Artifact ID: `13912982208`, `projection-live-browser-header-audit`; archive SHA-256: `2dbf0cf8bdc6a39caa816177c501f4d550185722e892790962f461c008ac052f`.
+- Preserved report SHA-256: `c3bae1482a4341106d6d4d03f8f1d13946a7aa63f72b50cc6295cf6c5f48f5fc`.
+- Initial workflow run `43148504782` was rejected before any job because `runner.temp` was used at job environment scope. Moving that expression to the two execution-step environments corrected the configuration. The initial rejected run made no provider request; the successful run above was the single live capture.
 
 ### Native candidate audit
 

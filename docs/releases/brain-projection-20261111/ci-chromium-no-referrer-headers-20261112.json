@@ -1,0 +1,191 @@
+{
+  "auditVersion": 1,
+  "target": "https://korlix-projection-check-20261111.onrender.com/no-referrer",
+  "scenario": "no-referrer",
+  "productionActivation": false,
+  "overallVerification": "NOT_ESTABLISHED",
+  "providerVerified": false,
+  "testerAttestationPerformed": false,
+  "evidenceSources": {
+    "headers": "CDP Network.requestWillBeSentExtraInfo only; not a server-side receipt.",
+    "dom": "Public sanitized #evidence text; page/loader policy settings are not header evidence."
+  },
+  "playwrightVersion": "1.56.1",
+  "browserVersion": "141.0.7390.37",
+  "startedAt": "2026-11-12T03:32:00.210Z",
+  "loadClicks": 1,
+  "retries": 0,
+  "outcome": "scene-terminal-state-observed",
+  "limits": {
+    "durationMs": 100000,
+    "navigationMs": 45000,
+    "sceneMs": 35000,
+    "drainMs": 3000,
+    "requests": 400,
+    "events": 8000,
+    "records": 64,
+    "hops": 16,
+    "tunnels": 80
+  },
+  "closedPopups": 0,
+  "transport": {
+    "kind": "local-https-connect-boundary",
+    "tlsIntercepted": false,
+    "httpHeadersModified": false,
+    "playwrightRequestInterception": false,
+    "quicDisabled": true,
+    "connections": 16,
+    "blockedConnections": 3,
+    "limited": false
+  },
+  "navigationStatus": 200,
+  "sceneDomEvidence": {
+    "acceptanceVersion": 4,
+    "origin": "https://korlix-projection-check-20261111.onrender.com",
+    "scenario": "no-referrer",
+    "productionActivation": false,
+    "overallVerification": "NOT_ESTABLISHED",
+    "startedAt": "2026-11-12T03:32:01.028Z",
+    "closedAt": null,
+    "rendererStatus": "ready",
+    "sdk": {
+      "started": true,
+      "loader": {
+        "channel": "quarterly",
+        "loading": "async",
+        "authorizationReferrerPolicy": "origin",
+        "scriptReferrerPolicy": "no-referrer"
+      },
+      "sdkVersion": "3.65.14a",
+      "steady": true,
+      "everSteady": true,
+      "steadyEvents": 1,
+      "animationEnds": 0,
+      "mapError": false,
+      "loaderError": false,
+      "pageError": false,
+      "cspViolations": 0,
+      "cspEvents": [],
+      "providerErrorCodes": [],
+      "documentReferrerPolicy": "no-referrer"
+    },
+    "tester": {
+      "googleSdkAndAuthorizationRequestsHadNoReferer": false
+    }
+  },
+  "closedDomEvidence": {
+    "acceptanceVersion": 4,
+    "origin": "https://korlix-projection-check-20261111.onrender.com",
+    "scenario": "no-referrer",
+    "productionActivation": false,
+    "overallVerification": "NOT_ESTABLISHED",
+    "startedAt": "2026-11-12T03:32:01.028Z",
+    "closedAt": "2026-11-12T03:32:07.748Z",
+    "rendererStatus": "ready",
+    "sdk": {
+      "started": true,
+      "loader": {
+        "channel": "quarterly",
+        "loading": "async",
+        "authorizationReferrerPolicy": "origin",
+        "scriptReferrerPolicy": "no-referrer"
+      },
+      "sdkVersion": "3.65.14a",
+      "steady": true,
+      "everSteady": true,
+      "steadyEvents": 1,
+      "animationEnds": 0,
+      "mapError": false,
+      "loaderError": false,
+      "pageError": false,
+      "cspViolations": 0,
+      "cspEvents": [],
+      "providerErrorCodes": [],
+      "documentReferrerPolicy": "no-referrer"
+    },
+    "tester": {
+      "googleSdkAndAuthorizationRequestsHadNoReferer": false
+    }
+  },
+  "failureStage": null,
+  "durationMs": 8237,
+  "hardDurationLimitReached": false,
+  "network": {
+    "headerCharacterization": "ALL_OBSERVED_RECOGNIZED_REQUESTS_OMITTED_REFERER",
+    "noRefererObservedForAllRecognizedRequests": true,
+    "scope": "Only the recognized SDK/authentication/configuration requests observed in this Chromium run; not all Google traffic or iPad headers.",
+    "counts": {
+      "playwrightRequests": 307,
+      "cdpRequests": 309,
+      "cdpEvents": 1545,
+      "recognizedRequests": 3,
+      "families": {
+        "sdk-bootstrap": 1,
+        "sdk-authentication": 0,
+        "map3d-config": 2
+      },
+      "allPlaywrightRecognizedRequestsCovered": true,
+      "cdpOnlyRecognizedRequests": 1,
+      "expectedFamiliesObserved": true,
+      "correlationIncomplete": false,
+      "unmatchedResponseEvents": 0
+    },
+    "limited": false,
+    "requests": [
+      {
+        "request": 11,
+        "hop": 1,
+        "family": "sdk-bootstrap",
+        "origin": "https://maps.googleapis.com",
+        "path": "/maps/api/js",
+        "method": "GET",
+        "redirectChain": false,
+        "correlation": "single-hop",
+        "extraInfoReceived": true,
+        "extraInfoExpected": true,
+        "refererState": "absent",
+        "refererOrigin": null,
+        "status": 200,
+        "statusSource": "response-extra-info",
+        "completion": "finished",
+        "cacheOrServiceWorker": false
+      },
+      {
+        "request": 23,
+        "hop": 1,
+        "family": "map3d-config",
+        "origin": "https://maps.googleapis.com",
+        "path": "/$rpc/google.internal.maps.mapsjs.v1.MapsJsInternalService/GetMap3DConfig",
+        "method": "OPTIONS",
+        "redirectChain": false,
+        "correlation": "single-hop",
+        "extraInfoReceived": true,
+        "extraInfoExpected": true,
+        "refererState": "absent",
+        "refererOrigin": null,
+        "status": 200,
+        "statusSource": "response-extra-info",
+        "completion": "finished",
+        "cacheOrServiceWorker": false
+      },
+      {
+        "request": 24,
+        "hop": 1,
+        "family": "map3d-config",
+        "origin": "https://maps.googleapis.com",
+        "path": "/$rpc/google.internal.maps.mapsjs.v1.MapsJsInternalService/GetMap3DConfig",
+        "method": "POST",
+        "redirectChain": false,
+        "correlation": "single-hop",
+        "extraInfoReceived": true,
+        "extraInfoExpected": true,
+        "refererState": "absent",
+        "refererOrigin": null,
+        "status": 200,
+        "statusSource": "response-extra-info",
+        "completion": "finished",
+        "cacheOrServiceWorker": false
+      }
+    ]
+  }
+}
