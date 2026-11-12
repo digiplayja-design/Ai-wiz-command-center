@@ -1,17 +1,15 @@
-KORLIX Brain+Voice 1.0.2 — voice connection startup fix
+KORLIX Brain+Voice 1.0.2 — VR address and Projection refresh
 
-This build fixes an early voice-setup confirmation being mistaken for a failed connection. Rici keeps the microphone closed until the final setup is confirmed, then shows “Rici is listening.” Connection failures now remain visible on the conversation screen. The Account screen displays the version and build actually installed.
+This candidate improves address commands and refreshes Projection availability when you close and reopen it. It retains the voice connection fix from build 16. “Explore address in 3D” and “Live camera availability” now identify separate actions, and address search and 3D imagery have separate availability messages.
 
-Please test on the physical iPhone or iPad: let Rici’s welcome finish, tap Talk to Rici, allow the microphone if asked, wait for “Rici is listening,” then ask “Rici, can you hear me?” Confirm a spoken answer and a second conversational turn. Repeat after skipping the welcome. Try Pause, Resume, and Stop while connecting. If listening never appears, capture the visible status and the installed build from Account. This is a targeted startup fix; physical-device voice success still needs confirmation.
+Please test on a physical iPhone or iPad:
+1. Start a conversation, wait for “Rici is listening,” and say “Enter VR.” Open the address controls in Projection.
+2. Say “Show me 1 Market Street, San Francisco, CA 94105,” then try “Show 1 Market Street, San Francisco, CA 94105 in 3D.” Check that the complete address is preserved. Review and confirm the destination candidate before displaying it. Also try entering an address or public landmark with the keyboard.
+3. Where 3D imagery is enabled, check the selected location and camera movement. This is recorded map imagery; requesting live camera availability does not establish that a live feed exists. Requests for live cameras or general research should not be treated as these address-display commands.
+4. Close Projection and reopen it. Check that current address-search and imagery availability is loaded again. After a network interruption, distinguish a failed availability check from a service that is not connected. Reopening refreshes status; it does not enable a missing provider service.
 
-Pause, Resume and Stop are separate controls in conversation and Projection views. Pause closes microphone audio and the active usage session. Resume reconnects in the same mode with recent conversation context after the previous session is confirmed closed. Stop clears resumable context. Live Conversation also has refreshed authentication for usage reports, reliable heartbeat timing and clearer balance/session errors.
+Voice checks: let Rici’s welcome finish, tap Talk to Rici, allow the microphone if asked, wait for “Rici is listening,” and ask “Rici, can you hear me?” Confirm a spoken answer and a second turn. Repeat after skipping the welcome. Try Pause, Resume, and Stop while connecting and during speech. Check that Pause closes microphone audio, Resume reconnects with recent context in the same mode, and Stop clears resumable context. If listening does not appear, record the visible connection message and the installed version/build from Account.
 
-Upload PDF from Home or the Memory/Training file action. Choose Memory, Training, or both; review and edit the extracted knowledge before approving a save. Existing text, Markdown, DOCX, CSV and JSON imports remain available. Training imports append to current instructions after review.
+Existing PDF review/save to Memory or Training, Camera Ask, directions, account, plan, AI GAS, welcome, ambience, and transcript controls are unchanged in this update. A brief regression check of PDF import, camera capture, and opening directions in Apple or Google Maps is useful.
 
-Camera Ask uses the same image-analysis service as KORLIX AI: take or select up to three photos, choose an analysis mode, ask follow-ups, and copy, share or report the answer. Camera Ask uses the existing shared credit allowance and answer history. It does not automatically save Memory or Training.
-
-Directions access is enabled for the requested support account. Enter or speak the complete destination, choose driving/walking/transit, review it, and open Apple or Google Maps. The map app confirms the address match before navigation. Embedded Projection imagery still depends on separately verified map-provider configuration.
-
-Device checks: try Pause during speech, Resume, Stop while connecting, sign-out/account switching, a network interruption, and a long Live Conversation. Verify microphone/speaker shutdown, restored context, current balance, PDF review/save, camera permission and capture, and both Maps choices. New native behavior must be tested on physical iOS and Android devices before store release.
-
-Existing account, plan, AI GAS, welcome, ambience, and transcript controls are preserved. This candidate does not activate store billing or submit an App Store release.
+Report the installed build, device, exact request, selected destination, visible status, and whether speech and imagery worked. Address search and embedded 3D imagery still depend on the deployed provider configuration. This candidate does not establish completed native-map acceptance, activate store billing, or submit an App Store release.
