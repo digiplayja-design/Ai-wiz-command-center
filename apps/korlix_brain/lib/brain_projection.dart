@@ -1035,12 +1035,12 @@ class BrainProjection extends ChangeNotifier {
   static String _originalCommand(String transcript) {
     var command = transcript.trim();
     final wrapper = RegExp(
-      r'^(?:(?:hey|okay|ok|please|' +
-          _riciVocative +
-          r')[,.:!?\s]+|'
-              r'(?:can|could|would|will)\s+you[,.:!?\s]+|'
-              r'i(?:\s+would|[\x27’]d)?\s+like\s+you\s+to\s+|'
-              r'i\s+(?:want|need)\s+you\s+to\s+)',
+      r'^(?:(?:hey|okay|ok|please|'
+      '$_riciVocative'
+      r')[,.:!?\s]+|'
+      r'(?:can|could|would|will)\s+you[,.:!?\s]+|'
+      r'i(?:\s+would|[\x27’]d)?\s+like\s+you\s+to\s+|'
+      r'i\s+(?:want|need)\s+you\s+to\s+)',
       caseSensitive: false,
     );
     // ASR may place the name before or after a polite request. Remove only
@@ -1056,7 +1056,9 @@ class BrainProjection extends ChangeNotifier {
 
   static String _viewCommand(String command) {
     final wrapper = RegExp(
-      r'[,.:!?\s]+(?:' + _riciVocative + r'|please|for me)[.!?\s]*$',
+      r'[,.:!?\s]+(?:'
+      '$_riciVocative'
+      r'|please|for me)[.!?\s]*$',
       caseSensitive: false,
     );
     // A trailing “Rici” is a vocative for explicit view controls only. Keep
