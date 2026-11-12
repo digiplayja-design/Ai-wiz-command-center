@@ -6,8 +6,80 @@ import {createAcceptanceServer, acceptanceMapPolicy, acceptancePort} from '../br
 import {observeLoader} from '../brain_projection/acceptance/frame.mjs';
 import {cameraControlsReady, classifyObservation, sanitizeEvidence, providerErrorCode, summarizeCspViolation} from '../brain_projection/acceptance/evidence.mjs';
 import {rendererPolicy} from '../brain_projection/renderer.mjs';
+import {API_RESTRICTION_ENDPOINT, createApiRestrictionProbe, summarizeApiRestriction} from '../brain_projection/acceptance/api-restriction.mjs';
 
 const candidate = 'acceptance-browser-fixture-not-a-real-key';
+const apiDenied = (reason = 'API_KEY_SERVICE_BLOCKED', service = 'identitytoolkit.googleapis.com') => ({
+  error: {code: 403, status: 'PERMISSION_DENIED', message: 'private-provider-message', details: [{
+    '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason, domain: 'googleapis.com',
+    metadata: {service, consumer: 'private-consumer', key: candidate},
+  }]},
+});
+
+test('API restriction observation requires a specific service denial and excludes raw provider content', () => {
+  const positive = summarizeApiRestriction(403, apiDenied());
+  assert.equal(positive.observation, 'DISALLOWED_API_DENIAL_OBSERVED');
+  assert.doesNotMatch(JSON.stringify(positive), /private-|consumer|acceptance-browser-fixture/);
+  for (const body of [apiDenied('SERVICE_DISABLED'), apiDenied('API_KEY_HTTP_REFERRER_BLOCKED'),
+    apiDenied('API_KEY_INVALID'), apiDenied('BILLING_DISABLED'), apiDenied('API_KEY_SERVICE_BLOCKED', 'other.googleapis.com'),
+    {error: {...apiDenied().error, status: 'UNAUTHENTICATED'}}, {error: {...apiDenied().error, code: 401}},
+    {error: {...apiDenied().error, details: [...apiDenied().error.details, ...apiDenied('SERVICE_DISABLED').error.details]}},
+    {error: {...apiDenied().error, details: [...apiDenied().error.details, ...Array(19).fill({}), ...apiDenied('SERVICE_DISABLED').error.details]}},
+    {error: {...apiDenied().error, details: [{...apiDenied().error.details[0], domain: 'example.test'}]}},
+    {error: {...apiDenied().error, details: [{...apiDenied().error.details[0], '@type': 'arbitrary'}]}},
+    {error: {...apiDenied().error, details: [{...apiDenied().error.details[0], reason: candidate}]}},
+    {authorizedDomains: ['private-fixture']}, null]) {
+    const result = summarizeApiRestriction(403, body);
+    assert.equal(result.observation, 'API_RESTRICTION_CHECK_INCONCLUSIVE');
+    assert.doesNotMatch(JSON.stringify(result), /private-|consumer|acceptance-browser-fixture/);
+  }
+  for (const status of [200, 302, 401, 429, 503, undefined]) {
+    assert.equal(summarizeApiRestriction(status, apiDenied()).observation, 'API_RESTRICTION_CHECK_INCONCLUSIVE');
+  }
+});
+
+test('browser API probe makes only one fixed read-only attempt with normal referrer policy', async () => {
+  const requests = [];
+  const run = createApiRestrictionProbe({browserKey: candidate, origin: 'https://acceptance.example',
+    fetchImpl: async (url, options) => { requests.push({url, options}); return Response.json(apiDenied(), {status: 403}); }});
+  assert.equal(requests.length, 0);
+  const report = await run();
+  assert.equal(report.observation, 'DISALLOWED_API_DENIAL_OBSERVED');
+  assert.equal(report.productionActivation, false);
+  assert.equal(report.overallVerification, 'NOT_ESTABLISHED');
+  assert.equal(report.request.actualRefererHeader, 'NOT_CAPTURED_BY_PAGE');
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].url, API_RESTRICTION_ENDPOINT);
+  assert.equal(requests[0].options.method, 'GET');
+  assert.equal(requests[0].options.credentials, 'omit');
+  assert.equal(requests[0].options.redirect, 'error');
+  assert.equal(requests[0].options.referrerPolicy, 'strict-origin-when-cross-origin');
+  assert.deepEqual(Object.keys(requests[0].options.headers).sort(), ['Accept', 'X-Goog-Api-Key']);
+  assert.equal(requests[0].options.headers['X-Goog-Api-Key'], candidate);
+  assert.equal(requests[0].options.body, undefined);
+  assert.equal(requests[0].options.referrer, undefined);
+  assert.doesNotMatch(JSON.stringify(report), /private-|consumer|acceptance-browser-fixture/);
+  await assert.rejects(run(), /already attempted/);
+  assert.equal(requests.length, 1);
+});
+
+test('API probe setup, transport, malformed and oversized responses remain inconclusive without retries', async () => {
+  let calls = 0;
+  const missing = await createApiRestrictionProbe({browserKey: '', fetchImpl: () => { calls++; throw Error('must not fetch'); }})();
+  assert.equal(missing.observation, 'NOT_PERFORMED');
+  assert.equal(calls, 0);
+  for (const fetchImpl of [async () => {throw Error(candidate);}, async () => new Response('malformed-private-response'),
+    async () => new Response('x'.repeat(65537)), async () => new Response(null)]) {
+    const run = createApiRestrictionProbe({browserKey: candidate, origin: 'https://acceptance.example',
+      fetchImpl: async (...args) => {calls++; return fetchImpl(...args);}});
+    const before = calls;
+    const report = await run();
+    assert.equal(calls, before + 1);
+    assert.equal(report.observation, 'API_RESTRICTION_CHECK_INCONCLUSIVE');
+    assert.equal(report.request.providerFetchAttempts, 1);
+    assert.doesNotMatch(JSON.stringify(report), /private-response|acceptance-browser-fixture/);
+  }
+});
 async function serve(t, options) {
   const server = createAcceptanceServer(options);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -23,6 +95,26 @@ async function serve(t, options) {
   });
   return request;
 }
+
+test('API probe page has only the fixed Google endpoint in its connection policy and waits for a click', async t => {
+  const request = await serve(t, {browserKey: candidate});
+  const response = await request('/api-restriction');
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  assert.equal(response.headers.get('referrer-policy'), 'strict-origin-when-cross-origin');
+  const policy = response.headers.get('content-security-policy');
+  assert.match(policy, /connect-src https:\/\/identitytoolkit\.googleapis\.com;/);
+  assert.doesNotMatch(policy, /unsafe-inline|unsafe-eval|\*|https:\/\/maps/);
+  const token = /script-src 'nonce-([^']+)'/.exec(policy)[1];
+  const html = await response.text();
+  assert.match(html, new RegExp(`src="/acceptance/api-restriction.mjs" nonce="${token}"`));
+  assert.match(html, /id="api-check">Check API restriction/);
+  assert.doesNotMatch(html, /<iframe|<script[^>]+(?:earth\.mjs|maps\.googleapis\.com)/);
+  assert.match(html, /actual outgoing headers|Actual outgoing headers/);
+  assert.equal((await request('/acceptance/api-restriction.mjs')).status, 200);
+  const missing = await serve(t);
+  assert.match(await (await missing('/api-restriction')).text(), /id="api-check" disabled/);
+});
 
 test('missing candidate key leaves setup explicit and never reads production configuration', async t => {
   const names = ['BRAIN_PROJECTION_MAPS_JS_BROWSER_KEY', 'BRAIN_PROJECTION_MAPS_JS_RESTRICTIONS_VERIFIED', 'BRAIN_PROJECTION_GEOCODING_KEY', 'OPENAI_API_KEY'];

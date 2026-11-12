@@ -25,10 +25,27 @@ const assets = new Map([
   ['/acceptance/client.mjs', new URL('./client.mjs', import.meta.url)],
   ['/acceptance/frame.mjs', new URL('./frame.mjs', import.meta.url)],
   ['/acceptance/evidence.mjs', new URL('./evidence.mjs', import.meta.url)],
+  ['/acceptance/api-restriction.mjs', new URL('./api-restriction.mjs', import.meta.url)],
   ['/brain-projection/earth.mjs', new URL('../public/earth.mjs', import.meta.url)],
   ['/brain-projection/camera.mjs', new URL('../public/camera.mjs', import.meta.url)],
   ['/brain-projection/earth.css', new URL('../public/earth.css', import.meta.url)],
 ]);
+
+function apiRestrictionPage({key, token}) {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin"><meta name="korlix-map-key" content="${key}">
+<title>Projection API restriction check</title>
+<style nonce="${token}">:root{color-scheme:dark;font:16px/1.6 system-ui,sans-serif;background:#07131e;color:#eaf5fc}body{max-width:960px;margin:32px auto;padding:20px}button{font:inherit;padding:12px 18px;border-radius:8px;background:#88e7d1;color:#05251c;border:0}button:disabled{opacity:.5}a{color:#a0d9ff}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#102333;padding:20px;border-radius:12px;font-size:13px}#api-status{font-weight:700}</style>
+<script type="module" src="/acceptance/api-restriction.mjs" nonce="${token}"></script></head><body>
+<h1>Projection API restriction check</h1><p>Test origin: <strong id="origin"></strong></p>
+<p>This check makes one read-only request to Google’s public Identity Toolkit configuration endpoint using the existing Maps browser key. The browser sends its normal referrer. No account sign-in, user data, Maps SDK or production activation is involved.</p>
+<p>Only Google’s specific API_KEY_SERVICE_BLOCKED response for Identity Toolkit establishes this observation. A missing-referrer, disabled-service, billing, network or generic error is inconclusive.</p>
+<button id="api-check"${key ? '' : ' disabled'}>Check API restriction</button>
+<p id="api-status" role="status" aria-live="polite">${key ? 'Ready. No provider request has been made.' : 'The acceptance browser key is not configured.'}</p>
+<pre id="api-evidence">No observation recorded.</pre>
+<p>The result excludes the key, raw provider messages, account configuration and response headers. Browser-generated CORS preflight may precede the single API request. Actual outgoing headers require a separate browser capture.</p>
+<p><a href="/">Return to the map check</a></p></body></html>`;
+}
 
 function shell({keyPresent, mode, token}) {
   const negative = mode === 'no-referrer', wrongOrigin = mode === 'wrong-origin';
@@ -88,6 +105,11 @@ export function createAcceptanceServer({browserKey = ''} = {}) {
     try {
       if (path === '/health') return send(200, 'application/json; charset=utf-8', JSON.stringify({service: 'projection-map-acceptance', ready: true, candidateKeyConfigured: Boolean(key), productionActivation: false}));
       if (path === '/favicon.ico') return send(204, 'image/x-icon', '');
+      if (path === '/api-restriction') {
+        const token = nonce();
+        const policy = `default-src 'none'; script-src 'nonce-${token}' 'strict-dynamic' 'self'; style-src 'nonce-${token}'; connect-src https://identitytoolkit.googleapis.com; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`;
+        return send(200, 'text/html; charset=utf-8', apiRestrictionPage({key, token}), policy);
+      }
       if (['/', '/no-referrer', '/wrong-origin'].includes(path)) {
         const token = nonce(), mode = path === '/' ? 'standard' : path.slice(1);
         return send(200, 'text/html; charset=utf-8', shell({keyPresent: Boolean(key), mode, token}), shellPolicy(token), mode === 'no-referrer' ? 'no-referrer' : 'strict-origin-when-cross-origin');
