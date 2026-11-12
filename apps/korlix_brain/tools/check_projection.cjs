@@ -25,7 +25,7 @@ async function fixture(page) {
     window.testGeocodingProvider = 'Test geocoder';
     window.projectionState = {
       open:true,room:'command',loading:false,selectedPlace:null,candidates:[],answer:null,notice:'',
-      camera:{sequence:0,operation:'reset'},
+      camera:{sequence:0,operation:'reset',viewMode:'street'},
       config:{rendererUrl:null,mapAvailable:false,geocodingAvailable:true,directionsAvailable:true,answersAvailable:true,answerCredits:4,answerCostLabel:'4 credits per successful sourced lookup.'},
       voice:{active:false,paused:false,phase:'complete',message:'Ready when you are'}
     };
@@ -45,7 +45,7 @@ async function fixture(page) {
           state.notice='Choose a matching destination to confirm.'; window.sendSnapshot(); return reply({requiresConfirmation:true});
         case 'select':
           state.selectedPlace=state.candidates.find(place=>place.id===command.payload.placeId); state.candidates=[]; state.answer=null;
-          state.camera={sequence:state.camera.sequence+1,operation:'flyTo',latitude:state.selectedPlace.latitude,longitude:state.selectedPlace.longitude,height:800};
+          state.camera={sequence:state.camera.sequence+1,operation:'flyTo',viewMode:'street',latitude:state.selectedPlace.latitude,longitude:state.selectedPlace.longitude,height:800};
           state.notice='Destination confirmed.'; window.sendSnapshot(); return reply({selected:true});
         case 'ask':
           if(/\b(live|real[ -]?time)\b.*\b(view|camera|feed|video|imagery)\b/i.test(command.payload.question)){
@@ -55,7 +55,13 @@ async function fixture(page) {
           window.testResearchCalls++;
           state.answer={text:'This is a sourced response fixture, not a claim about a real place. [1]',scope:'Confirmed destination',date:'2026-11-07',sources:[{title:'Test source',url:'https://example.com/source',date:'2026-11-07'}]};
           window.sendSnapshot(); return reply({answered:true});
-        case 'camera': state.camera={...state.camera,sequence:state.camera.sequence+1,operation:command.payload.operation}; window.sendSnapshot(); return reply({moved:true});
+        case 'camera': {
+          const mode = ['streetView','earthView'].includes(command.payload.operation);
+          state.camera={...state.camera,sequence:state.camera.sequence+1,
+            operation:mode?'flyTo':command.payload.operation,
+            viewMode:mode?(command.payload.operation==='earthView'?'earth':'street'):state.camera.viewMode};
+          window.sendSnapshot(); return reply({moved:true});
+        }
         case 'directions': return reply({ok:true,answer:'Review the full address and choose a maps app for directions.'});
         case 'savePlace':
           if(window.testFailSave)return reply(null,'Storage is unavailable. Your note has not been saved.');
@@ -147,7 +153,7 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
     const frame=document.querySelector('#map-container iframe'),stage=document.getElementById('scene-stage');
     const shell=document.querySelector('.projection-shell'),dock=document.querySelector('.voice-dock'),stop=document.getElementById('stop-button');
     const rect=frame.getBoundingClientRect(),button=stop.getBoundingClientRect();
-    const selectors=['.scene-topline','.scene-heading','.map-badge','.world-caption','.camera-controls','.place-banner','.room-architecture','.scene-crosshair','#world-canvas','.voice-dock'];
+    const selectors=['.scene-topline','.scene-heading','.map-badge','.world-caption','.camera-controls','.place-banner','.room-architecture','.scene-crosshair','#world-canvas','.voice-dock','.view-toolbar','.voice-command-feedback'];
     const points=[[rect.left+2,rect.top+2],[rect.right-2,rect.top+2],[rect.left+2,rect.bottom-2],[rect.right-2,rect.bottom-2],[rect.left+rect.width/2,rect.top+rect.height/2]];
     return {frame:rect.toJSON(),shell:shell.getBoundingClientRect().toJSON(),dock:dock.getBoundingClientRect().toJSON(),stop:button.toJSON(),
       width:innerWidth,height:innerHeight,phase:document.body.dataset.map,renderer:document.body.dataset.renderer,
@@ -204,24 +210,24 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
       page.on('pageerror',error=>errors.push(error.message));
       await fixture(page);
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'No horizontal overflow at '+width);
-      assert.equal(await page.locator('#world-caption-text').textContent(),'3D imagery is not connected yet.');
-      assert.equal(await page.locator('label[for="destination-input"]').textContent(),'Explore address in 3D');
+      assert.equal(await page.locator('#world-caption-text').textContent(),'Property imagery is not connected yet.');
+      assert.equal(await page.locator('label[for="destination-input"]').textContent(),'Explore a property');
       assert.equal(await page.locator('label[for="destination-input"]').isVisible(),true,'Address exploration is visibly labeled at '+width);
       assert.equal(await page.locator('#search-button').isEnabled(),true,'Address lookup is available independently of 3D imagery');
       await page.evaluate(()=>{window.projectionState.config.checking=true;window.sendSnapshot();});
       assert.equal(await page.locator('#search-button').isEnabled(),false,'Address lookup waits for fresh capabilities');
-      assert.equal(await page.locator('#search-help').first().textContent(),'Checking address search…Confirm a result before traveling.');
-      assert.equal(await page.locator('#world-caption-text').textContent(),'Checking 3D imagery…');
+      assert.equal(await page.locator('#search-help').first().textContent(),'Checking address search…Confirm a result to open Street View.');
+      assert.equal(await page.locator('#world-caption-text').textContent(),'Checking property imagery…');
       await page.locator('#destination-input').fill('10 Downing Street, London SW1A 2AA');
       await page.locator('#search-form').evaluate(form=>form.requestSubmit());
       assert.equal(await page.evaluate(()=>window.projectionCommands.some(c=>c.action==='search')),false,'Submitting during refresh cannot use stale capabilities');
       await page.evaluate(()=>{window.projectionState.config.checking=false;window.projectionState.config.geocodingAvailable=false;window.sendSnapshot();});
       assert.equal(await page.locator('#search-button').isEnabled(),false);
       assert.match(await page.locator('#search-help').textContent(),/Address search is not connected yet/);
-      assert.match(await page.locator('#world-caption-text').textContent(),/3D imagery is not connected yet/);
+      assert.match(await page.locator('#world-caption-text').textContent(),/Property imagery is not connected yet/);
       await page.evaluate(()=>{window.projectionState.config.checkFailed=true;window.sendSnapshot();});
       assert.match(await page.locator('#search-help').textContent(),/Could not check address search\. Close and reopen Projection to try again\./);
-      assert.match(await page.locator('#world-caption-text').textContent(),/Could not check 3D imagery/);
+      assert.match(await page.locator('#world-caption-text').textContent(),/Could not check property imagery/);
       await page.evaluate(()=>{window.projectionState.config.checkFailed=false;window.projectionState.config.geocodingAvailable=true;window.sendSnapshot();});
       assert.equal(await page.locator('#search-button').isEnabled(),true,'A refreshed address service re-enables search');
       await page.locator('#destination-input').fill('');
@@ -469,14 +475,15 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
       #provider-attribution{position:absolute;left:0;right:0;bottom:0;padding:8px;background:#030b13;overflow-wrap:anywhere}a{color:#b3e1ff}
       </style></head><body><span class="provider-label">Provider surface fixture</span><div class="provider-controls"><button>Map control</button></div><div id="provider-attribution">Google Maps · Synthetic imagery supplied by Example City Survey Office; Example Regional Mapping Group; Example Geospatial Imagery Cooperative; Example Municipal Cartography Archive. Attribution fixture only; no real imagery is requested. <a id="provider-terms" href="https://provider-links.test/terms" target="_blank">Provider link fixture</a></div><script>
       window.received=[];window.addEventListener('message',e=>window.received.push(e.data));
-      window.emitStatus=status=>{document.body.dataset.phase=status;parent.postMessage({type:'korlix-projection-status',status},'*');};
+      window.emitTransport=()=>parent.postMessage({type:'korlix-projection-transport-ready'},'*');
+      window.emitStatus=(status,extra={})=>{document.body.dataset.phase=status;const camera=window.received.at(-1)?.camera;parent.postMessage({type:'korlix-projection-status',status,...(camera?{sequence:camera.sequence,viewMode:camera.viewMode}:{}),...extra},'*');};
       window.emitCreditHeight=height=>parent.postMessage({type:'korlix-projection-credits',height},'*');
       window.emitStatus('loading');
       </script></body></html>`}));
     await fixture(page);
     await page.evaluate(()=>{
       window.projectionState.selectedPlace={id:'renderer-fixture',label:'Camera fixture',address:'Not a real location claim',latitude:40.71,longitude:-74,provider:'Test'};
-      window.projectionState.camera={sequence:1,operation:'flyTo',latitude:40.71,longitude:-74,height:650,heading:0,pitch:-45};
+      window.projectionState.camera={sequence:1,operation:'flyTo',viewMode:'street',latitude:40.71,longitude:-74,height:650,heading:0,pitch:-45};
       window.projectionState.config={...window.projectionState.config,mapAvailable:true,rendererUrl:'https://projection.test/brain-projection/earth.html'};window.sendSnapshot();
     });
     await page.locator('#map-container iframe').waitFor();
@@ -487,7 +494,14 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
     assert.equal(await page.locator('#map-container').isVisible(),true,'The provider owns a visible unobstructed surface while loading');
     assert.equal(await page.locator('#world-canvas').isVisible(),false,'The illustrative globe cannot cover a loading provider');
     assert.equal(await page.locator('[data-camera="closer"]').isEnabled(),false,'Loading is not camera readiness');
-    assert.equal(await renderer.evaluate(()=>window.received.length),0,'Camera commands wait for actual renderer readiness');
+    assert.equal(await renderer.evaluate(()=>window.received.length),0,'Camera commands wait for the verified frame transport');
+    await page.evaluate(()=>window.dispatchEvent(new MessageEvent('message',{origin:'https://attacker.test',source:document.querySelector('iframe').contentWindow,data:{type:'korlix-projection-transport-ready'}})));
+    assert.equal(await renderer.evaluate(()=>window.received.length),0,'A forged handshake cannot release camera commands');
+    await renderer.evaluate(()=>window.emitTransport());
+    await renderer.waitForFunction(()=>window.received.length===1);
+    assert.equal(await renderer.evaluate(()=>window.received[0].camera.viewMode),'street','Street View is the default camera mode');
+    assert.equal(await page.locator('[data-camera="closer"]').isEnabled(),false,'Transport does not claim loaded imagery');
+    assert.equal(await page.locator('[data-camera="stopCamera"]').isEnabled(),true,'Stop stays available while imagery loads');
     await renderer.evaluate(()=>window.emitStatus('ready'));
     await page.waitForFunction(()=>document.body.dataset.map==='ready');
     await renderer.waitForFunction(()=>window.received.length>0);
@@ -596,14 +610,43 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
     assert.equal(await page.evaluate(()=>window.projectionCommands.filter(c=>c.action==='cameraStatus').length),0,'Untrusted/stale camera outcomes never reach native');
     await renderer.evaluate(sequence=>parent.postMessage({type:'korlix-projection-camera-status',sequence,state:'limit',reason:'closest'},'*'),cameraSequence);
     await page.waitForFunction(()=>window.projectionCommands.some(c=>c.action==='cameraStatus'));
-    assert.deepEqual(await page.evaluate(()=>window.projectionCommands.filter(c=>c.action==='cameraStatus').at(-1).payload),{sequence:cameraSequence,state:'limit',reason:'closest'});
+    assert.deepEqual(await page.evaluate(()=>window.projectionCommands.filter(c=>c.action==='cameraStatus').at(-1).payload),{sequence:cameraSequence,viewMode:'street',state:'limit',reason:'closest'});
     await page.locator('[data-camera="stopCamera"]').click();
     await renderer.waitForFunction(()=>window.received.at(-1).camera.operation==='stopCamera');
     assert.equal(await page.evaluate(()=>window.projectionCommands.at(-1).action),'camera','Camera stop is distinct from conversation Stop');
     await renderer.evaluate(()=>window.emitStatus('error'));
     await page.waitForFunction(()=>document.body.dataset.map==='illustration');
-    assert.equal(await page.locator('#world-canvas').isVisible(),true,'Renderer failure returns to honest illustration');
+    assert.equal(await page.locator('#world-canvas').isVisible(),false,'Coverage errors keep the provider status visible without fabricated imagery');
+    assert.equal(await page.locator('[data-camera="closer"]').isEnabled(),false,'Unavailable imagery cannot accept zoom');
+    assert.equal(await page.locator('[data-view-mode="earth"]').isEnabled(),true,'Explicit Earth choice stays available after no coverage');
     assert.equal(await page.evaluate(()=>window.projectionCommands.filter(c=>c.action==='rendererReady').at(-1).payload.status),'error','Renderer failure reaches native so voice cannot claim camera movement');
+    const oldSequence=await page.evaluate(()=>window.projectionState.camera.sequence);
+    await page.locator('[data-view-mode="earth"]').click();
+    await renderer.waitForFunction(()=>window.received.at(-1).camera.viewMode==='earth');
+    assert.equal(await renderer.evaluate(()=>window.received.at(-1).camera.operation),'flyTo','Mode selection uses the existing flyTo contract');
+    assert.equal(await page.locator('[data-view-mode="earth"]').getAttribute('aria-pressed'),'true');
+    await renderer.evaluate(sequence=>window.emitStatus('ready',{sequence,viewMode:'street'}),oldSequence);
+    assert.equal(await page.locator('[data-camera="closer"]').isEnabled(),false,'Stale Street View readiness cannot enable Earth controls');
+    await page.locator('[data-camera="stopCamera"]').click();
+    await renderer.waitForFunction(()=>window.received.at(-1).camera.operation==='stopCamera');
+    assert.equal(await page.locator('[data-camera="closer"]').isEnabled(),false,'Stop crosses the transport without claiming loaded imagery');
+    await renderer.evaluate(()=>window.emitStatus('ready'));
+    await page.waitForFunction(()=>document.body.dataset.map==='ready');
+    assert.match(await page.locator('#map-badge').textContent(),/3D Earth/);
+    await page.locator('[data-view-mode="street"]').click();
+    await renderer.waitForFunction(()=>window.received.at(-1).camera.viewMode==='street');
+    await renderer.evaluate(()=>window.emitStatus('error',{reason:'no-coverage',message:'No recorded Street View is available near this location.'}));
+    await page.waitForFunction(()=>document.getElementById('world-caption-text').textContent.includes('No recorded Street View'));
+    assert.equal(await page.locator('[data-view-mode="street"]').getAttribute('aria-pressed'),'true','No coverage never silently changes to Earth');
+    await page.evaluate(()=>{
+      window.projectionState.lastVoiceCommand={heard:'Reese, zoom in <img src=x onerror=alert(1)>',action:'Zoom in',result:'The property view is unavailable. Try another view.',status:'failed'};
+      window.sendSnapshot();
+    });
+    assert.match(await page.locator('#voice-command-heard').textContent(),/Reese, zoom in <img/);
+    assert.equal(await page.locator('#voice-command-feedback img').count(),0,'Recognized speech is rendered as text');
+    assert.equal(await page.locator('#voice-command-action').textContent(),'Zoom in');
+    assert.equal(await page.locator('#voice-command-feedback').getAttribute('data-status'),'failed');
+    assert.match(await page.locator('#voice-command-result').textContent(),/unavailable/);
     for(const rendererUrl of ['http://projection.test/earth.html','javascript:alert(1)','https://name:password@projection.test/earth.html']){
       await page.evaluate(rendererUrl=>{window.projectionState.config.rendererUrl=rendererUrl;window.sendSnapshot();},rendererUrl);
       assert.equal(await page.locator('iframe').count(),0,'Unsafe renderer URL rejected: '+rendererUrl);

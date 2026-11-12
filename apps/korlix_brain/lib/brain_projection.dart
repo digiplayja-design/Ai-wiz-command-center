@@ -50,10 +50,22 @@ class BrainProjection extends ChangeNotifier {
   int _generation = 0;
   int _configGeneration = 0;
   int _cameraSequence = 0;
+  int _voiceCommandGeneration = 0;
+  int? _voiceCommandCameraSequence;
   Map<String, dynamic>? _place;
   List<Map<String, dynamic>> _candidates = [];
   Map<String, dynamic>? _answer;
-  Map<String, dynamic> _camera = {'sequence': 0, 'operation': 'reset'};
+  Map<String, dynamic> _camera = {
+    'sequence': 0,
+    'operation': 'reset',
+    'viewMode': 'street',
+  };
+  Map<String, dynamic> _lastVoiceCommand = {
+    'heard': '',
+    'action': '',
+    'result': '',
+    'status': 'idle',
+  };
   static Map<String, dynamic> _emptyConfig() => {
     'rendererUrl': null,
     'mapAvailable': false,
@@ -86,6 +98,7 @@ class BrainProjection extends ChangeNotifier {
     'camera': _camera,
     'config': _config,
     'voice': _voice,
+    'lastVoiceCommand': Map<String, dynamic>.of(_lastVoiceCommand),
     'transcript': List<Map<String, dynamic>>.of(_transcript),
   };
 
@@ -99,6 +112,15 @@ class BrainProjection extends ChangeNotifier {
 
   void cancelPending() {
     ++_generation;
+    ++_voiceCommandGeneration;
+    _voiceCommandCameraSequence = null;
+    if (_lastVoiceCommand['status'] == 'running') {
+      _lastVoiceCommand = {
+        ..._lastVoiceCommand,
+        'status': 'interrupted',
+        'result': 'The pending view request was interrupted.',
+      };
+    }
     _loading = false;
     _stopCameraIfMoving();
     _changed();
@@ -131,11 +153,12 @@ class BrainProjection extends ChangeNotifier {
       _rendererStatus = 'loading';
       _awaitingDestination = _place == null && _candidates.isEmpty;
       if (_place != null) {
-        // Closing destroys the Earth frame. Restore the selected destination
+        // Closing destroys the property view. Restore the selected destination
         // before a new frame receives any relative camera operation.
         _camera = {
           'sequence': ++_cameraSequence,
           'operation': 'flyTo',
+          'viewMode': _camera['viewMode'] ?? 'street',
           'latitude': _place!['latitude'],
           'longitude': _place!['longitude'],
           'height': 650,
@@ -189,6 +212,20 @@ class BrainProjection extends ChangeNotifier {
         _stopCameraIfMoving();
         _changed();
       }
+    } else if (event['type'] == 'voiceNotice' && event['message'] is String) {
+      final message = _boundedText(event['message'], 1000);
+      _notice = message;
+      ++_voiceCommandGeneration;
+      _voiceCommandCameraSequence = null;
+      _lastVoiceCommand = event['code'] == 'transcription_failed'
+          ? {
+              'heard': '',
+              'action': 'Speech recognition',
+              'result': message,
+              'status': 'failed',
+            }
+          : {..._lastVoiceCommand, 'result': message, 'status': 'failed'};
+      _changed();
     } else if (event['type'] == 'transcript' && event['text'] is String) {
       _transcript.add({
         'role': event['role'] == 'rici' ? 'rici' : 'you',
@@ -197,9 +234,50 @@ class BrainProjection extends ChangeNotifier {
       if (_transcript.length > 12) {
         _transcript.removeAt(0);
       }
+      if (event['role'] != 'rici' && event['current'] != false) {
+        final heard = _boundedText(event['text'], 2000);
+        final control = _parseVoiceControl(heard);
+        ++_voiceCommandGeneration;
+        _voiceCommandCameraSequence = null;
+        _lastVoiceCommand = {
+          'heard': heard,
+          'action': _controlLabel(control),
+          'result': control == null
+              ? 'No view command recognized. You can keep talking to Rici.'
+              : 'View command recognized.',
+          'status': control == null ? 'unrecognized' : 'heard',
+        };
+      }
       _changed();
     }
   }
+
+  static String _boundedText(Object? value, int maximum) {
+    final text = value is String ? value.trim() : '';
+    return text.length <= maximum ? text : text.substring(0, maximum);
+  }
+
+  static String _controlLabel(_ProjectionVoiceControl? control) =>
+      switch (control?.action) {
+        'open' => 'Open Projection',
+        'close' => 'Close Projection',
+        'search' => 'Find destination',
+        'select' => 'Confirm destination',
+        'room' => 'Change room',
+        'camera' => switch (control!.value) {
+          'streetView' => 'Street View',
+          'earthView' => 'Overhead view',
+          'closer' => 'Zoom in',
+          'farther' => 'Zoom out',
+          'zoomInContinuous' => 'Keep zooming in',
+          'zoomOutContinuous' => 'Keep zooming out',
+          'stopCamera' => 'Stop zooming',
+          'left' => 'Turn left',
+          'right' => 'Turn right',
+          _ => 'Reset view',
+        },
+        _ => 'Conversation',
+      };
 
   static String _text(Object? value, int max, {bool empty = false}) {
     final text = value is String ? value.trim() : '';
@@ -255,7 +333,7 @@ class BrainProjection extends ChangeNotifier {
     }
     final generation = _configGeneration;
     _config = {..._config, 'checking': true, 'checkFailed': false};
-    _notice = 'Checking address search and 3D imagery…';
+    _notice = 'Checking address search and property imagery…';
     final pending = _loadConfig(generation).whenComplete(() {
       if (_currentConfig(generation)) {
         _configPending = null;
@@ -289,14 +367,13 @@ class BrainProjection extends ChangeNotifier {
       _configured = true;
       if (_config['mapAvailable'] == true &&
           _config['geocodingAvailable'] == true) {
-        _notice =
-            'Explore recorded 3D imagery. Live cameras are a separate source.';
+        _notice = 'Explore recorded property imagery. Live cameras are a separate source.';
       } else if (_config['geocodingAvailable'] == true) {
-        _notice = '3D imagery is not connected yet. You can still look up and confirm an address.';
+        _notice = 'Property imagery is not connected yet. You can still look up and confirm an address.';
       } else if (_config['mapAvailable'] == true) {
-        _notice = '3D imagery is available. Address search is not connected yet. You can still talk to Rici.';
+        _notice = 'Property imagery is available. Address search is not connected yet. You can still talk to Rici.';
       } else {
-        _notice = 'Address search and 3D imagery are not connected yet. You can still talk to Rici.';
+        _notice = 'Address search and property imagery are not connected yet. You can still talk to Rici.';
       }
     } catch (_) {
       if (!_currentConfig(generation)) {
@@ -304,7 +381,7 @@ class BrainProjection extends ChangeNotifier {
       }
       _config = {..._emptyConfig(), 'checkFailed': true};
       _configured = true;
-      _notice = 'Could not check address search and 3D imagery. Close and reopen Projection to try again. You can still talk to Rici.';
+      _notice = 'Could not check address search and property imagery. Close and reopen Projection to try again. You can still talk to Rici.';
     }
     _changed();
   }
@@ -449,6 +526,8 @@ class BrainProjection extends ChangeNotifier {
     }
     ++_generation;
     _continuousZoom = false;
+    _rendererReady = false;
+    _rendererStatus = 'loading';
     _awaitingDestination = false;
     _loading = false;
     _place = Map<String, dynamic>.of(matches.first);
@@ -457,13 +536,14 @@ class BrainProjection extends ChangeNotifier {
     _camera = {
       'sequence': ++_cameraSequence,
       'operation': 'flyTo',
+      'viewMode': 'street',
       'latitude': _place!['latitude'],
       'longitude': _place!['longitude'],
       'height': 650,
       'heading': 0,
       'pitch': -45,
     };
-    _notice = 'The destination you confirmed is selected on screen.';
+    _notice = 'The destination you confirmed is selected. Requesting recorded Street View near the property.';
     _changed();
     return _result(_notice);
   }
@@ -478,6 +558,8 @@ class BrainProjection extends ChangeNotifier {
       'zoomInContinuous',
       'zoomOutContinuous',
       'stopCamera',
+      'streetView',
+      'earthView',
     }.contains(operation)) {
       throw const BrainApiException('Choose a supported camera control.');
     }
@@ -501,18 +583,41 @@ class BrainProjection extends ChangeNotifier {
     if (_config['mapAvailable'] != true) {
       return _result(
         _config['checking'] == true
-            ? '3D imagery is still connecting. I cannot move the view yet.'
+            ? 'Property imagery is still connecting. I cannot move the view yet.'
             : _config['checkFailed'] == true
-            ? 'Could not check 3D imagery. Close and reopen Projection to try again.'
-            : '3D imagery is not connected yet. You can still talk to Rici.',
+            ? 'Could not check property imagery. Close and reopen Projection to try again.'
+            : 'Property imagery is not connected yet. You can still talk to Rici.',
         ok: false,
       );
+    }
+    if (operation == 'streetView' || operation == 'earthView') {
+      // A failed or still-loading Street View must not trap the user. This
+      // explicit switch is a fresh destination request, not a relative move.
+      final mode = operation == 'streetView' ? 'street' : 'earth';
+      _continuousZoom = false;
+      _rendererReady = false;
+      _rendererStatus = 'loading';
+      _camera = {
+        'sequence': ++_cameraSequence,
+        'operation': 'flyTo',
+        'viewMode': mode,
+        'latitude': _place!['latitude'],
+        'longitude': _place!['longitude'],
+        'height': 650,
+        'heading': 0,
+        'pitch': -45,
+      };
+      _notice = mode == 'street'
+          ? 'Requesting recorded Street View near the selected property.'
+          : 'Requesting the recorded overhead 3D view of the selected property.';
+      _changed();
+      return _result(_notice);
     }
     if (!_rendererReady) {
       return _result(
         _rendererStatus == 'error'
-            ? 'The Earth view is unavailable right now, so I cannot move the view. Please reopen Projection and try again.'
-            : 'The Earth view is still connecting. I cannot move the view yet.',
+            ? 'The property view is unavailable right now. Choose Street View or Overhead to try another view.'
+            : 'The property view is still connecting. I cannot move the view yet.',
         ok: false,
       );
     }
@@ -576,7 +681,7 @@ class BrainProjection extends ChangeNotifier {
 
   Map<String, dynamic> unavailableLive() {
     const text =
-        'There is no connected, permitted live camera for this place. Earth imagery is recorded, not a live feed.';
+        'There is no connected, permitted live camera for this place. Map and Street View imagery are recorded, not a live feed.';
     _answer = {'text': text, 'sources': <Object>[], 'isLive': false};
     _changed();
     return {..._result(text), 'isLive': false};
@@ -762,11 +867,38 @@ class BrainProjection extends ChangeNotifier {
         await onStopVoice();
         return {'active': false};
       case 'rendererReady':
+        if ((payload['sequence'] != null &&
+                payload['sequence'] != _cameraSequence) ||
+            (payload['viewMode'] != null &&
+                payload['viewMode'] != _camera['viewMode'])) {
+          return null;
+        }
         final status = payload['status'] ?? 'ready';
         if (!{'ready', 'loading', 'error'}.contains(status)) {
-          throw const BrainApiException('Unknown Earth view status.');
+          throw const BrainApiException('Unknown property view status.');
         }
         if (_open) {
+          if (_voiceCommandCameraSequence == _cameraSequence) {
+            if (status == 'error') {
+              _lastVoiceCommand = {
+                ..._lastVoiceCommand,
+                'status': 'failed',
+                'result': 'The property imagery could not load. Choose Street View or Overhead to try another view.',
+              };
+            } else if (status == 'ready' &&
+                {
+                  'Street View',
+                  'Overhead view',
+                }.contains(_lastVoiceCommand['action'])) {
+              _lastVoiceCommand = {
+                ..._lastVoiceCommand,
+                'status': 'completed',
+                'result': _camera['viewMode'] == 'street'
+                    ? 'Recorded Street View is ready.'
+                    : 'The recorded overhead view is ready.',
+              };
+            }
+          }
           if (status != 'ready') _stopCameraIfMoving();
           _rendererStatus = status as String;
           _rendererReady = status == 'ready';
@@ -774,7 +906,12 @@ class BrainProjection extends ChangeNotifier {
         }
         return null;
       case 'cameraStatus':
-        if (!_open || payload['sequence'] != _cameraSequence) return null;
+        if (!_open ||
+            payload['sequence'] != _cameraSequence ||
+            (payload['viewMode'] != null &&
+                payload['viewMode'] != _camera['viewMode'])) {
+          return null;
+        }
         final state = payload['state'];
         final reason = payload['reason'];
         if (!{'stopped', 'limit'}.contains(state) ||
@@ -794,6 +931,13 @@ class BrainProjection extends ChangeNotifier {
                   ? 'You have reached the closest view. More detail depends on the imagery available for this location.'
                   : 'You have reached the farthest view.'
             : 'Camera motion stopped. Our conversation can continue.';
+        if (_voiceCommandCameraSequence == _cameraSequence) {
+          _lastVoiceCommand = {
+            ..._lastVoiceCommand,
+            'status': state == 'limit' ? 'limit' : 'completed',
+            'result': _notice,
+          };
+        }
         _changed();
         return null;
       default:
@@ -816,7 +960,19 @@ class BrainProjection extends ChangeNotifier {
     if (_voiceTurns.containsKey(turnId)) {
       return _voiceTurns[turnId]!;
     }
-    final future = _voiceTurn(transcript, arguments);
+    final command = ++_voiceCommandGeneration;
+    final control = _parseVoiceControl(transcript);
+    _voiceCommandCameraSequence = null;
+    _lastVoiceCommand = {
+      'heard': _boundedText(transcript, 2000),
+      'action': _controlLabel(control),
+      'result': control == null
+          ? 'Checking the request.'
+          : 'Applying the view command.',
+      'status': 'running',
+    };
+    _changed();
+    final future = _observeVoiceTurn(command, transcript, arguments, control);
     _voiceTurns[turnId] = future;
     if (_voiceTurns.length > 64) {
       _voiceTurns.remove(_voiceTurns.keys.first);
@@ -824,18 +980,63 @@ class BrainProjection extends ChangeNotifier {
     return future;
   }
 
+  Future<Map<String, dynamic>?> _observeVoiceTurn(
+    int command,
+    String transcript,
+    Map<String, dynamic>? arguments,
+    _ProjectionVoiceControl? control,
+  ) async {
+    try {
+      final result = await _voiceTurn(transcript, arguments);
+      if (_disposed || command != _voiceCommandGeneration) return result;
+      if (result == null || result['handled'] != true) {
+        _lastVoiceCommand = {
+          ..._lastVoiceCommand,
+          'status': 'unrecognized',
+          'result': 'No view command recognized. You can keep talking to Rici.',
+        };
+      } else {
+        final cameraSent = control?.action == 'camera' && result['ok'] == true;
+        if (cameraSent) _voiceCommandCameraSequence = _cameraSequence;
+        _lastVoiceCommand = {
+          ..._lastVoiceCommand,
+          'action': control == null ? 'Place request' : _controlLabel(control),
+          // A camera request is not proof that provider imagery has moved.
+          'status': result['ok'] == false
+              ? 'failed'
+              : cameraSent
+              ? 'sent'
+              : 'completed',
+          'result': _boundedText(result['answer'], 2000),
+        };
+      }
+      _changed();
+      return result;
+    } catch (_) {
+      if (!_disposed && command == _voiceCommandGeneration) {
+        _lastVoiceCommand = {
+          ..._lastVoiceCommand,
+          'status': 'failed',
+          'result': 'The view command could not finish. Please try again.',
+        };
+        _changed();
+      }
+      rethrow;
+    }
+  }
+
   static String _originalCommand(String transcript) => transcript
       .trim()
       .replaceFirst(
         RegExp(
-          r'^(?:(?:hey|okay|ok)\s+)?(?:rici|risi|ree[ -]?see)[, :]?\s+',
+          r'^(?:(?:hey|okay|ok)[,.:! ?\s]+)?(?:rici|risi|reese|reece|ree[ -]?see)[,.:! ?\s]+',
           caseSensitive: false,
         ),
         '',
       )
       .replaceFirst(
         RegExp(
-          r'^(?:please\s+|(?:can|could|would) you (?:please )?)',
+          r'^(?:please[,.:! ?\s]+|(?:can|could|would) you\s+(?:please[,.:! ?\s]+)?)',
           caseSensitive: false,
         ),
         '',
@@ -935,7 +1136,10 @@ class BrainProjection extends ChangeNotifier {
     final command = original.toLowerCase();
     if (original.isEmpty ||
         original.length > 2000 ||
-        RegExp(r'\b(?:remember|save)\b').hasMatch(command)) {
+        RegExp(r'\b(?:remember|save)\b').hasMatch(command) ||
+        RegExp(
+          r'\b(?:do not|don\x27t|don’t|never)\s+(?:open|close|zoom|move|go|show|switch|face|turn|rotate|pan|take|fly|start|stop|keep|continue)\b|[,;—]\s*(?:no|actually|instead)\b',
+        ).hasMatch(command)) {
       return null;
     }
     if (RegExp(
@@ -993,6 +1197,16 @@ class BrainProjection extends ChangeNotifier {
         ).hasMatch(command)) {
       return null;
     }
+    if (RegExp(
+      r'^(?:(?:(?:show|open)(?: me)?|switch to)\s+(?:the\s+)?street[ -]?view|(?:show(?: me)?\s+(?:the\s+)?front(?:al)?(?:\s+view)?\s+of|face)\s+(?:the|this|that|selected)\s+(?:property|building|house))(?:\s+(?:please|for me))?[.!? ]*$',
+    ).hasMatch(command)) {
+      return const _ProjectionVoiceControl('camera', 'streetView');
+    }
+    if (RegExp(
+      r'^(?:(?:show|open)(?: me)?|switch to)\s+(?:the\s+)?(?:overhead(?:\s+(?:view|map))?|3[ -]?d\s+(?:map|view)|earth\s+(?:view|map))(?:\s+(?:please|for me))?[.!? ]*$',
+    ).hasMatch(command)) {
+      return const _ProjectionVoiceControl('camera', 'earthView');
+    }
     final destination = _destinationCommand(
       original,
       awaitingDestination: _awaitingDestination,
@@ -1010,7 +1224,7 @@ class BrainProjection extends ChangeNotifier {
       );
     }
     if (RegExp(
-          r'^(?:(?:stop|pause|cancel)(?:\s+the)?\s+(?:zoom(?:ing)?|camera(?:\s+motion)?|moving(?:\s+(?:the\s+)?(?:view|camera))?)|hold(?:\s+(?:this|the))?\s+view)[.!? ]*$',
+          r'^(?:(?:stop|pause|cancel)(?:\s+the)?\s+(?:zoom(?:ing)?(?:\s+(?:in|out))?|camera(?:\s+motion)?|moving(?:\s+(?:the\s+)?(?:view|camera))?)|hold(?:\s+(?:this|that|the))?\s+view)(?:\s+please)?[.!? ]*$',
         ).hasMatch(command) ||
         (_continuousZoom &&
             RegExp(r'^(?:stop|hold|that(?:\x27s|’s| is) enough)[.!? ]*$')
@@ -1018,24 +1232,24 @@ class BrainProjection extends ChangeNotifier {
       return const _ProjectionVoiceControl('camera', 'stopCamera');
     }
     if (RegExp(
-      r'^(?:(?:keep|continue|start)\s+(?:zooming|moving|going)(?:\s+(?:in|closer))|zoom\s+(?:all the way\s+in|in\s+(?:continuously|all the way)))(?:\s+(?:please|until I (?:say )?stop))?[.!? ]*$',
+      r'^(?:(?:keep|continue|start)\s+(?:zooming|moving|going)(?:\s+(?:in|closer))|zoom\s+(?:all the way\s+in|in\s+(?:continuously|all the way)))(?:\s+(?:on|to|towards?)\s+(?:the|this|that|selected|current)\s+(?:building|property|house|place|address|location|map|view))?(?:[, ]+please|\s+for me|\s+until I (?:say )?stop)?[.!? ]*$',
       caseSensitive: false,
     ).hasMatch(command)) {
       return const _ProjectionVoiceControl('camera', 'zoomInContinuous');
     }
     if (RegExp(
-      r'^(?:(?:keep|continue|start)\s+(?:zooming|moving|going)(?:\s+(?:out|farther|further))|zoom\s+(?:all the way\s+out|out\s+(?:continuously|all the way)))(?:\s+(?:please|until I (?:say )?stop))?[.!? ]*$',
+      r'^(?:(?:keep|continue|start)\s+(?:zooming|moving|going)(?:\s+(?:out|farther|further))|zoom\s+(?:all the way\s+out|out\s+(?:continuously|all the way)))(?:\s+from\s+(?:the|this|that|selected|current)\s+(?:building|property|house|place|address|location|map|view))?(?:[, ]+please|\s+for me|\s+until I (?:say )?stop)?[.!? ]*$',
       caseSensitive: false,
     ).hasMatch(command)) {
       return const _ProjectionVoiceControl('camera', 'zoomOutContinuous');
     }
     if (RegExp(
-      r'^(?:(?:(?:go|move|come|get)\s+)?closer|zoom\s+in)(?:\s+(?:a little|more|to (?:the|this|that) (?:building|place|address|location)))?(?:\s+please)?[.!? ]*$',
+      r'^(?:(?:(?:go|move|come|get)\s+)?closer|zoom\s+in)(?:\s+(?:a little(?:\s+bit)?|more|(?:on|to|towards?)\s+(?:the|this|that|selected|current)\s+(?:building|property|house|place|address|location|map|view))){0,2}(?:[, ]+please|\s+for me)?[.!? ]*$',
     ).hasMatch(command)) {
       return const _ProjectionVoiceControl('camera', 'closer');
     }
     if (RegExp(
-      r'^(?:(?:(?:go|move|get)\s+)?(?:farther|further)|zoom\s+out|pull\s+back)(?:\s+(?:a little|more|from (?:the|this|that) (?:building|place|address|location)))?(?:\s+please)?[.!? ]*$',
+      r'^(?:(?:(?:go|move|get)\s+)?(?:farther|further)|zoom\s+out|pull\s+back)(?:\s+(?:a little(?:\s+bit)?|more|from\s+(?:the|this|that|selected|current)\s+(?:building|property|house|place|address|location|map|view))){0,2}(?:[, ]+please|\s+for me)?[.!? ]*$',
     ).hasMatch(command)) {
       return const _ProjectionVoiceControl('camera', 'farther');
     }

@@ -66,9 +66,9 @@
             </div>
 
             <div class="scene-crosshair" aria-hidden="true"><span></span><span></span></div>
-            <div class="world-caption" id="world-caption"><span class="caption-line"></span><span id="world-caption-text">Checking 3D imagery…</span></div>
+            <div class="world-caption" id="world-caption"><span class="caption-line"></span><span id="world-caption-text">Checking property imagery…</span></div>
 
-            <div class="camera-controls" role="group" aria-label="Map camera controls">
+            <div class="camera-controls" role="group" aria-label="Property view controls">
               <button type="button" data-camera="closer" aria-label="Go closer to the building" title="Go closer"><svg><use href="#icon-plus"/></svg></button>
               <button type="button" data-camera="farther" aria-label="Move farther away" title="Move farther"><svg><use href="#icon-minus"/></svg></button>
               <button type="button" data-camera="stopCamera" aria-label="Stop zooming" title="Stop zooming"><svg><use href="#icon-stop"/></svg></button>
@@ -81,19 +81,23 @@
             <div class="place-banner" id="place-banner" hidden><span class="place-pin"><svg><use href="#icon-pin"/></svg></span><div><span class="eyebrow">SELECTED PLACE</span><strong id="place-label"></strong><span id="place-address"></span><span id="place-match" class="partial-match-warning" hidden>Check address — partial match</span><span id="place-source" class="map-data-credit" translate="no" hidden>Google Maps</span></div><span class="place-confirmed">Confirmed</span></div>
           </div>
 
-          <section class="destination-panel" aria-label="Explore an address in 3D">
-            <label class="destination-label" for="destination-input">Explore address in 3D</label>
+          <div class="view-toolbar"><div class="view-switch" role="group" aria-label="Property view"><button type="button" data-view-mode="street" aria-pressed="true">Street View</button><button type="button" data-view-mode="earth" aria-pressed="false">3D Earth</button></div><p>Street View faces the selected location from nearby imagery.</p></div>
+
+          <section id="voice-command-feedback" class="voice-command-feedback" aria-label="Last voice command" aria-live="polite" hidden><div><span>You said</span><strong id="voice-command-heard"></strong></div><div><span>View control</span><strong id="voice-command-action"></strong></div><p id="voice-command-result"></p></section>
+
+          <section class="destination-panel" aria-label="Explore a property">
+            <label class="destination-label" for="destination-input">Explore a property</label>
             <form id="search-form" class="search-form" role="search">
               <svg class="search-icon"><use href="#icon-search"/></svg>
               <input id="destination-input" type="search" maxlength="300" placeholder="Enter a full address or place" autocomplete="off" enterkeyhint="search">
               <button type="submit" id="search-button" aria-label="Find destination"><span>Explore</span><svg><use href="#icon-arrow"/></svg></button>
             </form>
-            <div id="search-help" class="search-help"><span>Say “Go to…” or enter an address.</span><span>Confirm a result before traveling.</span></div>
+            <div id="search-help" class="search-help"><span>Tap Talk to Rici, then say “Go to…” or enter an address.</span><span>Confirm a result to open Street View.</span></div>
             <div id="candidates-panel" class="candidates-panel" hidden><div class="candidates-heading"><span class="eyebrow">CONFIRM YOUR DESTINATION</span><span id="candidate-count"></span></div><div id="candidates-list"></div></div>
             <div class="directions-panel"><button id="directions-button" class="directions-button" type="button" aria-label="Review destination for directions" aria-describedby="directions-help" disabled><svg aria-hidden="true"><use href="#icon-arrow"/></svg><span>Directions</span></button><p id="directions-help">Confirm a destination to review directions.</p></div>
           </section>
 
-          <div class="scene-footnote"><span><svg><use href="#icon-globe"/></svg><span id="imagery-disclosure">Map imagery is not a live camera feed.</span></span><span id="provider-label">PROJECTION / EARTH</span></div>
+          <div class="scene-footnote"><span><svg><use href="#icon-globe"/></svg><span id="imagery-disclosure">Recorded imagery · not a live camera feed.</span></span><span id="provider-label">PROJECTION / STREET VIEW</span></div>
         </section>
 
         <aside class="rici-panel" aria-label="Rici exploration assistant">
@@ -111,8 +115,8 @@
       <p id="projection-notice" class="projection-notice" role="status" aria-live="polite">Your existing KORLIX conversation stays with you.</p>
 
       <section class="voice-dock" aria-label="Conversation controls">
-        <div class="voice-identity"><div class="voice-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><div><strong id="voice-phase" role="status" aria-live="polite">Ready when you are</strong><span id="voice-hint">Talk to Rici or type a destination.</span></div></div>
-        <button id="talk-button" class="talk-button" type="button" aria-label="Start conversation"><span class="talk-microphone"><svg aria-hidden="true"><use href="#icon-mic"/></svg></span><span><strong id="talk-label">Talk to Rici</strong><small id="talk-detail">Start conversation</small></span></button>
+        <div class="voice-identity"><div class="voice-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><div><strong id="voice-phase" role="status" aria-live="polite">Ready when you are</strong><span id="voice-hint">Tap Talk to Rici to control the view by voice.</span></div></div>
+        <button id="talk-button" class="talk-button" type="button" aria-label="Start conversation"><span class="talk-microphone"><svg aria-hidden="true"><use href="#icon-mic"/></svg></span><span><strong id="talk-label">Talk to Rici</strong><small id="talk-detail">Enable voice controls</small></span></button>
         <div class="voice-actions" role="group" aria-label="Live conversation controls">
           <button id="pause-button" class="voice-control pause-button" type="button" aria-label="Pause conversation" disabled><svg aria-hidden="true"><use href="#icon-pause"/></svg><span id="pause-label">Pause</span></button>
           <button id="resume-button" class="voice-control resume-button" type="button" aria-label="Resume conversation" disabled><svg aria-hidden="true"><use href="#icon-play"/></svg><span>Resume</span></button>

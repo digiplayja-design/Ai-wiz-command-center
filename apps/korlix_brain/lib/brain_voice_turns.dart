@@ -13,6 +13,7 @@ class BrainVoiceTurns {
     required this.isCurrent,
     required this.saved,
     this.onProjection,
+    this.recognizesProjection,
   }) {
     _speech = BrainSpeechQueue(
       send,
@@ -39,6 +40,7 @@ class BrainVoiceTurns {
     Map<String, dynamic>? arguments,
   )?
   onProjection;
+  final bool Function(String transcript)? recognizesProjection;
   final _items = <String, _Turn>{};
   final _order = <String>[];
   final _seen = <String>{};
@@ -49,7 +51,12 @@ class BrainVoiceTurns {
   bool get current => !_disposed && isCurrent();
 
   void speechStarted(String id) {
-    if (!current) return;
+    if (!current ||
+        id.isEmpty ||
+        _seen.contains(id) ||
+        _items.containsKey(id)) {
+      return;
+    }
     ++_epoch;
     if (id.isNotEmpty && !_seen.contains(id) && !_items.containsKey(id)) {
       _items[id] = _Turn(_epoch);
@@ -78,13 +85,16 @@ class BrainVoiceTurns {
   }
 
   void transcriptionFailed(String id) {
+    if (id.isEmpty || _seen.contains(id)) return;
     _transcriptionTimers.remove(id)?.cancel();
+    final turn = _items[id];
     _seen.add(id);
     _items.remove(id);
     _order.remove(id);
-    if (current) {
+    if (current && (turn == null || turn.epoch == _epoch)) {
       emit({
         'type': 'voiceNotice',
+        'code': 'transcription_failed',
         'message': 'I could not hear that clearly. Please repeat it.',
       });
     }
@@ -103,9 +113,50 @@ class BrainVoiceTurns {
     }
     if (_items[id]!.text != null) return;
     _transcriptionTimers.remove(id)?.cancel();
-    _items[id]!.text = text;
-    emit({'type': 'transcript', 'role': 'you', 'text': text});
+    final turn = _items[id]!;
+    turn.text = text;
+    emit({
+      'type': 'transcript',
+      'role': 'you',
+      'text': text,
+      'current': turn.epoch == _epoch,
+    });
+    if (onProjection != null && recognizesProjection?.call(text) == true) {
+      // View controls, especially Stop, must never wait behind a slow reasoning
+      // request or an older ASR result. Reserve before dispatch so duplicates
+      // cannot enter the serialized reasoning queue or move the camera twice.
+      _items.remove(id);
+      _order.remove(id);
+      _seen.add(id);
+      if (turn.epoch == _epoch) {
+        unawaited(_directProjection(id, text, turn.epoch));
+      }
+      unawaited(_drain());
+      return;
+    }
     unawaited(_drain());
+  }
+
+  Future<void> _directProjection(String id, String text, int epoch) async {
+    try {
+      final result = await onProjection!(id, text, null);
+      if (!current || epoch != _epoch) return;
+      if (result == null || result['handled'] != true) {
+        throw StateError('Missing view result');
+      }
+      final answer = result['answer'];
+      if (answer is! String || answer.trim().isEmpty) {
+        throw StateError('Missing view result');
+      }
+      _speech.add(answer, epoch, id);
+    } catch (_) {
+      if (current && epoch == _epoch) {
+        const message =
+            'The view command could not finish. Please check Projection and try again.';
+        emit({'type': 'voiceNotice', 'message': message});
+        _speech.add(message, epoch, id);
+      }
+    }
   }
 
   Future<void> _drain() async {

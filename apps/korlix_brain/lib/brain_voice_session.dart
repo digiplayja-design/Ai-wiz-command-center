@@ -44,7 +44,7 @@ class BrainVoiceSessionGate {
   static const projectionTool = <String, dynamic>{
     'type': 'function',
     'name': 'control_projection',
-    'description': 'Control Projection Mode, look up a spoken address or named landmark, move its camera, ask about the selected place, or prepare directions when explicitly requested. Camera values include closer, farther, left, right, reset, zoomInContinuous, zoomOutContinuous and stopCamera. Use directions for route to, navigate to, or directions to an address. The app checks the original user transcript before acting.',
+    'description': 'Control Projection Mode, look up a spoken address or named landmark, move its camera, ask about the selected place, or prepare directions when explicitly requested. Camera values include closer, farther, left, right, reset, zoomInContinuous, zoomOutContinuous, stopCamera, streetView and earthView. Use directions for route to, navigate to, or directions to an address. The app checks the original user transcript before acting.',
     'parameters': {
       'type': 'object',
       'properties': {
@@ -57,7 +57,7 @@ class BrainVoiceSessionGate {
   };
   static const projectionInstructions =
       '# Projection capability for this client\n'
-      'This client adds control_projection alongside remember_in_brain. Earlier references to having only the memory tool do not include this optional capability. Projection Mode is a view inside KORLIX. Use control_projection only for the user\'s explicit projection, map, place, camera or room request, or a question about the selected place. Use an empty value when no value is needed. Spoken addresses and named landmarks can be searched without typing: use action search with the whole original destination, including unit, city and postal code. When the user confirms a displayed place or chooses a displayed result, use action search with their original confirmation as value, for example "yes, that is the place" or "choose the first result". The app validates the original user transcript. For zoom in or move closer, use action camera with value closer; for zoom out, use farther. For keep zooming in or keep zooming out, use zoomInContinuous or zoomOutContinuous. For stop zooming or stop moving the view, use stopCamera. These controls affect only the map camera, not the voice session. Zooming can continue within the available camera range; do not promise infinite zoom or imagery detail that is not available. For an explicit route to, navigate to, or directions to a destination, use action directions with that destination. This opens a route review screen; the user starts navigation with a tap. Do not claim navigation has started. For an explicit request to remember or save this place, address, building or location, use action savePlace. All ordinary memory commands still use remember_in_brain. Relay the returned answer and its scope/source limits accurately. Never describe map imagery as live video or invent a location, camera feed, date, population, mayor, crime statistic or building record. If a tool fails or has no verified data, say so. Do not start or stop the voice session when opening or closing Projection Mode.';
+      'This client adds control_projection alongside remember_in_brain. Earlier references to having only the memory tool do not include this optional capability. Projection Mode is a view inside KORLIX. Use control_projection only for the user\'s explicit projection, map, place, camera or room request, or a question about the selected place. Use an empty value when no value is needed. Spoken addresses and named landmarks can be searched without typing: use action search with the whole original destination, including unit, city and postal code. When the user confirms a displayed place or chooses a displayed result, use action search with their original confirmation as value, for example "yes, that is the place" or "choose the first result". The app validates the original user transcript. For show street view, show the front of the property or face the building, use action camera with value streetView. For show overhead or show the 3D map, use action camera with value earthView. Street View is recorded imagery and may be unavailable near a property; do not call it live or promise an exact front-door view. For zoom in or move closer, use action camera with value closer; for zoom out, use farther. For keep zooming in or keep zooming out, use zoomInContinuous or zoomOutContinuous. For stop zooming or stop moving the view, use stopCamera. These controls affect only the map camera, not the voice session. Zooming can continue within the available camera range; do not promise infinite zoom or imagery detail that is not available. For an explicit route to, navigate to, or directions to a destination, use action directions with that destination. This opens a route review screen; the user starts navigation with a tap. Do not claim navigation has started. For an explicit request to remember or save this place, address, building or location, use action savePlace. All ordinary memory commands still use remember_in_brain. Relay the returned answer and its scope/source limits accurately. Never describe map imagery as live video or invent a location, camera feed, date, population, mayor, crime statistic or building record. If a tool fails or has no verified data, say so. Do not start or stop the voice session when opening or closing Projection Mode.';
 
   Map<String, dynamic> get configuration => mode.isLive
       ? {
@@ -74,7 +74,14 @@ class BrainVoiceSessionGate {
               'input': {
                 'transcription': {
                   'model': 'gpt-transcribe',
-                  'keywords': ['Rici', 'Risi', 'KORLIX', 'Rici remember this'],
+                  'keywords': [
+                    'Rici',
+                    'Risi',
+                    'Reese',
+                    'Reece',
+                    'KORLIX',
+                    'Rici remember this',
+                  ],
                 },
                 'turn_detection': {
                   'type': 'semantic_vad',
@@ -98,7 +105,14 @@ class BrainVoiceSessionGate {
         'input': {
           'transcription': {
             'model': 'gpt-transcribe',
-            'keywords': ['Rici', 'Risi', 'KORLIX', 'Rici remember this'],
+            'keywords': [
+              'Rici',
+              'Risi',
+              'Reese',
+              'Reece',
+              'KORLIX',
+              'Rici remember this',
+            ],
           },
           'turn_detection': {
             'type': 'semantic_vad',

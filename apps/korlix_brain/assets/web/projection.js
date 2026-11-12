@@ -19,13 +19,13 @@
   let nonce = '', nextId = 0, connected = false, searchEpoch = 0, askEpoch = 0;
   let voiceAction = '', voiceEpoch = 0;
   let voiceViewportActive = false;
-  let frame = null, frameOrigin = '', frameUrl = '', mapStatus = 'illustration', lastCamera = '';
+  let frame = null, frameOrigin = '', frameUrl = '', frameReady = false, mapStatus = 'illustration', lastCamera = '';
   let rendererTimer = null, canvasInvalidated = true;
   let localNotice = '', localNoticeKind = '', lastSavedPlace = '', pendingQuestionLocal = false;
 
   const emptyState = () => ({
     open:true, room:'command', loading:false, selectedPlace:null, candidates:[], answer:null,
-    notice:'', camera:{sequence:0, operation:'reset'},
+    notice:'', camera:{sequence:0, operation:'reset', viewMode:'street'}, lastVoiceCommand:null,
     config:{rendererUrl:null, mapAvailable:false, geocodingAvailable:false, directionsAvailable:false, answersAvailable:false, checking:false, checkFailed:false, answerCredits:0, answerCostLabel:''},
     voice:{active:false, paused:false, phase:'complete', message:''}
   });
@@ -46,8 +46,9 @@
   }
 
   function cameraValue(raw) {
-    const camera = {sequence:0, operation:'reset'};
+    const camera = {sequence:0, operation:'reset', viewMode:'street'};
     if (!isObject(raw)) return camera;
+    camera.viewMode = raw.viewMode === 'earth' ? 'earth' : 'street';
     if (Number.isSafeInteger(raw.sequence) && raw.sequence >= 0) camera.sequence = raw.sequence;
     if (operations.has(raw.operation) || raw.operation === 'flyTo') camera.operation = raw.operation;
     for (const [key,min,max] of [['latitude',-90,90],['longitude',-180,180],['height',1,40000000],['heading',-360,360],['pitch',-90,0]]) {
@@ -74,6 +75,12 @@
     base.notice = clip(raw.notice,1500);
     base.camera = cameraValue(raw.camera);
     base.voice = voiceValue(raw.voice);
+    if (isObject(raw.lastVoiceCommand)) {
+      const command = raw.lastVoiceCommand;
+      const statuses = new Set(['idle','heard','running','unrecognized','sent','completed','failed','interrupted','limit']);
+      base.lastVoiceCommand = {heard:clip(command.heard,600), action:clip(command.action,100), result:clip(command.result,1000),
+        status:statuses.has(command.status) ? command.status : 'idle'};
+    }
     const config = isObject(raw.config) ? raw.config : {};
     base.config = {rendererUrl:safeUrl(config.rendererUrl), mapAvailable:config.mapAvailable === true,
       geocodingAvailable:config.geocodingAvailable === true, answersAvailable:config.answersAvailable === true,
@@ -148,7 +155,11 @@
     $('place-source').hidden = place?.provider !== 'google';
     $('place-match').hidden = !place?.partialMatch;
     $('place-banner').querySelector('.place-confirmed').textContent = place?.partialMatch ? 'Partial match' : 'Confirmed';
-    $('provider-label').textContent = place?.provider && place.provider !== 'google' ? clip(place.provider,60).toUpperCase() : 'PROJECTION / EARTH';
+    $('provider-label').textContent = state.camera.viewMode === 'earth' ? 'PROJECTION / 3D EARTH' : 'PROJECTION / STREET VIEW';
+    document.querySelectorAll('[data-view-mode]').forEach(button => {
+      button.setAttribute('aria-pressed',String(button.dataset.viewMode === state.camera.viewMode));
+      button.disabled = !connected || !place || !state.config.mapAvailable;
+    });
     $('save-button').disabled = !connected || !place || busy.save;
     $('save-button').textContent = busy.save ? 'Saving…' : 'Save place';
     $('place-note').disabled = !place || busy.save;
@@ -162,7 +173,7 @@
     if (!place) $('save-status').textContent = 'Choose and confirm a destination first.';
     else if ($('save-status').textContent === 'Choose and confirm a destination first.') $('save-status').textContent = '';
     document.querySelectorAll('[data-camera]').forEach(button => {
-      button.disabled = !connected || !place || !state.config.mapAvailable || mapStatus !== 'ready';
+      button.disabled = !connected || !place || !state.config.mapAvailable || (button.dataset.camera !== 'stopCamera' && mapStatus !== 'ready');
     });
   }
 
@@ -231,8 +242,8 @@
     const help = $('search-help');
     help.firstElementChild.textContent = state.config.checking ? 'Checking address search…' : busy.search ? 'Finding matching destinations…' : state.config.checkFailed
       ? 'Could not check address search. Close and reopen Projection to try again.' : connected && !state.config.geocodingAvailable
-      ? 'Address search is not connected yet. You can still talk to Rici.' : 'Say “Go to…” with an address or landmark, or enter a place.';
-    help.lastElementChild.textContent = 'Confirm a result before traveling.';
+      ? 'Address search is not connected yet. You can still talk to Rici.' : 'Tap Talk to Rici, then say “Go to…” with an address, or enter a place.';
+    help.lastElementChild.textContent = 'Confirm a result to open Street View.';
   }
 
   function measureVoiceDock() {
@@ -268,12 +279,12 @@
       : voice.message || (controls.session ? 'Rici is with you' : 'Ready when you are');
     $('voice-hint').textContent = phase === 'paused' ? 'Microphone off. Resume when you’re ready.'
       : phase === 'pausing' ? 'Turning off the microphone and audio…'
-      : controls.session ? 'Say “keep zooming in” or “stop zooming”.' : 'Talk to Rici or type a destination.';
+      : controls.session ? 'Say “Rici, zoom in”, “keep zooming in”, or “stop zooming”.' : 'Tap Talk to Rici to control the view by voice.';
     $('talk-button').disabled = !controls.start;
     $('talk-label').textContent = phase === 'paused' ? 'Conversation paused' : controls.session
       ? (phase === 'connecting' ? 'Connecting…' : phase === 'stopping' ? 'Finishing…' : phase === 'pausing' ? 'Pausing…' : 'Rici is with you') : 'Talk to Rici';
     $('talk-detail').textContent = phase === 'paused' ? 'Microphone off' : controls.session
-      ? (phase === 'listening' ? 'Microphone on' : phase === 'speaking' ? 'Rici is speaking' : phase === 'thinking' ? 'Thinking with you' : 'Conversation controls below') : 'Start conversation';
+      ? (phase === 'listening' ? 'Listening for your voice' : phase === 'speaking' ? 'Rici is speaking' : phase === 'thinking' ? 'Thinking with you' : 'Conversation controls below') : 'Enable voice controls';
     $('pause-button').disabled = !controls.pause;
     $('pause-button').setAttribute('aria-busy',String(phase === 'pausing'));
     $('pause-label').textContent = phase === 'pausing' ? 'Pausing…' : 'Pause';
@@ -325,31 +336,46 @@
     renderTranscripts();
   }
 
+  function renderVoiceCommand() {
+    const command = state.lastVoiceCommand;
+    const panel = $('voice-command-feedback');
+    panel.hidden = !command || !(command.heard || command.result);
+    panel.dataset.status = command?.status || 'idle';
+    $('voice-command-heard').textContent = command?.heard || 'No words received';
+    $('voice-command-action').textContent = command?.action || 'Waiting for a view command';
+    $('voice-command-result').textContent = command?.result || '';
+  }
+
   function setMapStatus(status, message = '') {
     const previousStatus = mapStatus;
     mapStatus = status;
     const ready = status === 'ready';
-    const remoteActive = !!frame && ['loading','ready'].includes(status);
+    const remoteActive = !!frame && ['loading','ready','error'].includes(status);
+    const street = state.camera.viewMode === 'street';
     document.body.dataset.map = ready ? 'ready' : 'illustration';
     document.body.dataset.renderer = remoteActive ? 'active' : 'inactive';
     $('map-container').hidden = !remoteActive;
     $('world-canvas').hidden = remoteActive;
-    $('map-badge').lastChild.textContent = ready ? '3D Earth imagery' : status === 'loading' || state.config.checking ? 'Connecting map' : 'Illustrative globe';
-    $('world-caption-text').textContent = ready ? 'Earth imagery · not a live camera feed' : status === 'loading'
-      ? 'Connecting recorded 3D imagery · not a live camera feed' : state.config.checking
-      ? 'Checking 3D imagery…' : state.config.checkFailed
-      ? 'Could not check 3D imagery. Close and reopen Projection to try again.' : status === 'error'
-      ? '3D imagery could not load. Close and reopen Projection to try again.' : '3D imagery is not connected yet.';
+    $('map-badge').lastChild.textContent = ready ? (street ? 'Recorded Street View' : '3D Earth imagery')
+      : status === 'error' ? (street ? 'Street View unavailable' : '3D Earth unavailable')
+      : status === 'loading' || state.config.checking ? 'Connecting property view' : 'Illustrative globe';
+    $('world-caption-text').textContent = ready ? (street ? 'Recorded Street View facing the selected location · visibility varies' : 'Recorded 3D Earth imagery · overhead view')
+      : status === 'loading' ? (state.selectedPlace ? 'Loading the selected property view…' : 'Confirm an address to open Street View.')
+      : state.config.checking ? 'Checking property imagery…' : state.config.checkFailed
+      ? 'Could not check property imagery. Close and reopen Projection to try again.' : status === 'error'
+      ? (message || (street ? 'Street View could not load here. You can choose 3D Earth.' : '3D Earth could not load. Try Street View.'))
+      : 'Property imagery is not connected yet.';
+    $('imagery-disclosure').textContent = 'Recorded imagery · not a live camera feed. Capture dates appear when available.';
     if (message && status === 'error') notice(message,'error');
     canvasInvalidated = true; renderPlace();
     if (connected && status !== previousStatus && ['ready','loading','error'].includes(status)) {
-      send('rendererReady',{status}).catch(fail);
+      send('rendererReady',{status,sequence:state.camera.sequence,viewMode:state.camera.viewMode}).catch(fail);
     }
   }
 
   function disposeFrame() {
     clearTimeout(rendererTimer);
-    frame?.remove(); frame = null; frameOrigin = ''; frameUrl = ''; lastCamera = '';
+    frame?.remove(); frame = null; frameOrigin = ''; frameUrl = ''; frameReady = false; lastCamera = '';
     $('map-container').replaceChildren(); setMapStatus('illustration');
   }
 
@@ -361,24 +387,28 @@
     // The native controller additionally validates the API origin and exact
     // renderer path. This layer rejects non-HTTPS and credential-bearing URLs.
     frameOrigin = new URL(url).origin; frameUrl = url;
-    frame = document.createElement('iframe'); frame.title = 'KORLIX 3D Earth map';
+    frame = document.createElement('iframe'); frame.title = 'KORLIX property view';
     // Provider-owned links may open a separate window. The iframe still cannot
     // navigate the local workspace, submit forms or receive its native bridge.
     frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox');
     frame.setAttribute('referrerpolicy','no-referrer');
     frame.setAttribute('allow',"camera 'none'; microphone 'none'; geolocation 'none'; payment 'none'; clipboard-read 'none'; clipboard-write 'none'");
     frame.src = url; $('map-container').append(frame); setMapStatus('loading');
-    rendererTimer = setTimeout(() => { if (mapStatus === 'loading') setMapStatus('error','The map has not connected. You can keep talking to Rici.'); },45000);
+    rendererTimer = setTimeout(() => { if (mapStatus === 'loading' && (!frameReady || state.selectedPlace)) setMapStatus('error','The property view has not connected. Try the other view or another address.'); },45000);
   }
 
   function sendCamera() {
-    if (!frame || mapStatus !== 'ready') return;
+    // Transport readiness is independent of imagery readiness. An address must
+    // reach Street View before it can load; Stop and mode changes must also
+    // reach it while a provider lookup is pending or has failed.
+    if (!frame || !frameReady) return;
     const place = state.selectedPlace ? {id:state.selectedPlace.id,label:state.selectedPlace.label,
       latitude:state.selectedPlace.latitude,longitude:state.selectedPlace.longitude} : null;
     const data = {type:'korlix-projection-camera',camera:state.camera,place};
     const serialized = JSON.stringify(data);
     if (serialized === lastCamera) return;
     lastCamera = serialized;
+    if (place && state.camera.operation === 'flyTo') setMapStatus('loading');
     frame.contentWindow.postMessage(data,frameOrigin);
   }
 
@@ -386,31 +416,39 @@
     if (!frame || event.source !== frame.contentWindow || event.origin !== frameOrigin) return;
     const data = event.data;
     if (!isObject(data)) return;
+    if (data.type === 'korlix-projection-transport-ready') {
+      frameReady = true;
+      sendCamera();
+      return;
+    }
     // The provider owns its full iframe surface, including controls/credits.
     // No remote geometry, HTML or styling messages are consumed by the shell.
     if (data.type === 'korlix-projection-camera-status') {
       if (!Number.isSafeInteger(data.sequence) || data.sequence !== state.camera.sequence
+        || (data.viewMode !== undefined && data.viewMode !== state.camera.viewMode)
         || !['stopped','limit'].includes(data.state)
         || !['closest','farthest','stopped','interrupted'].includes(data.reason)) return;
       // The renderer may report only a bounded motion outcome. The native
       // controller owns wording and rejects a stale sequence independently.
-      send('cameraStatus',{sequence:data.sequence,state:data.state,reason:data.reason}).catch(fail);
+      send('cameraStatus',{sequence:data.sequence,viewMode:state.camera.viewMode,state:data.state,reason:data.reason}).catch(fail);
       return;
     }
     if (data.type !== 'korlix-projection-status' || !['loading','ready','error'].includes(data.status)) return;
-    const wasReady = mapStatus === 'ready';
+    if (data.viewMode !== undefined && data.viewMode !== state.camera.viewMode) return;
+    if (data.sequence !== undefined && data.sequence !== state.camera.sequence) return;
+    // Older renderers used their first ready status as the transport handshake.
+    // The awaiting-destination state is never presented as loaded imagery.
+    if (data.status === 'ready') frameReady = true;
     if (data.status !== 'loading') clearTimeout(rendererTimer);
-    setMapStatus(data.status,clip(data.message,500));
-    if (data.status === 'ready') {
-      if (!wasReady) lastCamera = '';
-      sendCamera();
-    }
+    const status = data.reason === 'awaiting-destination' || (!state.selectedPlace && data.status === 'ready') ? 'loading' : data.status;
+    setMapStatus(status,clip(data.message,500));
+    sendCamera();
   });
 
   function render() {
     $('connection-label').textContent = connected ? 'Your KORLIX workspace' : 'Preview · open inside KORLIX';
     $('close-projection').disabled = busy.close;
-    renderRoom(); renderPlace(); renderCandidates(); renderAnswer(); renderSearch(); renderVoice(); renderNotice(); syncRenderer();
+    renderRoom(); renderPlace(); renderCandidates(); renderAnswer(); renderSearch(); renderVoice(); renderVoiceCommand(); renderNotice(); syncRenderer();
   }
 
   window.KorlixProjectionConnect = connection => {
@@ -493,6 +531,8 @@
   document.querySelectorAll('[data-question]').forEach(button => button.addEventListener('click',() => ask(button.dataset.question)));
   $('question-form').addEventListener('submit',event => { event.preventDefault(); ask($('question-input').value.trim()); });
   document.querySelectorAll('[data-camera]').forEach(button => button.addEventListener('click',() => send('camera',{operation:button.dataset.camera}).catch(fail)));
+  document.querySelectorAll('[data-view-mode]').forEach(button => button.addEventListener('click',() =>
+    send('camera',{operation:button.dataset.viewMode === 'earth' ? 'earthView' : 'streetView'}).catch(fail)));
 
   $('save-form').addEventListener('submit',async event => {
     event.preventDefault();

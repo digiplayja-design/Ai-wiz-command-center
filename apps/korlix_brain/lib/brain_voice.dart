@@ -608,6 +608,7 @@ class BrainVoice {
       } else {
         _turns = BrainVoiceTurns(
           onProjection: onProjection,
+          recognizesProjection: recognizesProjection,
           isCurrent: current,
           emit: _forward,
           saved: onSaved,

@@ -76,7 +76,12 @@ class BrainLiveTurns {
     final turn = _turns.putIfAbsent(id, () => _LiveTurn(_epoch));
     if (turn.transcript.isCompleted) return;
     if (text.trim().isNotEmpty) {
-      emit({'type': 'transcript', 'role': 'you', 'text': text});
+      emit({
+        'type': 'transcript',
+        'role': 'you',
+        'text': text,
+        'current': turn.epoch == _epoch,
+      });
       if (turn.epoch == _epoch &&
           onProjection != null &&
           recognizesProjection?.call(text) == true) {
@@ -205,6 +210,13 @@ class BrainLiveTurns {
     final turn = _turns[id];
     if (turn != null && !turn.transcript.isCompleted) {
       turn.transcript.complete(null);
+      if (current && turn.epoch == _epoch) {
+        emit({
+          'type': 'voiceNotice',
+          'code': 'transcription_failed',
+          'message': 'I could not recognize that speech. Please repeat the view command or keep talking to Rici.',
+        });
+      }
     }
     // Direct audio conversation can continue even when display ASR fails.
   }
