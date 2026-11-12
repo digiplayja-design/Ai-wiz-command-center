@@ -1,0 +1,38 @@
+{
+  "acceptanceVersion": 4,
+  "origin": "https://korlix-projection-denial-20261112.onrender.com",
+  "scenario": "wrong-origin",
+  "productionActivation": false,
+  "overallVerification": "NOT_ESTABLISHED",
+  "startedAt": "2026-11-12T02:54:24.252Z",
+  "closedAt": null,
+  "rendererStatus": "error",
+  "observation": "WRONG_ORIGIN_DENIAL_OBSERVED",
+  "cameraCommands": [],
+  "sdk": {
+    "started": true,
+    "loader": {
+      "channel": "quarterly",
+      "loading": "async",
+      "authorizationReferrerPolicy": "origin",
+      "scriptReferrerPolicy": "strict-origin-when-cross-origin"
+    },
+    "sdkVersion": "3.65.14a",
+    "steady": false,
+    "everSteady": false,
+    "steadyEvents": 0,
+    "animationEnds": 0,
+    "mapError": false,
+    "loaderError": false,
+    "pageError": false,
+    "cspViolations": 0,
+    "cspEvents": [],
+    "providerErrorCodes": [
+      "RefererNotAllowedMapError"
+    ],
+    "documentReferrerPolicy": "strict-origin-when-cross-origin"
+  },
+  "tester": {
+    "currentOriginAbsentFromKeyAllowlist": true
+  }
+}
