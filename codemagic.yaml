@@ -691,6 +691,38 @@ workflows:
         submit_to_app_store: false
 
 
+  korlix-brain-testflight-assign-18:
+    name: KORLIX Brain+Voice — internal TestFlight build 18
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    environment:
+      xcode: 26.6
+    # Manual only, no custom inputs. Queue after verifying the successful upload
+    # 6af5e56f9679c85ac0af26f0 and its IPA report: com.korlix.brain 1.0.2 (18),
+    # source 5933fe7274bfc33f8846288457c01cb27723993e. Never select a newer build.
+    # Isolated native build branch: release/brain-voice-zoom-5933fe7.
+    # Requires the fixed independently reviewed docs/releases/brain-voice-zoom-20261112/verified-upload.json
+    # and its pinned record hash. Workflow environment cannot assert verification.
+    # Adds only the build relationship to the existing KORLIX Brain Internal
+    # group. Does not upload, submit review, attach an App Store version or invite.
+    scripts:
+      - name: Validate exact internal delivery guards
+        script: |
+          set -euo pipefail
+          python3 -m unittest discover -s scripts/tests -p 'test_brain_testflight_assignment.py' -v
+          python3 -c 'import runpy; runpy.run_path("scripts/assign_brain_testflight_build.py")["require_verified_source_upload"]()'
+      - name: Assign verified build to existing internal testers
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.brain-testflight-tools"
+          "$CM_BUILD_DIR/.brain-testflight-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+          "$CM_BUILD_DIR/.brain-testflight-tools/bin/python" scripts/assign_brain_testflight_build.py \
+            --assign --output artifacts/brain-testflight-assignment.json
+    artifacts:
+      - artifacts/brain-testflight-assignment.json
+
   korlix-brain-android-release:
     name: KORLIX Brain+Voice — signed Android release candidate
     instance_type: mac_mini_m2

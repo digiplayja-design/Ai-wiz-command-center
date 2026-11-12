@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-11-12T16:54:01.273189+00:00",
+  "sourceUpload": {
+    "codemagicBuildId": "6af5e56f9679c85ac0af26f0",
+    "workflow": "korlix-brain-ios-testflight",
+    "commit": "5933fe7274bfc33f8846288457c01cb27723993e",
+    "bundleId": "com.korlix.brain",
+    "version": "1.0.2",
+    "buildNumber": "18"
+  },
+  "sourceTree": "237beb1620c6c4c329d371452b9abcb371ab8695",
+  "publishingStatus": "uploaded",
+  "appleUploadId": "c9cee120-66bb-41a9-9cff-d403b4964609",
+  "ipa": {
+    "bytes": 34875464,
+    "sha256": "3f94f7b024a401f3538876d3952fae849ea6735127d65024b12bd79b37cf473d",
+    "infoPlist": {
+      "CFBundleIdentifier": "com.korlix.brain",
+      "CFBundleShortVersionString": "1.0.2",
+      "CFBundleVersion": "18",
+      "CFBundleSupportedPlatforms": [
+        "iPhoneOS"
+      ]
+    }
+  }
+}
