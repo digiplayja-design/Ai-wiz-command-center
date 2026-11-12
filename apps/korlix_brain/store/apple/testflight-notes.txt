@@ -1,15 +1,15 @@
-KORLIX Brain+Voice 1.0.2 — VR address and Projection refresh
+KORLIX Brain+Voice 1.0.2 — spoken destinations and continuous zoom
 
-This candidate improves address commands and refreshes Projection availability when you close and reopen it. It retains the voice connection fix from build 16. “Explore address in 3D” and “Live camera availability” now identify separate actions, and address search and 3D imagery have separate availability messages.
+This candidate connects recognized spoken VR commands directly to the existing destination lookup and confirmation flow. Rici no longer has to choose a map tool before a supported spoken destination or camera command can run. It retains the voice connection fix and address/Projection refresh work from builds 16 and 17.
 
-Please test on a physical iPhone or iPad:
-1. Start a conversation, wait for “Rici is listening,” and say “Enter VR.” Open the address controls in Projection.
-2. Say “Show me 1 Market Street, San Francisco, CA 94105,” then try “Show 1 Market Street, San Francisco, CA 94105 in 3D.” Check that the complete address is preserved. Review and confirm the destination candidate before displaying it. Also try entering an address or public landmark with the keyboard.
-3. Where 3D imagery is enabled, check the selected location and camera movement. This is recorded map imagery; requesting live camera availability does not establish that a live feed exists. Requests for live cameras or general research should not be treated as these address-display commands.
-4. Close Projection and reopen it. Check that current address-search and imagery availability is loaded again. After a network interruption, distinguish a failed availability check from a service that is not connected. Reopening refreshes status; it does not enable a missing provider service.
+On a physical iPhone or iPad, start a conversation and wait for Rici to listen:
+1. Say “Open VR and go to San Francisco Ferry Building, San Francisco, CA.” Check that the complete spoken destination appears. Review the candidate, then say “That’s it” for a single result or “Choose the first one.” Confirm that the selected location is displayed without typing.
+2. Say “Go to 1 Market Street, San Francisco, CA 94105.” Check that the complete address is preserved and the candidate still needs confirmation. Also test a typed address.
+3. Say “Zoom in” several times, then “Keep zooming in.” Say “Stop zooming” or “Stop moving the view” to hold the camera while keeping Rici listening. Try “Keep zooming out,” “Hold this view,” “Rotate left,” “Rotate right,” and “Reset view.” A Stop Zoom button is also available.
+4. Repeated commands have no count limit. Continuous movement stops at the closest or farthest navigation bound. Closer navigation cannot create detail absent from the recorded imagery; this is not a live camera feed.
+5. During continuous movement, touch the map, choose another destination, pause the conversation, background the app, and return. Old camera movement must stay stopped. A delayed earlier address result must not replace a newer destination.
+6. After selecting a place, ask an ordinary question such as “Look up quantum mechanics” or “Tell me a joke.” Rici should continue the conversation without changing the destination. Confirm one action and one spoken acknowledgement per direct camera command.
 
-Voice checks: let Rici’s welcome finish, tap Talk to Rici, allow the microphone if asked, wait for “Rici is listening,” and ask “Rici, can you hear me?” Confirm a spoken answer and a second turn. Repeat after skipping the welcome. Try Pause, Resume, and Stop while connecting and during speech. Check that Pause closes microphone audio, Resume reconnects with recent context in the same mode, and Stop clears resumable context. If listening does not appear, record the visible connection message and the installed version/build from Account.
+Voice regression: ask “Rici, can you hear me?” and confirm a spoken reply and a second turn. Test Pause, Resume, and Stop while connecting and speaking. Stop Zoom must preserve the conversation; Stop Conversation must close microphone audio and clear resumable context. Repeat after skipping the welcome and in both Live Conversation and Deep Think modes.
 
-Existing PDF review/save to Memory or Training, Camera Ask, directions, account, plan, AI GAS, welcome, ambience, and transcript controls are unchanged in this update. A brief regression check of PDF import, camera capture, and opening directions in Apple or Google Maps is useful.
-
-Report the installed build, device, exact request, selected destination, visible status, and whether speech and imagery worked. Address search and embedded 3D imagery still depend on the deployed provider configuration. This candidate does not establish completed native-map acceptance, activate store billing, or submit an App Store release.
+Check PDF import/review, Camera Ask, directions, and account controls briefly. Report the installed version/build, device, exact spoken request, selected destination, visible status, and whether speech and imagery worked. This candidate still requires physical-device acceptance and does not submit an App Store release.

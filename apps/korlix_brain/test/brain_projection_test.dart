@@ -685,7 +685,7 @@ void main() {
           'Show me 3 facts about 10 Downing Street',
           'Show me 3 photos of 10 Downing Street',
           'Show me 10 Downing Street history',
-        'Show me 10 Downing Street, history',
+          'Show me 10 Downing Street, history',
           'Show me 10 Downing Street history of the street',
           'Show me 10 Downing Street, history of the street',
           'Show me 3 buildings in Downing Street',
@@ -990,6 +990,281 @@ void main() {
     );
   });
 
+  group('Hands-free destinations and continuous zoom', () {
+    test('ordinary lookup requests remain conversation outside a destination prompt', () async {
+      final f = Fixture();
+      addTearDown(f.projection.dispose);
+      const phrases = [
+        'Look up quantum mechanics',
+        'Find a good restaurant recipe',
+        'Explore relativity',
+        'Search for cooking tips',
+        'Show me quantum mechanics',
+      ];
+      for (final phrase in phrases) {
+        expect(
+          f.projection.recognizesVoiceControl(phrase),
+          false,
+          reason: phrase,
+        );
+      }
+      await f.select();
+      for (final phrase in phrases) {
+        expect(
+          f.projection.recognizesVoiceControl(phrase),
+          false,
+          reason: phrase,
+        );
+      }
+      expect(f.projection.recognizesVoiceControl('Go to Paris'), true);
+      expect(
+        f.projection.recognizesVoiceControl('Find the Eiffel Tower'),
+        true,
+      );
+    });
+
+    test(
+      'landmark and compound VR requests preserve the spoken destination',
+      () async {
+        for (final phrase in [
+          'Rici, show me San Francisco Ferry Building, San Francisco, CA',
+          'Open VR and show me San Francisco Ferry Building, San Francisco, CA',
+          'Open virtual reality and take me to San Francisco Ferry Building, San Francisco, CA',
+        ]) {
+          final queries = <String>[];
+          final f = Fixture(
+            request: (method, path, body) async {
+              if (path.endsWith('/config')) return config;
+              queries.add(body!['query'] as String);
+              return {
+                'candidates': [place],
+              };
+            },
+          );
+          addTearDown(f.projection.dispose);
+          expect(f.projection.recognizesVoiceControl(phrase), true);
+          await f.projection.voiceTurn('landmark', phrase, null);
+          expect(queries, ['San Francisco Ferry Building, San Francisco, CA']);
+          expect(f.projection.snapshot['selectedPlace'], isNull);
+          expect(f.projection.recognizesVoiceControl("That's it"), true);
+          await f.projection.voiceTurn('confirmation', "That's it", null);
+          expect(
+            (f.projection.snapshot['selectedPlace'] as Map)['id'],
+            place['id'],
+          );
+          expect(f.starts, 0);
+          expect(f.stops, 0);
+        }
+      },
+    );
+
+    test('a prompted bare landmark works but ordinary conversation is not a lookup', () async {
+      final f = Fixture();
+      addTearDown(f.projection.dispose);
+      await f.projection.voiceTurn('open', 'Open VR', null);
+      for (final phrase in [
+        'Tell me a joke',
+        'How old is the Ferry Building?',
+        'Remember I like San Francisco',
+        'Do not go to the Ferry Building',
+      ]) {
+        expect(
+          f.projection.recognizesVoiceControl(phrase),
+          false,
+          reason: phrase,
+        );
+      }
+      expect(
+        f.projection.recognizesVoiceControl('San Francisco Ferry Building'),
+        true,
+      );
+      await f.projection.voiceTurn(
+        'bare',
+        'San Francisco Ferry Building',
+        null,
+      );
+      expect(
+        f.requests.where((path) => path.endsWith('/resolve')),
+        hasLength(1),
+      );
+      await f.projection.voiceTurn('select', 'First one', null);
+      expect(f.projection.snapshot['selectedPlace'], isNotNull);
+      expect(
+        f.projection.recognizesVoiceControl('San Francisco Ferry Building'),
+        false,
+      );
+    });
+
+    test(
+      'camera stop holds the view and keeps the conversation active',
+      () async {
+        final f = Fixture();
+        addTearDown(f.projection.dispose);
+        await f.select();
+        f.projection.receiveVoice({'type': 'voice', 'phase': 'listening'});
+        await f.projection.voiceTurn('keep-in', 'Keep zooming in', null);
+        expect(
+          (f.projection.snapshot['camera'] as Map)['operation'],
+          'zoomInContinuous',
+        );
+        expect(f.projection.recognizesVoiceControl('Stop'), true);
+        await f.projection.voiceTurn('stop-camera', 'Stop zooming', null);
+        expect(
+          (f.projection.snapshot['camera'] as Map)['operation'],
+          'stopCamera',
+        );
+        expect((f.projection.snapshot['voice'] as Map)['active'], true);
+        expect(f.stops, 0);
+        expect(f.projection.recognizesVoiceControl('Stop'), false);
+        await f.projection.voiceTurn('keep-out', 'Keep zooming out', null);
+        expect(
+          (f.projection.snapshot['camera'] as Map)['operation'],
+          'zoomOutContinuous',
+        );
+        await f.projection.voiceTurn('hold', 'Hold this view', null);
+        expect(
+          (f.projection.snapshot['camera'] as Map)['operation'],
+          'stopCamera',
+        );
+      },
+    );
+
+    test('repeated zoom is not capped by a command count and duplicates never move twice', () async {
+      final f = Fixture();
+      addTearDown(f.projection.dispose);
+      await f.select();
+      final start = (f.projection.snapshot['camera'] as Map)['sequence'] as int;
+      for (var i = 0; i < 80; i++) {
+        expect(
+          (await f.projection.voiceTurn('step-$i', 'Zoom in', null))?['ok'],
+          true,
+        );
+      }
+      expect((f.projection.snapshot['camera'] as Map)['sequence'], start + 80);
+      await f.projection.voiceTurn('step-79', 'Zoom in', {
+        'action': 'camera',
+        'value': 'closer',
+      });
+      expect((f.projection.snapshot['camera'] as Map)['sequence'], start + 80);
+      expect(
+        f.projection.recognizesVoiceControl('Do not keep zooming in'),
+        false,
+      );
+      expect(
+        f.projection.recognizesVoiceControl('How do I stop zooming?'),
+        false,
+      );
+      for (final phrase in [
+        'Zoom in on the history of this building',
+        'Zoom in, no, zoom out',
+        'Turn left but do not move the view',
+      ]) {
+        expect(
+          f.projection.recognizesVoiceControl(phrase),
+          false,
+          reason: phrase,
+        );
+      }
+      expect(f.projection.recognizesVoiceControl('Stop moving the view'), true);
+    });
+
+    test(
+      'pause, stop, background and errors cancel continuous camera motion',
+      () async {
+        for (final event in [
+          {'type': 'voice', 'phase': 'pausing'},
+          {'type': 'voice', 'phase': 'paused'},
+          {'type': 'voice', 'phase': 'stopping'},
+          {'type': 'voice', 'phase': 'complete'},
+          {'type': 'voice', 'phase': 'error'},
+          {'type': 'appLifecycle', 'active': false},
+        ]) {
+          final f = Fixture();
+          addTearDown(f.projection.dispose);
+          await f.select();
+          f.projection.camera('zoomInContinuous');
+          f.projection.receiveVoice(event);
+          expect(
+            (f.projection.snapshot['camera'] as Map)['operation'],
+            'stopCamera',
+            reason: '$event',
+          );
+          expect(f.stops, 0);
+        }
+        final f = Fixture();
+        addTearDown(f.projection.dispose);
+        await f.select();
+        f.projection.camera('zoomInContinuous');
+        await f.projection.dispatch('rendererReady', {'status': 'error'});
+        expect(
+          (f.projection.snapshot['camera'] as Map)['operation'],
+          'stopCamera',
+        );
+        f.projection.receiveVoice({'type': 'appLifecycle', 'active': false});
+        expect(f.projection.camera('zoomInContinuous')['ok'], false);
+      },
+    );
+
+    test(
+      'new searches stop movement before a new destination is confirmed',
+      () async {
+        final f = Fixture();
+        addTearDown(f.projection.dispose);
+        await f.select();
+        f.projection.camera('zoomInContinuous');
+        await f.projection.search('A different destination');
+        expect(
+          (f.projection.snapshot['camera'] as Map)['operation'],
+          'stopCamera',
+        );
+        expect(f.projection.snapshot['selectedPlace'], isNull);
+        expect(f.projection.snapshot['candidates'], isNotEmpty);
+      },
+    );
+
+    test(
+      'only the current camera outcome can stop motion or report its limit',
+      () async {
+        final f = Fixture();
+        addTearDown(f.projection.dispose);
+        await f.select();
+        f.projection.camera('zoomInContinuous');
+        final old = (f.projection.snapshot['camera'] as Map)['sequence'];
+        f.projection.camera('zoomOutContinuous');
+        final current = (f.projection.snapshot['camera'] as Map)['sequence'];
+        await f.projection.dispatch('cameraStatus', {
+          'sequence': old,
+          'state': 'limit',
+          'reason': 'closest',
+        });
+        expect(
+          (f.projection.snapshot['camera'] as Map)['operation'],
+          'zoomOutContinuous',
+        );
+        await f.projection.dispatch('cameraStatus', {
+          'sequence': current,
+          'state': 'limit',
+          'reason': 'farthest',
+        });
+        expect(
+          (f.projection.snapshot['camera'] as Map)['operation'],
+          'stopCamera',
+        );
+        expect(f.projection.snapshot['notice'], contains('farthest view'));
+        f.projection.camera('zoomInContinuous');
+        await f.projection.dispatch('cameraStatus', {
+          'sequence': (f.projection.snapshot['camera'] as Map)['sequence'],
+          'state': 'limit',
+          'reason': 'closest',
+        });
+        expect(
+          f.projection.snapshot['notice'],
+          contains('More detail depends on the imagery'),
+        );
+      },
+    );
+  });
+
   group('Projection bridge', () {
     String message(
       String id,
@@ -1016,6 +1291,17 @@ void main() {
       expect(bridge.accept(message('9', 'ask')), isNull);
       expect(bridge.accept(message('10', 'stopVoice')), isNotNull);
       expect(bridge.accept(message('11', 'close')), isNotNull);
+      expect(
+        bridge.accept(
+          jsonEncode({
+            'id': '12',
+            'nonce': 'per-view-secret',
+            'action': 'camera',
+            'payload': {'operation': 'stopCamera'},
+          }),
+        ),
+        isNotNull,
+      );
     });
   });
 }

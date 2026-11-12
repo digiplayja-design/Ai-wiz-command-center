@@ -108,6 +108,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
       _api,
       _emit,
       onProjection: _projection.voiceTurn,
+      recognizesProjection: _projection.recognizesVoiceControl,
       onSaved: (result) async {
         // A confirmed write must remain visible even if the subsequent refresh fails.
         final memory = Map<String, dynamic>.from(result['memory'] as Map);

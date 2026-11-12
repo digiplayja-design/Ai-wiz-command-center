@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:korlix_brain/brain_live_turns.dart';
@@ -189,11 +190,506 @@ void main() {
     );
     h.live.dispose();
   });
+
+  group('original-transcript view controls', () {
+    Future<void> flush() => Future<void>.delayed(Duration.zero);
+    bool recognizes(String text) => {
+      'Show me the Ferry Building in 3D',
+      'Keep zooming in',
+      'Stop zooming',
+      'Close VR',
+    }.contains(text);
+    Map<String, dynamic> result(String text) => {
+      'ok': true,
+      'handled': true,
+      'answer': text,
+    };
+    Map<String, dynamic> automaticDone(
+      String id, {
+      String status = 'completed',
+    }) => {'id': id, 'status': status, 'output': <Object>[]};
+    List<Map<String, dynamic>> acknowledgements(Harness h) =>
+        h.sent.where((event) => event['type'] == 'response.create').toList();
+
+    test(
+      'ASR moves the view without a model tool and speaks one verified result',
+      () async {
+        final h = Harness(
+          recognizes: recognizes,
+          project: (_, _, _) async =>
+              result('Zooming in. Say stop zooming to stop.'),
+        );
+        h.begin('one', 'r1');
+        h.live.accept('one', 'Keep zooming in');
+        h.live.accept('one', 'Keep zooming in');
+        await flush();
+        expect(h.projections.single, ['one', 'Keep zooming in', null]);
+        expect(
+          h.sent
+              .where((e) => e['type'] == 'response.cancel')
+              .single['response_id'],
+          'r1',
+        );
+        expect(
+          acknowledgements(h),
+          isEmpty,
+          reason: 'Wait for cancellation to finish',
+        );
+        await h.live.responseDone(automaticDone('r1', status: 'cancelled'));
+        await flush();
+        final response = acknowledgements(h).single['response'] as Map;
+        expect(response['conversation'], 'none');
+        expect(response['metadata']['brain_turn'], 'one');
+        expect(response['metadata']['brain_projection_direct'], 'true');
+        expect(response['tool_choice'], 'none');
+        expect(response['tools'], isEmpty);
+        expect(
+          response['input'][0]['content'][0]['text'],
+          'Zooming in. Say stop zooming to stop.',
+        );
+        expect(
+          h.sent.where((e) => e['type'] == 'conversation.item.create'),
+          isEmpty,
+          reason: 'Never invent a function call or call output',
+        );
+        h.live.responseStarted({
+          'id': 'ack1',
+          'metadata': {'brain_turn': 'one', 'brain_projection_direct': 'true'},
+        });
+        await h.live.responseDone(automaticDone('ack1'));
+        expect(acknowledgements(h).length, 1);
+        expect(h.sent.where((e) => e['type'] == 'response.cancel').length, 1);
+        expect(
+          h.live.usageEvent({
+            'type': 'response.done',
+            'response': {
+              'id': 'ack1',
+              'usage': {'total_tokens': 9},
+            },
+          })['response']['metadata']['brain_turn'],
+          'one',
+        );
+        h.live.dispose();
+      },
+    );
+
+    test(
+      'ASR before response.created cancels the later automatic reply',
+      () async {
+        final h = Harness(
+          recognizes: recognizes,
+          project: (_, _, _) async => result('The view stopped.'),
+        );
+        h.live.speechStarted('one');
+        h.live.speechStopped('one');
+        h.live.accept('one', 'Stop zooming');
+        await flush();
+        expect(h.projections.length, 1);
+        expect(h.sent, isEmpty);
+        h.live.responseStarted({'id': 'late-auto'});
+        await flush();
+        expect(h.sent.map((e) => e['type']), [
+          'response.cancel',
+          'output_audio_buffer.clear',
+        ]);
+        await h.live.responseDone(
+          automaticDone('late-auto', status: 'cancelled'),
+        );
+        expect(acknowledgements(h).length, 1);
+        h.live.dispose();
+      },
+    );
+
+    test(
+      'ASR after automatic completion clears old audio before acknowledging',
+      () async {
+        final h = Harness(
+          recognizes: recognizes,
+          project: (_, _, _) async => result('The view stopped.'),
+        );
+        h.begin('one', 'auto1');
+        h.live.audioStarted('auto1');
+        await h.live.responseDone(automaticDone('auto1'));
+        h.live.accept('one', 'Stop zooming');
+        await flush();
+        expect(h.sent.map((e) => e['type']), [
+          'output_audio_buffer.clear',
+          'response.create',
+        ]);
+        h.live.dispose();
+      },
+    );
+
+    test('queued automatic audio is cleared even before its started event', () async {
+      final h = Harness(
+        recognizes: recognizes,
+        project: (_, _, _) async => result('The view stopped.'),
+      );
+      h.begin('one', 'auto1');
+      await h.live.responseDone(automaticDone('auto1'));
+      h.live.accept('one', 'Stop zooming');
+      await flush();
+      expect(h.sent.map((e) => e['type']), [
+        'output_audio_buffer.clear',
+        'response.create',
+      ]);
+      // A delayed event for the cleared reply must not cut off the new speech.
+      h.live.audioStarted('auto1');
+      await flush();
+      expect(
+        h.sent.where((e) => e['type'] == 'output_audio_buffer.clear').length,
+        1,
+      );
+      expect(acknowledgements(h).length, 1);
+      h.live.dispose();
+    });
+
+    test(
+      'late ASR waits for a previously requested tool continuation',
+      () async {
+        final h = Harness(
+          recognizes: recognizes,
+          project: (_, _, _) async => result('The view stopped.'),
+          timeout: const Duration(milliseconds: 1),
+        );
+        h.begin('one', 'auto1');
+        await h.live.responseDone(done('auto1'));
+        expect(h.requests, isEmpty);
+        expect(
+          acknowledgements(h).length,
+          1,
+          reason:
+              'The failed ASR tool has already requested its ordinary reply',
+        );
+        h.live.accept('one', 'Stop zooming');
+        await flush();
+        expect(h.projections.length, 1);
+        expect(
+          acknowledgements(h).length,
+          1,
+          reason:
+              'Do not overlap the continuation still awaiting response.created',
+        );
+        h.live.responseStarted({
+          'id': 'tool-follow',
+          'metadata': {'brain_turn': 'one'},
+        });
+        await flush();
+        expect(
+          h.sent
+              .where((e) => e['type'] == 'response.cancel')
+              .single['response_id'],
+          'tool-follow',
+        );
+        await h.live.responseDone(
+          automaticDone('tool-follow', status: 'cancelled'),
+        );
+        await flush();
+        expect(acknowledgements(h).length, 2);
+        expect(
+          acknowledgements(h)
+              .last['response']['metadata']['brain_projection_direct'],
+          'true',
+        );
+        expect(h.projections.length, 1);
+        h.live.dispose();
+      },
+    );
+
+    test(
+      'a tool already waiting for ASR shares its direct result exactly once',
+      () async {
+        final finish = Completer<Map<String, dynamic>?>();
+        final h = Harness(
+          recognizes: recognizes,
+          project: (_, _, _) => finish.future,
+        );
+        h.begin('one', 'auto1');
+        final pending = h.live.responseDone(
+          done(
+            'auto1',
+            name: 'control_projection',
+            args: '{"action":"search","value":"model changed the destination"}',
+            call: 'real-call',
+          ),
+        );
+        await flush();
+        h.live.accept('one', 'Show me the Ferry Building in 3D');
+        await flush();
+        expect(h.projections.single, [
+          'one',
+          'Show me the Ferry Building in 3D',
+          null,
+        ]);
+        expect(acknowledgements(h), isEmpty);
+        finish.complete(
+          result('Review the full address on screen and confirm it.'),
+        );
+        await pending;
+        await flush();
+        expect(h.projections.length, 1);
+        final outputs = h.sent
+            .where((e) => e['type'] == 'conversation.item.create')
+            .toList();
+        expect(outputs.single['item']['call_id'], 'real-call');
+        expect(
+          jsonDecode(outputs.single['item']['output'])['answer'],
+          'Review the full address on screen and confirm it.',
+        );
+        expect(acknowledgements(h).length, 1);
+        final outputIndex = h.sent.indexOf(outputs.single);
+        expect(
+          h.sent.indexOf(acknowledgements(h).single),
+          greaterThan(outputIndex),
+        );
+        await h.live.responseDone(
+          done(
+            'auto1',
+            name: 'control_projection',
+            args: '{"action":"search","value":"again"}',
+            call: 'real-call',
+          ),
+        );
+        expect(h.projections.length, 1);
+        expect(acknowledgements(h).length, 1);
+        h.live.dispose();
+      },
+    );
+
+    test('a completed real call in a cancelled reply receives an output, incomplete calls do not', () async {
+      final h = Harness(
+        recognizes: recognizes,
+        project: (_, _, _) async => result('Zooming in.'),
+      );
+      h.begin('one', 'auto1');
+      h.live.accept('one', 'Keep zooming in');
+      await h.live.responseDone({
+        'id': 'auto1',
+        'status': 'cancelled',
+        'output': [
+          {
+            'type': 'function_call',
+            'status': 'completed',
+            'name': 'control_projection',
+            'call_id': 'completed-call',
+            'arguments': '{"action":"camera","value":"zoomInContinuous"}',
+          },
+          {
+            'type': 'function_call',
+            'status': 'incomplete',
+            'name': 'control_projection',
+            'call_id': 'incomplete-call',
+            'arguments': '{"action":',
+          },
+        ],
+      });
+      final outputs = h.sent
+          .where((e) => e['type'] == 'conversation.item.create')
+          .toList();
+      expect(outputs.single['item']['call_id'], 'completed-call');
+      expect(h.projections.length, 1);
+      expect(acknowledgements(h).length, 1);
+      h.live.dispose();
+    });
+
+    test(
+      'later tool arguments cannot replace or replay the original control',
+      () async {
+        final h = Harness(
+          recognizes: recognizes,
+          project: (_, _, _) async => result('The view stopped.'),
+        );
+        h.begin('one', 'auto1');
+        final pending = h.live.responseDone({
+          'id': 'auto1',
+          'status': 'completed',
+          'output': [
+            {
+              'type': 'function_call',
+              'name': 'control_projection',
+              'call_id': 'real-call-one',
+              'arguments': '{malformed',
+            },
+            {
+              'type': 'function_call',
+              'name': 'control_projection',
+              'call_id': 'real-call-two',
+              'arguments': '{"action":"camera","value":"zoomInContinuous"}',
+            },
+          ],
+        });
+        await flush();
+        expect(
+          h.sent,
+          isEmpty,
+          reason: 'The original transcript owns the action',
+        );
+        h.live.accept('one', 'Stop zooming');
+        await pending;
+        await flush();
+        expect(h.projections.single, ['one', 'Stop zooming', null]);
+        final outputs = h.sent
+            .where((e) => e['type'] == 'conversation.item.create')
+            .toList();
+        expect(outputs.map((e) => e['item']['call_id']), [
+          'real-call-one',
+          'real-call-two',
+        ]);
+        for (final output in outputs) {
+          expect(
+            jsonDecode(output['item']['output'])['answer'],
+            'The view stopped.',
+          );
+        }
+        expect(acknowledgements(h).length, 1);
+        expect(h.requests, isEmpty);
+        h.live.dispose();
+      },
+    );
+
+    test(
+      'wrong memory tool cannot turn a direct camera utterance into a write',
+      () async {
+        final h = Harness(
+          recognizes: recognizes,
+          project: (_, _, _) async => result('The view stopped.'),
+        );
+        h.begin('one', 'auto1');
+        h.live.accept('one', 'Stop zooming');
+        await h.live.responseDone(
+          done('auto1', args: '{"text":"invented memory"}'),
+        );
+        expect(h.requests, isEmpty);
+        expect(h.saved, isEmpty);
+        final output = h.sent.firstWhere(
+          (e) => e['type'] == 'conversation.item.create',
+        );
+        expect(jsonDecode(output['item']['output'])['saved'], isFalse);
+        expect(acknowledgements(h).length, 1);
+        h.live.dispose();
+      },
+    );
+
+    test(
+      'ordinary conversation and memory commands preserve the native paths',
+      () async {
+        final h = Harness(
+          recognizes: recognizes,
+          project: (_, _, _) async => result('Must never execute'),
+        );
+        h.begin('one', 'auto1');
+        h.live.accept('one', 'Tell me a story about a telescope');
+        await h.live.responseDone(automaticDone('auto1'));
+        expect(h.projections, isEmpty);
+        expect(h.sent, isEmpty);
+        h.begin('two', 'auto2');
+        h.live.accept('two', 'Rici remember this: my dog is Joy');
+        await h.live.responseDone(done('auto2'));
+        expect(h.projections, isEmpty);
+        expect(h.requests.single, ['two', 'Rici remember this: my dog is Joy']);
+        expect(h.saved.length, 1);
+        expect(acknowledgements(h).single['response']['conversation'], isNull);
+        h.live.dispose();
+      },
+    );
+
+    test('late ASR after a newer utterance never moves the view', () async {
+      final h = Harness(
+        recognizes: recognizes,
+        project: (_, _, _) async => result('Must never execute'),
+      );
+      h.begin('one', 'auto1');
+      h.live.speechStarted('two');
+      h.live.accept('one', 'Keep zooming in');
+      await h.live.responseDone(automaticDone('auto1', status: 'cancelled'));
+      expect(h.projections, isEmpty);
+      expect(acknowledgements(h), isEmpty);
+      h.live.dispose();
+    });
+
+    test(
+      'new stop control is not blocked by an earlier address lookup',
+      () async {
+        final search = Completer<Map<String, dynamic>?>();
+        final h = Harness(
+          recognizes: recognizes,
+          project: (id, _, _) => id == 'one'
+              ? search.future
+              : Future.value(result('The view stopped.')),
+        );
+        h.begin('one', 'auto1');
+        h.live.accept('one', 'Show me the Ferry Building in 3D');
+        await h.live.responseDone(automaticDone('auto1', status: 'cancelled'));
+        h.begin('two', 'auto2');
+        h.live.accept('two', 'Stop zooming');
+        await h.live.responseDone(automaticDone('auto2', status: 'cancelled'));
+        await flush();
+        expect(h.projections.map((p) => p.first), ['one', 'two']);
+        expect(
+          acknowledgements(h).single['response']['metadata']['brain_turn'],
+          'two',
+        );
+        search.complete(result('Stale address result'));
+        await flush();
+        expect(acknowledgements(h).length, 1);
+        expect(jsonEncode(h.sent), isNot(contains('Stale address result')));
+        h.live.dispose();
+      },
+    );
+
+    test(
+      'Stop or account teardown suppresses a late result and acknowledgement',
+      () async {
+        final finish = Completer<Map<String, dynamic>?>();
+        final h = Harness(
+          recognizes: recognizes,
+          project: (_, _, _) => finish.future,
+        );
+        h.begin('one', 'auto1');
+        h.live.accept('one', 'Show me the Ferry Building in 3D');
+        await flush();
+        await h.live.responseDone(automaticDone('auto1', status: 'cancelled'));
+        h.live.dispose();
+        final count = h.sent.length;
+        finish.complete(result('Stale address result'));
+        await flush();
+        expect(h.sent.length, count);
+        expect(acknowledgements(h), isEmpty);
+      },
+    );
+
+    test('failed direct control acknowledges failure once without retry or success claim', () async {
+      final h = Harness(
+        recognizes: recognizes,
+        project: (_, _, _) async => throw StateError('private provider detail'),
+      );
+      h.begin('one', 'auto1');
+      h.live.accept('one', 'Keep zooming in');
+      await h.live.responseDone(automaticDone('auto1', status: 'cancelled'));
+      await flush();
+      expect(h.projections.length, 1);
+      expect(
+        acknowledgements(h)
+            .single['response']['input'][0]['content'][0]['text'],
+        contains('could not finish'),
+      );
+      expect(jsonEncode(h.sent), isNot(contains('private provider detail')));
+      expect(h.requests, isEmpty);
+      h.live.dispose();
+    });
+  });
 }
 
 class Harness {
   Harness({
     Future<Map<String, dynamic>> Function(String, String)? save,
+    Future<Map<String, dynamic>?> Function(
+      String,
+      String,
+      Map<String, dynamic>?,
+    )?
+    project,
+    bool Function(String)? recognizes,
     Duration timeout = const Duration(seconds: 15),
   }) {
     live = BrainLiveTurns(
@@ -219,6 +715,13 @@ class Harness {
       reportTiming: (id, ms) async {
         timings.add([id, ms]);
       },
+      recognizesProjection: recognizes,
+      onProjection: project == null
+          ? null
+          : (id, text, args) {
+              projections.add([id, text, args]);
+              return project(id, text, args);
+            },
       transcriptionTimeout: timeout,
     );
   }
@@ -227,6 +730,7 @@ class Harness {
       events = <Map<String, dynamic>>[],
       saved = <Map<String, dynamic>>[];
   final requests = <List<String>>[], timings = <List<Object>>[];
+  final projections = <List<Object?>>[];
   void begin(String turn, String response) {
     live.speechStarted(turn);
     live.speechStopped(turn);

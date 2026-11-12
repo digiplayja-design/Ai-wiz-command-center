@@ -16,7 +16,13 @@ import 'package:flutter/foundation.dart';
 import 'voice_usage_guard.dart';
 
 class BrainVoice {
-  BrainVoice(this.api, this.emit, {required this.onSaved, this.onProjection});
+  BrainVoice(
+    this.api,
+    this.emit, {
+    required this.onSaved,
+    this.onProjection,
+    this.recognizesProjection,
+  });
   final BrainApi api;
   final void Function(Map<String, dynamic>) emit;
   final Future<void> Function(Map<String, dynamic>) onSaved;
@@ -26,6 +32,7 @@ class BrainVoice {
     Map<String, dynamic>? arguments,
   )?
   onProjection;
+  final bool Function(String transcript)? recognizesProjection;
   BrainVoiceTurns? _turns;
   BrainLiveTurns? _live;
   RTCPeerConnection? _peer;
@@ -580,6 +587,7 @@ class BrainVoice {
       if (mode.isLive) {
         _live = BrainLiveTurns(
           onProjection: onProjection,
+          recognizesProjection: recognizesProjection,
           isCurrent: current,
           emit: _forward,
           saved: onSaved,

@@ -578,6 +578,28 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
     }
     await page.locator('[data-camera="closer"]').click();
     await renderer.waitForFunction(()=>window.received.at(-1).camera.operation==='closer');
+    await page.evaluate(()=>{
+      window.projectionState.camera={...window.projectionState.camera,sequence:window.projectionState.camera.sequence+1,operation:'zoomInContinuous'};
+      window.sendSnapshot();
+    });
+    await renderer.waitForFunction(()=>window.received.at(-1).camera.operation==='zoomInContinuous');
+    const cameraSequence=await page.evaluate(()=>window.projectionState.camera.sequence);
+    await page.evaluate(sequence=>{
+      const source=document.querySelector('iframe').contentWindow;
+      for(const [origin,windowSource,record] of [
+        ['https://attacker.test',source,{sequence,state:'limit',reason:'closest'}],
+        ['https://projection.test',window,{sequence,state:'limit',reason:'closest'}],
+        ['https://projection.test',source,{sequence:sequence-1,state:'limit',reason:'closest'}],
+        ['https://projection.test',source,{sequence,state:'script',reason:'closest'}],
+      ]) window.dispatchEvent(new MessageEvent('message',{origin,source:windowSource,data:{type:'korlix-projection-camera-status',...record}}));
+    },cameraSequence);
+    assert.equal(await page.evaluate(()=>window.projectionCommands.filter(c=>c.action==='cameraStatus').length),0,'Untrusted/stale camera outcomes never reach native');
+    await renderer.evaluate(sequence=>parent.postMessage({type:'korlix-projection-camera-status',sequence,state:'limit',reason:'closest'},'*'),cameraSequence);
+    await page.waitForFunction(()=>window.projectionCommands.some(c=>c.action==='cameraStatus'));
+    assert.deepEqual(await page.evaluate(()=>window.projectionCommands.filter(c=>c.action==='cameraStatus').at(-1).payload),{sequence:cameraSequence,state:'limit',reason:'closest'});
+    await page.locator('[data-camera="stopCamera"]').click();
+    await renderer.waitForFunction(()=>window.received.at(-1).camera.operation==='stopCamera');
+    assert.equal(await page.evaluate(()=>window.projectionCommands.at(-1).action),'camera','Camera stop is distinct from conversation Stop');
     await renderer.evaluate(()=>window.emitStatus('error'));
     await page.waitForFunction(()=>document.body.dataset.map==='illustration');
     assert.equal(await page.locator('#world-canvas').isVisible(),true,'Renderer failure returns to honest illustration');

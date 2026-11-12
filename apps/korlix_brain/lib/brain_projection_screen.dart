@@ -33,6 +33,7 @@ class BrainProjectionBridge {
     'resumeVoice',
     'openSource',
     'rendererReady',
+    'cameraStatus',
   };
 
   Map<String, dynamic>? accept(String raw) {
@@ -42,6 +43,7 @@ class BrainProjectionBridge {
       if (value is! Map || value['nonce'] != nonce) return null;
       final id = value['id'];
       final action = value['action'];
+      final payload = value['payload'];
       if (id is! String ||
           !RegExp(r'^\d{1,10}$').hasMatch(id) ||
           !actions.contains(action) ||
@@ -49,10 +51,12 @@ class BrainProjectionBridge {
           (_pending.length >= 8 &&
               action != 'stopVoice' &&
               action != 'pauseVoice' &&
-              action != 'close')) {
+              action != 'close' &&
+              !(action == 'camera' &&
+                  payload is Map &&
+                  payload['operation'] == 'stopCamera'))) {
         return null;
       }
-      final payload = value['payload'];
       if (payload != null && payload is! Map) return null;
       _seen.add(id);
       _pending.add(id);

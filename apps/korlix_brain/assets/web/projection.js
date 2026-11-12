@@ -8,7 +8,7 @@
   const clip = (value, length = 2000) => typeof value === 'string' ? value.slice(0, length) : '';
   const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
   const finite = (value, min, max) => typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
-  const operations = new Set(['closer', 'farther', 'left', 'right', 'reset']);
+  const operations = new Set(['closer', 'farther', 'left', 'right', 'reset', 'zoomInContinuous', 'zoomOutContinuous', 'stopCamera']);
   const isLocalLiveQuestion = question => /\b(live|real[ -]?time)\b.*\b(view|camera|feed|video|imagery)\b/i.test(question);
   const phases = new Set(['complete', 'connecting', 'listening', 'thinking', 'speaking', 'pausing', 'paused', 'stopping', 'error']);
   const terminalVoicePhases = new Set(['complete','error']);
@@ -50,7 +50,7 @@
     if (!isObject(raw)) return camera;
     if (Number.isSafeInteger(raw.sequence) && raw.sequence >= 0) camera.sequence = raw.sequence;
     if (operations.has(raw.operation) || raw.operation === 'flyTo') camera.operation = raw.operation;
-    for (const [key,min,max] of [['latitude',-90,90],['longitude',-180,180],['height',25,40000000],['heading',-360,360],['pitch',-90,0]]) {
+    for (const [key,min,max] of [['latitude',-90,90],['longitude',-180,180],['height',1,40000000],['heading',-360,360],['pitch',-90,0]]) {
       if (finite(raw[key],min,max)) camera[key] = raw[key];
     }
     return camera;
@@ -231,7 +231,7 @@
     const help = $('search-help');
     help.firstElementChild.textContent = state.config.checking ? 'Checking address search…' : busy.search ? 'Finding matching destinations…' : state.config.checkFailed
       ? 'Could not check address search. Close and reopen Projection to try again.' : connected && !state.config.geocodingAvailable
-      ? 'Address search is not connected yet. You can still talk to Rici.' : 'Say “Show me…” with a street address, or enter a place.';
+      ? 'Address search is not connected yet. You can still talk to Rici.' : 'Say “Go to…” with an address or landmark, or enter a place.';
     help.lastElementChild.textContent = 'Confirm a result before traveling.';
   }
 
@@ -268,7 +268,7 @@
       : voice.message || (controls.session ? 'Rici is with you' : 'Ready when you are');
     $('voice-hint').textContent = phase === 'paused' ? 'Microphone off. Resume when you’re ready.'
       : phase === 'pausing' ? 'Turning off the microphone and audio…'
-      : controls.session ? 'Your KORLIX conversation continues in this room.' : 'Talk to Rici or type a destination.';
+      : controls.session ? 'Say “keep zooming in” or “stop zooming”.' : 'Talk to Rici or type a destination.';
     $('talk-button').disabled = !controls.start;
     $('talk-label').textContent = phase === 'paused' ? 'Conversation paused' : controls.session
       ? (phase === 'connecting' ? 'Connecting…' : phase === 'stopping' ? 'Finishing…' : phase === 'pausing' ? 'Pausing…' : 'Rici is with you') : 'Talk to Rici';
@@ -388,6 +388,15 @@
     if (!isObject(data)) return;
     // The provider owns its full iframe surface, including controls/credits.
     // No remote geometry, HTML or styling messages are consumed by the shell.
+    if (data.type === 'korlix-projection-camera-status') {
+      if (!Number.isSafeInteger(data.sequence) || data.sequence !== state.camera.sequence
+        || !['stopped','limit'].includes(data.state)
+        || !['closest','farthest','stopped','interrupted'].includes(data.reason)) return;
+      // The renderer may report only a bounded motion outcome. The native
+      // controller owns wording and rejects a stale sequence independently.
+      send('cameraStatus',{sequence:data.sequence,state:data.state,reason:data.reason}).catch(fail);
+      return;
+    }
     if (data.type !== 'korlix-projection-status' || !['loading','ready','error'].includes(data.status)) return;
     const wasReady = mapStatus === 'ready';
     if (data.status !== 'loading') clearTimeout(rendererTimer);
