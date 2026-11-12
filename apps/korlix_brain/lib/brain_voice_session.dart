@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'brain_model.dart';
 
 enum BrainSessionAction { none, configure, ready, reject }
@@ -12,8 +14,19 @@ class BrainVoiceSessionGate {
   final BrainVoiceMode mode;
   final bool projectionEnabled;
   bool _requested = false;
+  bool _projectionAcknowledged = false;
+  int _earlierAcknowledgements = 0;
   Map<String, dynamic>? _memoryTool;
+  String? _originalInstructions;
   String? _instructions;
+  String? _rejectionCode;
+
+  /// A fixed diagnostic code; never includes provider or account content.
+  String? get rejectionCode => _rejectionCode;
+
+  // Initial server setup and an earlier client update can still be awaiting
+  // acknowledgement when Projection is appended. Waiting must remain bounded.
+  static const _maximumEarlierAcknowledgements = 2;
 
   static const projectionActions = <String>[
     'open',
@@ -31,7 +44,7 @@ class BrainVoiceSessionGate {
   static const projectionTool = <String, dynamic>{
     'type': 'function',
     'name': 'control_projection',
-    'description': 'Control Projection Mode, ask about the selected place, or prepare directions when the user explicitly requests it. Use directions for route to, navigate to, or directions to an address. The app checks the original user transcript before acting.',
+    'description': 'Control Projection Mode, look up a spoken address or named landmark, move its camera, ask about the selected place, or prepare directions when explicitly requested. Camera values include closer, farther, left, right, reset, zoomInContinuous, zoomOutContinuous and stopCamera. Use directions for route to, navigate to, or directions to an address. The app checks the original user transcript before acting.',
     'parameters': {
       'type': 'object',
       'properties': {
@@ -44,7 +57,7 @@ class BrainVoiceSessionGate {
   };
   static const projectionInstructions =
       '# Projection capability for this client\n'
-      'This client adds control_projection alongside remember_in_brain. Earlier references to having only the memory tool do not include this optional capability. Projection Mode is a view inside KORLIX. Use control_projection only for the user\'s explicit projection, map, place, camera or room request, or a question about the selected place. Use an empty value when no value is needed. When the user confirms a displayed place or chooses a displayed result, use action search with their original confirmation as value, for example "yes, that is the place" or "choose the first result". The app validates the original user transcript. For an explicit route to, navigate to, or directions to a destination, use action directions with that destination. This opens a route review screen; the user starts navigation with a tap. Do not claim navigation has started. For an explicit request to remember or save this place, address, building or location, use action savePlace. All ordinary memory commands still use remember_in_brain. Relay the returned answer and its scope/source limits accurately. Never describe map imagery as live video or invent a location, camera feed, date, population, mayor, crime statistic or building record. If a tool fails or has no verified data, say so. Do not start or stop the voice session when opening or closing Projection Mode.';
+      'This client adds control_projection alongside remember_in_brain. Earlier references to having only the memory tool do not include this optional capability. Projection Mode is a view inside KORLIX. Use control_projection only for the user\'s explicit projection, map, place, camera or room request, or a question about the selected place. Use an empty value when no value is needed. Spoken addresses and named landmarks can be searched without typing: use action search with the whole original destination, including unit, city and postal code. When the user confirms a displayed place or chooses a displayed result, use action search with their original confirmation as value, for example "yes, that is the place" or "choose the first result". The app validates the original user transcript. For zoom in or move closer, use action camera with value closer; for zoom out, use farther. For keep zooming in or keep zooming out, use zoomInContinuous or zoomOutContinuous. For stop zooming or stop moving the view, use stopCamera. These controls affect only the map camera, not the voice session. Zooming can continue within the available camera range; do not promise infinite zoom or imagery detail that is not available. For an explicit route to, navigate to, or directions to a destination, use action directions with that destination. This opens a route review screen; the user starts navigation with a tap. Do not claim navigation has started. For an explicit request to remember or save this place, address, building or location, use action savePlace. All ordinary memory commands still use remember_in_brain. Relay the returned answer and its scope/source limits accurately. Never describe map imagery as live video or invent a location, camera feed, date, population, mayor, crime statistic or building record. If a tool fails or has no verified data, say so. Do not start or stop the voice session when opening or closing Projection Mode.';
 
   Map<String, dynamic> get configuration => mode.isLive
       ? {
@@ -54,7 +67,7 @@ class BrainVoiceSessionGate {
             'reasoning': {'effort': 'low'},
             'tool_choice': 'auto',
             if (_memoryTool != null) ...{
-              'tools': [_memoryTool, projectionTool],
+              'tools': [_copyTool(_memoryTool!), projectionTool],
               'instructions': _instructions,
             },
             'audio': {
@@ -110,8 +123,9 @@ class BrainVoiceSessionGate {
     if (event['type'] != 'session.updated' || !_requested) {
       return BrainSessionAction.none;
     }
+    if (_rejectionCode != null) return BrainSessionAction.reject;
     final session = event['session'];
-    if (session is! Map) return BrainSessionAction.reject;
+    if (session is! Map) return _reject('malformed_session');
     final audio = session['audio'];
     final input = audio is Map ? audio['input'] : null;
     // GA uses audio.input; older event serializers used the flat fields.
@@ -123,27 +137,29 @@ class BrainVoiceSessionGate {
         ? (input is Map ? input['transcription'] : null)
         : session['input_audio_transcription'];
     final tools = session['tools'];
-    final liveContract =
-        !mode.isLive ||
-        (session['model'] is String &&
-            (session['model'] == mode.model ||
-                (session['model'] as String).startsWith('${mode.model}-')) &&
-            session['reasoning'] is Map &&
-            (session['reasoning'] as Map)['effort'] == 'low' &&
-            session['tool_choice'] == 'auto');
-    final voiceContract =
-        liveContract &&
-        vad is Map &&
-        (vad['type'] == 'semantic_vad' || vad['type'] == 'server_vad') &&
-        vad['create_response'] == mode.isLive &&
-        transcription is Map &&
-        transcription['model'] == 'gpt-transcribe';
-    if (!voiceContract) return BrainSessionAction.reject;
+    if (mode.isLive) {
+      if (!_matchesModel(session['model'])) return _reject('model_mismatch');
+      if (session['reasoning'] is! Map ||
+          (session['reasoning'] as Map)['effort'] != 'low') {
+        return _reject('reasoning_mismatch');
+      }
+      if (session['tool_choice'] != 'auto') {
+        return _reject('tool_choice_mismatch');
+      }
+    }
+    if (vad is! Map ||
+        (vad['type'] != 'semantic_vad' && vad['type'] != 'server_vad') ||
+        vad['create_response'] != mode.isLive) {
+      return _reject('vad_mismatch');
+    }
+    if (transcription is! Map || transcription['model'] != 'gpt-transcribe') {
+      return _reject('transcription_mismatch');
+    }
     if (!mode.isLive) return BrainSessionAction.ready;
     if (!projectionEnabled) {
       return _hasTools(tools, const {'remember_in_brain'})
           ? BrainSessionAction.ready
-          : BrainSessionAction.reject;
+          : _reject('memory_tools_mismatch');
     }
     if (_memoryTool == null) {
       // Some providers send defaults in session.created. First acknowledge the
@@ -151,31 +167,73 @@ class BrainVoiceSessionGate {
       // Never reconstruct or replace its account-bound memory instructions.
       return _prepareProjection(session)
           ? BrainSessionAction.configure
-          : BrainSessionAction.reject;
+          : _reject('missing_server_context');
     }
-    return _hasTools(tools, const {
-              'remember_in_brain',
-              'control_projection',
-            }) &&
-            session['instructions'] == _instructions
-        ? BrainSessionAction.ready
-        : BrainSessionAction.reject;
+    if (_hasTools(tools, const {'remember_in_brain', 'control_projection'}) &&
+        session['instructions'] == _instructions) {
+      _projectionAcknowledged = true;
+      return BrainSessionAction.ready;
+    }
+    if (_hasTools(tools, const {'remember_in_brain'}) &&
+        _sameJson((tools as List).single, _memoryTool) &&
+        session['instructions'] == _originalInstructions) {
+      if (_projectionAcknowledged) return _reject('configuration_downgrade');
+      if (++_earlierAcknowledgements > _maximumEarlierAcknowledgements) {
+        return _reject('stale_configuration_limit');
+      }
+      // This acknowledges an earlier configuration, not a rejected latest
+      // update. Keep the microphone muted and the existing deadline running.
+      // In particular, do not resend or restart the setup timer here.
+      return BrainSessionAction.none;
+    }
+    if (session['instructions'] != _instructions &&
+        session['instructions'] != _originalInstructions) {
+      return _reject('projection_context_mismatch');
+    }
+    return _reject('projection_tools_mismatch');
   }
 
   bool _prepareProjection(Map session) {
     final tools = session['tools'];
     final instructions = session['instructions'];
-    final model = session['model'];
     if (!_hasTools(tools, const {'remember_in_brain'}) ||
         instructions is! String ||
         instructions.trim().isEmpty ||
-        model is! String ||
-        (model != mode.model && !model.startsWith('${mode.model}-'))) {
+        !_matchesModel(session['model'])) {
       return false;
     }
-    _memoryTool = Map<String, dynamic>.from((tools as List).single as Map);
+    _memoryTool = _copyTool((tools as List).single as Map);
+    _originalInstructions = instructions;
     _instructions = '$instructions\n\n$projectionInstructions';
     return true;
+  }
+
+  BrainSessionAction _reject(String code) {
+    _rejectionCode ??= code;
+    return BrainSessionAction.reject;
+  }
+
+  bool _matchesModel(Object? model) =>
+      model is String &&
+      (model == mode.model || model.startsWith('${mode.model}-'));
+
+  static Map<String, dynamic> _copyTool(Map tool) =>
+      Map<String, dynamic>.from(jsonDecode(jsonEncode(tool)) as Map);
+
+  static bool _sameJson(Object? first, Object? second) {
+    if (first is Map && second is Map) {
+      return first.length == second.length &&
+          first.keys.every(
+            (key) =>
+                second.containsKey(key) && _sameJson(first[key], second[key]),
+          );
+    }
+    if (first is List && second is List) {
+      return first.length == second.length &&
+          Iterable<int>.generate(first.length)
+              .every((i) => _sameJson(first[i], second[i]));
+    }
+    return first == second;
   }
 
   bool _hasTools(Object? tools, Set<String> expected) {

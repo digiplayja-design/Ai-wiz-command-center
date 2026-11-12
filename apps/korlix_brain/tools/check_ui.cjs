@@ -62,11 +62,27 @@ function stableSavedTargetGeometry(){
   for(const width of [320,390,768,1024]){
     const page=await browser.newPage({viewport:{width,height:width===1024?768:900},reducedMotion:'reduce'});
     page.on('pageerror',e=>errors.push(e.message));
+    // Transcripts belong to the native store, outside the WebView lifetime.
+    // Keep that fixture across reloads without relying on file: localStorage.
+    const savedTranscripts=new Map();
+    await page.exposeFunction('__testTranscriptStore',(action,payload={})=>{
+      switch(action){
+        case 'listSavedTranscripts':return Array.from(savedTranscripts.values()).reverse();
+        case 'saveTranscript':{
+          const message=payload.message;
+          assert.equal(message?.id,payload.messageId,'Save must reference an existing transcript fixture');
+          savedTranscripts.set(message.id,structuredClone(message));
+          return savedTranscripts.get(message.id);
+        }
+        case 'deleteTranscript':return {deleted:savedTranscripts.delete(payload.messageId)};
+        default:throw new Error('Unexpected transcript store action: '+action);
+      }
+    });
     await page.addInitScript(()=>{
       localStorage.setItem('korlix-brain-welcome-v1-seen','true');
       window.testAccount={training:'Use plain language.',memories:[],canUndo:false};
       window.testCommands=[];window.testFailSave=false;window.testHoldStop=false;
-      window.testMessages={};window.testSaved=JSON.parse(localStorage.getItem('testSavedMessages')||'{}');
+      window.testMessages={};
       window.testFailTranscript=false;window.testCancelDelete=false;window.testPendingSavedLoads=0;
       window.Korlix={postMessage:raw=>{
         const m=JSON.parse(raw);window.testCommands.push(m);
@@ -74,18 +90,20 @@ function stableSavedTargetGeometry(){
           window.KorlixBrainReceive({type:'reply',id:m.id,data,error});
           if(m.action==='listSavedTranscripts')window.testPendingSavedLoads--;
         },0);
+        const storedReply=payload=>window.__testTranscriptStore(m.action,payload).then(
+          data=>reply(data),error=>reply(null,error.message));
         switch(m.action){
           case 'welcomeState':return reply({native:false,automatic:false,foreground:true});
           case 'load':return reply(window.testAccount);
-          case 'listSavedTranscripts':window.testPendingSavedLoads++;return reply(Object.values(window.testSaved).reverse());
+          case 'listSavedTranscripts':window.testPendingSavedLoads++;return storedReply();
           case 'saveTranscript':
             if(window.testFailTranscript)return reply(null,'Device storage unavailable. Please retry.');
-            window.testSaved[m.payload.messageId]=window.testMessages[m.payload.messageId];localStorage.setItem('testSavedMessages',JSON.stringify(window.testSaved));return reply(window.testSaved[m.payload.messageId]);
+            return storedReply({messageId:m.payload.messageId,message:window.testMessages[m.payload.messageId]});
           case 'shareTranscript':return reply({shared:false});
           case 'deleteTranscript':
             if(window.testCancelDelete)return reply({deleted:false});
             if(window.testFailTranscript)return reply(null,'Device storage unavailable. Please retry.');
-            delete window.testSaved[m.payload.messageId];localStorage.setItem('testSavedMessages',JSON.stringify(window.testSaved));return reply({deleted:true});
+            return storedReply({messageId:m.payload.messageId});
           case 'saveMemory':
             if(window.testFailSave)return reply(null,'Connection interrupted. Refresh before retrying.');
             window.testAccount.memories.push({id:'m'+window.testAccount.memories.length,content:m.payload.text,source:m.payload.source});return reply(window.testAccount);
@@ -140,6 +158,7 @@ function stableSavedTargetGeometry(){
     await row.getByRole('button',{name:'Save',exact:true}).click();
     await page.waitForFunction(()=>document.querySelector('#cinema-kb-status').textContent.includes('storage unavailable'));
     assert.equal(await row.getByRole('button',{name:'Save',exact:true}).isEnabled(),true);
+    assert.equal(savedTranscripts.size,0,'Failed save does not persist a transcript');
     await page.evaluate(()=>window.testFailTranscript=false);
     await row.getByRole('button',{name:'Save',exact:true}).click();
     await row.getByRole('button',{name:'Saved',exact:true}).waitFor();
@@ -221,26 +240,47 @@ function stableSavedTargetGeometry(){
     assert.equal(await page.evaluate(()=>window.testCommands.find(c=>c.action==='startVoice').payload.mode),'live','Live is the default');
     await page.getByRole('button',{name:'Stop conversation',exact:true}).click();
     await page.waitForFunction(()=>document.querySelector('.kb-product').dataset.voiceActive==='false');
-    await page.reload();
-    await page.waitForFunction(()=>document.querySelector('#cinema-kb-account-status')?.textContent==='Account connected');
-    await page.getByRole('button',{name:/My Brain/}).first().click();
-    await page.locator('section[data-screen="brain"] [data-go="saved"]').click();
-    await page.locator('section[data-screen="saved"]').waitFor({state:'visible'});
     const savedRow=page.locator('#cinema-kb-saved-transcripts [data-message-id="message-a"]');
-    await savedRow.waitFor();
-    assert.equal(await savedRow.locator('p').textContent(),'<img src=x onerror="window.injected=true">','Saved text survives reload');
+    try{
+      assert.equal(savedTranscripts.get('message-a')?.text,'<img src=x onerror="window.injected=true">','Save committed before reload');
+      await page.reload();
+      await page.waitForFunction(()=>document.querySelector('#cinema-kb-account-status')?.textContent==='Account connected');
+      await page.getByRole('button',{name:/My Brain/}).first().click();
+      await page.locator('section[data-screen="brain"] [data-go="saved"]').click();
+      await page.locator('section[data-screen="saved"]').waitFor({state:'visible'});
+      await savedRow.waitFor();
+      assert.equal(await savedRow.locator('p').textContent(),'<img src=x onerror="window.injected=true">','Saved text survives reload');
+    }catch(error){
+      const state=await page.evaluate(()=>({
+        screen:document.querySelector('.kb-product')?.dataset.screen,
+        account:document.querySelector('#cinema-kb-account-status')?.textContent,
+        status:document.querySelector('#cinema-kb-status')?.textContent,
+        pendingSavedLoads:window.testPendingSavedLoads,
+        rows:[...document.querySelectorAll('#cinema-kb-saved-transcripts [data-message-id]')].map(row=>({id:row.dataset.messageId,height:row.getBoundingClientRect().height})),
+        commands:(window.testCommands||[]).map(command=>({id:command.id,action:command.action,messageId:command.payload?.messageId}))
+      })).catch(failure=>({inspectionError:failure.message}));
+      console.error('Saved transcript reload failure',JSON.stringify({width,savedIds:[...savedTranscripts.keys()],pageErrors:errors,state}));
+      const directory=process.env.UI_SCREENSHOTS||process.env.PROJECTION_SCREENSHOTS;
+      if(directory){
+        fs.mkdirSync(directory,{recursive:true});
+        await page.screenshot({path:path.join(directory,'brain-saved-reload-failure-'+width+'.png'),fullPage:true}).catch(()=>{});
+      }
+      throw error;
+    }
     await page.evaluate(()=>window.testCancelDelete=true);
     await savedRow.getByRole('button',{name:'Delete',exact:true}).click();
     await page.waitForFunction(()=>!document.querySelector('#cinema-kb-saved-transcripts [data-transcript-action="delete"]').disabled);
     assert.equal(await savedRow.count(),1,'Cancel retains saved message');
+    assert.equal(savedTranscripts.has('message-a'),true,'Canceled delete retains the native store record');
     await page.evaluate(()=>{window.testCancelDelete=false;window.testFailTranscript=true;});
     await savedRow.getByRole('button',{name:'Delete',exact:true}).click();
     await page.waitForFunction(()=>document.querySelector('#cinema-kb-status').textContent.includes('storage unavailable'));
     assert.equal(await savedRow.count(),1,'Failed delete remains visible');
+    assert.equal(savedTranscripts.has('message-a'),true,'Failed delete retains the native store record');
     await page.evaluate(()=>window.testFailTranscript=false);
     await savedRow.getByRole('button',{name:'Delete',exact:true}).click();
     await savedRow.waitFor({state:'detached'});
-    assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('testSavedMessages'))),{});
+    assert.equal(savedTranscripts.size,0,'Successful delete removes the native store record');
     await page.locator('#cinema-kb-saved-back').click();
     assert.equal(await page.evaluate(()=>window.testCommands.some(c=>c.action==='startVoice')),false,'Reading saved messages never starts a charged conversation');
     await page.close();

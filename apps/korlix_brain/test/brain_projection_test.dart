@@ -120,6 +120,189 @@ void main() {
     });
   });
 
+  group('Projection capability refresh', () {
+    test(
+      'a genuine reopening refreshes previously unavailable services',
+      () async {
+        var reads = 0;
+        final refreshed = Completer<Map<String, dynamic>>();
+        final f = Fixture(
+          request: (method, path, body) async {
+            if (path.endsWith('/config')) {
+              if (++reads == 1) return <String, dynamic>{};
+              return refreshed.future;
+            }
+            return {
+              'candidates': [place],
+            };
+          },
+        );
+        addTearDown(f.projection.dispose);
+        f.projection.open();
+        final unavailable = await f.projection.search('10 Downing Street');
+        expect(unavailable['ok'], false);
+        expect(
+          unavailable['answer'],
+          contains('Address search is not connected yet'),
+        );
+        f.projection.open(room: 'discovery');
+        await f.projection.dispatch('room', {'room': 'command'});
+        expect(reads, 1, reason: 'An open view and room changes share config');
+
+        f.projection.close();
+        f.projection.open();
+        expect((f.projection.snapshot['config'] as Map)['checking'], true);
+        final lookup = f.projection.search(
+          '10 Downing Street, London SW1A 2AA',
+        );
+        expect(reads, 2, reason: 'Search joins this opening’s config request');
+        refreshed.complete(config);
+        expect((await lookup)['ok'], true);
+        expect((f.projection.snapshot['config'] as Map)['mapAvailable'], true);
+        expect((f.projection.snapshot['config'] as Map)['checking'], false);
+        expect(f.projection.snapshot['selectedPlace'], isNull);
+        expect(f.projection.snapshot['candidates'], hasLength(1));
+        expect(f.opens, 2);
+        expect(f.starts, 0);
+        expect(f.stops, 0);
+      },
+    );
+
+    for (final oldFails in [false, true]) {
+      for (final oldFinishesFirst in [false, true]) {
+        test(
+          'stale config ${oldFails ? 'failure' : 'success'} ${oldFinishesFirst ? 'before' : 'after'} the new request is ignored',
+          () async {
+            final old = Completer<Map<String, dynamic>>();
+            final current = Completer<Map<String, dynamic>>();
+            var reads = 0;
+            final f = Fixture(
+              request: (method, path, body) async {
+                if (path.endsWith('/config')) {
+                  return ++reads == 1 ? old.future : current.future;
+                }
+                return {
+                  'candidates': [place],
+                };
+              },
+            );
+            addTearDown(f.projection.dispose);
+            f.projection.open();
+            f.projection.close();
+            f.projection.open();
+
+            void finishOld() {
+              if (oldFails) {
+                old.completeError(StateError('old request failed'));
+              } else {
+                old.complete(<String, dynamic>{});
+              }
+            }
+
+            if (oldFinishesFirst) {
+              finishOld();
+              await Future<void>.delayed(Duration.zero);
+              expect(
+                (f.projection.snapshot['config'] as Map)['checking'],
+                true,
+              );
+            }
+            final lookup = f.projection.search('Current destination');
+            expect(
+              reads,
+              2,
+              reason: 'An old finalizer cannot clear the new pending request',
+            );
+            current.complete(config);
+            await lookup;
+            final before = jsonEncode(f.projection.snapshot);
+            if (!oldFinishesFirst) {
+              finishOld();
+              await Future<void>.delayed(Duration.zero);
+            }
+            expect(jsonEncode(f.projection.snapshot), before);
+            expect(
+              (f.projection.snapshot['config'] as Map)['mapAvailable'],
+              true,
+            );
+            expect((f.projection.snapshot['config'] as Map)['checking'], false);
+            expect(reads, 2);
+          },
+        );
+      }
+    }
+
+    test(
+      'a failed refresh does not reuse previously enabled capabilities',
+      () async {
+        var reads = 0;
+        var resolves = 0;
+        final f = Fixture(
+          request: (method, path, body) async {
+            if (path.endsWith('/config')) {
+              if (++reads == 1) return config;
+              throw StateError('refresh unavailable');
+            }
+            resolves++;
+            return {
+              'candidates': [place],
+            };
+          },
+        );
+        addTearDown(f.projection.dispose);
+        f.projection.open();
+        await f.projection.search('First destination');
+        f.projection.close();
+        f.projection.open();
+        expect((await f.projection.search('Second destination'))['ok'], false);
+        final current = f.projection.snapshot['config'] as Map;
+        expect(current['rendererUrl'], isNull);
+        expect(current['mapAvailable'], false);
+        expect(current['geocodingAvailable'], false);
+        expect(current['checking'], false);
+        expect(current['checkFailed'], true);
+        expect(resolves, 1);
+        f.projection.open(room: 'discovery');
+        await f.projection.search('Another attempt in the same opening');
+        expect(
+          reads,
+          2,
+          reason: 'Failed checks also remain scoped to one opening',
+        );
+        f.projection.close();
+        f.projection.open();
+        await Future<void>.delayed(Duration.zero);
+        expect(
+          reads,
+          3,
+          reason: 'Closing and reopening retries a failed check',
+        );
+      },
+    );
+
+    test('close and dispose ignore pending configuration completion', () async {
+      for (final dispose in [false, true]) {
+        final pending = Completer<Map<String, dynamic>>();
+        final f = Fixture(request: (_, _, _) => pending.future);
+        var notifications = 0;
+        f.projection.addListener(() => notifications++);
+        f.projection.open();
+        if (dispose) {
+          f.projection.dispose();
+        } else {
+          f.projection.close();
+          addTearDown(f.projection.dispose);
+        }
+        final before = jsonEncode(f.projection.snapshot);
+        final count = notifications;
+        pending.complete(config);
+        await Future<void>.delayed(Duration.zero);
+        expect(jsonEncode(f.projection.snapshot), before);
+        expect(notifications, count);
+      }
+    });
+  });
+
   group('Place state and evidence', () {
     test(
       'camera waits for the renderer and readiness resets on errors and reopen',
@@ -190,8 +373,8 @@ void main() {
         f.projection.open();
         final lookup = await f.projection.voiceTurn(
           'provider-lookup',
-          'Go to My destination',
-          {'action': 'search', 'value': 'My destination'},
+          'Go to San Francisco Ferry Building',
+          {'action': 'search', 'value': 'San Francisco Ferry Building'},
         );
         expect(
           lookup?['answer'],
@@ -369,6 +552,187 @@ void main() {
   });
 
   group('Original voice transcript', () {
+    test('VR aliases open and close without starting a conversation', () async {
+      final f = Fixture();
+      addTearDown(f.projection.dispose);
+      expect(
+        (await f.projection.voiceTurn(
+          'open-vr',
+          'Rici, enter VR',
+          null,
+        ))?['ok'],
+        true,
+      );
+      expect(f.projection.isOpen, true);
+      expect(
+        (await f.projection.voiceTurn('close-vr', 'Close VR', null))?['ok'],
+        true,
+      );
+      expect(f.projection.isOpen, false);
+      expect(f.starts, 0);
+      expect(f.stops, 0);
+      for (final phrase in [
+        'Do not open VR',
+        'How do I enter VR?',
+        '"Open VR" is an example',
+      ]) {
+        await f.projection.voiceTurn(phrase, phrase, {'action': 'open'});
+      }
+      expect(f.opens, 1);
+    });
+
+    test('explicit address display preserves the full original address and confirmation', () async {
+      const address = '14360 Jupiter Rd, Apt 4B, Brooklyn, NY 10012';
+      for (final phrase in [
+        'Rici, show me $address',
+        'Please show $address in 3D.',
+        'Risi, could you please show me $address in 3-D?',
+      ]) {
+        final queries = <String>[];
+        final f = Fixture(
+          request: (method, path, body) async {
+            if (path.endsWith('/config')) return config;
+            queries.add(body!['query'] as String);
+            return {
+              'candidates': [place],
+            };
+          },
+        );
+        addTearDown(f.projection.dispose);
+        await f.projection.voiceTurn('show-address', phrase, {
+          'action': 'search',
+          'value': 'Brooklyn',
+        });
+        expect(queries, [address], reason: phrase);
+        expect(f.projection.isOpen, true);
+        expect(f.projection.snapshot['selectedPlace'], isNull);
+        expect((f.projection.snapshot['camera'] as Map)['operation'], 'reset');
+        expect(f.projection.snapshot['candidates'], hasLength(1));
+        await f.projection.voiceTurn(
+          'confirm-address',
+          'Yes that is the place',
+          null,
+        );
+        expect(
+          (f.projection.snapshot['selectedPlace'] as Map)['userQuery'],
+          address,
+        );
+        expect((f.projection.snapshot['camera'] as Map)['operation'], 'flyTo');
+        expect(f.starts, 0);
+      }
+    });
+
+    test(
+      'address display is recognized without model tool arguments',
+      () async {
+        final f = Fixture();
+        addTearDown(f.projection.dispose);
+        final result = await f.projection.voiceTurn(
+          'show-local',
+          'Show 10 Downing Street, London SW1A 2AA in 3D',
+          null,
+        );
+        expect(result?['ok'], true);
+        expect(
+          (f.projection.snapshot['candidates'] as List).single['userQuery'],
+          '10 Downing Street, London SW1A 2AA',
+        );
+        expect(f.projection.snapshot['selectedPlace'], isNull);
+      },
+    );
+
+    test(
+      'street names containing live or research words remain addresses',
+      () async {
+        final queries = <String>[];
+        final f = Fixture(
+          request: (method, path, body) async {
+            if (path.endsWith('/config')) return config;
+            queries.add(body!['query'] as String);
+            return {
+              'candidates': [place],
+            };
+          },
+        );
+        addTearDown(f.projection.dispose);
+        const addresses = [
+          '123 Live Oak Road, Live Oak, FL 32060',
+          '10 New Street, New York, NY 10004',
+          '45 History Lane, Apt 2B, London SW1A 2AA',
+          '123 Main Street, Newport News, VA 23601',
+          '123 Main Street Newport News VA 23601',
+        ];
+        for (final address in addresses) {
+          final result = await f.projection.voiceTurn(
+            address,
+            'Show me $address',
+            null,
+          );
+          expect(result?['ok'], true, reason: address);
+        }
+        expect(queries, addresses);
+        expect(f.projection.snapshot['selectedPlace'], isNull);
+      },
+    );
+
+    test(
+      'show requests for research or media cannot become address lookups',
+      () async {
+        final f = Fixture();
+        addTearDown(f.projection.dispose);
+        f.projection.open();
+        const phrases = [
+          'Show me 3 facts about 10 Downing Street',
+          'Show me 3 photos of 10 Downing Street',
+          'Show me 10 Downing Street history',
+          'Show me 10 Downing Street, history',
+          'Show me 10 Downing Street history of the street',
+          'Show me 10 Downing Street, history of the street',
+          'Show me 3 buildings in Downing Street',
+          'Show me 3D printing examples',
+          'Do not show me 10 Downing Street',
+          'How do I show 10 Downing Street in 3D?',
+          '"Show me 10 Downing Street" is an example',
+        ];
+        for (final phrase in phrases) {
+          await f.projection.voiceTurn(phrase, phrase, {
+            'action': 'search',
+            'value': '10 Downing Street',
+          });
+        }
+        expect(f.requests.where((path) => path.endsWith('/resolve')), isEmpty);
+        expect(f.projection.snapshot['selectedPlace'], isNull);
+      },
+    );
+
+    test(
+      'live camera address requests keep the explicit unavailable response',
+      () async {
+        final f = Fixture();
+        addTearDown(f.projection.dispose);
+        f.projection.open();
+        for (final phrase in [
+          'Show me a live view of 10 Downing Street',
+          'Show me 10 Downing Street live camera imagery',
+          'Show me 10 Downing Street live camera on the road',
+          'Show me 10 Downing Street, live camera on the road',
+          'Show 10 Downing Street real-time video in 3D',
+        ]) {
+          final result = await f.projection.voiceTurn(phrase, phrase, {
+            'action': 'search',
+            'value': '10 Downing Street',
+          });
+          expect(result?['isLive'], false);
+          expect(
+            result?['answer'],
+            contains('no connected, permitted live camera'),
+          );
+        }
+        expect(f.requests.where((path) => !path.endsWith('/config')), isEmpty);
+        expect(f.projection.snapshot['selectedPlace'], isNull);
+      },
+    );
+
     test('existing Risi and Ree-see aliases can open projection', () async {
       for (final alias in ['Risi', 'Ree-see', 'Ree see']) {
         final f = Fixture();
@@ -626,6 +990,281 @@ void main() {
     );
   });
 
+  group('Hands-free destinations and continuous zoom', () {
+    test('ordinary lookup requests remain conversation outside a destination prompt', () async {
+      final f = Fixture();
+      addTearDown(f.projection.dispose);
+      const phrases = [
+        'Look up quantum mechanics',
+        'Find a good restaurant recipe',
+        'Explore relativity',
+        'Search for cooking tips',
+        'Show me quantum mechanics',
+      ];
+      for (final phrase in phrases) {
+        expect(
+          f.projection.recognizesVoiceControl(phrase),
+          false,
+          reason: phrase,
+        );
+      }
+      await f.select();
+      for (final phrase in phrases) {
+        expect(
+          f.projection.recognizesVoiceControl(phrase),
+          false,
+          reason: phrase,
+        );
+      }
+      expect(f.projection.recognizesVoiceControl('Go to Paris'), true);
+      expect(
+        f.projection.recognizesVoiceControl('Find the Eiffel Tower'),
+        true,
+      );
+    });
+
+    test(
+      'landmark and compound VR requests preserve the spoken destination',
+      () async {
+        for (final phrase in [
+          'Rici, show me San Francisco Ferry Building, San Francisco, CA',
+          'Open VR and show me San Francisco Ferry Building, San Francisco, CA',
+          'Open virtual reality and take me to San Francisco Ferry Building, San Francisco, CA',
+        ]) {
+          final queries = <String>[];
+          final f = Fixture(
+            request: (method, path, body) async {
+              if (path.endsWith('/config')) return config;
+              queries.add(body!['query'] as String);
+              return {
+                'candidates': [place],
+              };
+            },
+          );
+          addTearDown(f.projection.dispose);
+          expect(f.projection.recognizesVoiceControl(phrase), true);
+          await f.projection.voiceTurn('landmark', phrase, null);
+          expect(queries, ['San Francisco Ferry Building, San Francisco, CA']);
+          expect(f.projection.snapshot['selectedPlace'], isNull);
+          expect(f.projection.recognizesVoiceControl("That's it"), true);
+          await f.projection.voiceTurn('confirmation', "That's it", null);
+          expect(
+            (f.projection.snapshot['selectedPlace'] as Map)['id'],
+            place['id'],
+          );
+          expect(f.starts, 0);
+          expect(f.stops, 0);
+        }
+      },
+    );
+
+    test('a prompted bare landmark works but ordinary conversation is not a lookup', () async {
+      final f = Fixture();
+      addTearDown(f.projection.dispose);
+      await f.projection.voiceTurn('open', 'Open VR', null);
+      for (final phrase in [
+        'Tell me a joke',
+        'How old is the Ferry Building?',
+        'Remember I like San Francisco',
+        'Do not go to the Ferry Building',
+      ]) {
+        expect(
+          f.projection.recognizesVoiceControl(phrase),
+          false,
+          reason: phrase,
+        );
+      }
+      expect(
+        f.projection.recognizesVoiceControl('San Francisco Ferry Building'),
+        true,
+      );
+      await f.projection.voiceTurn(
+        'bare',
+        'San Francisco Ferry Building',
+        null,
+      );
+      expect(
+        f.requests.where((path) => path.endsWith('/resolve')),
+        hasLength(1),
+      );
+      await f.projection.voiceTurn('select', 'First one', null);
+      expect(f.projection.snapshot['selectedPlace'], isNotNull);
+      expect(
+        f.projection.recognizesVoiceControl('San Francisco Ferry Building'),
+        false,
+      );
+    });
+
+    test(
+      'camera stop holds the view and keeps the conversation active',
+      () async {
+        final f = Fixture();
+        addTearDown(f.projection.dispose);
+        await f.select();
+        f.projection.receiveVoice({'type': 'voice', 'phase': 'listening'});
+        await f.projection.voiceTurn('keep-in', 'Keep zooming in', null);
+        expect(
+          (f.projection.snapshot['camera'] as Map)['operation'],
+          'zoomInContinuous',
+        );
+        expect(f.projection.recognizesVoiceControl('Stop'), true);
+        await f.projection.voiceTurn('stop-camera', 'Stop zooming', null);
+        expect(
+          (f.projection.snapshot['camera'] as Map)['operation'],
+          'stopCamera',
+        );
+        expect((f.projection.snapshot['voice'] as Map)['active'], true);
+        expect(f.stops, 0);
+        expect(f.projection.recognizesVoiceControl('Stop'), false);
+        await f.projection.voiceTurn('keep-out', 'Keep zooming out', null);
+        expect(
+          (f.projection.snapshot['camera'] as Map)['operation'],
+          'zoomOutContinuous',
+        );
+        await f.projection.voiceTurn('hold', 'Hold this view', null);
+        expect(
+          (f.projection.snapshot['camera'] as Map)['operation'],
+          'stopCamera',
+        );
+      },
+    );
+
+    test('repeated zoom is not capped by a command count and duplicates never move twice', () async {
+      final f = Fixture();
+      addTearDown(f.projection.dispose);
+      await f.select();
+      final start = (f.projection.snapshot['camera'] as Map)['sequence'] as int;
+      for (var i = 0; i < 80; i++) {
+        expect(
+          (await f.projection.voiceTurn('step-$i', 'Zoom in', null))?['ok'],
+          true,
+        );
+      }
+      expect((f.projection.snapshot['camera'] as Map)['sequence'], start + 80);
+      await f.projection.voiceTurn('step-79', 'Zoom in', {
+        'action': 'camera',
+        'value': 'closer',
+      });
+      expect((f.projection.snapshot['camera'] as Map)['sequence'], start + 80);
+      expect(
+        f.projection.recognizesVoiceControl('Do not keep zooming in'),
+        false,
+      );
+      expect(
+        f.projection.recognizesVoiceControl('How do I stop zooming?'),
+        false,
+      );
+      for (final phrase in [
+        'Zoom in on the history of this building',
+        'Zoom in, no, zoom out',
+        'Turn left but do not move the view',
+      ]) {
+        expect(
+          f.projection.recognizesVoiceControl(phrase),
+          false,
+          reason: phrase,
+        );
+      }
+      expect(f.projection.recognizesVoiceControl('Stop moving the view'), true);
+    });
+
+    test(
+      'pause, stop, background and errors cancel continuous camera motion',
+      () async {
+        for (final event in [
+          {'type': 'voice', 'phase': 'pausing'},
+          {'type': 'voice', 'phase': 'paused'},
+          {'type': 'voice', 'phase': 'stopping'},
+          {'type': 'voice', 'phase': 'complete'},
+          {'type': 'voice', 'phase': 'error'},
+          {'type': 'appLifecycle', 'active': false},
+        ]) {
+          final f = Fixture();
+          addTearDown(f.projection.dispose);
+          await f.select();
+          f.projection.camera('zoomInContinuous');
+          f.projection.receiveVoice(event);
+          expect(
+            (f.projection.snapshot['camera'] as Map)['operation'],
+            'stopCamera',
+            reason: '$event',
+          );
+          expect(f.stops, 0);
+        }
+        final f = Fixture();
+        addTearDown(f.projection.dispose);
+        await f.select();
+        f.projection.camera('zoomInContinuous');
+        await f.projection.dispatch('rendererReady', {'status': 'error'});
+        expect(
+          (f.projection.snapshot['camera'] as Map)['operation'],
+          'stopCamera',
+        );
+        f.projection.receiveVoice({'type': 'appLifecycle', 'active': false});
+        expect(f.projection.camera('zoomInContinuous')['ok'], false);
+      },
+    );
+
+    test(
+      'new searches stop movement before a new destination is confirmed',
+      () async {
+        final f = Fixture();
+        addTearDown(f.projection.dispose);
+        await f.select();
+        f.projection.camera('zoomInContinuous');
+        await f.projection.search('A different destination');
+        expect(
+          (f.projection.snapshot['camera'] as Map)['operation'],
+          'stopCamera',
+        );
+        expect(f.projection.snapshot['selectedPlace'], isNull);
+        expect(f.projection.snapshot['candidates'], isNotEmpty);
+      },
+    );
+
+    test(
+      'only the current camera outcome can stop motion or report its limit',
+      () async {
+        final f = Fixture();
+        addTearDown(f.projection.dispose);
+        await f.select();
+        f.projection.camera('zoomInContinuous');
+        final old = (f.projection.snapshot['camera'] as Map)['sequence'];
+        f.projection.camera('zoomOutContinuous');
+        final current = (f.projection.snapshot['camera'] as Map)['sequence'];
+        await f.projection.dispatch('cameraStatus', {
+          'sequence': old,
+          'state': 'limit',
+          'reason': 'closest',
+        });
+        expect(
+          (f.projection.snapshot['camera'] as Map)['operation'],
+          'zoomOutContinuous',
+        );
+        await f.projection.dispatch('cameraStatus', {
+          'sequence': current,
+          'state': 'limit',
+          'reason': 'farthest',
+        });
+        expect(
+          (f.projection.snapshot['camera'] as Map)['operation'],
+          'stopCamera',
+        );
+        expect(f.projection.snapshot['notice'], contains('farthest view'));
+        f.projection.camera('zoomInContinuous');
+        await f.projection.dispatch('cameraStatus', {
+          'sequence': (f.projection.snapshot['camera'] as Map)['sequence'],
+          'state': 'limit',
+          'reason': 'closest',
+        });
+        expect(
+          f.projection.snapshot['notice'],
+          contains('More detail depends on the imagery'),
+        );
+      },
+    );
+  });
+
   group('Projection bridge', () {
     String message(
       String id,
@@ -652,6 +1291,17 @@ void main() {
       expect(bridge.accept(message('9', 'ask')), isNull);
       expect(bridge.accept(message('10', 'stopVoice')), isNotNull);
       expect(bridge.accept(message('11', 'close')), isNotNull);
+      expect(
+        bridge.accept(
+          jsonEncode({
+            'id': '12',
+            'nonce': 'per-view-secret',
+            'action': 'camera',
+            'payload': {'operation': 'stopCamera'},
+          }),
+        ),
+        isNotNull,
+      );
     });
   });
 }

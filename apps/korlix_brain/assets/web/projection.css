@@ -82,3 +82,4 @@ body[data-voice="paused"] .voice-wave i{background:#bba1cc;animation:none}
   .directions-panel{gap:9px;padding:10px 12px}
   .directions-panel p{font-size:10px}
 }
+.destination-label{display:block;margin:0 0 10px;color:var(--ink);font-size:13px;font-weight:600;letter-spacing:.01em}

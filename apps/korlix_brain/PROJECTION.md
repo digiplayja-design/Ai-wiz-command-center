@@ -17,8 +17,13 @@ view do not start a new voice session or end the current one.
 
 ## Supported flow
 
-1. Open Projection using the home shortcut or an explicit voice command.
-2. Say **“Go to [full address or place]”**, or type the destination.
+1. Open Projection using the home shortcut or an explicit voice command, such as
+   **“Rici, enter VR.”**
+2. Under **Explore address in 3D**, type a destination or say
+   **“Go to [full address or place].”** Numbered street addresses also accept
+   **“Show me [full address]”** and **“Show [full address] in 3D.”** These commands
+   retain the original street, unit, city and postal code. Research requests and
+   live-camera questions do not become address-display commands.
 3. Confirm a geocoder candidate, including a single result. Partial matches are
    flagged. Rici does not silently discard a street number, city or postal code.
 4. Use closer/farther, rotate and reset controls, or their spoken equivalents.
@@ -31,7 +36,8 @@ view do not start a new voice session or end the current one.
 7. **Close projection** returns to home. **Stop conversation** stops the native
    conversation while leaving the view open.
 
-Live-view requests currently return an honest unavailable response. Recorded 3D
+The **Live camera availability** control and spoken live-view requests currently
+return an honest unavailable response. Recorded 3D
 imagery is never labeled live, and an unknown capture date stays unknown. This
 implementation does not include Street View or infer occupancy from imagery.
 
@@ -50,6 +56,10 @@ and the Maps Content text-to-speech boundary in
 - `brain_projection.dart` owns ephemeral view state and validates all actions.
   New lookups, selection changes, Stop, close and account disposal invalidate
   stale results. The full original transcript authorizes voice actions.
+  A genuine close/reopen refreshes server capabilities. Repeated open commands,
+  room changes and searches share the current opening's check; late responses
+  from an earlier opening cannot replace it. A failed check shows retry guidance,
+  while a missing address or map service is identified separately.
 - `brain_projection_screen.dart` hosts a separate bundled WebView. Its narrow
   channel requires an unpredictable per-view nonce. No account token, full
   `Korlix` bridge or memory repository is exposed to the remote map frame.
