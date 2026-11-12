@@ -935,8 +935,9 @@ class BrainProjection extends ChangeNotifier {
     final command = original.toLowerCase();
     if (original.isEmpty ||
         original.length > 2000 ||
-        RegExp(r'\b(?:remember|save)\b').hasMatch(command))
+        RegExp(r'\b(?:remember|save)\b').hasMatch(command)) {
       return null;
+    }
     if (RegExp(
       r'^(?:close|exit|leave|dismiss)\s+(?:the\s+)?(?:projection|vr|virtual reality|room)\b',
     ).hasMatch(command)) {
@@ -957,8 +958,9 @@ class BrainProjection extends ChangeNotifier {
           .replaceFirst(RegExp(r'^[, ]*(?:and\s+)?', caseSensitive: false), '')
           .trim();
       final destination = _destinationCommand(rest, awaitingDestination: true);
-      if (destination != null)
+      if (destination != null) {
         return _ProjectionVoiceControl('search', destination, room);
+      }
       return _ProjectionVoiceControl('open', '', room);
     }
     if (_open && _candidates.isNotEmpty) {
@@ -988,14 +990,16 @@ class BrainProjection extends ChangeNotifier {
     if (onDirections != null &&
         RegExp(
           r'^(?:route to|navigate to|(?:give|show) me directions to|directions to)\b',
-        ).hasMatch(command))
+        ).hasMatch(command)) {
       return null;
+    }
     final destination = _destinationCommand(
       original,
       awaitingDestination: _awaitingDestination,
     );
-    if (destination != null)
+    if (destination != null) {
       return _ProjectionVoiceControl('search', destination);
+    }
     if (!_open) return null;
     if (RegExp(
       r'^(?:switch|change|show|enter|open)\s+(?:(?:me|rooms?|the room)\s+)?(?:to\s+)?(?:the\s+)?(?:command center|discovery theat(?:er|re))(?:[.!? ]|$)',
@@ -1090,8 +1094,9 @@ class BrainProjection extends ChangeNotifier {
       if (destination.isNotEmpty &&
           destination.length <= 500 &&
           !_researchOrConversation(destination) &&
-          (explicitTravel || awaitingDestination || destinationCue))
+          (explicitTravel || awaitingDestination || destinationCue)) {
         return destination;
+      }
       return null;
     }
     return _displayAddress(command, awaitingDestination: awaitingDestination);

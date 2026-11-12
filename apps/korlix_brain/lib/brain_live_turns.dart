@@ -292,8 +292,11 @@ class BrainLiveTurns {
   Future<void> responseDone(Map response) async {
     final responseId = response['id']?.toString();
     if (_activeResponse == responseId) _activeResponse = null;
-    if (!current || responseId == null || !_completedResponses.add(responseId))
+    if (!current ||
+        responseId == null ||
+        !_completedResponses.add(responseId)) {
       return;
+    }
     final turnId = _responses[responseId];
     if (turnId == null) return;
     final turn = _turns[turnId]!;
