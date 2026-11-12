@@ -1,4 +1,8 @@
-KORLIX Brain+Voice 1.0.2 — conversation controls and knowledge tools
+KORLIX Brain+Voice 1.0.2 — voice connection startup fix
+
+This build fixes an early voice-setup confirmation being mistaken for a failed connection. Rici keeps the microphone closed until the final setup is confirmed, then shows “Rici is listening.” Connection failures now remain visible on the conversation screen. The Account screen displays the version and build actually installed.
+
+Please test on the physical iPhone or iPad: let Rici’s welcome finish, tap Talk to Rici, allow the microphone if asked, wait for “Rici is listening,” then ask “Rici, can you hear me?” Confirm a spoken answer and a second conversational turn. Repeat after skipping the welcome. Try Pause, Resume, and Stop while connecting. If listening never appears, capture the visible status and the installed build from Account. This is a targeted startup fix; physical-device voice success still needs confirmation.
 
 Pause, Resume and Stop are separate controls in conversation and Projection views. Pause closes microphone audio and the active usage session. Resume reconnects in the same mode with recent conversation context after the previous session is confirmed closed. Stop clears resumable context. Live Conversation also has refreshed authentication for usage reports, reliable heartbeat timing and clearer balance/session errors.
 

@@ -95,7 +95,6 @@ void main() {
   );
 
   test('missing transcription or malformed configuration fails closed', () {
-    final gate = BrainVoiceSessionGate()..observe({'type': 'session.created'});
     for (final session in [
       null,
       'invalid',
@@ -111,6 +110,7 @@ void main() {
         },
       },
     ]) {
+      final gate = BrainVoiceSessionGate()..observe({'type': 'session.created'});
       expect(
         gate.observe({'type': 'session.updated', 'session': session}),
         BrainSessionAction.reject,
