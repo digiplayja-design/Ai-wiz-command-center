@@ -749,3 +749,37 @@ workflows:
       - $CM_BUILD_DIR/apps/korlix_brain/artifacts/BrainVoice-upload-certificate.pem
     # First upload is performed in the dedicated Play record. No automatic
     # publishing, tester invitations, or billing activation is configured here.
+
+  korlix-brain-testflight-assign-property-view-19:
+    name: KORLIX Brain+Voice — property-view internal TestFlight build 19
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    environment:
+      xcode: 26.6
+    # Manual only, no custom inputs. Exact-source CI 43278567990 passed all 4 jobs.
+    # Verified upload job 6af606109679c85ac0af33c6 (index 24) and independently inspected IPA.
+    # Source branch: release/brain-property-view-8b25e22; Apple upload 62a57dce-cffc-4590-80bc-92da3c34b474.
+    # Expected bundle/version: com.korlix.brain 1.0.2; source build floor 19.
+    # Independently inspected IPA: 1.0.2 build 19. Upload success observed; group delivery still requires read-back.
+    # Validated source 8b25e22eb5fc5cbfbc871a24f14c372d2d37efc0. Never select a latest-build fallback.
+    # Requires the fixed independently reviewed docs/releases/brain-property-view-20261112/verified-upload.json
+    # and its pinned record hash. Workflow environment cannot assert verification.
+    # Adds only the build relationship to the existing KORLIX Brain Internal
+    # group. Does not upload, submit review, attach an App Store version or invite.
+    scripts:
+      - name: Validate exact internal delivery guards
+        script: |
+          set -euo pipefail
+          python3 -m unittest discover -s scripts/tests -p 'test_brain_property_view_testflight_assignment.py' -v
+          python3 -c 'import runpy; runpy.run_path("scripts/assign_brain_property_view_testflight_build.py")["require_verified_source_upload"]()'
+      - name: Assign verified build to existing internal testers
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.brain-property-view-testflight-tools"
+          "$CM_BUILD_DIR/.brain-property-view-testflight-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+          "$CM_BUILD_DIR/.brain-property-view-testflight-tools/bin/python" scripts/assign_brain_property_view_testflight_build.py \
+            --assign --output artifacts/brain-property-view-testflight-assignment.json
+    artifacts:
+      - artifacts/brain-property-view-testflight-assignment.json
