@@ -17,8 +17,6 @@ jobs:
     if: github.ref == 'refs/heads/test/brain-projection-live-headers-20261112'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    env:
-      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/projection-live-header-browsers
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
@@ -31,11 +29,14 @@ jobs:
           node --check backend/tools/capture_projection_live_headers.mjs
           node --test backend/test/brain_projection_live_headers.test.mjs
       - name: Install pinned browser outside the repository
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/projection-live-header-browsers
         run: |
           npm install --prefix "$RUNNER_TEMP/projection-live-header-tools" --no-audit --no-fund --ignore-scripts playwright@1.56.1
           "$RUNNER_TEMP/projection-live-header-tools/node_modules/.bin/playwright" install --with-deps chromium
       - name: Observe one approved no-referrer scene without retries
         env:
+          PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/projection-live-header-browsers
           PROJECTION_LIVE_HEADER_DEPS: ${{ runner.temp }}/projection-live-header-tools
           PROJECTION_LIVE_HEADER_ARTIFACTS: ${{ runner.temp }}/projection-live-header-audit
           DEBUG: ''
