@@ -113,7 +113,7 @@ export function createStreetCameraController({panorama, getResetHeading, reduced
       // No undocumented maximum or tile-level assumption: observe the zoom
       // value accepted by the actual panorama. Wait through async/quantized
       // provider updates before reporting a camera that stopped advancing.
-      if (stalled >= 1000 && direction * (desired - actual) >= .49) { limit(direction); return; }
+      if (stalled >= 1000 && direction * (desired - actual) >= (continuous ? .49 : 1e-6)) { limit(direction); return; }
       if (!continuous && direction * (actual - desired) >= -1e-6) {
         cancel();
         return;

@@ -61,7 +61,7 @@ export function mountProjectionRenderer({window: win, document: doc, loadLibrary
   let viewMode = 'street', phase = 'awaiting-destination', target = null;
   let api = null, sdkPromise = null, sdkAbort = null, sdkDeadline = null, viewDeadline = null;
   let panorama = null, service = null, streetController = null, map = null, earthController = null;
-  let pendingStreet = null, pendingEarth = null, metadataGeneration = 0, previousStatus = '';
+  let pendingStreet = null, pendingEarth = null, metadataGeneration = 0, previousStatus = '', failingView = false;
   const libraries = new Map(), removers = [];
   const previousAuthFailure = win.gm_authFailure;
   const current = token => !disposed && token === viewGeneration;
@@ -99,7 +99,8 @@ export function mountProjectionRenderer({window: win, document: doc, loadLibrary
   }
   function clearViewDeadline() { win.clearTimeout(viewDeadline); viewDeadline = null; }
   function failView(token, reason = 'unavailable') {
-    if (!current(token)) return;
+    if (!current(token) || failingView) return;
+    failingView = true;
     clearViewDeadline();
     ++viewGeneration; ++metadataGeneration;
     pendingStreet = pendingEarth = null;
@@ -110,6 +111,7 @@ export function mountProjectionRenderer({window: win, document: doc, loadLibrary
     status('error', reason, reason === 'no-coverage'
       ? 'Street-level imagery is not available near this address. Choose 3D Earth or try another address.'
       : `${viewMode === 'street' ? 'Street View' : '3D Earth imagery'} could not load. Try again or choose another view.`);
+    failingView = false;
   }
   function armViewDeadline(token) {
     clearViewDeadline();
@@ -128,7 +130,8 @@ export function mountProjectionRenderer({window: win, document: doc, loadLibrary
         finished = true;
         win.clearTimeout(sdkDeadline); sdkDeadline = null;
         if (disposed || abort.signal.aborted || error || typeof value?.importLibrary !== 'function') {
-          sdkPromise = null; reject(Error('Imagery library unavailable.')); return;
+          if (sdkAbort === abort) sdkPromise = null;
+          reject(Error('Imagery library unavailable.')); return;
         }
         api = value; resolve(api);
       };
@@ -138,7 +141,9 @@ export function mountProjectionRenderer({window: win, document: doc, loadLibrary
           value => finish(value), () => finish(null, true));
       } catch { finish(null, true); }
     });
-    return sdkPromise;
+    const pending = sdkPromise;
+    void pending.catch(() => { if (sdkPromise === pending) sdkPromise = null; });
+    return pending;
   }
   function library(name) {
     if (libraries.has(name)) return libraries.get(name);
@@ -281,10 +286,10 @@ export function mountProjectionRenderer({window: win, document: doc, loadLibrary
     } catch { failView(token); }
   }
   function beginView(command) {
+    stopControllers(); hideViews();
     const token = ++viewGeneration;
     ++metadataGeneration;
     pendingStreet = pendingEarth = null;
-    stopControllers(); hideViews();
     viewMode = command.camera.viewMode ?? 'street';
     viewSequence = command.camera.sequence;
     target = {lat: command.camera.latitude ?? command.place?.latitude, lng: command.camera.longitude ?? command.place?.longitude};
@@ -300,7 +305,11 @@ export function mountProjectionRenderer({window: win, document: doc, loadLibrary
     clearViewDeadline(); hideViews();
     viewSequence = sequence;
     status('error', 'interrupted', 'View loading stopped. Choose the address again when you are ready.');
-    cameraStatus(viewMode, {state: 'stopped', reason, sequence});
+    // A reused Earth viewer may already be animating its new destination while
+    // awaiting a steady scene. Invalidate lookup work AND stop that SDK flight.
+    const activeController = viewMode === 'street' ? streetController : earthController;
+    stopControllers(reason, sequence);
+    if (!activeController) cameraStatus(viewMode, {state: 'stopped', reason, sequence});
     return true;
   }
   function interruptCamera() {
@@ -373,4 +382,3 @@ export function mountProjectionRenderer({window: win, document: doc, loadLibrary
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   mountProjectionRenderer({window, document});
 }
-

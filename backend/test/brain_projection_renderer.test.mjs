@@ -727,3 +727,41 @@ test('explicit panorama failures after readiness disable imagery using the curre
     runtime.dispose();
   }
 });
+
+test('a partial provider zoom clamp finishes a single step and reports the actual closest view', async () => {
+  const f = surfaceFixture({maxZoom: 1.2}), runtime = await openStreetFixture(f);
+  f.send(2, 'closer', {}, null);
+  for (let i = 0; i < 100; i++) f.tick();
+  assert.equal(f.calls.panoramas[0].zoom, 1.2); assert.equal(f.frames.size, 0);
+  assert.equal(cameraStatuses(f).at(-1).reason, 'closest');
+  runtime.dispose();
+});
+
+test('an Earth stop failure is bounded and cannot prevent a later Street View selection', async () => {
+  const f = surfaceFixture(), runtime = mountProjectionRenderer(f);
+  f.send(1, 'flyTo', {viewMode: 'earth'}); await flush(); f.calls.maps[0].steady();
+  f.calls.maps[0].stopCameraAnimation = () => { throw Error('provider failure'); };
+  f.send(2, 'closer', {viewMode: 'earth'}, null);
+  assert.equal(latestView(f).status, 'error');
+  f.send(3, 'flyTo', {viewMode: 'street'}); await flush(); f.reply(0); await flush(); f.calls.panoramas[0].ready();
+  assert.equal(latestView(f).status, 'ready'); assert.equal(latestView(f).viewMode, 'street');
+  runtime.dispose();
+});
+
+test('Stop, pointer and background interrupt an Earth destination flight before its steady event', async () => {
+  for (const cause of ['stop', 'pointer', 'background']) {
+    const f = surfaceFixture(), runtime = mountProjectionRenderer(f);
+    f.send(1, 'flyTo', {viewMode: 'earth'}); await flush(); f.calls.maps[0].steady();
+    f.send(2, 'flyTo', {viewMode: 'earth'}, {...selected, latitude: 40.71}); await flush();
+    const map = f.calls.maps[0], previousStops = map.stops;
+    assert.equal(map.flights.length, 1); assert.equal(latestView(f).status, 'loading');
+    if (cause === 'stop') f.send(3, 'stopCamera', {viewMode: 'earth'}, null);
+    else if (cause === 'pointer') f.gestures();
+    else f.hidden(true);
+    assert.ok(map.stops > previousStops, 'The in-progress SDK flight must be stopped, not only hidden.');
+    map.steady(); await flush();
+    assert.equal(latestView(f).reason, 'interrupted');
+    assert.equal(cameraStatuses(f).at(-1).reason, cause === 'stop' ? 'stopped' : 'interrupted');
+    runtime.dispose();
+  }
+});
