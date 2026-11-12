@@ -89,10 +89,10 @@
             <label class="destination-label" for="destination-input">Explore a property</label>
             <form id="search-form" class="search-form" role="search">
               <svg class="search-icon"><use href="#icon-search"/></svg>
-              <input id="destination-input" type="search" maxlength="300" placeholder="Enter a full address or place" autocomplete="off" enterkeyhint="search">
+              <input id="destination-input" type="search" maxlength="500" placeholder="Say or enter a full address or place" autocomplete="off" enterkeyhint="search">
               <button type="submit" id="search-button" aria-label="Find destination"><span>Explore</span><svg><use href="#icon-arrow"/></svg></button>
             </form>
-            <div id="search-help" class="search-help"><span>Tap Talk to Rici, then say “Go to…” or enter an address.</span><span>Confirm a result to open Street View.</span></div>
+            <div id="search-help" class="search-help" role="status" aria-live="polite"><span>Tap Talk to Rici, then say a full street address.</span><span>Confirm a result to open Street View.</span></div>
             <div id="candidates-panel" class="candidates-panel" hidden><div class="candidates-heading"><span class="eyebrow">CONFIRM YOUR DESTINATION</span><span id="candidate-count"></span></div><div id="candidates-list"></div></div>
             <div class="directions-panel"><button id="directions-button" class="directions-button" type="button" aria-label="Review destination for directions" aria-describedby="directions-help" disabled><svg aria-hidden="true"><use href="#icon-arrow"/></svg><span>Directions</span></button><p id="directions-help">Confirm a destination to review directions.</p></div>
           </section>

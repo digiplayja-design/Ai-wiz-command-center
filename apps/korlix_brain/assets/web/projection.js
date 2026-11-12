@@ -20,10 +20,12 @@
   let frame = null, frameOrigin = '', frameUrl = '', frameReady = false, mapStatus = 'illustration', lastCamera = '';
   let rendererTimer = null, canvasInvalidated = true;
   let localNotice = '', localNoticeKind = '', lastSavedPlace = '', pendingQuestionLocal = false;
+  let lastSearchSequence = 0, revealedVoiceSearchSequence = 0;
 
   const emptyState = () => ({
     open:true, room:'command', loading:false, selectedPlace:null, candidates:[], answer:null,
     notice:'', camera:{sequence:0, operation:'reset', viewMode:'street'}, lastVoiceCommand:null,
+    destinationSearch:{sequence:0, query:'', active:false, source:'typed'},
     config:{rendererUrl:null, mapAvailable:false, geocodingAvailable:false, directionsAvailable:false, answersAvailable:false, checking:false, checkFailed:false, answerCredits:0, answerCostLabel:''},
     voice:{active:false, paused:false, phase:'complete', message:''}
   });
@@ -73,6 +75,12 @@
     base.notice = clip(raw.notice,1500);
     base.camera = cameraValue(raw.camera);
     base.voice = voiceValue(raw.voice);
+    if (isObject(raw.destinationSearch) && Number.isSafeInteger(raw.destinationSearch.sequence)
+      && raw.destinationSearch.sequence > 0) {
+      const search = raw.destinationSearch;
+      base.destinationSearch = {sequence:search.sequence, query:clip(search.query,500),
+        active:search.active === true, source:search.source === 'voice' ? 'voice' : 'typed'};
+    }
     if (isObject(raw.lastVoiceCommand)) {
       const command = raw.lastVoiceCommand;
       const statuses = new Set(['idle','heard','running','unrecognized','sent','completed','failed','interrupted','limit']);
@@ -199,6 +207,18 @@
       });
       list.append(button);
     });
+    const search = state.destinationSearch;
+    if (search.source === 'voice' && !search.active && state.candidates.length
+      && search.sequence !== revealedVoiceSearchSequence) {
+      revealedVoiceSearchSequence = search.sequence;
+      // A spoken search must reveal its confirmation choices without opening
+      // the keyboard. The scrollport already reserves the microphone dock.
+      requestAnimationFrame(() => {
+        if (state.destinationSearch.sequence === search.sequence && state.candidates.length) {
+          document.querySelector('.destination-panel').scrollIntoView({block:'start', behavior:'auto'});
+        }
+      });
+    }
   }
 
   function renderAnswer() {
@@ -235,13 +255,22 @@
   }
 
   function renderSearch() {
-    $('search-button').disabled = !connected || state.config.checking || !state.config.geocodingAvailable || busy.search;
-    $('search-button').querySelector('span').textContent = busy.search ? 'Finding…' : 'Explore';
+    const search = state.destinationSearch;
+    if (search.sequence > 0 && search.sequence !== lastSearchSequence) {
+      lastSearchSequence = search.sequence;
+      $('destination-input').value = search.query;
+    }
+    const finding = busy.search || search.active;
+    $('search-button').disabled = !connected || state.config.checking || !state.config.geocodingAvailable || finding;
+    $('search-button').setAttribute('aria-busy',String(finding));
+    $('search-button').querySelector('span').textContent = finding ? 'Finding…' : 'Explore';
     const help = $('search-help');
-    help.firstElementChild.textContent = state.config.checking ? 'Checking address search…' : busy.search ? 'Finding matching destinations…' : state.config.checkFailed
+    help.firstElementChild.textContent = state.config.checking ? 'Checking address search…' : finding ? 'Finding matching destinations…' : state.config.checkFailed
       ? 'Could not check address search. Close and reopen Projection to try again.' : connected && !state.config.geocodingAvailable
-      ? 'Address search is not connected yet. You can still talk to Rici.' : 'Tap Talk to Rici, then say “Go to…” with an address, or enter a place.';
-    help.lastElementChild.textContent = 'Confirm a result to open Street View.';
+      ? 'Address search is not connected yet. You can still talk to Rici.' : 'While Rici is listening, say a full street address or “Search for…” a place.';
+    help.lastElementChild.textContent = state.candidates.length === 1
+      ? 'Say “Yes, that’s it” to confirm.' : state.candidates.length > 1
+      ? 'Say “Choose the first result”, or tap a match.' : 'Confirm a result to open Street View.';
   }
 
   function measureVoiceDock() {
@@ -454,6 +483,9 @@
     if (!isObject(connection) || !clip(connection.nonce,512)) return;
     if (nonce && nonce !== connection.nonce) {
       voiceEpoch++; voiceAction = '';
+      searchEpoch++; busy.search = false;
+      lastSearchSequence = 0; revealedVoiceSearchSequence = 0;
+      $('destination-input').value = '';
       requests.forEach(request => { clearTimeout(request.timer); request.reject(new Error('The projection connection was renewed. Please try again.')); });
       requests.clear(); disposeFrame();
     }
@@ -512,9 +544,9 @@
   $('search-form').addEventListener('submit',async event => {
     event.preventDefault();
     const query = $('destination-input').value.trim();
-    if (!query || busy.search || !connected || state.config.checking || !state.config.geocodingAvailable) return;
+    if (!query || busy.search || state.destinationSearch.active || !connected || state.config.checking || !state.config.geocodingAvailable) return;
     const epoch = ++searchEpoch; busy.search = true; notice(''); renderSearch();
-    try { await send('search',{query:query.slice(0,300)}); }
+    try { await send('search',{query:query.slice(0,500)}); }
     catch (error) { if (epoch === searchEpoch) fail(error); }
     finally { if (epoch === searchEpoch) { busy.search = false; renderSearch(); } }
   });

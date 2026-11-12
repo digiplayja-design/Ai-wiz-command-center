@@ -1,28 +1,42 @@
-## Projection voice-control repair — candidate pending verification
+## Spoken street-address search repair — build 21 candidate
 
-Version 1.0.2 build 19 was delivered to the existing KORLIX Brain Internal group;
-Apple's assignment read-back reported `IN_BETA_TESTING` at
-2026-11-12T19:42:14Z. The user subsequently reported that Projection imagery is
-visible but Rici still cannot control it. Build 19's delivery does not establish
-physical-device voice acceptance.
+The user confirmed that Street View works in delivered version 1.0.2 (20), but
+reported that Rici cannot start an address search automatically. Source review
+found a reproducible recognition gap: a standalone address was only accepted
+while the controller was waiting for its first destination, and was rejected
+after selecting a property. Natural commands such as “Search [address]” also
+fell outside the existing parser. Both main-screen and Projection voice sessions
+already share the native search dispatcher; there is no separate missing bridge.
+The exact failed utterance on the physical device has not yet been observed.
 
-This candidate keeps voice activation/status reachable while viewing imagery,
-normalizes additional Rici transcriptions and polite command wrappers, and adds
-a bounded notice when Live speech recognition does not return words. Commands
-still require explicit intent in the original transcript. Street View remains
-recorded imagery, with the existing production renderer.
+This candidate accepts strong standalone street addresses while Projection is
+open, including subsequent destinations, and bounded explicit search phrases
+that can also open Projection from home. The original address text remains the
+authority. Voice searches update the address field and lookup progress, and
+reveal matching candidates. Confirmation remains explicit and can be spoken.
+Current-turn ASR, stale-result protection, memory/research boundaries and the
+working Street View renderer remain in place.
 
-The candidate requires fresh exact-source CI, a verified signed IPA, Apple
-upload/processing and read-back of assignment to the existing internal group.
-No new build or delivery is claimed here. Keep version 1.0.2; select a fresh
-build number using the source floor and Apple's latest build at release time.
-Do not reuse build 19's upload record, checksum or assignment pins.
+The source build floor is 21. Exact-source CI, signed package inspection, Apple
+upload/processing, delivery and physical-device acceptance must be recorded
+separately before claiming this candidate is available. Do not reuse build 20's
+package, upload receipt or assignment pins. The requested immersive Projection
+animation is an isolated visual/motion concept; it is not part of this repair.
 
 Physical-device checks are in [testflight-notes.txt](apple/testflight-notes.txt).
-Record the build, voice phase, recognized words and view-control result when a
-spoken command fails. This candidate does not request public App Store review,
-new testers, invitations or another backend deployment. The sections below
-retain historical release records.
+Record the installed build, voice phase, exact recognized words and view-control
+result if address speech fails. No backend renderer deployment is needed.
+
+## Verified build 20 baseline
+
+Source `6202cd06d94dae7eaf9fea097d63254de51a357e` passed clean Flutter analysis,
+230 tests, responsive UI checks, Android build and iOS simulator/release compile.
+Signed version 1.0.2 (20) was independently verified and assigned to the existing
+KORLIX Brain Internal group. A separate Apple read-back at
+2026-11-12T21:34:03.749217Z confirmed `IN_BETA_TESTING`, `already_linked`, and
+`deliveryVerified: true`, preserving its existing tester membership. That
+successful delivery does not establish acceptance of the newly reported
+spoken-address behavior. Historical release records follow.
 
 ## Native subscription and AI GAS candidate — build 14
 

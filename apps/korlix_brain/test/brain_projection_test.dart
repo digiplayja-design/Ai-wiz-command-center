@@ -990,6 +990,316 @@ void main() {
     );
   });
 
+  group('Spoken street address search', () {
+    test(
+      'bounded address introductions replace a property only inside Projection',
+      () async {
+        const address = '123 Main Street, Unit I, Reece, NY 10012';
+        for (final phrase in ['The address is $address', 'Address: $address']) {
+          final queries = <String>[];
+          final f = Fixture(
+            request: (_, path, body) async {
+              if (path.endsWith('/config')) return config;
+              queries.add(body!['query'] as String);
+              return {
+                'candidates': [place],
+              };
+            },
+          );
+          addTearDown(f.projection.dispose);
+          expect(f.projection.recognizesVoiceControl(phrase), false);
+          await f.select();
+          queries.clear();
+          expect(f.projection.recognizesVoiceControl(phrase), true);
+          await f.projection.voiceTurn('context-address', phrase, null);
+          expect(queries, [address]);
+          expect(f.projection.snapshot['selectedPlace'], isNull);
+          expect(
+            (f.projection.snapshot['destinationSearch'] as Map)['query'],
+            address,
+          );
+        }
+      },
+    );
+
+    test('the next full address replaces a selected property only after confirmation', () async {
+      for (final address in [
+        '14360 Jupiter Road, Suite 8, Brooklyn, NY 10012',
+        '20 Resee Street, Unit 4, Reece, NY 10012',
+        "12-14 King's Road, London, SW3 4RP",
+        '123 Live Oak Road, Newport News, VA 23601',
+        '123 Live Oak Road, Mountain View, CA 94040',
+        '123 Main Street, Unit I, Reece, NY 10012',
+        'One hundred twenty-three Main Street, Apartment 4B, Springfield, IL 62701',
+        'one four three six zero Jupiter Road, Brooklyn, NY 10012',
+        "Twenty-three King's Road, London, SW3 4RP",
+      ]) {
+        final queries = <String>[];
+        final f = Fixture(
+          request: (_, path, body) async {
+            if (path.endsWith('/config')) return config;
+            queries.add(body!['query'] as String);
+            return {
+              'candidates': [place],
+            };
+          },
+        );
+        addTearDown(f.projection.dispose);
+        await f.select();
+        queries.clear();
+        final camera = Map.of(f.projection.snapshot['camera'] as Map);
+        expect(
+          f.projection.recognizesVoiceControl(address),
+          true,
+          reason: address,
+        );
+        await f.projection.voiceTurn('next-address', address, {
+          'action': 'search',
+          'value': 'A model-proposed incomplete address',
+        });
+        expect(queries, [address]);
+        expect(f.projection.snapshot['selectedPlace'], isNull);
+        expect(f.projection.snapshot['camera'], camera);
+        expect(f.projection.snapshot['destinationSearch'], {
+          'sequence': 2,
+          'query': address,
+          'active': false,
+          'source': 'voice',
+        });
+        await f.projection.voiceTurn('confirmation', 'Yes', null);
+        expect(
+          (f.projection.snapshot['selectedPlace'] as Map)['id'],
+          place['id'],
+        );
+        expect((f.projection.snapshot['camera'] as Map)['viewMode'], 'street');
+        expect(f.starts, 0);
+        expect(f.stops, 0);
+      }
+    });
+
+    test('explicit natural search forms open Projection with the complete original address', () async {
+      const address =
+          'One hundred twenty-three Main Drive, Unit 4, Springfield, IL 62701';
+      for (final phrase in [
+        'Rici, search this address: $address',
+        'Can you search $address?',
+        'Look up the address $address',
+        'Find this street address: $address',
+        'Search for the address of $address',
+      ]) {
+        final queries = <String>[];
+        final f = Fixture(
+          request: (_, path, body) async {
+            if (path.endsWith('/config')) return config;
+            queries.add(body!['query'] as String);
+            return {
+              'candidates': [place],
+            };
+          },
+        );
+        addTearDown(f.projection.dispose);
+        expect(f.projection.isOpen, false);
+        expect(f.projection.recognizesVoiceControl(address), false);
+        expect(
+          f.projection.recognizesVoiceControl(phrase),
+          true,
+          reason: phrase,
+        );
+        await f.projection.voiceTurn('search', phrase, null);
+        expect(f.projection.isOpen, true);
+        expect(queries, [address], reason: phrase);
+        expect(f.projection.snapshot['selectedPlace'], isNull);
+        expect(
+          (f.projection.snapshot['destinationSearch'] as Map)['source'],
+          'voice',
+        );
+      }
+    });
+
+    test('address mentions, research, memories and negation never become replacement searches', () async {
+      final f = Fixture();
+      addTearDown(f.projection.dispose);
+      await f.select();
+      final before = f.requests
+          .where((path) => path.endsWith('/resolve'))
+          .length;
+      final camera = Map.of(f.projection.snapshot['camera'] as Map);
+      for (final phrase in [
+        '14360 Jupiter Road is where I used to live',
+        '14360 Jupiter Road photos',
+        'Show me photos of 14360 Jupiter Road',
+        'Tell me about 14360 Jupiter Road',
+        'Remember 14360 Jupiter Road',
+        'Do not search 14360 Jupiter Road',
+        'Search for crime near 14360 Jupiter Road',
+        'How far is 14360 Jupiter Road?',
+        'One person on Main Street',
+        'Twenty photos of Main Street',
+        '123 Main Street and then show me the photos',
+        '123 Main Street, don’t go there',
+        '14360 Jupiter Road, Suite 8, Brooklyn, NY 10012, not this address',
+        '123 Main Street needs repairs',
+        'Search 10 Downing Street history',
+        'Search road conditions',
+        'Search Main Street history',
+        'The address is 123 Main Street needs repairs',
+        'Address: 123 Main Street, not this address',
+        'one hundred hundred Main Street',
+        'one thousand thousand Main Street',
+        'one two three four five six seven eight nine ten Main Street',
+        'San Francisco Ferry Building',
+        '123 Main',
+      ]) {
+        expect(
+          f.projection.recognizesVoiceControl(phrase),
+          false,
+          reason: phrase,
+        );
+        await f.projection.voiceTurn(phrase, phrase, {
+          'action': 'search',
+          'value': '14360 Jupiter Road',
+        });
+      }
+      expect(
+        f.requests.where((path) => path.endsWith('/resolve')),
+        hasLength(before),
+      );
+      expect(f.projection.snapshot['camera'], camera);
+      expect(f.saves, isEmpty);
+    });
+
+    test('voice search snapshot supersedes typed progress and stale completion cannot clear it', () async {
+      final first = Completer<Map<String, dynamic>>();
+      final second = Completer<Map<String, dynamic>>();
+      final f = Fixture(
+        request: (_, path, body) async {
+          if (path.endsWith('/config')) return config;
+          return body!['query'] == '10 First Street'
+              ? first.future
+              : second.future;
+        },
+      );
+      addTearDown(f.projection.dispose);
+      final typed = f.projection.search('10 First Street');
+      expect(f.projection.snapshot['destinationSearch'], {
+        'sequence': 1,
+        'query': '10 First Street',
+        'active': true,
+        'source': 'typed',
+      });
+      await Future<void>.delayed(Duration.zero);
+      final voice = f.projection.voiceTurn(
+        'next',
+        'Search 20 Second Street, Unit 4',
+        null,
+      );
+      expect(f.projection.snapshot['destinationSearch'], {
+        'sequence': 2,
+        'query': '20 Second Street, Unit 4',
+        'active': true,
+        'source': 'voice',
+      });
+      await Future<void>.delayed(Duration.zero);
+      first.complete({
+        'candidates': [place],
+      });
+      await typed;
+      expect(
+        (f.projection.snapshot['destinationSearch'] as Map)['active'],
+        true,
+      );
+      expect(
+        (f.projection.snapshot['destinationSearch'] as Map)['sequence'],
+        2,
+      );
+      expect(f.projection.snapshot['candidates'], isEmpty);
+      second.complete({
+        'candidates': [
+          {...place, 'id': 'second'},
+        ],
+      });
+      await voice;
+      expect(f.projection.snapshot['destinationSearch'], {
+        'sequence': 2,
+        'query': '20 Second Street, Unit 4',
+        'active': false,
+        'source': 'voice',
+      });
+      expect(
+        (f.projection.snapshot['candidates'] as List).single['id'],
+        'second',
+      );
+    });
+
+    test(
+      'cancel and close retire voice search progress before a late result',
+      () async {
+        for (final close in [false, true]) {
+          final pending = Completer<Map<String, dynamic>>();
+          final f = Fixture(
+            request: (_, path, _) async {
+              if (path.endsWith('/config')) return config;
+              return pending.future;
+            },
+          );
+          addTearDown(f.projection.dispose);
+          final lookup = f.projection.voiceTurn(
+            'search',
+            'Go to 123 Main Street',
+            null,
+          );
+          await Future<void>.delayed(Duration.zero);
+          expect(
+            (f.projection.snapshot['destinationSearch'] as Map)['active'],
+            true,
+          );
+          if (close) {
+            f.projection.close();
+          } else {
+            f.projection.cancelPending();
+          }
+          expect(
+            (f.projection.snapshot['destinationSearch'] as Map)['active'],
+            false,
+          );
+          pending.complete({
+            'candidates': [place],
+          });
+          await lookup;
+          expect(
+            (f.projection.snapshot['destinationSearch'] as Map)['active'],
+            false,
+          );
+          expect(f.projection.snapshot['selectedPlace'], isNull);
+          expect(f.projection.snapshot['candidates'], isEmpty);
+        }
+      },
+    );
+
+    test('a failed lookup clears current progress while retaining the spoken query', () async {
+      final f = Fixture(
+        request: (_, path, _) async {
+          if (path.endsWith('/config')) return config;
+          throw StateError('Synthetic unavailable lookup');
+        },
+      );
+      addTearDown(f.projection.dispose);
+      final result = await f.projection.voiceTurn(
+        'search',
+        'Go to 123 Main Street',
+        null,
+      );
+      expect(result?['ok'], false);
+      expect(f.projection.snapshot['destinationSearch'], {
+        'sequence': 1,
+        'query': '123 Main Street',
+        'active': false,
+        'source': 'voice',
+      });
+      expect(f.projection.snapshot['selectedPlace'], isNull);
+    });
+  });
+
   group('Hands-free destinations and continuous zoom', () {
     test('ordinary lookup requests remain conversation outside a destination prompt', () async {
       final f = Fixture();

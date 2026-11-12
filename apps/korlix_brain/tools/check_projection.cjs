@@ -99,6 +99,63 @@ async function settleLayout(page) {
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
 }
 
+async function assertSpokenAddressFeedback(browser, errors, width, height) {
+  const page = await browser.newPage({viewport:{width,height},reducedMotion:'reduce'});
+  page.on('pageerror',error=>errors.push(error.message));
+  await fixture(page);
+  const query = 'Twenty one Oak Street, Apt 4B, Example City, NY 10001';
+  await page.evaluate(query=>{
+    const state=window.projectionState;
+    state.voice={active:true,phase:'listening',message:'Rici is listening'};
+    state.loading=true;
+    state.destinationSearch={sequence:1,query,active:true,source:'voice'};
+    state.lastVoiceCommand={heard:query,action:'Find destination',status:'running',result:'Applying the view command.'};
+    window.sendSnapshot();
+  },query);
+  assert.equal(await page.locator('#destination-input').inputValue(),query,'Voice query populates the original full address at '+width);
+  assert.equal(await page.locator('#search-button span').textContent(),'Finding…','Native lookup shows progress without a form submission');
+  assert.equal(await page.locator('#search-button').getAttribute('aria-busy'),'true');
+  assert.equal(await page.locator('#search-button').isEnabled(),false);
+  assert.equal(await page.evaluate(()=>window.projectionCommands.some(c=>c.action==='search')),false,'Rendering native search must not submit a duplicate request');
+  await page.evaluate(query=>{
+    const state=window.projectionState;
+    state.loading=false;state.destinationSearch.active=false;
+    state.candidates=[
+      {id:'spoken-a',label:'First spoken match',address:'Example address fixture',userQuery:query,latitude:40.71,longitude:-74,provider:'Test'},
+      {id:'spoken-b',label:'Second spoken match',address:'Alternate example fixture',userQuery:query,latitude:40.72,longitude:-73.98,provider:'Test'}
+    ];
+    state.lastVoiceCommand={...state.lastVoiceCommand,status:'completed',result:'Choose a matching destination.'};
+    window.sendSnapshot();
+  },query);
+  await settleLayout(page);
+  assert.match(await page.locator('#search-help').textContent(),/Choose the first result/);
+  assert.equal(await page.locator('#search-button').getAttribute('aria-busy'),'false');
+  const visibility=await page.evaluate(()=>{
+    const candidate=document.querySelector('.candidate-button'),box=candidate.getBoundingClientRect();
+    const dock=document.querySelector('.voice-dock').getBoundingClientRect();
+    return {top:box.top,bottom:box.bottom,dockTop:dock.top,focused:document.activeElement?.id,
+      hittable:document.elementFromPoint(box.x+box.width/2,box.y+box.height/2)?.closest('button')===candidate};
+  });
+  assert.ok(visibility.top>=0&&visibility.bottom<=visibility.dockTop&&visibility.hittable,'Spoken results are visible above the voice dock: '+JSON.stringify(visibility));
+  assert.notEqual(visibility.focused,'destination-input','Spoken search must not raise the keyboard');
+  assert.equal(await page.evaluate(()=>window.projectionCommands.some(c=>c.action==='select')),false,'Spoken search still requires destination confirmation');
+  await page.locator('.candidate-button').first().click();
+  await page.locator('#place-banner').waitFor();
+  await page.locator('#destination-input').fill('An unfinished typed draft');
+  await page.evaluate(()=>{window.projectionState.loading=true;window.sendSnapshot();});
+  assert.equal(await page.locator('#destination-input').inputValue(),'An unfinished typed draft','Unrelated snapshots do not overwrite a new draft');
+  assert.equal(await page.locator('#search-button span').textContent(),'Explore','A research request is not address-search progress');
+  await page.evaluate(()=>{
+    const state=window.projectionState;
+    state.selectedPlace=null;state.candidates=[];
+    state.destinationSearch={sequence:2,query:'32 Pine Avenue, Example City',active:true,source:'voice'};
+    window.sendSnapshot();
+  });
+  assert.equal(await page.locator('#destination-input').inputValue(),'32 Pine Avenue, Example City','The next spoken address replaces the previous query');
+  if(screenDirectory){fs.mkdirSync(screenDirectory,{recursive:true});await page.screenshot({path:path.join(screenDirectory,`projection-spoken-search-${width}.png`)});}
+  await page.close();
+}
+
 async function assertVoiceControls(page,label) {
   await settleLayout(page);
   const controls=await page.evaluate(()=>['pause-button','resume-button','stop-button'].map(id=>{
@@ -477,6 +534,10 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
         }
         await offMap.close();
       }
+    }
+
+    for(const [width,height] of [[390,844],[768,1024]]) {
+      await assertSpokenAddressFeedback(browser,errors,width,height);
     }
 
     const page = await browser.newPage({viewport:{width:1024,height:768},reducedMotion:'reduce'});

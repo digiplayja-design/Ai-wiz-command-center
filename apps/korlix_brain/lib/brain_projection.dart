@@ -50,11 +50,18 @@ class BrainProjection extends ChangeNotifier {
   int _generation = 0;
   int _configGeneration = 0;
   int _cameraSequence = 0;
+  int _destinationSearchSequence = 0;
   int _voiceCommandGeneration = 0;
   int? _voiceCommandCameraSequence;
   Map<String, dynamic>? _place;
   List<Map<String, dynamic>> _candidates = [];
   Map<String, dynamic>? _answer;
+  Map<String, dynamic> _destinationSearch = {
+    'sequence': 0,
+    'query': '',
+    'active': false,
+    'source': 'typed',
+  };
   Map<String, dynamic> _camera = {
     'sequence': 0,
     'operation': 'reset',
@@ -94,6 +101,7 @@ class BrainProjection extends ChangeNotifier {
     'selectedPlace': _place,
     'candidates': _candidates,
     'answer': _answer,
+    'destinationSearch': Map<String, dynamic>.of(_destinationSearch),
     'notice': _notice,
     'camera': _camera,
     'config': _config,
@@ -122,6 +130,7 @@ class BrainProjection extends ChangeNotifier {
       };
     }
     _loading = false;
+    _destinationSearch = {..._destinationSearch, 'active': false};
     _stopCameraIfMoving();
     _changed();
   }
@@ -432,12 +441,21 @@ class BrainProjection extends ChangeNotifier {
     'answer': text,
   };
 
-  Future<Map<String, dynamic>> search(String query) async {
+  Future<Map<String, dynamic>> search(
+    String query, {
+    bool fromVoice = false,
+  }) async {
     query = _text(query, 500);
     _stopCameraIfMoving();
     _awaitingDestination = false;
     final generation = ++_generation;
     _loading = true;
+    _destinationSearch = {
+      'sequence': ++_destinationSearchSequence,
+      'query': query,
+      'active': true,
+      'source': fromVoice ? 'voice' : 'typed',
+    };
     _place = null;
     _candidates = [];
     _answer = null;
@@ -497,6 +515,7 @@ class BrainProjection extends ChangeNotifier {
     } finally {
       if (_current(generation)) {
         _loading = false;
+        _destinationSearch = {..._destinationSearch, 'active': false};
         _changed();
       }
     }
@@ -534,6 +553,7 @@ class BrainProjection extends ChangeNotifier {
     _rendererStatus = 'loading';
     _awaitingDestination = false;
     _loading = false;
+    _destinationSearch = {..._destinationSearch, 'active': false};
     _place = Map<String, dynamic>.of(matches.first);
     _candidates = [];
     _answer = null;
@@ -1093,6 +1113,89 @@ class BrainProjection extends ChangeNotifier {
     caseSensitive: false,
   ).hasMatch(value);
 
+  static const _streetNameAndType =
+      r'(?:[a-z0-9.\x27’\-]+\s+){1,8}?(?:street|st|avenue|ave|road|rd|drive|dr|lane|ln|boulevard|blvd|court|ct|place|pl|terrace|ter|way|circle|cir|square|sq|parkway|pkwy|highway|hwy|route|rte|trail|trl|crescent|cres|close|row|walk)\b';
+  static const _addressNumberWord =
+      r'(?:zero|oh|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand)';
+  static final _addressIntroducer = RegExp(
+    r'^(?:(?:the|this)\s+)?(?:street\s+)?address(?:\s+(?:is|of|for))?(?:\s*:\s*|\s+)(.+)$',
+    caseSensitive: false,
+  );
+
+  /// A complete street address can replace a selected property while its
+  /// Projection is open. This does not turn arbitrary bare places or ordinary
+  /// conversation at Home into navigation. Preserve spoken numbers verbatim;
+  /// the geocoder and the existing confirmation step resolve their meaning.
+  static bool _standaloneStreetAddress(String value) {
+    if (value.isEmpty || value.length > 500) {
+      return false;
+    }
+    var house = RegExp(
+      r'^\d+[a-z]?(?:[-/]\d+[a-z]?)?\s+',
+      caseSensitive: false,
+    ).firstMatch(value);
+    if (house == null) {
+      house = RegExp(
+        '^$_addressNumberWord(?:[ -]+(?:and[ -]+)?$_addressNumberWord){0,7}\\s+',
+        caseSensitive: false,
+      ).firstMatch(value);
+      if (house == null ||
+          RegExp(
+            r'^(?:hundred|thousand)\b',
+            caseSensitive: false,
+          ).hasMatch(value) ||
+          RegExp(
+            '^$_addressNumberWord\\b',
+            caseSensitive: false,
+          ).hasMatch(value.substring(house.end))) {
+        return false;
+      }
+      final numberWords = house.group(0)!.toLowerCase();
+      if (RegExp(r'\bhundred\b').allMatches(numberWords).length > 1 ||
+          RegExp(r'\bthousand\b').allMatches(numberWords).length > 1 ||
+          RegExp(r'\bthousand[ -]+(?:and[ -]+)?hundred\b')
+              .hasMatch(numberWords)) {
+        return false;
+      }
+    }
+    final streetText = value.substring(house.end);
+    final street = RegExp(
+      '^$_streetNameAndType',
+      caseSensitive: false,
+    ).firstMatch(streetText);
+    if (street == null ||
+        RegExp(
+          r'\b(?:at|on|near|about|for|from|with|and|people|person|facts?|photos?|pictures?|images?|videos?|examples?)\b',
+          caseSensitive: false,
+        ).hasMatch(street.group(0)!)) {
+      return false;
+    }
+    final remainder = streetText.substring(street.end);
+    // Check language after the street, not words inside its name: Live Oak
+    // Road in Mountain View remains a destination. Unit letters are identifiers.
+    final locality = remainder
+        .replaceAll(
+          RegExp(
+            r'\b(?:unit|suite|ste|apartment|apt|floor|fl)\.?\s*#?\s*(?:\d+[a-z]?|[a-z]\d+|[a-z]{1,3})\b|#\s*(?:\d+[a-z]?|[a-z]\d+|[a-z]{1,3})\b',
+            caseSensitive: false,
+          ),
+          '',
+        )
+        .replaceFirst(RegExp(r'^[\s,.]+'), '');
+    if (!RegExp(
+          r'^[a-z0-9\s,.\x27’/#\-]*$',
+          caseSensitive: false,
+        ).hasMatch(remainder) ||
+        _researchOrConversation(locality) ||
+        RegExp(
+          r'\b(?:is|was|were|are|has|have|had|used|belongs|means|costs?|needs?|requires?|looks?|seems?|sold|selling|should|would|could|will|can|i|you|we|they|he|she|it|my|your|our|their|at|about|with|because|but|then|not|no|actually|instead|cancel|ignore|forget|correction|where|whose)\b|^[\s.,]*(?:[\x27’]s\s+)?(?:(?:the|its)\s+)?(?:facts?|photos?|pictures?|images?|videos?|details?|information|history|weather|news|crime|statistics|reasons?|examples?|reviews?|directions|population)(?:\s+please)?$',
+          caseSensitive: false,
+        ).hasMatch(locality)) {
+      return false;
+    }
+    return true;
+  }
+
   static String? _displayAddress(
     String command, {
     bool awaitingDestination = false,
@@ -1113,7 +1216,8 @@ class BrainProjection extends ChangeNotifier {
     // Keep the entire address, including unit, city and postal code, and never
     // substitute a model-proposed substring for these original user words.
     final street = RegExp(
-      r'^\d+[a-z]?(?:[-/]\d+[a-z]?)?\s+(?:[a-z0-9.\x27’\-]+\s+){1,8}?(?:street|st|avenue|ave|road|rd|drive|dr|lane|ln|boulevard|blvd|court|ct|place|pl|terrace|ter|way|circle|cir|square|sq|parkway|pkwy|highway|hwy|route|rte|trail|trl|crescent|cres|close|row|walk)\b',
+      r'^\d+[a-z]?(?:[-/]\d+[a-z]?)?\s+'
+      '$_streetNameAndType',
       caseSensitive: false,
     ).firstMatch(address);
     if (street == null) {
@@ -1244,6 +1348,11 @@ class BrainProjection extends ChangeNotifier {
     if (destination != null) {
       return _ProjectionVoiceControl('search', destination);
     }
+    // A rejected explicit search must not be reinterpreted as a bare place
+    // merely because Projection is currently asking for a destination.
+    if (RegExp(r'^search\s+', caseSensitive: false).hasMatch(original)) {
+      return null;
+    }
     if (!_open) return null;
     if (RegExp(
       r'^(?:switch|change|show|enter|open)\s+(?:(?:me|rooms?|the room)\s+)?(?:to\s+)?(?:the\s+)?(?:command center|discovery theat(?:er|re))(?:[.!? ]|$)',
@@ -1299,12 +1408,23 @@ class BrainProjection extends ChangeNotifier {
       return const _ProjectionVoiceControl('camera', 'reset');
     }
     final bare = _cleanDestination(original);
-    if (_awaitingDestination &&
-        bare.isNotEmpty &&
-        bare.length <= 500 &&
-        !_researchOrConversation(bare) &&
-        (_namedPlace(bare) ||
-            RegExp(r'^\d+[a-z]?\s+\S+', caseSensitive: false).hasMatch(bare))) {
+    final introduced = _addressIntroducer.firstMatch(bare);
+    if (introduced != null) {
+      final address = introduced.group(1)!;
+      return _standaloneStreetAddress(address)
+          ? _ProjectionVoiceControl('search', address)
+          : null;
+    }
+    if (_standaloneStreetAddress(bare) ||
+        (_awaitingDestination &&
+            bare.isNotEmpty &&
+            bare.length <= 500 &&
+            !_researchOrConversation(bare) &&
+            (_namedPlace(bare) ||
+                RegExp(
+                  r'^\d+[a-z]?\s+\S+',
+                  caseSensitive: false,
+                ).hasMatch(bare)))) {
       return _ProjectionVoiceControl('search', bare);
     }
     return null;
@@ -1315,12 +1435,21 @@ class BrainProjection extends ChangeNotifier {
     required bool awaitingDestination,
   }) {
     final explicit = RegExp(
-      r'^(go to|take me to|fly to|navigate to|find(?: the)?(?: address(?: of| for)?)?|search for|explore|look up)\s+(.+)$',
+      r'^(go to|take me to|fly to|navigate to|find(?: the)?(?: address(?: of| for)?)?|search(?: for)?|explore|look up)\s+(.+)$',
       caseSensitive: false,
     ).firstMatch(command);
     if (explicit != null) {
       final verb = explicit.group(1)!.toLowerCase();
-      final destination = _cleanDestination(explicit.group(2)!);
+      var destination = _cleanDestination(explicit.group(2)!);
+      final introducedAddress = _addressIntroducer.firstMatch(destination);
+      if (introducedAddress != null) {
+        if (!_standaloneStreetAddress(introducedAddress.group(1)!)) return null;
+        destination = introducedAddress.group(1)!;
+      }
+      // Bare “search” is new vocabulary, so require a complete street address
+      // rather than letting “Search road conditions” become navigation.
+      final streetAddress = _standaloneStreetAddress(destination);
+      if (verb == 'search' && !streetAddress) return null;
       final explicitTravel = {
         'go to',
         'take me to',
@@ -1329,6 +1458,7 @@ class BrainProjection extends ChangeNotifier {
       }.contains(verb);
       final destinationCue =
           verb.contains('address') ||
+          streetAddress ||
           _namedPlace(destination) ||
           RegExp(
             r'^\d+[a-z]?\s+\S+',
@@ -1340,7 +1470,7 @@ class BrainProjection extends ChangeNotifier {
           ).hasMatch(explicit.group(2)!);
       if (destination.isNotEmpty &&
           destination.length <= 500 &&
-          !_researchOrConversation(destination) &&
+          (streetAddress || !_researchOrConversation(destination)) &&
           (explicitTravel || awaitingDestination || destinationCue)) {
         return destination;
       }
@@ -1380,7 +1510,7 @@ class BrainProjection extends ChangeNotifier {
           );
         case 'search':
           open(room: control.room);
-          return search(control.value);
+          return search(control.value, fromVoice: true);
         case 'select':
           return select(control.value);
         case 'camera':

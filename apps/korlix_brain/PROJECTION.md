@@ -24,11 +24,19 @@ view do not start a new voice session or end the current one.
    off, tap **Talk to Rici** and wait for **Listening** before speaking. Viewing
    imagery or dictating into the keyboard's address field does not start Rici.
    Under **Explore a property**, type a destination and tap **Explore**, or say
-   **“Go to [full address or place].”** Numbered street addresses also accept
+   **“Go to [full address or place]”** or **“Search [full street address].”**
+   While Projection is open, a complete standalone street address starts a
+   lookup, including after another property has already been selected. From
+   home, use an explicit search command to open Projection and search together.
+   In the open view, **“The address is [full street address]”** also works.
+   Numbered street addresses also accept
    **“Show me [full address]”** and **“Show [full address] in 3D.”** These commands
    retain the original street, unit, city and postal code. Research requests and
    live-camera questions do not become address-display commands.
-3. Confirm a geocoder candidate, including a single result. Partial matches are
+3. A spoken search fills the address field, shows **Finding…**, and reveals the
+   matching candidates without opening the keyboard. Confirm a geocoder
+   candidate, including a single result: say **“Yes, that's it”** for one match
+   or **“Choose the first result”** when several are shown. Partial matches are
    flagged. Rici does not silently discard a street number, city or postal code.
 4. Use closer/farther, rotate and reset controls, or their spoken equivalents.
    Rici name variants and bounded polite phrasing are normalized before the
@@ -66,6 +74,10 @@ and the Maps Content text-to-speech boundary in
 - `brain_projection.dart` owns ephemeral view state and validates all actions.
   New lookups, selection changes, Stop, close and account disposal invalidate
   stale results. The full original transcript authorizes voice actions.
+  The `destinationSearch` snapshot carries the current lookup sequence,
+  complete user query, active state and typed/voice source. Unrelated voice or
+  research snapshots preserve an unfinished address-field draft; a new lookup
+  updates that field. Late completion cannot clear a newer lookup's progress.
   A genuine close/reopen refreshes server capabilities. Repeated open commands,
   room changes and searches share the current opening's check; late responses
   from an earlier opening cannot replace it. A failed check shows retry guidance,
