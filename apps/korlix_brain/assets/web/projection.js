@@ -14,11 +14,9 @@
   const terminalVoicePhases = new Set(['complete','error']);
   const requests = new Map();
   const transcripts = [];
-  const shell = document.querySelector('.projection-shell');
   const busy = {search:false, select:false, ask:false, save:false, directions:false, close:false};
   let nonce = '', nextId = 0, connected = false, searchEpoch = 0, askEpoch = 0;
   let voiceAction = '', voiceEpoch = 0;
-  let voiceViewportActive = false;
   let frame = null, frameOrigin = '', frameUrl = '', frameReady = false, mapStatus = 'illustration', lastCamera = '';
   let rendererTimer = null, canvasInvalidated = true;
   let localNotice = '', localNoticeKind = '', lastSavedPlace = '', pendingQuestionLocal = false;
@@ -269,17 +267,18 @@
   function renderVoice() {
     const voice = state.voice;
     const controls = voiceControls(), phase = controls.phase;
-    const viewportActive = !terminalVoicePhases.has(phase);
-    const transition = viewportActive !== voiceViewportActive;
-    const scrollOffset = transition ? (voiceViewportActive ? shell.scrollTop : window.scrollY) : 0;
     document.body.dataset.voice = phase;
     document.body.dataset.voiceActive = String(voice.active);
-    $('voice-phase').textContent = phase === 'stopping' ? 'Stopping conversation…' : phase === 'connecting' ? 'Connecting to Rici…'
+    $('voice-phase').textContent = !controls.session ? 'Microphone off'
+      : phase === 'stopping' ? 'Stopping conversation…' : phase === 'connecting' ? 'Connecting to Rici…'
       : phase === 'pausing' ? 'Pausing conversation…' : phase === 'paused' ? 'Conversation paused'
       : voice.message || (controls.session ? 'Rici is with you' : 'Ready when you are');
     $('voice-hint').textContent = phase === 'paused' ? 'Microphone off. Resume when you’re ready.'
       : phase === 'pausing' ? 'Turning off the microphone and audio…'
-      : controls.session ? 'Say “Rici, zoom in”, “keep zooming in”, or “stop zooming”.' : 'Tap Talk to Rici to control the view by voice.';
+      : controls.session ? 'Say “Rici, zoom in”, “keep zooming in”, or “stop zooming”.'
+      : voice.message && !['Microphone off','Ready when you are'].includes(voice.message)
+      ? voice.message : 'Tap Talk to Rici to control the view by voice.';
+    $('voice-hint').title = $('voice-hint').textContent;
     $('talk-button').disabled = !controls.start;
     $('talk-label').textContent = phase === 'paused' ? 'Conversation paused' : controls.session
       ? (phase === 'connecting' ? 'Connecting…' : phase === 'stopping' ? 'Finishing…' : phase === 'pausing' ? 'Pausing…' : 'Rici is with you') : 'Talk to Rici';
@@ -296,16 +295,6 @@
     $('rici-presence').textContent = phase === 'listening' ? 'Listening' : phase === 'speaking' ? 'Speaking' : phase === 'thinking' ? 'Thinking'
       : phase === 'paused' ? 'Paused' : phase === 'pausing' ? 'Pausing' : phase === 'stopping' ? 'Stopping' : controls.session ? 'Connecting' : 'Ready';
     measureVoiceDock();
-    if (transition) {
-      voiceViewportActive = viewportActive;
-      if (viewportActive) {
-        window.scrollTo(0,0);
-        shell.scrollTop = scrollOffset;
-      } else {
-        shell.scrollTop = 0;
-        window.scrollTo(0,scrollOffset);
-      }
-    }
   }
 
   function syncVoiceGuards(previousVoice) {
@@ -344,6 +333,16 @@
     $('voice-command-heard').textContent = command?.heard || 'No words received';
     $('voice-command-action').textContent = command?.action || 'Waiting for a view command';
     $('voice-command-result').textContent = command?.result || '';
+    // Keep a compact last-heard/action result beside the microphone controls.
+    // The complete text remains in the detailed panel outside the map surface.
+    const summary = $('voice-command-summary');
+    summary.hidden = panel.hidden;
+    summary.dataset.status = panel.dataset.status;
+    $('voice-summary-heard').textContent = command?.heard || 'No words received';
+    $('voice-summary-action').textContent = [command?.action,command?.result].filter(Boolean).join(' · ');
+    $('voice-summary-heard').title = $('voice-summary-heard').textContent;
+    $('voice-summary-action').title = $('voice-summary-action').textContent;
+    measureVoiceDock();
   }
 
   function setMapStatus(status, message = '') {

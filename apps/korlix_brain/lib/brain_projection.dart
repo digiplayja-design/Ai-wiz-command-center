@@ -217,7 +217,11 @@ class BrainProjection extends ChangeNotifier {
       _notice = message;
       ++_voiceCommandGeneration;
       _voiceCommandCameraSequence = null;
-      _lastVoiceCommand = event['code'] == 'transcription_failed'
+      _lastVoiceCommand =
+          {
+            'transcription_failed',
+            'transcription_timeout',
+          }.contains(event['code'])
           ? {
               'heard': '',
               'action': 'Speech recognition',
@@ -1025,22 +1029,45 @@ class BrainProjection extends ChangeNotifier {
     }
   }
 
-  static String _originalCommand(String transcript) => transcript
-      .trim()
-      .replaceFirst(
-        RegExp(
-          r'^(?:(?:hey|okay|ok)[,.:! ?\s]+)?(?:rici|risi|reese|reece|ree[ -]?see)[,.:! ?\s]+',
-          caseSensitive: false,
-        ),
-        '',
-      )
-      .replaceFirst(
-        RegExp(
-          r'^(?:please[,.:! ?\s]+|(?:can|could|would) you\s+(?:please[,.:! ?\s]+)?)',
-          caseSensitive: false,
-        ),
-        '',
-      );
+  static const _riciVocative =
+      r'(?:rici|risi|reese|reece|resee|risee|ree[ -]?see)';
+
+  static String _originalCommand(String transcript) {
+    var command = transcript.trim();
+    final wrapper = RegExp(
+      r'^(?:(?:hey|okay|ok|please|' +
+          _riciVocative +
+          r')[,.:!?\s]+|'
+              r'(?:can|could|would|will)\s+you[,.:!?\s]+|'
+              r'i(?:\s+would|[\x27’]d)?\s+like\s+you\s+to\s+|'
+              r'i\s+(?:want|need)\s+you\s+to\s+)',
+      caseSensitive: false,
+    );
+    // ASR may place the name before or after a polite request. Remove only
+    // bounded address-to-assistant wrappers; the explicit action parser below
+    // still decides whether the remaining words authorize any movement.
+    for (var i = 0; i < 8; i++) {
+      final next = command.replaceFirst(wrapper, '').trimLeft();
+      if (next == command) break;
+      command = next;
+    }
+    return command;
+  }
+
+  static String _viewCommand(String command) {
+    final wrapper = RegExp(
+      r'[,.:!?\s]+(?:' + _riciVocative + r'|please|for me)[.!?\s]*$',
+      caseSensitive: false,
+    );
+    // A trailing “Rici” is a vocative for explicit view controls only. Keep
+    // the original destination text intact when searching for an address.
+    for (var i = 0; i < 4; i++) {
+      final next = command.replaceFirst(wrapper, '').trimRight();
+      if (next == command) break;
+      command = next;
+    }
+    return command;
+  }
 
   static String _cleanDestination(String value) => value
       .replaceAll(RegExp(r'[.!?]+$'), '')
@@ -1134,6 +1161,7 @@ class BrainProjection extends ChangeNotifier {
   _ProjectionVoiceControl? _parseVoiceControl(String transcript) {
     final original = _originalCommand(transcript);
     final command = original.toLowerCase();
+    final viewCommand = _viewCommand(command);
     if (original.isEmpty ||
         original.length > 2000 ||
         RegExp(r'\b(?:remember|save)\b').hasMatch(command) ||
@@ -1170,10 +1198,10 @@ class BrainProjection extends ChangeNotifier {
     if (_open && _candidates.isNotEmpty) {
       final confirmation = RegExp(
         r'^(?:(?:yes|yeah|correct)[,.! ]*)?(?:that(?: is|’s|\x27s) (?:it|right|correct|the (?:place|one))|use (?:that|this) (?:place|address|one)|confirm(?: (?:that|this) (?:place|address))?|yes|yeah|correct)[.! ]*$',
-      ).hasMatch(command);
+      ).hasMatch(viewCommand);
       final ordinal = RegExp(
         r'^(?:(?:choose|select|use|go to)\s+)?(?:the\s+)?(first|second|third|fourth|fifth|1|2|3|4|5)\s*(?:result|place|one)(?:\s+please)?[.!? ]*$|^(?:choose|select|use)\s+(?:the\s+)?(first|second|third|fourth|fifth|1|2|3|4|5)(?:\s+please)?[.!? ]*$',
-      ).firstMatch(command);
+      ).firstMatch(viewCommand);
       int? index;
       if (confirmation && _candidates.length == 1) index = 0;
       if (ordinal != null) {
@@ -1199,12 +1227,12 @@ class BrainProjection extends ChangeNotifier {
     }
     if (RegExp(
       r'^(?:(?:(?:show|open)(?: me)?|switch to)\s+(?:the\s+)?street[ -]?view|(?:show(?: me)?\s+(?:the\s+)?front(?:al)?(?:\s+view)?\s+of|face)\s+(?:the|this|that|selected)\s+(?:property|building|house))(?:\s+(?:please|for me))?[.!? ]*$',
-    ).hasMatch(command)) {
+    ).hasMatch(viewCommand)) {
       return const _ProjectionVoiceControl('camera', 'streetView');
     }
     if (RegExp(
       r'^(?:(?:show|open)(?: me)?|switch to)\s+(?:the\s+)?(?:overhead(?:\s+(?:view|map))?|3[ -]?d\s+(?:map|view)|earth\s+(?:view|map))(?:\s+(?:please|for me))?[.!? ]*$',
-    ).hasMatch(command)) {
+    ).hasMatch(viewCommand)) {
       return const _ProjectionVoiceControl('camera', 'earthView');
     }
     final destination = _destinationCommand(
@@ -1217,7 +1245,7 @@ class BrainProjection extends ChangeNotifier {
     if (!_open) return null;
     if (RegExp(
       r'^(?:switch|change|show|enter|open)\s+(?:(?:me|rooms?|the room)\s+)?(?:to\s+)?(?:the\s+)?(?:command center|discovery theat(?:er|re))(?:[.!? ]|$)',
-    ).hasMatch(command)) {
+    ).hasMatch(viewCommand)) {
       return _ProjectionVoiceControl(
         'room',
         command.contains('discovery') ? 'discovery' : 'command',
@@ -1225,44 +1253,47 @@ class BrainProjection extends ChangeNotifier {
     }
     if (RegExp(
           r'^(?:(?:stop|pause|cancel)(?:\s+the)?\s+(?:zoom(?:ing)?(?:\s+(?:in|out))?|camera(?:\s+motion)?|moving(?:\s+(?:the\s+)?(?:view|camera))?)|hold(?:\s+(?:this|that|the))?\s+view)(?:\s+please)?[.!? ]*$',
-        ).hasMatch(command) ||
+        ).hasMatch(viewCommand) ||
         (_continuousZoom &&
             RegExp(r'^(?:stop|hold|that(?:\x27s|’s| is) enough)[.!? ]*$')
-                .hasMatch(command))) {
+                .hasMatch(viewCommand))) {
       return const _ProjectionVoiceControl('camera', 'stopCamera');
     }
     if (RegExp(
       r'^(?:(?:keep|continue|start)\s+(?:zooming|moving|going)(?:\s+(?:in|closer))|zoom\s+(?:all the way\s+in|in\s+(?:continuously|all the way)))(?:\s+(?:on|to|towards?)\s+(?:the|this|that|selected|current)\s+(?:building|property|house|place|address|location|map|view))?(?:[, ]+please|\s+for me|\s+until I (?:say )?stop)?[.!? ]*$',
       caseSensitive: false,
-    ).hasMatch(command)) {
+    ).hasMatch(viewCommand)) {
       return const _ProjectionVoiceControl('camera', 'zoomInContinuous');
     }
     if (RegExp(
       r'^(?:(?:keep|continue|start)\s+(?:zooming|moving|going)(?:\s+(?:out|farther|further))|zoom\s+(?:all the way\s+out|out\s+(?:continuously|all the way)))(?:\s+from\s+(?:the|this|that|selected|current)\s+(?:building|property|house|place|address|location|map|view))?(?:[, ]+please|\s+for me|\s+until I (?:say )?stop)?[.!? ]*$',
       caseSensitive: false,
-    ).hasMatch(command)) {
+    ).hasMatch(viewCommand)) {
       return const _ProjectionVoiceControl('camera', 'zoomOutContinuous');
     }
     if (RegExp(
-      r'^(?:(?:(?:go|move|come|get)\s+)?closer|zoom\s+in)(?:\s+(?:a little(?:\s+bit)?|more|(?:on|to|towards?)\s+(?:the|this|that|selected|current)\s+(?:building|property|house|place|address|location|map|view))){0,2}(?:[, ]+please|\s+for me)?[.!? ]*$',
-    ).hasMatch(command)) {
+          r'^(?:(?:(?:go|move|come|get)\s+)?closer|zoom\s+in)(?:\s+(?:a little(?:\s+bit)?|more|(?:on|to|towards?)\s+(?:the|this|that|selected|current)\s+(?:building|property|house|place|address|location|map|view))){0,2}(?:[, ]+please|\s+for me)?[.!? ]*$',
+        ).hasMatch(viewCommand) ||
+        RegExp(
+          r'^zoom\s+into\s+(?:the|this|that|selected|current)\s+(?:building|property|house|place|address|location|map|view)[.!? ]*$',
+        ).hasMatch(viewCommand)) {
       return const _ProjectionVoiceControl('camera', 'closer');
     }
     if (RegExp(
       r'^(?:(?:(?:go|move|get)\s+)?(?:farther|further)|zoom\s+out|pull\s+back)(?:\s+(?:a little(?:\s+bit)?|more|from\s+(?:the|this|that|selected|current)\s+(?:building|property|house|place|address|location|map|view))){0,2}(?:[, ]+please|\s+for me)?[.!? ]*$',
-    ).hasMatch(command)) {
+    ).hasMatch(viewCommand)) {
       return const _ProjectionVoiceControl('camera', 'farther');
     }
     for (final direction in ['left', 'right']) {
       if (RegExp(
         '^(?:rotate|turn|pan)(?:\\s+(?:the\\s+)?(?:view|camera))?\\s+(?:to\\s+the\\s+)?$direction(?:\\s+please)?[.!? ]*\$',
-      ).hasMatch(command)) {
+      ).hasMatch(viewCommand)) {
         return _ProjectionVoiceControl('camera', direction);
       }
     }
     if (RegExp(
       r'^(?:reset|recenter)(?:\s+(?:the\s+)?(?:view|camera|place))?[.!? ]*$',
-    ).hasMatch(command)) {
+    ).hasMatch(viewCommand)) {
       return const _ProjectionVoiceControl('camera', 'reset');
     }
     final bare = _cleanDestination(original);

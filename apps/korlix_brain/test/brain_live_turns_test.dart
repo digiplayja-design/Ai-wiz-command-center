@@ -191,6 +191,176 @@ void main() {
     h.live.dispose();
   });
 
+  group('live transcription watchdog', () {
+    const timeout = Duration(seconds: 1);
+
+    testWidgets(
+      'missing ASR is visible without a tool and a late camera command is retired',
+      (tester) async {
+        final h = Harness(
+          timeout: timeout,
+          recognizes: (text) => text == 'Keep zooming in',
+          project: (_, _, _) async => {
+            'ok': true,
+            'handled': true,
+            'answer': 'Zooming in.',
+          },
+        );
+        addTearDown(h.live.dispose);
+        h.begin('one', 'auto1');
+        await h.live.responseDone({
+          'id': 'auto1',
+          'status': 'completed',
+          'output': <Object>[],
+        });
+        await tester.pump(const Duration(milliseconds: 999));
+        expect(h.events, isEmpty);
+        await tester.pump(const Duration(milliseconds: 1));
+        expect(h.events.single['type'], 'voiceNotice');
+        expect(h.events.single['code'], 'transcription_timeout');
+        expect(h.events.single['message'], contains('repeat the view command'));
+        expect(h.events.single['message'], isNot(contains('Microphone off')));
+        expect(h.requests, isEmpty);
+        expect(
+          h.sent,
+          isEmpty,
+          reason: 'Ordinary audio must keep its own flow',
+        );
+
+        h.live.accept('one', 'Keep zooming in');
+        await tester.pump();
+        expect(h.projections, isEmpty);
+        expect(h.events, hasLength(1));
+
+        // The session remains usable; only the timed-out item was retired.
+        h.begin('two', 'auto2');
+        h.live.accept('two', 'Keep zooming in');
+        await tester.pump();
+        expect(h.projections.single.first, 'two');
+      },
+    );
+
+    testWidgets(
+      'accepted ASR cancels the watchdog and duplicate VAD cannot rearm it',
+      (tester) async {
+        final h = Harness(timeout: timeout);
+        addTearDown(h.live.dispose);
+        h.live.speechStarted('one');
+        h.live.speechStopped('one');
+        h.live.accept('one', 'Hello');
+        h.live.speechStarted('one');
+        h.live.speechStopped('one');
+        await tester.pump(const Duration(seconds: 2));
+        expect(h.events.single['type'], 'transcript');
+        expect(h.events.single['text'], 'Hello');
+      },
+    );
+
+    testWidgets('ASR arriving before speech completion never arms a watchdog', (
+      tester,
+    ) async {
+      final h = Harness(timeout: timeout);
+      addTearDown(h.live.dispose);
+      h.live.speechStarted('one');
+      h.live.accept('one', 'Hello');
+      h.live.speechStopped('one');
+      await tester.pump(const Duration(seconds: 2));
+      expect(h.events.single['type'], 'transcript');
+    });
+
+    testWidgets(
+      'explicit failure cancels the deadline and rejects delayed ASR once',
+      (tester) async {
+        final h = Harness(timeout: timeout);
+        addTearDown(h.live.dispose);
+        h.live.speechStarted('one');
+        h.live.speechStopped('one');
+        h.live.transcriptionFailed('one');
+        await tester.pump(const Duration(seconds: 2));
+        h.live.accept('one', 'Delayed words');
+        expect(h.events, hasLength(1));
+        expect(h.events.single['code'], 'transcription_failed');
+      },
+    );
+
+    testWidgets(
+      'new speech cancels the old warning and only the current turn expires',
+      (tester) async {
+        final h = Harness(timeout: timeout);
+        addTearDown(h.live.dispose);
+        h.live.speechStarted('staleWithoutStop');
+        h.live.speechStarted('one');
+        h.live.speechStopped('one');
+        await tester.pump(const Duration(milliseconds: 600));
+        h.live.speechStarted('two');
+        h.live.speechStopped('one');
+        h.live.speechStopped('staleWithoutStop');
+        await tester.pump(const Duration(milliseconds: 500));
+        expect(
+          h.events,
+          isEmpty,
+          reason: 'The superseded deadline was canceled',
+        );
+        h.live.speechStopped('two');
+        await tester.pump(timeout);
+        expect(h.events.single['code'], 'transcription_timeout');
+        h.live.accept('two', 'Too late');
+        expect(h.events, hasLength(1));
+      },
+    );
+
+    testWidgets(
+      'supersession preserves the original transcript for an older memory tool',
+      (tester) async {
+        final h = Harness(timeout: timeout);
+        addTearDown(h.live.dispose);
+        h.begin('one', 'r1');
+        h.begin('two', 'r2');
+        h.live.accept('two', 'Hello');
+        await tester.pump(const Duration(seconds: 2));
+        expect(
+          h.events.where((event) => event['type'] == 'voiceNotice'),
+          isEmpty,
+        );
+        h.live.accept('one', 'Rici remember this: original');
+        await h.live.responseDone(done('r1'));
+        expect(h.requests.single, ['one', 'Rici remember this: original']);
+        expect(h.saved, hasLength(1));
+        expect(
+          h.sent.where((event) => event['type'] == 'response.create'),
+          isEmpty,
+        );
+      },
+    );
+
+    testWidgets(
+      'Stop and an expired session suppress watchdog notices and late controls',
+      (tester) async {
+        for (final stop in [true, false]) {
+          final h = Harness(
+            timeout: timeout,
+            recognizes: (_) => true,
+            project: (_, _, _) async => {'handled': true, 'answer': 'Too late'},
+          );
+          h.live.speechStarted('one');
+          h.live.speechStopped('one');
+          if (stop) {
+            h.live.dispose();
+          } else {
+            h.sessionCurrent = false;
+          }
+          await tester.pump(const Duration(seconds: 2));
+          expect(h.events, isEmpty);
+          h.sessionCurrent = true;
+          h.live.accept('one', 'Keep zooming in');
+          await tester.pump();
+          expect(h.projections, isEmpty);
+          h.live.dispose();
+        }
+      },
+    );
+  });
+
   group('original-transcript view controls', () {
     Future<void> flush() => Future<void>.delayed(Duration.zero);
     bool recognizes(String text) => {
@@ -700,7 +870,7 @@ class Harness {
       saved: (r) async {
         saved.add(r);
       },
-      isCurrent: () => true,
+      isCurrent: () => sessionCurrent,
       requestMemory: (id, text) async {
         requests.add([id, text]);
         return save != null
@@ -726,6 +896,7 @@ class Harness {
     );
   }
   late final BrainLiveTurns live;
+  bool sessionCurrent = true;
   final sent = <Map<String, dynamic>>[],
       events = <Map<String, dynamic>>[],
       saved = <Map<String, dynamic>>[];

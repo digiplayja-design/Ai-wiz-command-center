@@ -42,6 +42,7 @@ class BrainLiveTurns {
   final _completedResponses = <String>{};
   final _directAcknowledgements = <String>{};
   final _cancelledResponses = <String>{};
+  final _transcriptionTimers = <String, Timer>{};
   Future<void> _toolQueue = Future.value();
   int _epoch = 0;
   bool _disposed = false;
@@ -52,6 +53,9 @@ class BrainLiveTurns {
     if (!current || id.isEmpty || _turns.containsKey(id)) return;
     final active = _activeResponse;
     ++_epoch;
+    // An earlier utterance may still supply its original memory transcript,
+    // but it must not publish a delayed recognition warning over a new turn.
+    _cancelTranscriptionTimers();
     _turns[id] = _LiveTurn(_epoch);
     if (active != null) {
       unawaited(
@@ -69,11 +73,18 @@ class BrainLiveTurns {
     if (turn.stoppedAt != null) return;
     turn.stoppedAt = now();
     _waitingResponses.add(id);
+    if (turn.epoch == _epoch && !turn.transcript.isCompleted) {
+      _transcriptionTimers[id] = Timer(
+        transcriptionTimeout,
+        () => _failTranscription(id, timedOut: true),
+      );
+    }
   }
 
   void accept(String id, String text) {
     if (!current || id.isEmpty) return;
     final turn = _turns.putIfAbsent(id, () => _LiveTurn(_epoch));
+    _transcriptionTimers.remove(id)?.cancel();
     if (turn.transcript.isCompleted) return;
     if (text.trim().isNotEmpty) {
       emit({
@@ -206,19 +217,33 @@ class BrainLiveTurns {
     }
   }
 
-  void transcriptionFailed(String id) {
+  void transcriptionFailed(String id) => _failTranscription(id);
+
+  void _failTranscription(String id, {bool timedOut = false}) {
+    _transcriptionTimers.remove(id)?.cancel();
     final turn = _turns[id];
     if (turn != null && !turn.transcript.isCompleted) {
+      // Expiry retires this item as well as its warning. A late ASR completion
+      // must not move the view after the user has been asked to repeat it.
       turn.transcript.complete(null);
       if (current && turn.epoch == _epoch) {
         emit({
           'type': 'voiceNotice',
-          'code': 'transcription_failed',
-          'message': 'I could not recognize that speech. Please repeat the view command or keep talking to Rici.',
+          'code': timedOut ? 'transcription_timeout' : 'transcription_failed',
+          'message': timedOut
+              ? 'Speech recognition did not return any words. Please repeat the view command; you can keep talking to Rici.'
+              : 'I could not recognize that speech. Please repeat the view command or keep talking to Rici.',
         });
       }
     }
     // Direct audio conversation can continue even when display ASR fails.
+  }
+
+  void _cancelTranscriptionTimers() {
+    for (final timer in _transcriptionTimers.values) {
+      timer.cancel();
+    }
+    _transcriptionTimers.clear();
   }
 
   void responseStarted(Map response) {
@@ -523,6 +548,7 @@ class BrainLiveTurns {
 
   void dispose() {
     _disposed = true;
+    _cancelTranscriptionTimers();
     for (final turn in _turns.values) {
       if (!turn.transcript.isCompleted) turn.transcript.complete(null);
     }

@@ -74,6 +74,8 @@ void main() {
       const closer = [
         'Reese, zoom in',
         'Reece, zoom in',
+        'Resee, zoom in',
+        'Risee, zoom in',
         'Ree See, zoom in',
         'Rici. Zoom in.',
         'Hey, Rici, zoom in',
@@ -83,6 +85,16 @@ void main() {
         'Zoom in a little bit',
         'Could you please zoom in?',
         'Can you zoom in for me?',
+        'Please, Rici, zoom in',
+        'Could you, Resee, please zoom in?',
+        'Zoom in, Rici',
+        'Zoom in Resee',
+        'Zoom in, please, Rici.',
+        'Rici, I want you to zoom in',
+        'Rici, I would like you to zoom in',
+        'Rici, I’d like you to zoom in',
+        'Rici, can you zoom into the property?',
+        'Hey, please, Resee, could you zoom into this building for me?',
       ];
       var index = 0;
       for (final phrase in closer) {
@@ -101,11 +113,11 @@ void main() {
       }
       await f.projection.voiceTurn(
         'continuous',
-        'Keep zooming in on the building',
+        'Please, Resee, keep zooming in on the building',
         null,
       );
       expect(f.camera['operation'], 'zoomInContinuous');
-      await f.projection.voiceTurn('stop', 'Reese, stop zooming in.', null);
+      await f.projection.voiceTurn('stop', 'Stop zooming in, Resee.', null);
       expect(f.camera['operation'], 'stopCamera');
     },
   );
@@ -124,6 +136,14 @@ void main() {
       'Look up quantum mechanics',
       'Remember that I like Street View',
       'Show me how Street View works',
+      'Please, Rici, don’t zoom in',
+      'Resee, I want you to explain how to zoom in',
+      'I do not want you to zoom in, Rici',
+      'Rici, could you never zoom in?',
+      'Rici, I want you to remember to zoom in',
+      'Could you explain “zoom in”, Resee?',
+      'Resee, zoom into the history of this property',
+      'Please, Rici, zoom in, actually zoom out',
     ];
     final before = Map.of(f.camera);
     for (final phrase in phrases) {
@@ -135,6 +155,60 @@ void main() {
     }
     expect(f.camera, before);
   });
+
+  test(
+    'assistant wrappers preserve the complete destination and confirmation',
+    () async {
+      final queries = <String>[];
+      final f = _PropertyFixture(
+        request: (_, path, payload) async {
+          if (path.endsWith('/config')) return _config;
+          queries.add(payload!['query'] as String);
+          return {
+            'candidates': [_place],
+          };
+        },
+      );
+      addTearDown(f.projection.dispose);
+      f.projection.open();
+      const address = '20 Resee Street, Unit 4, Reece, NY 10012';
+      await f.projection.voiceTurn(
+        'address',
+        'Please, Resee, can you go to $address?',
+        null,
+      );
+      expect(queries, [address]);
+      expect(f.projection.snapshot['selectedPlace'], isNull);
+      await f.projection.voiceTurn('confirm', 'That’s it, Resee.', null);
+      expect(
+        (f.projection.snapshot['selectedPlace'] as Map)['id'],
+        _place['id'],
+      );
+      expect(f.camera['viewMode'], 'street');
+    },
+  );
+
+  test(
+    'missing speech transcript replaces stale command feedback explicitly',
+    () async {
+      final f = _PropertyFixture();
+      addTearDown(f.projection.dispose);
+      await f.select();
+      await f.projection.voiceTurn('earlier', 'Resee, zoom in', null);
+      final before = Map.of(f.camera);
+      f.projection.receiveVoice({
+        'type': 'voiceNotice',
+        'code': 'transcription_timeout',
+        'message':
+            'The spoken words did not arrive. Please repeat the view command.',
+      });
+      expect(f.feedback['heard'], isEmpty);
+      expect(f.feedback['action'], 'Speech recognition');
+      expect(f.feedback['status'], 'failed');
+      expect(f.feedback['result'], contains('Please repeat'));
+      expect(f.camera, before);
+    },
+  );
 
   test('Street View is the default and explicit mode switches work through renderer failures', () async {
     final f = _PropertyFixture();
@@ -331,8 +405,8 @@ void main() {
       live.speechStarted('one');
       live.speechStopped('one');
       live.responseStarted({'id': 'auto-one'});
-      live.accept('one', 'Reese, zoom in on the property');
-      live.accept('one', 'Reese, zoom in on the property');
+      live.accept('one', 'Please, Resee, zoom into the property');
+      live.accept('one', 'Please, Resee, zoom into the property');
       await live.responseDone({
         'id': 'auto-one',
         'status': 'cancelled',
@@ -385,7 +459,10 @@ void main() {
       await _flush();
       expect(requests, ['question']);
       turns.speechStarted('zoom');
-      turns.accept('zoom', 'Reese, keep zooming in on the building');
+      turns.accept(
+        'zoom',
+        'Resee, I want you to keep zooming in on the building',
+      );
       expect(f.camera['operation'], 'zoomInContinuous');
       await _flush();
       turns.responseStarted({
@@ -393,11 +470,11 @@ void main() {
         'metadata': {'brain_epoch': '2'},
       });
       turns.speechStarted('stop');
-      turns.accept('stop', 'Reese, stop zooming');
+      turns.accept('stop', 'Stop zooming, Resee');
       final stoppedSequence = f.camera['sequence'];
       expect(f.camera['operation'], 'stopCamera');
       expect(pending.isCompleted, false);
-      turns.accept('stop', 'Reese, stop zooming');
+      turns.accept('stop', 'Stop zooming, Resee');
       turns.responseDone('zoom-ack');
       await _flush();
       final acknowledgements = sent

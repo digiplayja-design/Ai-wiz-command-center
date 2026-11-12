@@ -32,12 +32,13 @@ body[data-renderer="active"] .camera-controls button{width:44px;height:44px;padd
 body[data-renderer="active"] .camera-controls .control-divider{flex:0 0 1px;width:1px;height:24px;margin:0 2px}
 body[data-renderer="active"] .world-caption{position:static;inset:auto;order:4;width:auto;max-width:none;justify-content:center;margin:0;padding:0;background:none;font-size:9px;text-align:center}
 body[data-renderer="active"] .rici-panel,body[data-renderer="active"] .voice-dock{box-shadow:none}
-/* A running conversation keeps Stop pinned outside the scrollable map/workspace. */
-body[data-voice]:not([data-voice="complete"]):not([data-voice="error"]){overflow:hidden}
-body[data-voice]:not([data-voice="complete"]):not([data-voice="error"]) .projection-shell{position:fixed;inset:0 0 calc(var(--voice-dock-height,90px) + 24px + env(safe-area-inset-bottom));overflow-y:auto;overscroll-behavior-y:contain;scrollbar-gutter:stable}
-body[data-voice]:not([data-voice="complete"]):not([data-voice="error"]) .voice-dock{position:fixed;left:clamp(14px,3.2vw,52px);right:clamp(14px,3.2vw,52px);bottom:calc(12px + env(safe-area-inset-bottom));max-width:1536px;margin:0 auto;z-index:20;background:linear-gradient(110deg,#191320,#10111e);box-shadow:0 -8px 32px #0008,0 12px 36px #0006}
-body[data-renderer="active"][data-voice]:not([data-voice="complete"]):not([data-voice="error"]) .voice-dock{box-shadow:none}
-body[data-voice]:not([data-voice="complete"]):not([data-voice="error"]) main{padding-bottom:12px}
+/* Keep microphone state and Start/Resume/Stop visible before and during voice.
+   Reserve a separate scrollport so the dock cannot cover provider attribution. */
+body[data-voice]{overflow:hidden}
+body[data-voice] .projection-shell{position:fixed;inset:0 0 calc(var(--voice-dock-height,90px) + 24px + env(safe-area-inset-bottom));overflow-y:auto;overscroll-behavior-y:contain;scrollbar-gutter:stable}
+body[data-voice] .voice-dock{position:fixed;left:clamp(14px,3.2vw,52px);right:clamp(14px,3.2vw,52px);bottom:calc(12px + env(safe-area-inset-bottom));max-width:1536px;margin:0 auto;z-index:20;background:linear-gradient(110deg,#191320,#10111e);box-shadow:0 -8px 32px #0008,0 12px 36px #0006}
+body[data-renderer="active"][data-voice] .voice-dock{box-shadow:none}
+body[data-voice] main{padding-bottom:12px}
 @media(max-width:560px){body[data-renderer="active"] .scene-stage{padding:10px;gap:10px}body[data-renderer="active"] .scene-heading h2{font-size:17px}}
 
 .candidate-button .partial-match-warning,.place-banner .partial-match-warning{display:block;color:#e0bd84;font-size:10px;line-height:1.5;margin-top:5px}
@@ -51,8 +52,16 @@ body[data-voice]:not([data-voice="complete"]):not([data-voice="error"]) main{pad
 .directions-button:hover:enabled{border-color:var(--gold);background:#8b714d35}
 
 /* Keep each conversation action visible, including while paused. */
-.voice-dock{gap:16px}
+.voice-dock{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px 16px}
 .voice-identity strong{overflow-wrap:anywhere}
+.voice-identity>div:last-child{min-width:0}
+.voice-identity strong,.voice-identity div>span{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+.voice-command-summary{grid-column:1 / -1;min-width:0;padding-top:8px;border-top:1px solid var(--line)}
+.voice-command-summary p{display:grid;grid-template-columns:70px minmax(0,1fr);gap:8px;margin:0;font-size:11px;line-height:1.6}
+.voice-command-summary p+p{margin-top:2px}
+.voice-command-summary span{color:var(--muted)}
+.voice-command-summary strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;color:#b6edef}
+.voice-command-summary[data-status="failed"] p:last-child strong,.voice-command-summary[data-status="interrupted"] p:last-child strong{color:var(--danger)}
 .voice-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;flex-shrink:0}
 .voice-actions .voice-control{display:flex;align-items:center;justify-content:center;gap:6px;min-width:78px;min-height:44px;padding:8px;border:1px solid #bba1cc50;border-radius:6px;background:#ad91c410;color:#e0d7e6;font-size:11px;line-height:1.3}
 .voice-actions .voice-control svg{width:14px;height:14px}
@@ -72,6 +81,7 @@ body[data-voice="paused"] .voice-wave i{background:#bba1cc;animation:none}
 @media(max-width:560px){
   .voice-dock{gap:10px;padding:12px}
   .voice-identity div>span{display:none}
+  body[data-voice="complete"] .voice-identity div>span,body[data-voice="error"] .voice-identity div>span{display:-webkit-box;font-size:9px}
   .voice-identity strong{font-size:11px}
   .voice-wave{margin:0;width:16px;gap:2px}
   .talk-button{padding:6px 10px;gap:7px;max-width:146px}

@@ -83,7 +83,7 @@
 
           <div class="view-toolbar"><div class="view-switch" role="group" aria-label="Property view"><button type="button" data-view-mode="street" aria-pressed="true">Street View</button><button type="button" data-view-mode="earth" aria-pressed="false">3D Earth</button></div><p>Street View faces the selected location from nearby imagery.</p></div>
 
-          <section id="voice-command-feedback" class="voice-command-feedback" aria-label="Last voice command" aria-live="polite" hidden><div><span>You said</span><strong id="voice-command-heard"></strong></div><div><span>View control</span><strong id="voice-command-action"></strong></div><p id="voice-command-result"></p></section>
+          <section id="voice-command-feedback" class="voice-command-feedback" aria-label="Last voice command details" hidden><div><span>You said</span><strong id="voice-command-heard"></strong></div><div><span>View control</span><strong id="voice-command-action"></strong></div><p id="voice-command-result"></p></section>
 
           <section class="destination-panel" aria-label="Explore a property">
             <label class="destination-label" for="destination-input">Explore a property</label>
@@ -115,13 +115,14 @@
       <p id="projection-notice" class="projection-notice" role="status" aria-live="polite">Your existing KORLIX conversation stays with you.</p>
 
       <section class="voice-dock" aria-label="Conversation controls">
-        <div class="voice-identity"><div class="voice-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><div><strong id="voice-phase" role="status" aria-live="polite">Ready when you are</strong><span id="voice-hint">Tap Talk to Rici to control the view by voice.</span></div></div>
+        <div class="voice-identity"><div class="voice-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><div><strong id="voice-phase" role="status" aria-live="polite">Microphone off</strong><span id="voice-hint">Tap Talk to Rici to control the view by voice.</span></div></div>
         <button id="talk-button" class="talk-button" type="button" aria-label="Start conversation"><span class="talk-microphone"><svg aria-hidden="true"><use href="#icon-mic"/></svg></span><span><strong id="talk-label">Talk to Rici</strong><small id="talk-detail">Enable voice controls</small></span></button>
         <div class="voice-actions" role="group" aria-label="Live conversation controls">
           <button id="pause-button" class="voice-control pause-button" type="button" aria-label="Pause conversation" disabled><svg aria-hidden="true"><use href="#icon-pause"/></svg><span id="pause-label">Pause</span></button>
           <button id="resume-button" class="voice-control resume-button" type="button" aria-label="Resume conversation" disabled><svg aria-hidden="true"><use href="#icon-play"/></svg><span>Resume</span></button>
           <button id="stop-button" class="voice-control stop-button" type="button" aria-label="Stop conversation" disabled><svg aria-hidden="true"><use href="#icon-stop"/></svg><span id="stop-label">Stop</span></button>
         </div>
+        <div id="voice-command-summary" class="voice-command-summary" aria-label="Last voice command" aria-live="polite" hidden><p><span>You said</span><strong id="voice-summary-heard"></strong></p><p><span>View control</span><strong id="voice-summary-action"></strong></p></div>
       </section>
       <footer class="workspace-footer"><span>Same Rici. Same conversation. A new dimension.</span><span>No headset required.</span></footer>
     </main>

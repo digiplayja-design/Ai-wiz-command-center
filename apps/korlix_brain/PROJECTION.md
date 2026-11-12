@@ -1,10 +1,11 @@
 # KORLIX Brain+Voice — Projection Mode
 
-## First implementation
+## Current implementation
 
 Projection is an optional view over the existing Brain workspace. Command Center
 and Discovery Theater are two presentations of the same selected place, camera,
-research answer and Rici conversation. This phase provides an interactive 3D map
+research answer and Rici conversation. Confirmed destinations open recorded
+Street View facing the selected location; 3D Earth is an explicit alternative
 on the phone or tablet screen. Physical room projection, head tracking, headset
 stereoscopy and live camera connections are separate future integrations.
 
@@ -19,7 +20,10 @@ view do not start a new voice session or end the current one.
 
 1. Open Projection using the home shortcut or an explicit voice command, such as
    **“Rici, enter VR.”**
-2. Under **Explore address in 3D**, type a destination or say
+2. The voice controls show the current microphone/session state. If voice is
+   off, tap **Talk to Rici** and wait for **Listening** before speaking. Viewing
+   imagery or dictating into the keyboard's address field does not start Rici.
+   Under **Explore a property**, type a destination and tap **Explore**, or say
    **“Go to [full address or place].”** Numbered street addresses also accept
    **“Show me [full address]”** and **“Show [full address] in 3D.”** These commands
    retain the original street, unit, city and postal code. Research requests and
@@ -27,6 +31,10 @@ view do not start a new voice session or end the current one.
 3. Confirm a geocoder candidate, including a single result. Partial matches are
    flagged. Rici does not silently discard a street number, city or postal code.
 4. Use closer/farther, rotate and reset controls, or their spoken equivalents.
+   Rici name variants and bounded polite phrasing are normalized before the
+   original command is validated. **You said** and **View control** show the
+   recognized words, interpreted action and result. **Stop zooming** stops the
+   camera while leaving the conversation active.
 5. Ask about building history, nearby places, mayor, population or area crime.
    Research returns numbered sources and the geographic scope/reference period.
 6. Save an explicitly requested place note through the existing My Brain
@@ -37,9 +45,11 @@ view do not start a new voice session or end the current one.
    conversation while leaving the view open.
 
 The **Live camera availability** control and spoken live-view requests currently
-return an honest unavailable response. Recorded 3D
-imagery is never labeled live, and an unknown capture date stays unknown. This
-implementation does not include Street View or infer occupancy from imagery.
+return an honest unavailable response. Street View is recorded imagery, not a
+live camera connection; an unknown capture date stays unknown. Available
+coverage and facade visibility vary by location. Unavailable Street View does
+not silently switch to overhead imagery. This implementation does not infer
+occupancy from imagery.
 
 Google-returned address labels stay visual in the candidate and selected-place
 cards. Each Google card has a compact **Google Maps** source credit, including
@@ -72,8 +82,9 @@ and the Maps Content text-to-speech boundary in
   above the iframe; the selected-place panel, camera buttons and imagery caption
   remain below it in normal document flow. App decorations never cover the map.
   No provider shadow DOM is inspected or altered, and no remote credit-height
-  message is consumed. During a conversation, the workspace scrolls above the
-  pinned voice dock so Stop remains reachable without covering the iframe.
+  message is consumed. The workspace keeps voice activation and session status
+  reachable while viewing imagery; active Pause/Resume/Stop controls retain the
+  same native session. The voice dock must not cover the provider iframe.
 - The iframe permits scripts, its own origin and provider popups that leave the
   iframe sandbox. It does not grant top-level navigation, forms, downloads,
   camera, microphone, geolocation or access to the local native bridge. A
@@ -99,10 +110,18 @@ and the Maps Content text-to-speech boundary in
   configuration, preserving the original memory tool and account instructions.
   Legacy clients retain their original one-tool contract. Deep Think intercepts
   supported place commands and otherwise uses the existing reasoning pipeline.
+  Both modes authorize direct controls from the item-bound original transcript.
+  Missing Live transcription has a bounded diagnostic; stale or absent words
+  cannot authorize a delayed camera action.
 
 ## Backend integration
 
-This app branch starts at the mobile release baseline
+Build 19's matching Street View renderer is deployed at backend revision
+`31f763a812d6b5506918429e7a86d6ad976868b0` on the existing production service.
+The subsequent voice-control repair is native/UI work and uses that renderer.
+Its new signed build and device acceptance must be verified separately.
+
+Historical integration baseline: this app branch starts at the mobile release baseline
 `217e19a5bb628a9673e143eaa305dca789fff831`. Its historical backend directory is not
 the deployment baseline. The matching API change is isolated on
 `feature/brain-projection-api-20261107`. It includes the shared voice-meter fix
@@ -118,8 +137,8 @@ POST /api/brain-projection/resolve   {query}
 POST /api/brain-projection/answer    {question, place}
 ```
 
-The server's dedicated map renderer uses Google Maps JavaScript
-`Map3DElement` on the quarterly channel. It is public map-only content and
+The server's dedicated map renderer uses Google Maps JavaScript Street View
+and optional `Map3DElement` on the quarterly channel. It is public map-only content and
 consumes no account credentials. Configuration requires separate
 `BRAIN_PROJECTION_GEOCODING_KEY` and `BRAIN_PROJECTION_MAPS_JS_BROWSER_KEY`
 values, plus the correct public backend origin. The browser key must have the
@@ -144,6 +163,12 @@ Google usage has its own provider billing/configuration; the build does not
 enable a Google project, provision keys, or change production environment values.
 
 ## Validation and release
+
+The voice-control repair is a candidate pending its own CI, signed-build and
+delivery evidence. Physical iPhone/iPad microphone and WebView acceptance is
+still required; neither parser tests nor browser fixtures establish that check.
+Follow `store/apple/testflight-notes.txt`, recording the installed build, voice
+phase, **You said** text, **View control** and result for any failed command.
 
 - Projection controller tests cover exact renderer origin, candidate
   confirmation, stale results, source allowlisting, honest unavailable states,

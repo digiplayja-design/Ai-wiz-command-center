@@ -114,7 +114,7 @@ async function assertVoiceControls(page,label) {
 }
 
 async function settleRendererLayout(page,renderer,label) {
-  // Window size and the active voice scrollport can resize the iframe. Wait for
+  // Window size and the voice controls can resize the iframe. Wait for
   // both documents to agree without inspecting any provider-owned internals.
   let previous='',last;
   const deadline=Date.now()+5000;
@@ -138,14 +138,30 @@ async function settleRendererLayout(page,renderer,label) {
 async function alignRendererInViewport(page) {
   await page.evaluate(()=>{
     const shell=document.querySelector('.projection-shell'),frame=document.querySelector('#map-container iframe');
-    const active=!['complete','error'].includes(document.body.dataset.voice);
-    const clip=active?shell.getBoundingClientRect():{top:0,height:innerHeight};
+    const clip=shell.getBoundingClientRect();
     const rect=frame.getBoundingClientRect();
     const change=rect.top-(clip.top+Math.max(8,(clip.height-rect.height)/2));
-    if(active)shell.scrollTop+=change;
-    else window.scrollBy(0,change);
+    shell.scrollTop+=change;
   });
   await settleLayout(page);
+}
+
+async function assertVoiceEntry(page,label) {
+  await settleLayout(page);
+  const geometry=await page.evaluate(()=>{
+    const button=document.getElementById('talk-button'),status=document.getElementById('voice-phase');
+    const dock=document.querySelector('.voice-dock'),shell=document.querySelector('.projection-shell');
+    const box=button.getBoundingClientRect(),state=status.getBoundingClientRect();
+    return {button:box.toJSON(),status:state.toJSON(),dock:dock.getBoundingClientRect().toJSON(),shell:shell.getBoundingClientRect().toJSON(),
+      text:status.textContent,disabled:button.disabled,height:innerHeight,width:innerWidth,
+      hittable:document.elementFromPoint(box.x+box.width/2,box.y+box.height/2)?.closest('button')===button};
+  });
+  assert.equal(geometry.text,'Microphone off','Inactive microphone is explicit at '+label);
+  assert.equal(geometry.disabled,false,'Voice can be started at '+label);
+  assert.ok(geometry.button.width>=44&&geometry.button.height>=44,'Voice start has a 44px touch target at '+label);
+  assert.ok(geometry.button.top>=0&&geometry.button.bottom<=geometry.height&&geometry.hittable,'Voice start is reachable without auto-scrolling at '+label);
+  assert.ok(geometry.status.top>=0&&geometry.status.bottom<=geometry.height,'Microphone state is visible at '+label);
+  assert.ok(geometry.shell.bottom<=geometry.dock.top-10,'Inactive voice dock reserves its own space at '+label);
 }
 
 async function assertClearRendererSurface(page,label,{activeVoice=false,capture=false}={}) {
@@ -153,7 +169,7 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
     const frame=document.querySelector('#map-container iframe'),stage=document.getElementById('scene-stage');
     const shell=document.querySelector('.projection-shell'),dock=document.querySelector('.voice-dock'),stop=document.getElementById('stop-button');
     const rect=frame.getBoundingClientRect(),button=stop.getBoundingClientRect();
-    const selectors=['.scene-topline','.scene-heading','.map-badge','.world-caption','.camera-controls','.place-banner','.room-architecture','.scene-crosshair','#world-canvas','.voice-dock','.view-toolbar','.voice-command-feedback'];
+    const selectors=['.scene-topline','.scene-heading','.map-badge','.world-caption','.camera-controls','.place-banner','.room-architecture','.scene-crosshair','#world-canvas','.voice-dock','.view-toolbar','.voice-command-feedback','.voice-command-summary'];
     const points=[[rect.left+2,rect.top+2],[rect.right-2,rect.top+2],[rect.left+2,rect.bottom-2],[rect.right-2,rect.bottom-2],[rect.left+rect.width/2,rect.top+rect.height/2]];
     return {frame:rect.toJSON(),shell:shell.getBoundingClientRect().toJSON(),dock:dock.getBoundingClientRect().toJSON(),stop:button.toJSON(),
       width:innerWidth,height:innerHeight,phase:document.body.dataset.map,renderer:document.body.dataset.renderer,
@@ -186,12 +202,12 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
       const overlapHeight=Math.max(0,Math.min(frame.bottom,box.bottom)-Math.max(frame.top,box.top));
       assert.ok(overlapWidth*overlapHeight<.5,selector+' stays entirely outside the provider iframe at '+label);
     }
-    const clip=activeVoice?geometry.shell:{top:0,bottom:geometry.height};
+    const clip=geometry.shell;
     assert.ok(frame.top>=clip.top&&frame.bottom<=clip.bottom,'Complete iframe can scroll into view at '+label);
     assert.ok(geometry.hits.every(hit=>hit.frame),'All iframe corners and its center remain hittable at '+label);
+    assert.ok(geometry.shell.bottom<=geometry.dock.top-10,'Scroll viewport ends above the voice dock at '+label);
+    assert.ok(frame.bottom<geometry.dock.top,'Voice dock never covers the provider surface at '+label);
     if(activeVoice) {
-      assert.ok(geometry.shell.bottom<=geometry.dock.top-10,'Scroll viewport ends above the active voice dock at '+label);
-      assert.ok(frame.bottom<geometry.dock.top,'Voice dock never covers the provider surface at '+label);
       assert.ok(geometry.stop.y>=0&&geometry.stop.bottom<=geometry.height&&geometry.stopHittable,'Stop stays visible and hittable at '+label);
     }
   } catch(error) {
@@ -209,6 +225,7 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
       const page = await browser.newPage({viewport:{width,height},reducedMotion:'reduce'});
       page.on('pageerror',error=>errors.push(error.message));
       await fixture(page);
+      await assertVoiceEntry(page,'initial-'+width);
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'No horizontal overflow at '+width);
       assert.equal(await page.locator('#world-caption-text').textContent(),'Property imagery is not connected yet.');
       assert.equal(await page.locator('label[for="destination-input"]').textContent(),'Explore a property');
@@ -563,12 +580,25 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
           await settleRendererLayout(page,renderer,label);
           assert.equal(await page.locator('[data-camera="closer"]').isEnabled(),phase==='ready','App camera readiness remains accurate at '+label);
           assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'Remote map layout fits '+label);
+          const startsBefore=await page.evaluate(()=>window.projectionCommands.filter(c=>['startVoice','resumeVoice'].includes(c.action)).length);
+          for(const voicePhase of ['complete','error']) {
+            await page.evaluate(voicePhase=>{
+              window.projectionState.voice={active:false,paused:false,phase:voicePhase,message:voicePhase==='error'?'Voice connection failed. Tap Talk to Rici to reconnect.':'Microphone off'};
+              window.sendSnapshot();
+              document.querySelector('.projection-shell').scrollTop=0;
+            },voicePhase);
+            await assertVoiceEntry(page,`${voicePhase}-initial-${label}`);
+            await alignRendererInViewport(page);
+            await assertVoiceEntry(page,`${voicePhase}-map-${label}`);
+            await assertClearRendererSurface(page,`${voicePhase}-${label}`);
+          }
+          assert.equal(await page.evaluate(()=>window.projectionCommands.filter(c=>['startVoice','resumeVoice'].includes(c.action)).length),startsBefore,'Visible microphone controls never start capture automatically at '+label);
           await alignRendererInViewport(page);
           await assertClearRendererSurface(page,label);
           if(screenDirectory&&width<500&&phase==='ready')await page.screenshot({path:path.join(screenDirectory,`projection-map-layout-${room}-${width}.png`),fullPage:true});
 
           await page.evaluate(()=>{
-            window.scrollBeforeVoice=scrollY;
+            window.scrollBeforeVoice=document.querySelector('.projection-shell').scrollTop;
             window.projectionState.voice={active:true,phase:'listening',message:'Rici is listening'};window.sendSnapshot();
           });
           assert.equal(await page.evaluate(()=>Math.abs(document.querySelector('.projection-shell').scrollTop-window.scrollBeforeVoice)<1),true,'Starting voice preserves the reading position at '+label);
@@ -586,7 +616,8 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
             window.scrollBeforeStop=document.querySelector('.projection-shell').scrollTop;
             window.projectionState.voice={active:false,phase:'complete',message:'Microphone off'};window.sendSnapshot();
           });
-          assert.equal(await page.evaluate(()=>Math.abs(scrollY-window.scrollBeforeStop)<1),true,'Stopping voice restores normal page scrolling at '+label);
+          assert.equal(await page.evaluate(()=>Math.abs(document.querySelector('.projection-shell').scrollTop-window.scrollBeforeStop)<1),true,'Stopping voice preserves the view and keeps the voice entry visible at '+label);
+          await assertVoiceEntry(page,'stopped-'+label);
         }
       }
     }
@@ -647,12 +678,24 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
     assert.equal(await page.locator('#voice-command-action').textContent(),'Zoom in');
     assert.equal(await page.locator('#voice-command-feedback').getAttribute('data-status'),'failed');
     assert.match(await page.locator('#voice-command-result').textContent(),/unavailable/);
+    assert.match(await page.locator('#voice-summary-heard').textContent(),/Reese, zoom in <img/);
+    assert.equal(await page.locator('#voice-command-summary img').count(),0,'Compact voice feedback is text, never injected HTML');
+    assert.match(await page.locator('#voice-summary-action').textContent(),/Zoom in.*unavailable/);
+    for(const width of [320,390,768,1024]) {
+      await page.setViewportSize({width,height:844});
+      await settleRendererLayout(page,renderer,'voice-feedback-'+width);
+      await alignRendererInViewport(page);
+      await assertVoiceEntry(page,'voice-feedback-'+width);
+      const bounds=await page.locator('#voice-command-summary').boundingBox();
+      assert.ok(bounds&&bounds.y>=0&&bounds.y+bounds.height<=844,'Last heard/action feedback remains visible beside imagery at '+width);
+      await assertClearRendererSurface(page,'voice-feedback-'+width);
+    }
     for(const rendererUrl of ['http://projection.test/earth.html','javascript:alert(1)','https://name:password@projection.test/earth.html']){
       await page.evaluate(rendererUrl=>{window.projectionState.config.rendererUrl=rendererUrl;window.sendSnapshot();},rendererUrl);
       assert.equal(await page.locator('iframe').count(),0,'Unsafe renderer URL rejected: '+rendererUrl);
     }
     await page.close();
     assert.deepEqual(errors,[],'No uncaught browser errors');
-    console.log('Projection UI passed: five viewport sizes, both rooms, explicit place confirmation, reviewed userQuery directions with account entitlement, Google address attribution without a map, source safety, cost disclosure, save failure/success, separate 44px Pause/Resume/Stop controls, explicit resume, cancellation of pending resume, stale reply protection, close/stop separation, renderer origin isolation, unobstructed provider surfaces while loading/ready and paused, separate provider popups, dock clearance with scroll preservation, and no credential transfer.');
+    console.log('Projection UI passed: five viewport sizes, both rooms, explicit place confirmation, reviewed userQuery directions with account entitlement, Google address attribution without a map, source safety, cost disclosure, save failure/success, visible idle/error microphone entry without auto-start, compact last-heard/action feedback, separate 44px Pause/Resume/Stop controls, explicit resume, cancellation of pending resume, stale reply protection, close/stop separation, renderer origin isolation, unobstructed provider surfaces while loading/ready and paused, separate provider popups, dock clearance with scroll preservation, and no credential transfer.');
   } finally { await browser.close(); }
 })().catch(error=>{console.error(error);process.exitCode=1;});

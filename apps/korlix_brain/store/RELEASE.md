@@ -1,3 +1,29 @@
+## Projection voice-control repair — candidate pending verification
+
+Version 1.0.2 build 19 was delivered to the existing KORLIX Brain Internal group;
+Apple's assignment read-back reported `IN_BETA_TESTING` at
+2026-11-12T19:42:14Z. The user subsequently reported that Projection imagery is
+visible but Rici still cannot control it. Build 19's delivery does not establish
+physical-device voice acceptance.
+
+This candidate keeps voice activation/status reachable while viewing imagery,
+normalizes additional Rici transcriptions and polite command wrappers, and adds
+a bounded notice when Live speech recognition does not return words. Commands
+still require explicit intent in the original transcript. Street View remains
+recorded imagery, with the existing production renderer.
+
+The candidate requires fresh exact-source CI, a verified signed IPA, Apple
+upload/processing and read-back of assignment to the existing internal group.
+No new build or delivery is claimed here. Keep version 1.0.2; select a fresh
+build number using the source floor and Apple's latest build at release time.
+Do not reuse build 19's upload record, checksum or assignment pins.
+
+Physical-device checks are in [testflight-notes.txt](apple/testflight-notes.txt).
+Record the build, voice phase, recognized words and view-control result when a
+spoken command fails. This candidate does not request public App Store review,
+new testers, invitations or another backend deployment. The sections below
+retain historical release records.
+
 ## Native subscription and AI GAS candidate — build 14
 
 The approved USD 34.99 monthly plan includes 60 Live minutes. The three retained AI GAS packs add 60 / 120 / 180 minutes for USD 30 / 55 / 80. The four products and exact US prices are now configured and verified in both stores; Apple availability is currently USA only. Native checkout, server verification, durable minute accounting, restore and refund handling are implemented. Production billing remains disabled pending native purchase tests and completion of store review requirements.
