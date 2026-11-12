@@ -308,6 +308,10 @@ async function main() {
         .filter(message => message.type === 'korlix-projection-status').map(message => message.status));
       const waitStatus = status => page.waitForFunction(expected => window.__projectionContractObserver.messages
         .some(message => message.type === 'korlix-projection-status' && message.status === expected), status);
+      const waitCameraStatus = (state, reason, cameraSequence = sequence) => page.waitForFunction(expected =>
+        window.__projectionContractObserver.messages.some(message => message.type === 'korlix-projection-camera-status' &&
+          message.state === expected.state && message.reason === expected.reason && message.sequence === expected.sequence),
+      {state, reason, sequence: cameraSequence});
       const command = (operation, camera = {}, selected = undefined) => page.evaluate(value => {
         document.querySelector('iframe').contentWindow.postMessage(value, window.location.origin);
       }, {type: 'korlix-projection-camera', camera: {operation, sequence: ++sequence, ...camera}, ...(selected ? {place: selected} : {})});
@@ -401,6 +405,38 @@ async function main() {
                 assert.ok(expected[operation]((await snapshot()).flights.at(-1).endCamera), `${operation} must use the public camera API.`);
               }
               result.cameraContract = (await snapshot()).flights;
+              const waitFrames = () => frame.evaluate(async () => {
+                for (let index = 0; index < 5; index++) await new Promise(resolveFrame => requestAnimationFrame(resolveFrame));
+              });
+              const beforeZoom = (await snapshot()).camera;
+              await command('zoomInContinuous');
+              await frame.waitForFunction(previous => window.__maps3dContractFixture.publicState().range < previous * .95, beforeZoom.range);
+              await command('stopCamera');
+              await waitCameraStatus('stopped', 'stopped');
+              const afterZoom = (await snapshot()).camera;
+              await waitFrames();
+              assert.equal((await snapshot()).camera.range, afterZoom.range, 'Stop must cancel the continuous rAF loop.');
+              assert.deepEqual(afterZoom.center, beforeZoom.center);
+              assert.equal(afterZoom.heading, beforeZoom.heading);
+              assert.equal(afterZoom.tilt, beforeZoom.tilt);
+              assert.equal((await snapshot()).flights.length, result.cameraContract.length,
+                'Continuous zoom must update public range without queuing SDK fly animations.');
+              await command('zoomOutContinuous');
+              await frame.waitForFunction(previous => window.__maps3dContractFixture.publicState().range > previous * 1.05, afterZoom.range);
+              await frame.evaluate(() => document.querySelector('gmp-map-3d').dispatchEvent(new PointerEvent('pointerdown', {bubbles: true})));
+              await waitCameraStatus('stopped', 'interrupted');
+              const afterPointer = (await snapshot()).camera.range;
+              await waitFrames();
+              assert.equal((await snapshot()).camera.range, afterPointer, 'A user gesture takes over from voice zoom.');
+              await frame.evaluate(() => Object.assign(document.querySelector('gmp-map-3d'), {range: 1, tilt: 0}));
+              await command('zoomInContinuous');
+              await waitCameraStatus('limit', 'closest');
+              assert.equal((await snapshot()).camera.range, 1);
+              result.continuousCameraContract = {rangeMovedIn: afterZoom.range < beforeZoom.range,
+                rangeMovedOut: afterPointer > afterZoom.range, stoppedWithoutDrift: true,
+                pointerInterrupted: true, closestBoundReported: true, statusSequenceChecked: true};
+              await command('reset');
+              await frame.waitForFunction(() => window.__maps3dContractFixture.publicState().range > 1);
               for (const [width, height] of [[1280, 800], [360, 740]]) {
                 await page.setViewportSize({width, height});
                 await frame.evaluate(() => new Promise(resolveFrame => requestAnimationFrame(resolveFrame)));
@@ -424,8 +460,14 @@ async function main() {
                 await page.screenshot({path: resolve(artifactDirectory, `fixture-ready-${width}.png`)});
               }
               const flights = (await snapshot()).flights.length;
+              const beforeClose = (await snapshot()).camera.range;
+              await command('zoomOutContinuous');
+              await frame.waitForFunction(previous => window.__maps3dContractFixture.publicState().range > previous, beforeClose);
               await frame.evaluate(() => window.dispatchEvent(new PageTransitionEvent('pagehide')));
               assert.equal((await snapshot()).disconnected, 1);
+              const closedRange = (await snapshot()).camera.range;
+              await waitFrames();
+              assert.equal((await snapshot()).camera.range, closedRange, 'Closing the frame cancels continuous work.');
               await command('closer');
               await frame.evaluate(() => window.__maps3dContractFixture.emitSteady(true));
               assert.equal((await snapshot()).flights.length, flights);
@@ -449,7 +491,15 @@ async function main() {
         assert.equal(result.loaderRequests.length, ['unverified', 'legacy-only'].includes(mode) ? 0 : 1);
         result.messages = await page.evaluate(() => window.__projectionContractObserver.messages);
         assert.doesNotMatch(JSON.stringify(result.messages), /not-a-real-credential|private-provider-fixture-details|maps\.googleapis\.com/);
-        assert.ok(result.messages.every(message => message.type === 'korlix-projection-status'), 'Only public statuses cross the frame boundary.');
+        assert.ok(result.messages.every(message => {
+          if (message.type === 'korlix-projection-status') return ['loading', 'ready', 'error'].includes(message.status) &&
+            Object.keys(message).every(key => ['type', 'status', 'message'].includes(key));
+          if (message.type !== 'korlix-projection-camera-status') return false;
+          return Object.keys(message).sort().join(',') === 'reason,sequence,state,type' &&
+            Number.isSafeInteger(message.sequence) && message.sequence >= 0 &&
+            ((message.state === 'stopped' && ['stopped', 'interrupted'].includes(message.reason)) ||
+             (message.state === 'limit' && ['closest', 'farthest'].includes(message.reason)));
+        }), 'Only allowlisted public map/camera statuses cross the frame boundary.');
         result.cspViolations = await frame.evaluate(() => window.__projectionContractObserver.violations);
         assert.deepEqual(result.cspViolations, [], 'Production nonce CSP must permit the adapter and nonced fixture without violations.');
         assert.deepEqual(result.pageErrors, []);

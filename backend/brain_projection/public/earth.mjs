@@ -1,4 +1,4 @@
-import {parseCameraMessage, createCameraController, initialCameraOptions} from './camera.mjs';
+import {parseCameraMessage, createCameraController, initialCameraOptions, MIN_CAMERA_ALTITUDE} from './camera.mjs';
 
 const noop = () => {};
 
@@ -68,11 +68,44 @@ export function mountProjectionRenderer({window: win, document: doc, loadLibrary
     status('error', 'Recorded 3D imagery could not load. Check the map connection or try again later.');
     dispose();
   }
+  function cameraStatus({state: value, reason, sequence}) {
+    if (disposed || win.parent === win || !Number.isSafeInteger(sequence) || sequence < 0) return;
+    if ((value !== 'stopped' || !['stopped', 'interrupted'].includes(reason)) &&
+        (value !== 'limit' || !['closest', 'farthest'].includes(reason))) return;
+    // No geometry, labels, provider errors or arbitrary data crosses this path.
+    win.parent.postMessage({type: 'korlix-projection-camera-status', state: value, reason, sequence}, '*');
+  }
+  function interruptCamera() {
+    if (disposed) return;
+    if (pending) {
+      const sequence = pending.camera.sequence;
+      pending = null;
+      if (controller) controller.stop('interrupted', sequence);
+      else cameraStatus({state: 'stopped', reason: 'interrupted', sequence});
+    } else controller?.interrupt();
+  }
+  function visibilityChanged() {
+    if (doc.visibilityState === 'hidden') interruptCamera();
+  }
   function receive(event) {
     if (disposed) return;
     const command = parseCameraMessage(event, {parent: win.parent, ownOrigin: win.location.origin, lastSequence});
     if (!command) return;
     lastSequence = command.camera.sequence;
+    // A stop is valid with no selected place and before SDK readiness. It must
+    // remove a queued command so a late import/steady event cannot restart it.
+    if (command.camera.operation === 'stopCamera') {
+      pending = null;
+      if (controller) controller.apply(command);
+      else cameraStatus({state: 'stopped', reason: 'stopped', sequence: lastSequence});
+      return;
+    }
+    if (doc.visibilityState === 'hidden') {
+      pending = null;
+      if (controller) controller.stop('interrupted', lastSequence);
+      else cameraStatus({state: 'stopped', reason: 'interrupted', sequence: lastSequence});
+      return;
+    }
     if (!ready || !controller) { pending = command; return; }
     controller.apply(command);
   }
@@ -93,6 +126,7 @@ export function mountProjectionRenderer({window: win, document: doc, loadLibrary
     win.clearTimeout(deadline);
     win.removeEventListener('message', receive);
     win.removeEventListener('pagehide', dispose);
+    doc.removeEventListener('visibilitychange', visibilityChanged);
     for (const remove of removeListeners) remove();
     pending = null;
     loading.abort();
@@ -105,6 +139,7 @@ export function mountProjectionRenderer({window: win, document: doc, loadLibrary
   }
   win.addEventListener('message', receive);
   win.addEventListener('pagehide', dispose);
+  doc.addEventListener('visibilitychange', visibilityChanged);
   // Official authentication callback must exist before the SDK is requested.
   // https://developers.google.com/maps/documentation/javascript/events#auth-errors
   win.gm_authFailure = failed;
@@ -122,14 +157,22 @@ export function mountProjectionRenderer({window: win, document: doc, loadLibrary
       if (typeof library?.Map3DElement !== 'function') { failed(); return; }
       map = new library.Map3DElement({...initialCameraOptions(), mode: 'SATELLITE',
         defaultUIHidden: true, description: 'Recorded 3D geographic imagery, not a live camera feed.',
-        minAltitude: 25, maxAltitude: 40000000, maxTilt: 85});
-      controller = createCameraController({map, onError: failed,
+        minAltitude: MIN_CAMERA_ALTITUDE, maxAltitude: 40000000, maxTilt: 85});
+      controller = createCameraController({map, onError: failed, onStatus: cameraStatus,
+        requestFrame: callback => win.requestAnimationFrame(callback),
+        cancelFrame: id => win.cancelAnimationFrame(id),
         reducedMotion: win.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true});
       map.addEventListener('gmp-steadychange', steady);
       map.addEventListener('gmp-error', failed);
       const mounted = map;
       removeListeners.push(() => mounted.removeEventListener('gmp-steadychange', steady),
         () => mounted.removeEventListener('gmp-error', failed));
+      // Observe input on the public element without preventing Google's own
+      // gestures, attribution clicks or access to its internal UI.
+      for (const eventName of ['pointerdown', 'touchstart', 'wheel']) {
+        mounted.addEventListener(eventName, interruptCamera, {capture: true, passive: true});
+        removeListeners.push(() => mounted.removeEventListener(eventName, interruptCamera, {capture: true}));
+      }
       // Attribution, legal links and all internal map UI remain owned by Google.
       // Do not inspect/modify its Shadow DOM or intercept its link clicks.
       container.append(map);
