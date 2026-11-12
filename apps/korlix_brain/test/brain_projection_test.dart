@@ -373,8 +373,8 @@ void main() {
         f.projection.open();
         final lookup = await f.projection.voiceTurn(
           'provider-lookup',
-          'Go to My destination',
-          {'action': 'search', 'value': 'My destination'},
+          'Go to San Francisco Ferry Building',
+          {'action': 'search', 'value': 'San Francisco Ferry Building'},
         );
         expect(
           lookup?['answer'],
