@@ -14,6 +14,10 @@ export function parseCameraMessage(event, {parent, ownOrigin, lastSequence = -1}
   const raw = value.camera;
   if (!operations.has(raw.operation) || !Number.isSafeInteger(raw.sequence) || raw.sequence < 0 || raw.sequence <= lastSequence) return null;
   const camera = {operation: raw.operation, sequence: raw.sequence};
+  if (raw.viewMode !== undefined) {
+    if (!['street', 'earth'].includes(raw.viewMode)) return null;
+    camera.viewMode = raw.viewMode;
+  }
   for (const [name, low, high] of [['latitude', -90, 90], ['longitude', -180, 180],
     ['height', 1, 40000000], ['heading', -360, 360], ['pitch', -90, 0]]) {
     if (raw[name] === undefined || raw[name] === null) continue;
@@ -52,7 +56,7 @@ export function initialCameraOptions() {
 // Legacy "height" is a compatibility standoff hint, not a surveyed elevation.
 // Center the requested place on terrain; putting the camera directly above its
 // coordinates while tilting would point past the requested building.
-function destination(value) {
+export function destinationCamera(value) {
   const tilt = clamp(90 + (value.pitch ?? -50), 0, 85);
   return {center: {lat: value.latitude, lng: value.longitude, altitude: 0},
     altitudeMode: 'RELATIVE_TO_GROUND',
@@ -60,10 +64,10 @@ function destination(value) {
     heading: heading(value.heading ?? 0), tilt, roll: 0};
 }
 
-export function createCameraController({map, reducedMotion = false, onError = () => {}, onStatus = () => {},
+export function createCameraController({map, selectedPlace = null, reducedMotion = false, onError = () => {}, onStatus = () => {},
   requestFrame = callback => globalThis.requestAnimationFrame(callback),
   cancelFrame = id => globalThis.cancelAnimationFrame(id)}) {
-  let selected = null, disposed = false, generation = 0, frame = null;
+  let selected = selectedPlace ? {...selectedPlace} : null, disposed = false, generation = 0, frame = null;
   let activeSequence = null, interruptible = false;
   const report = (state, reason, sequence = activeSequence) => {
     if (!disposed && Number.isSafeInteger(sequence) && sequence >= 0) onStatus({state, reason, sequence});
@@ -185,14 +189,14 @@ export function createCameraController({map, reducedMotion = false, onError = ()
     if (place) selected = {...place};
     switch (camera.operation) {
       case 'flyTo': {
-        const target = destination({latitude: camera.latitude ?? selected?.latitude,
+        const target = destinationCamera({latitude: camera.latitude ?? selected?.latitude,
           longitude: camera.longitude ?? selected?.longitude, height: camera.height,
           heading: camera.heading, pitch: camera.pitch});
         move(camera.sequence, () => target, 1200);
         break;
       }
       case 'reset': {
-        const target = selected ? destination(selected) : {...initialCameraOptions(), altitudeMode: 'ABSOLUTE'};
+        const target = selected ? destinationCamera(selected) : {...initialCameraOptions(), altitudeMode: 'ABSOLUTE'};
         move(camera.sequence, () => target, 1200);
         break;
       }

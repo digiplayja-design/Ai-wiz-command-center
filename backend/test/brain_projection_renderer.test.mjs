@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {parseCameraMessage, createCameraController, initialCameraOptions} from '../brain_projection/public/camera.mjs';
+import {parseCameraMessage, createCameraController, initialCameraOptions, destinationCamera} from '../brain_projection/public/camera.mjs';
 import {mountProjectionRenderer, loadGoogleMapsLibrary} from '../brain_projection/public/earth.mjs';
+import {headingToProperty, capturedMonth, requestPanorama} from '../brain_projection/public/street.mjs';
 
 const origin = 'https://chee-chai-chee-backend.onrender.com';
 const selected = {id: 'place-1', label: 'Confirmed place', latitude: 40.7, longitude: -73.9};
@@ -135,195 +136,6 @@ function assertClean(f) {
   assert.ok(f.calls.maps.every(map => [...map.listeners.values()].every(listeners => listeners.size === 0)));
 }
 
-test('SDK loader registers its callback first, loads only Maps JavaScript quarterly and propagates the CSP nonce', async () => {
-  const f = fakeBrowser(), abort = new AbortController();
-  let imports = 0, callback;
-  f.window.google = {maps: {importLibrary(name) { imports++; assert.equal(name, 'maps3d'); return Promise.resolve(f.library); }}};
-  f.document.head.append = script => {
-    assert.equal(typeof f.window.__korlixMapsReady, 'function', 'Warm cache cannot beat callback registration');
-    f.scripts.push(script);
-    callback = f.window.__korlixMapsReady;
-  };
-  const loading = loadGoogleMapsLibrary({...f, key: 'public-test-key', signal: abort.signal});
-  const script = f.scripts[0], url = new URL(script.src);
-  assert.equal(url.origin, 'https://maps.googleapis.com');
-  assert.equal(url.pathname, '/maps/api/js');
-  assert.deepEqual(Object.fromEntries(url.searchParams), {key: 'public-test-key', v: 'quarterly',
-    loading: 'async', callback: '__korlixMapsReady', auth_referrer_policy: 'origin'});
-  assert.equal(script.nonce, 'document-csp-nonce');
-  assert.equal(script.referrerPolicy, 'strict-origin-when-cross-origin');
-  assert.equal(script.async, true);
-  assert.equal(imports, 0);
-  callback();
-  callback();
-  assert.equal(await loading, f.library);
-  assert.equal(imports, 1, 'A duplicate SDK callback never starts another import or map');
-  assert.equal(script.onerror, null);
-  abort.abort();
-});
-
-test('SDK import errors, failed scripts and cancellation are sanitized; late imports cannot revive the loader', async () => {
-  for (const failure of ['import', 'script', 'abort', 'aborted']) {
-    const f = fakeBrowser(), abort = new AbortController(), pending = deferred();
-    f.window.google = {maps: {importLibrary: () => pending.promise}};
-    if (failure === 'aborted') abort.abort();
-    const loading = loadGoogleMapsLibrary({...f, key: 'public-test-key', signal: abort.signal});
-    const rejected = assert.rejects(loading, error => {
-      assert.doesNotMatch(error.message, /secret|public-test-key|https:|provider body/);
-      return true;
-    });
-    const callback = f.window.__korlixMapsReady;
-    if (failure === 'import') {
-      callback();
-      pending.reject(Error('https://provider.invalid/?key=secret provider body'));
-    } else if (failure === 'script') {
-      f.scripts[0].onerror({message: 'key=secret provider body'});
-    } else if (failure === 'abort') {
-      callback();
-      abort.abort();
-      pending.resolve(f.library);
-      callback();
-    }
-    await rejected;
-    assert.equal(f.scripts.length, failure === 'aborted' ? 0 : 1);
-    assert.ok(f.scripts.every(script => script.removed));
-  }
-});
-
-test('renderer remains loading until its own documented steady event reports completed rendering', async () => {
-  const f = fakeBrowser();
-  const runtime = mountProjectionRenderer(f);
-  assert.equal(typeof runtime.dispose, 'function');
-  assert.deepEqual(statuses(f), ['loading']);
-  assert.equal([...f.timers.values()][0].milliseconds, 30000);
-  assert.equal(typeof f.window.gm_authFailure, 'function');
-  await flush();
-  const map = f.calls.maps[0];
-  assert.equal(map.options.mode, 'SATELLITE');
-  assert.equal(map.options.defaultUIHidden, true);
-  assert.deepEqual(map.options.center, initialCameraOptions().center);
-  assert.equal(map.options.minAltitude, 1);
-  assert.equal(map.options.maxAltitude, 40000000);
-  assert.deepEqual(statuses(f), ['loading'], 'SDK import and construction do not imply imagery loaded');
-  map.emit('gmp-steadystate', {isSteady: true});
-  map.emit('gmp-animationend');
-  map.emit('gmp-steadychange', {isSteady: false});
-  map.emit('gmp-steadychange', {isSteady: 'true'});
-  map.emit('gmp-steadychange', {isSteady: true, target: {}});
-  assert.deepEqual(statuses(f), ['loading']);
-  map.emit('gmp-steadychange', {isSteady: true});
-  assert.deepEqual(statuses(f), ['loading', 'ready']);
-  map.emit('gmp-steadychange', {isSteady: false});
-  map.emit('gmp-steadychange', {isSteady: true});
-  assert.deepEqual(statuses(f), ['loading', 'ready'], 'Camera movement does not repeatedly reinitialize the shell');
-  assert.equal(f.state.hidden, true);
-  assert.equal(f.timers.size, 0);
-  assert.ok(f.posts.every(post => post[0].type === 'korlix-projection-status' && post[1] === '*'));
-  assert.doesNotMatch(JSON.stringify(f.posts), /public-test-key|Authorization|nonce|provider/);
-  runtime.dispose();
-  assertClean(f);
-  runtime.dispose();
-});
-
-test('only the latest valid queued camera command runs after steady; source and sequence checks survive SDK migration', async () => {
-  const pending = deferred();
-  const f = fakeBrowser({loadLibrary: () => pending.promise});
-  const runtime = mountProjectionRenderer(f);
-  f.emit('message', message(f.window.parent));
-  f.emit('message', message(f.window.parent, {data: {type: 'korlix-projection-camera',
-    camera: {...camera, sequence: 2, latitude: 41, longitude: -72}, place: selected}}));
-  pending.resolve(f.library);
-  await flush();
-  const map = f.calls.maps[0];
-  assert.equal(f.calls.flights.length, 0);
-  map.emit('gmp-steadychange', {isSteady: true});
-  assert.equal(f.calls.flights.length, 1);
-  assert.deepEqual(f.calls.flights[0].endCamera.center, {lat: 41, lng: -72, altitude: 0});
-  assert.equal(f.calls.flights[0].endCamera.altitudeMode, 'RELATIVE_TO_GROUND');
-  f.emit('message', message(f.window.parent));
-  f.emit('message', message({}, {data: {type: 'korlix-projection-camera', camera: {...camera, sequence: 3}}}));
-  assert.equal(f.calls.flights.length, 1);
-  f.emit('message', message(f.window.parent, {data: {type: 'korlix-projection-camera',
-    camera: {sequence: 3, operation: 'closer'}}}));
-  assert.equal(f.calls.flights.length, 2);
-  assert.deepEqual(f.calls.order, ['stop', 'fly', 'stop', 'fly']);
-  runtime.dispose();
-});
-
-test('missing configuration never loads the SDK and an unavailable constructor never reports readiness', async () => {
-  const missing = fakeBrowser({key: ''});
-  mountProjectionRenderer(missing);
-  assert.deepEqual(statuses(missing), ['loading', 'error']);
-  assert.equal(missing.calls.loads.length, 0);
-  assertClean(missing);
-  for (const badLibrary of [undefined, {}, {Map3DElement: null}]) {
-    const f = fakeBrowser({loadLibrary: async () => badLibrary});
-    mountProjectionRenderer(f);
-    await flush();
-    assert.deepEqual(statuses(f), ['loading', 'error']);
-    assert.equal(f.calls.maps.length, 0);
-    assertClean(f);
-  }
-});
-
-test('SDK, constructor, initialization and authentication failures release resources without provider details', async () => {
-  for (const failure of ['sdk', 'constructor', 'map', 'auth-before', 'auth-after']) {
-    const f = fakeBrowser({constructorThrows: failure === 'constructor',
-      ...(failure === 'sdk' ? {loadLibrary: async () => {throw Error('key=secret provider body');}} : {})});
-    mountProjectionRenderer(f);
-    if (failure === 'auth-before') f.window.gm_authFailure();
-    await flush();
-    const map = f.calls.maps[0];
-    if (failure === 'map') map.emit('gmp-error', {message: 'key=secret provider body'});
-    if (failure === 'auth-after') {
-      map.emit('gmp-steadychange', {isSteady: true});
-      f.window.gm_authFailure();
-    }
-    assert.deepEqual(statuses(f), failure === 'auth-after' ? ['loading', 'ready', 'error'] : ['loading', 'error']);
-    assert.equal(f.state.hidden, false);
-    assert.doesNotMatch(JSON.stringify(f.posts), /secret|private|provider body|public-test-key/);
-    assertClean(f);
-    const count = f.posts.length;
-    f.window.gm_authFailure();
-    map?.emit('gmp-steadychange', {isSteady: true});
-    assert.equal(f.posts.length, count);
-  }
-});
-
-test('closing during SDK import aborts pending work, ignores late resolution and restores an earlier auth handler', async () => {
-  const pending = deferred(), f = fakeBrowser({loadLibrary: () => pending.promise});
-  const previous = () => {};
-  f.window.gm_authFailure = previous;
-  mountProjectionRenderer(f);
-  const lateAuth = f.window.gm_authFailure;
-  f.emit('pagehide');
-  assert.equal(f.calls.loads[0].signal.aborted, true);
-  pending.resolve(f.library);
-  await flush();
-  lateAuth();
-  assert.equal(f.calls.maps.length, 0);
-  assert.deepEqual(statuses(f), ['loading']);
-  assert.equal(f.window.gm_authFailure, previous);
-  assertClean(f);
-});
-
-test('deadline covers both SDK download and imagery rendering, preventing late readiness in either phase', async () => {
-  for (const phase of ['sdk', 'imagery']) {
-    const pending = deferred(), f = fakeBrowser({loadLibrary: () => phase === 'sdk' ? pending.promise : Promise.resolve(f.library)});
-    mountProjectionRenderer(f);
-    await flush();
-    const map = f.calls.maps[0];
-    const lateSteady = map ? [...map.listeners.get('gmp-steadychange')][0] : null;
-    [...f.timers.values()][0].callback();
-    pending.resolve(f.library);
-    await flush();
-    lateSteady?.({target: map, isSteady: true});
-    assert.deepEqual(statuses(f), ['loading', 'error']);
-    assert.equal(f.calls.loads[0].signal.aborted, true);
-    assertClean(f);
-  }
-});
-
 test('camera targets terrain under the confirmed address and preserves actual center while zooming and orbiting', () => {
   const f = fakeBrowser(), map = new f.library.Map3DElement(initialCameraOptions());
   const controller = createCameraController({map});
@@ -397,25 +209,6 @@ test('latest camera command wins asynchronous cancellation; disposal invalidates
   await flush();
   assert.equal(f.calls.flights.length, 1);
   assert.deepEqual(errors, []);
-});
-
-test('superseded flight errors are ignored; current flight failures fail the renderer without details', async () => {
-  const f = fakeBrowser();
-  mountProjectionRenderer(f);
-  await flush();
-  const map = f.calls.maps[0], flights = [];
-  map.flightResult = () => {const pending = deferred(); flights.push(pending); return pending.promise;};
-  map.emit('gmp-steadychange', {isSteady: true});
-  f.emit('message', message(f.window.parent));
-  f.emit('message', message(f.window.parent, {data: {type: 'korlix-projection-camera', camera: {...camera, sequence: 2}, place: selected}}));
-  flights[0].reject(Error('https://provider.invalid/?key=secret'));
-  await flush();
-  assert.deepEqual(statuses(f), ['loading', 'ready']);
-  flights[1].reject(Error('https://provider.invalid/?key=secret'));
-  await flush();
-  assert.deepEqual(statuses(f), ['loading', 'ready', 'error']);
-  assert.doesNotMatch(JSON.stringify(f.posts), /secret|provider.invalid/);
-  assertClean(f);
 });
 
 const cameraStatuses = f => f.posts.filter(post => post[0].type === 'korlix-projection-camera-status').map(post => post[0]);
@@ -600,77 +393,431 @@ test('each discrete camera command cancels continuous motion while retaining its
   }
 });
 
-test('pointer, touch and wheel cancel motion once, with sanitized sequence-aware statuses and full cleanup', async () => {
-  for (const input of ['pointerdown', 'touchstart', 'wheel']) {
-    const f = fakeBrowser(), runtime = mountProjectionRenderer(f);
-    await flush();
-    const map = f.calls.maps[0];
-    map.emit('gmp-steadychange', {isSteady: true});
-    Object.assign(map, {range: 1000, tilt: 40});
-    sendCamera(f, 1, 'zoomInContinuous');
-    f.advanceFrame(); f.advanceFrame();
-    map.emit(input);
-    assert.equal(f.frames.size, 0);
-    const stopCount = f.calls.stops;
-    map.emit(input); map.emit('pointerdown');
-    assert.equal(f.calls.stops, stopCount, 'Repeated native input must not repeatedly stop SDK gesture handling.');
-    assert.deepEqual(cameraStatuses(f), [{type: 'korlix-projection-camera-status', state: 'stopped', reason: 'interrupted', sequence: 1}]);
-    sendCamera(f, 2, 'zoomOutContinuous');
-    f.advanceFrame(); f.advanceFrame();
-    assert.equal(f.frames.size, 1);
-    f.document.visibilityState = 'hidden';
-    f.emitDocument('visibilitychange');
-    assert.equal(f.frames.size, 0);
-    assert.equal(cameraStatuses(f).at(-1).sequence, 2);
-    f.document.visibilityState = 'visible';
-    f.emitDocument('visibilitychange');
-    assert.equal(f.frames.size, 0, 'Showing the document cannot resume a cancelled voice command.');
-    sendCamera(f, 3, 'zoomInContinuous');
-    f.advanceFrame(); f.advanceFrame();
-    f.emit('pagehide');
-    assertClean(f);
-    runtime.dispose();
-    assert.doesNotMatch(JSON.stringify(cameraStatuses(f)), /center|latitude|longitude|label|key|http/);
-  }
-});
 
-test('stop and hidden-document commands remove queued motion before a late SDK or steady event', async () => {
-  for (const phase of ['import', 'steady']) {
-    for (const cause of ['stopCamera', 'visibility']) {
-      const pending = deferred(), f = fakeBrowser({loadLibrary: () => pending.promise});
-      const runtime = mountProjectionRenderer(f);
-      if (phase === 'steady') { pending.resolve(f.library); await flush(); }
-      sendCamera(f, 1, 'zoomInContinuous');
-      if (cause === 'stopCamera') sendCamera(f, 2, 'stopCamera');
-      else {
-        f.document.visibilityState = 'hidden';
-        f.emitDocument('visibilitychange');
-        sendCamera(f, 2, 'zoomOutContinuous');
-        f.document.visibilityState = 'visible';
-        f.emitDocument('visibilitychange');
-      }
-      pending.resolve(f.library);
-      await flush();
-      f.calls.maps[0].emit('gmp-steadychange', {isSteady: true});
-      assert.equal(f.frames.size, 0);
-      assert.equal(f.calls.flights.length, 0);
-      assert.deepEqual(cameraStatuses(f).at(-1), {type: 'korlix-projection-camera-status', state: 'stopped',
-        reason: cause === 'stopCamera' ? 'stopped' : 'interrupted', sequence: 2});
-      runtime.dispose();
-      assertClean(f);
+function surfaceFixture({key = 'public-fixture-key', sdkDeferred = null, maxZoom = 3, importFailure = false,
+  readyWhenVisible = false, setPanoFailure = false} = {}) {
+  class Element {
+    constructor(tag = 'div') { this.tag = tag; this.hidden = false; this.textContent = ''; this.children = []; this.listeners = new Map(); this.attributes = {}; }
+    setAttribute(name, value) { this.attributes[name] = value; }
+    append(...children) { this.children.push(...children); for (const child of children) child.isConnected = true; }
+    remove() { this.removed = true; this.isConnected = false; }
+    addEventListener(name, fn) { if (!this.listeners.has(name)) this.listeners.set(name, new Set()); this.listeners.get(name).add(fn); }
+    removeEventListener(name, fn) { this.listeners.get(name)?.delete(fn); }
+    emit(name, detail = {}) { for (const fn of [...(this.listeners.get(name) || [])]) fn({target: this, ...detail}); }
+  }
+  const calls = {loads: [], imports: [], queries: [], panoramas: [], maps: [], order: []};
+  const posts = [], timers = new Map(), frames = new Map(), panoramas = new Map(), scripts = [];
+  const root = new Element(), state = new Element(), label = new Element(), events = new Element(), documentEvents = new Element();
+  let now = 0, serial = 0;
+  class StreetViewService {
+    getPanorama(request, callback) { calls.queries.push({request, callback}); }
+  }
+  class StreetViewPanorama extends Element {
+    constructor(host, options) {
+      super(); this.host = host; this.options = options; this.pano = ''; this.status = 'UNKNOWN_ERROR'; this.zoom = 1; this.pov = {heading: 0, pitch: 0}; this.visible = false;
+      calls.panoramas.push(this);
     }
+    addListener(name, fn) { this.addEventListener(name, fn); return {remove: () => this.removeEventListener(name, fn)}; }
+    getPano() { return this.pano; }
+    getStatus() { return this.status; }
+    getPosition() { return panoramas.get(this.pano)?.location.latLng; }
+    getZoom() { return this.zoom; }
+    getPov() { return {...this.pov}; }
+    setPov(value) { this.pov = {...value}; }
+    setZoom(value) { this.zoom = Math.max(0, Math.min(maxZoom, value)); }
+    setVisible(value) { this.visible = value; if (value && readyWhenVisible && this.status !== 'OK') this.ready(); }
+    setPano(value) { this.pano = value; this.status = 'UNKNOWN_ERROR'; this.emit('pano_changed'); if (setPanoFailure) this.ready('UNKNOWN_ERROR'); }
+    ready(status = 'OK', pano = this.pano) { this.pano = pano; this.status = status; this.emit('status_changed'); }
+  }
+  class Map3DElement extends Element {
+    constructor(options) {
+      super('gmp-map-3d');
+      if ('altitudeMode' in options) throw Error('altitudeMode belongs to CameraOptions, not Map3DElementOptions.');
+      this.options = options; Object.assign(this, options); this.flights = []; this.stops = 0; calls.maps.push(this);
+    }
+    stopCameraAnimation() { this.stops++; }
+    flyCameraTo(value) {
+      if (!this.isConnected) throw Error('The map must be mounted before its destination flight.');
+      this.flights.push(value); Object.assign(this, value.endCamera);
+    }
+    steady() { this.emit('gmp-steadychange', {isSteady: true}); }
+  }
+  const api = {importLibrary(name) {
+    calls.imports.push(name);
+    if (importFailure) return Promise.reject(Error('key=secret provider body'));
+    if (name === 'streetView') return Promise.resolve({StreetViewService, StreetViewPanorama});
+    if (name === 'maps3d') return Promise.resolve({Map3DElement});
+    throw Error('Unexpected library.');
+  }};
+  const win = {location: {origin}, parent: {postMessage: (message, target) => {calls.order.push(message.type); posts.push([message, target]);}},
+    matchMedia: () => ({matches: false}), addEventListener: (name, fn) => events.addEventListener(name, fn),
+    removeEventListener: (name, fn) => events.removeEventListener(name, fn),
+    setTimeout(fn, delay) { const id = ++serial; timers.set(id, {callback: fn, milliseconds: delay}); return id; },
+    clearTimeout: id => timers.delete(id),
+    requestAnimationFrame(fn) { const id = ++serial; frames.set(id, fn); return id; },
+    cancelAnimationFrame: id => frames.delete(id), google: {maps: api}};
+  const doc = {visibilityState: 'visible',
+    addEventListener: (name, fn) => documentEvents.addEventListener(name, fn),
+    removeEventListener: (name, fn) => documentEvents.removeEventListener(name, fn),
+    getElementById: name => ({map: root, 'map-state': state, 'imagery-label': label})[name],
+    querySelector: selector => selector === 'meta[name="korlix-map-key"]' ? {content: key} : {nonce: 'fixture-csp-nonce'},
+    createElement: tag => new Element(tag), head: {append: script => scripts.push(script)}};
+  const send = (sequence, operation = 'flyTo', extra = {}, place = selected) => events.emit('message', {
+    source: win.parent, origin: 'null', data: {type: 'korlix-projection-camera', camera: {sequence, operation, ...extra}, place}});
+  const reply = (index, {pano = 'pano-' + index, position = {lat: selected.latitude - .0001, lng: selected.longitude}, date = '2026-06', status = 'OK'} = {}) => {
+    const data = {location: {pano, latLng: position}, imageDate: date};
+    panoramas.set(pano, data);
+    calls.queries[index].callback(status === 'OK' ? data : null, status);
+    return data;
+  };
+  return {window: win, document: doc, posts, timers, frames, calls, state, label, root, events, documentEvents, scripts, api, send, reply,
+    loadLibrary(args) { calls.order.push('sdk-load'); calls.loads.push(args); return sdkDeferred ? sdkDeferred.promise : Promise.resolve(api); },
+    tick(delta = 16) { now += delta; const pending = [...frames.values()]; frames.clear(); for (const fn of pending) fn(now); },
+    hidden(value) { doc.visibilityState = value ? 'hidden' : 'visible'; documentEvents.emit('visibilitychange'); },
+    gestures(name = 'pointerdown') { for (const host of root.children) if (!host.hidden) host.emit(name); },
+    close() { events.emit('pagehide'); },
+  };
+}
+const latestView = f => statusPosts(f).at(-1)?.[0];
+async function openStreetFixture(f, sequence = 1) {
+  const runtime = mountProjectionRenderer(f);
+  f.send(sequence);
+  await flush();
+  f.reply(0); await flush();
+  f.calls.panoramas[0].ready(); await flush();
+  return runtime;
+}
+function assertSurfaceClean(f) {
+  assert.equal(f.events.listeners.get('message')?.size, 0);
+  assert.equal(f.events.listeners.get('pagehide')?.size, 0);
+  assert.equal(f.documentEvents.listeners.get('visibilitychange')?.size, 0);
+  assert.equal(f.frames.size, 0); assert.equal(f.timers.size, 0);
+  assert.ok(f.root.children.every(host => host.removed));
+  assert.ok(f.calls.panoramas.every(pano => !pano.visible && [...pano.listeners.values()].every(listeners => !listeners.size)));
+}
+
+test('view-mode input is bounded and optional legacy camera messages remain accepted', () => {
+  const parent = {}, context = {parent, ownOrigin: origin};
+  for (const viewMode of ['street', 'earth']) assert.equal(parseCameraMessage(message(parent, {data: {
+    type: 'korlix-projection-camera', camera: {...camera, viewMode}, place: selected}}), context).camera.viewMode, viewMode);
+  for (const viewMode of ['live', '', null, {}, ['street']]) assert.equal(parseCameraMessage(message(parent, {data: {
+    type: 'korlix-projection-camera', camera: {...camera, viewMode}, place: selected}}), context), null);
+  assert.equal(parseCameraMessage(message(parent), context).camera.viewMode, undefined);
+});
+
+test('SDK bootstrap preserves nonce/origin policy and defers all viewer imports', async () => {
+  const f = surfaceFixture(), abort = new AbortController();
+  const promise = loadGoogleMapsLibrary({...f, key: 'public-fixture-key', signal: abort.signal});
+  const script = f.scripts[0], url = new URL(script.src);
+  assert.equal(url.origin, 'https://maps.googleapis.com'); assert.equal(url.pathname, '/maps/api/js');
+  assert.equal(url.searchParams.get('v'), 'quarterly'); assert.equal(url.searchParams.get('auth_referrer_policy'), 'origin');
+  assert.equal(script.nonce, 'fixture-csp-nonce'); assert.equal(script.referrerPolicy, 'strict-origin-when-cross-origin');
+  f.window.__korlixMapsReady();
+  const api = await promise;
+  assert.deepEqual(f.calls.imports, []);
+  await api.importLibrary('streetView'); assert.deepEqual(f.calls.imports, ['streetView']);
+  abort.abort();
+});
+
+test('loader errors and aborts never expose URLs/key values or revive a late load', async () => {
+  for (const reason of ['script', 'abort', 'pre-abort']) {
+    const f = surfaceFixture(), abort = new AbortController();
+    if (reason === 'pre-abort') abort.abort();
+    const loading = loadGoogleMapsLibrary({...f, key: 'secret-key', signal: abort.signal});
+    const rejected = assert.rejects(loading, error => !/secret|http|provider/.test(error.message));
+    const callback = f.window.__korlixMapsReady;
+    if (reason === 'script') f.scripts[0].onerror();
+    if (reason === 'abort') abort.abort();
+    callback?.(); await rejected;
+    assert.ok(f.scripts.every(script => script.removed));
   }
 });
 
-test('invalid public camera state during continuous movement fails once and releases the frame', async () => {
-  const f = fakeBrowser();
-  mountProjectionRenderer(f);
+test('transport handshake precedes SDK load and legacy ready is explicitly awaiting a destination', async () => {
+  const f = surfaceFixture(), runtime = mountProjectionRenderer(f);
+  assert.ok(f.calls.order.indexOf('korlix-projection-transport-ready') < f.calls.order.indexOf('sdk-load'));
   await flush();
+  assert.equal(latestView(f).reason, 'awaiting-destination');
+  assert.equal(f.calls.panoramas.length, 0); assert.equal(f.calls.maps.length, 0); assert.equal(f.calls.imports.length, 0);
+  assert.equal(f.state.hidden, false);
+  runtime.dispose(); assertSurfaceClean(f);
+});
+
+test('legacy destination defaults to bounded outdoor Street View, faces target and displays its recorded date', async () => {
+  const f = surfaceFixture(), runtime = await openStreetFixture(f);
+  assert.deepEqual(f.calls.imports, ['streetView']); assert.equal(f.calls.maps.length, 0);
+  assert.deepEqual(f.calls.queries[0].request, {location: {lat: 40.7, lng: -73.9}, radius: 50, preference: 'nearest', sources: ['google', 'outdoor']});
+  const pano = f.calls.panoramas[0];
+  assert.equal(pano.pov.heading, 0); assert.equal(pano.pov.pitch, 0); assert.equal(pano.zoom, 1); assert.equal(pano.visible, true);
+  assert.equal(pano.options.imageDateControl, true); assert.equal(pano.options.motionTracking, false);
+  assert.match(f.label.textContent, /Captured 2026-06/); assert.match(f.label.textContent, /Not live/);
+  assert.equal(latestView(f).viewMode, 'street'); assert.equal(latestView(f).sequence, 1); assert.equal(latestView(f).status, 'ready');
+  assert.equal(headingToProperty({lat: 0, lng: 0}, {lat: 0, lng: 1}), 90);
+  assert.equal(headingToProperty({lat: 0, lng: 0}, {lat: -1, lng: 0}), 180);
+  runtime.dispose(); assertSurfaceClean(f);
+});
+
+test('a service match does not report viewer readiness before the matching panorama status', async () => {
+  const f = surfaceFixture(), runtime = mountProjectionRenderer(f);
+  f.send(1); await flush(); f.reply(0); await flush();
+  assert.equal(latestView(f).status, 'loading');
+  const pano = f.calls.panoramas[0];
+  pano.ready('OK', 'stale-id'); assert.equal(latestView(f).status, 'loading');
+  pano.ready('OK', 'pano-0'); assert.equal(latestView(f).status, 'ready');
+  runtime.dispose();
+});
+
+test('a panorama that waits for visibility can finish its initial and reused destination loads', async () => {
+  const f = surfaceFixture({readyWhenVisible: true}), runtime = mountProjectionRenderer(f);
+  f.send(1); await flush(); f.reply(0); await flush();
+  assert.equal(latestView(f).status, 'ready');
+  assert.equal(latestView(f).sequence, 1);
+  assert.equal(f.calls.panoramas[0].visible, true);
+  assert.equal(f.timers.size, 0);
+  f.send(2); await flush(); f.reply(1, {pano: 'second'}); await flush();
+  assert.equal(latestView(f).status, 'ready');
+  assert.equal(latestView(f).sequence, 2);
+  assert.equal(f.calls.panoramas.length, 1);
+  assert.equal(f.calls.panoramas[0].pano, 'second');
+  assert.equal(f.calls.panoramas[0].visible, true);
+  assert.equal(f.timers.size, 0);
+  runtime.dispose();
+});
+
+test('a synchronous setPano failure cannot be made visible by the pending open operation', async () => {
+  const f = surfaceFixture({setPanoFailure: true}), runtime = mountProjectionRenderer(f);
+  f.send(1); await flush(); f.reply(0); await flush();
+  assert.equal(latestView(f).status, 'error');
+  assert.equal(f.calls.panoramas[0].visible, false);
+  assert.equal(f.calls.panoramas[0].host.hidden, true);
+  assert.equal(statusPosts(f).some(([value]) => value.status === 'ready' && value.reason === 'ready'), false);
+  runtime.dispose();
+});
+
+test('no coverage retries at 100m then offers explicit Earth without creating an overhead map', async () => {
+  const f = surfaceFixture(), runtime = mountProjectionRenderer(f);
+  f.send(1); await flush(); f.reply(0, {status: 'ZERO_RESULTS'}); await flush();
+  assert.equal(f.calls.queries[1].request.radius, 100);
+  f.reply(1, {status: 'ZERO_RESULTS'}); await flush();
+  assert.equal(latestView(f).reason, 'no-coverage'); assert.match(f.state.textContent, /Choose 3D Earth/);
+  assert.equal(f.calls.maps.length, 0); assert.equal(f.calls.panoramas.length, 0);
+  assert.deepEqual(f.calls.imports, ['streetView']); runtime.dispose();
+});
+
+test('unknown provider failures and invalid/out-of-radius metadata are not claimed as missing coverage', async () => {
+  for (const result of [{status: 'UNKNOWN_ERROR'}, {position: {lat: 0, lng: 0}}, {pano: '<script>'}]) {
+    const f = surfaceFixture(), runtime = mountProjectionRenderer(f);
+    f.send(1); await flush(); f.reply(0, result); await flush();
+    assert.equal(latestView(f).reason, 'unavailable'); assert.equal(f.calls.queries.length, 1);
+    assert.doesNotMatch(JSON.stringify(f.posts), /private-fixture-key|secret|<script>/); runtime.dispose();
+  }
+});
+
+test('late A lookup cannot replace B, and invalid source/stale sequence cannot replace the selected destination', async () => {
+  const f = surfaceFixture(), runtime = mountProjectionRenderer(f);
+  f.send(1); await flush();
+  f.send(2, 'flyTo', {}, {...selected, id: 'B', latitude: 40.71}); await flush();
+  f.reply(1, {pano: 'B', position: {lat: 40.7099, lng: -73.9}}); await flush();
+  f.calls.panoramas[0].ready();
+  f.reply(0, {pano: 'A'}); await flush();
+  assert.equal(f.calls.panoramas[0].getPano(), 'B'); assert.equal(latestView(f).sequence, 2);
+  const count = f.calls.queries.length;
+  f.send(1); f.events.emit('message', message({})); await flush();
+  assert.equal(f.calls.queries.length, count); runtime.dispose();
+});
+
+test('stop during SDK or panorama lookup cancels work and never shows a late destination', async () => {
+  for (const phase of ['sdk', 'lookup', 'display']) {
+    const pending = deferred(), f = surfaceFixture({sdkDeferred: phase === 'sdk' ? pending : null});
+    const runtime = mountProjectionRenderer(f); f.send(1); await flush();
+    if (phase === 'display') { f.reply(0); await flush(); }
+    f.send(2, 'stopCamera', {}, null);
+    if (phase === 'sdk') pending.resolve(f.api);
+    if (phase === 'lookup') f.reply(0);
+    if (phase === 'display') f.calls.panoramas[0].ready();
+    await flush();
+    assert.equal(latestView(f).reason, 'interrupted'); assert.equal(latestView(f).sequence, 2);
+    assert.ok(f.calls.panoramas.every(p => !p.visible)); assert.equal(f.calls.maps.length, 0);
+    assert.equal(cameraStatuses(f).at(-1).sequence, 2);
+    runtime.dispose(); assertSurfaceClean(f);
+  }
+});
+
+test('a newer destination can recover after stop or absent coverage and reuse a single panorama object', async () => {
+  const f = surfaceFixture(), runtime = await openStreetFixture(f);
+  f.send(2); await flush(); f.reply(1, {pano: 'second', date: '2025-12'}); await flush(); f.calls.panoramas[0].ready();
+  assert.equal(f.calls.panoramas.length, 1); assert.equal(f.calls.panoramas[0].pano, 'second');
+  assert.match(f.label.textContent, /2025-12/);
+  f.send(3); await flush(); f.send(4, 'stopCamera', {}, null); f.reply(2, {pano: 'canceled'}); await flush();
+  f.send(5); await flush(); f.reply(3, {pano: 'latest'}); await flush(); f.calls.panoramas[0].ready();
+  assert.equal(f.calls.panoramas.length, 1); assert.equal(latestView(f).sequence, 5); assert.equal(latestView(f).status, 'ready');
+  runtime.dispose();
+});
+
+test('continuous panorama zoom detects provider clamp and stops without infinite requests', async () => {
+  const f = surfaceFixture({maxZoom: 2}), runtime = await openStreetFixture(f);
+  f.send(2, 'zoomInContinuous', {}, null);
+  for (let i = 0; i < 300; i++) f.tick();
+  assert.equal(f.calls.panoramas[0].zoom, 2); assert.equal(f.frames.size, 0);
+  assert.deepEqual(cameraStatuses(f).at(-1), {type: 'korlix-projection-camera-status', state: 'limit', reason: 'closest', sequence: 2, viewMode: 'street'});
+  f.send(3, 'zoomOutContinuous', {}, null);
+  for (let i = 0; i < 300; i++) f.tick();
+  assert.equal(f.calls.panoramas[0].zoom, 0); assert.equal(cameraStatuses(f).at(-1).reason, 'farthest');
+  runtime.dispose();
+});
+
+test('Stop, manual input and background cancel panorama zoom without resuming on return', async () => {
+  for (const method of ['stop', 'pointerdown', 'touchstart', 'wheel', 'hidden']) {
+    const f = surfaceFixture(), runtime = await openStreetFixture(f);
+    f.send(2, 'zoomInContinuous', {}, null); f.tick(); f.tick();
+    const stale = [...f.frames.values()][0];
+    if (method === 'stop') f.send(3, 'stopCamera', {}, null);
+    else if (method === 'hidden') { f.hidden(true); f.hidden(false); }
+    else f.gestures(method);
+    const stopped = f.calls.panoramas[0].zoom;
+    stale(999); for (let i = 0; i < 20; i++) f.tick();
+    assert.equal(f.calls.panoramas[0].zoom, stopped); assert.equal(f.frames.size, 0);
+    assert.equal(cameraStatuses(f).at(-1).state, 'stopped');
+    assert.equal(latestView(f).status, 'ready');
+    runtime.dispose(); assertSurfaceClean(f);
+  }
+});
+
+test('Earth loads only on explicit selection; Street return restores recorded panorama and mode-specific statuses', async () => {
+  const f = surfaceFixture(), runtime = await openStreetFixture(f);
+  f.send(2, 'flyTo', {viewMode: 'earth'}); await flush();
+  assert.deepEqual(f.calls.imports, ['streetView', 'maps3d']); assert.equal(f.calls.maps.length, 1);
+  assert.equal(latestView(f).status, 'loading');
+  f.calls.maps[0].steady(); assert.equal(latestView(f).status, 'ready'); assert.equal(latestView(f).viewMode, 'earth');
+  f.send(3, 'zoomInContinuous', {viewMode: 'earth'}, null); f.tick(); f.tick();
+  f.send(4, 'flyTo', {viewMode: 'street'}); await flush(); assert.equal(f.frames.size, 0);
+  f.reply(1, {pano: 'pano-0'}); await flush();
+  assert.equal(latestView(f).status, 'ready'); assert.equal(latestView(f).viewMode, 'street');
+  assert.equal(f.calls.panoramas.length, 1); assert.equal(f.calls.maps.length, 1);
+  f.calls.maps[0].steady(); assert.equal(latestView(f).viewMode, 'street');
+  runtime.dispose(); assertSurfaceClean(f);
+});
+
+test('Earth keeps animation altitudeMode out of its constructor and flies to a terrain-relative destination after mounting', async () => {
+  const f = surfaceFixture(), runtime = mountProjectionRenderer(f);
+  f.send(1, 'flyTo', {viewMode: 'earth', height: 850, pitch: -50}); await flush();
+  assert.equal(latestView(f).status, 'loading');
+  assert.equal(f.calls.maps.length, 1);
   const map = f.calls.maps[0];
-  map.emit('gmp-steadychange', {isSteady: true});
-  sendCamera(f, 1, 'zoomInContinuous');
-  map.range = NaN;
-  f.advanceFrame();
-  assert.deepEqual(statuses(f), ['loading', 'ready', 'error']);
-  assertClean(f);
+  assert.equal('altitudeMode' in map.options, false);
+  assert.equal(map.isConnected, true);
+  assert.equal(map.flights.length, 1);
+  assert.deepEqual(map.flights[0].endCamera, destinationCamera({...selected, height: 850, pitch: -50}));
+  assert.equal(map.flights[0].endCamera.altitudeMode, 'RELATIVE_TO_GROUND');
+  Object.assign(map, map.options);
+  map.steady();
+  assert.equal(latestView(f).status, 'loading', 'A steady constructor scene does not establish the requested destination.');
+  Object.assign(map, map.flights[0].endCamera);
+  map.steady();
+  assert.equal(latestView(f).status, 'ready');
+  assert.equal(latestView(f).viewMode, 'earth');
+  runtime.dispose();
+});
+
+test('unknown dates stay unavailable and user panorama navigation cannot leave stale capture metadata', async () => {
+  assert.equal(capturedMonth('2026-13'), null); assert.equal(capturedMonth('<script>'), null);
+  const f = surfaceFixture(), runtime = await openStreetFixture(f), pano = f.calls.panoramas[0];
+  pano.setPano('walked-to-pano');
+  assert.match(f.label.textContent, /Capture date unavailable/);
+  f.reply(1, {pano: 'walked-to-pano', date: '2024-10'}); await flush();
+  assert.match(f.label.textContent, /2024-10/);
+  pano.setPano('unknown-date'); f.reply(2, {pano: 'unknown-date', date: 'invalid'}); await flush();
+  assert.match(f.label.textContent, /Capture date unavailable/);
+  runtime.dispose();
+});
+
+test('display deadline, missing configuration, imports and auth failures are sanitized and do not auto-fallback', async () => {
+  for (const cause of ['deadline', 'missing', 'import', 'auth']) {
+    const f = surfaceFixture({key: cause === 'missing' ? '' : 'public-fixture-key', importFailure: cause === 'import'});
+    const runtime = mountProjectionRenderer(f); f.send(1); await flush();
+    if (cause === 'deadline') for (const timer of [...f.timers.values()]) timer.callback();
+    if (cause === 'auth') f.window.gm_authFailure();
+    await flush();
+    assert.equal(latestView(f).status, 'error'); assert.equal(f.calls.maps.length, 0);
+    assert.doesNotMatch(JSON.stringify(f.posts), /public-fixture-key|secret|provider body/);
+    runtime.dispose(); assertSurfaceClean(f);
+  }
+});
+
+test('closing during a pending lookup prevents late viewer construction and restores auth callback', async () => {
+  const f = surfaceFixture(), previous = () => {};
+  f.window.gm_authFailure = previous;
+  mountProjectionRenderer(f); f.send(1); await flush();
+  const late = f.window.gm_authFailure;
+  f.close(); f.reply(0); late(); await flush();
+  assert.equal(f.calls.panoramas.length, 0); assert.equal(f.window.gm_authFailure, previous);
+  assertSurfaceClean(f);
+});
+
+test('callback-and-promise service implementations settle once and sanitize rejected provider details', async () => {
+  const answer = await requestPanorama({getPanorama(_request, callback) {
+    callback(null, 'ZERO_RESULTS'); return Promise.reject(Error('secret-provider-detail'));
+  }}, {location: {lat: 1, lng: 2}});
+  assert.deepEqual(answer, {data: null, status: 'ZERO_RESULTS'});
+});
+
+test('current provider and controller failures after a relative move carry the newest camera sequence', async () => {
+  for (const cause of ['auth', 'camera']) {
+    const f = surfaceFixture(), runtime = await openStreetFixture(f);
+    f.send(2, 'closer', {}, null);
+    if (cause === 'auth') f.window.gm_authFailure();
+    else { f.calls.panoramas[0].zoom = NaN; f.tick(); }
+    assert.equal(latestView(f).status, 'error'); assert.equal(latestView(f).sequence, 2);
+    runtime.dispose();
+  }
+});
+
+test('explicit panorama failures after readiness disable imagery using the current sequence', async () => {
+  for (const status of ['ZERO_RESULTS', 'UNKNOWN_ERROR']) {
+    const f = surfaceFixture(), runtime = await openStreetFixture(f);
+    f.send(2, 'closer', {}, null);
+    f.calls.panoramas[0].ready(status);
+    assert.equal(latestView(f).status, 'error'); assert.equal(latestView(f).sequence, 2);
+    assert.equal(latestView(f).reason, status === 'ZERO_RESULTS' ? 'no-coverage' : 'unavailable');
+    assert.equal(f.calls.panoramas[0].visible, false); assert.equal(f.frames.size, 0);
+    runtime.dispose();
+  }
+});
+
+test('a partial provider zoom clamp finishes a single step and reports the actual closest view', async () => {
+  const f = surfaceFixture({maxZoom: 1.2}), runtime = await openStreetFixture(f);
+  f.send(2, 'closer', {}, null);
+  for (let i = 0; i < 100; i++) f.tick();
+  assert.equal(f.calls.panoramas[0].zoom, 1.2); assert.equal(f.frames.size, 0);
+  assert.equal(cameraStatuses(f).at(-1).reason, 'closest');
+  runtime.dispose();
+});
+
+test('an Earth stop failure is bounded and cannot prevent a later Street View selection', async () => {
+  const f = surfaceFixture(), runtime = mountProjectionRenderer(f);
+  f.send(1, 'flyTo', {viewMode: 'earth'}); await flush(); f.calls.maps[0].steady();
+  f.calls.maps[0].stopCameraAnimation = () => { throw Error('provider failure'); };
+  f.send(2, 'closer', {viewMode: 'earth'}, null);
+  assert.equal(latestView(f).status, 'error');
+  f.send(3, 'flyTo', {viewMode: 'street'}); await flush(); f.reply(0); await flush(); f.calls.panoramas[0].ready();
+  assert.equal(latestView(f).status, 'ready'); assert.equal(latestView(f).viewMode, 'street');
+  runtime.dispose();
+});
+
+test('Stop, pointer and background interrupt an Earth destination flight before its steady event', async () => {
+  for (const cause of ['stop', 'pointer', 'background']) {
+    const f = surfaceFixture(), runtime = mountProjectionRenderer(f);
+    f.send(1, 'flyTo', {viewMode: 'earth'}); await flush(); f.calls.maps[0].steady();
+    f.send(2, 'flyTo', {viewMode: 'earth'}, {...selected, latitude: 40.71}); await flush();
+    const map = f.calls.maps[0], previousStops = map.stops;
+    assert.equal(map.flights.length, 2); assert.equal(latestView(f).status, 'loading');
+    if (cause === 'stop') f.send(3, 'stopCamera', {viewMode: 'earth'}, null);
+    else if (cause === 'pointer') f.gestures();
+    else f.hidden(true);
+    assert.ok(map.stops > previousStops, 'The in-progress SDK flight must be stopped, not only hidden.');
+    map.steady(); await flush();
+    assert.equal(latestView(f).reason, 'interrupted');
+    assert.equal(cameraStatuses(f).at(-1).reason, cause === 'stop' ? 'stopped' : 'interrupted');
+    runtime.dispose();
+  }
 });
