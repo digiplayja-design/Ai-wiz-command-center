@@ -1,7 +1,7 @@
 name: Magic Camera backend validation
 on:
   push:
-    branches: [feature/korlix-magic-camera-backend-20261030]
+    branches: [feature/korlix-magic-camera-backend-20261030, feature/magic-camera-release-readiness-20261030]
     paths: ['backend/magic_camera/**', 'backend/test/magic_camera*', 'backend/test/receipt_app_sessions.test.mjs', 'backend/security/receipt_app_sessions.mjs', 'backend/server.js', 'supabase/migrations/*magic_camera*', '.github/workflows/magic-camera-backend.yml']
   workflow_dispatch:
 permissions:
