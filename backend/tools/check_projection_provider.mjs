@@ -25,7 +25,7 @@ function requiredLiveChecks() {
     {id: 'unrelated_origin_browser', status: 'NOT_PERFORMED',
       requiredObservation: 'Run a controlled browser load from an unapproved HTTPS origin and record a specific referrer-restriction denial such as RefererNotAllowedMapError. A generic 403, failed fetch or blank map is inconclusive.'},
     {id: 'missing_referrer_browser', status: 'NOT_PERFORMED',
-      requiredObservation: 'Run a controlled browser load that omits the referrer and record a specific referrer-restriction denial. Confirm the test actually omitted the header. Server requests with spoofed headers do not establish WebView behavior.'},
+      requiredObservation: 'Run a controlled browser load with no-referrer policies. Capture the actual relevant Google SDK and authorization request headers to confirm whether Referer is absent, and record the tested origin, SDK version, current website restrictions, and observed rendering or specific denial. Policy configuration alone does not verify header omission. The SDK can also supply the page origin in authorization data, so rendering on an approved origin does not establish failed website restrictions or satisfy the separate unapproved-origin denial check. Server requests with spoofed headers do not establish WebView behavior.'},
     {id: 'other_api_restriction', status: 'NOT_PERFORMED',
       requiredObservation: 'Inspect the key API allowlist and, in an owner-authorized negative check, record rejection by a disallowed API specifically because of API-key service restrictions (for example API_KEY_SERVICE_BLOCKED). Disabled service, billing, quota or generic REQUEST_DENIED errors are not proof.'},
     {id: 'native_devices', status: 'NOT_PERFORMED',
