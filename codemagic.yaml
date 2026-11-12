@@ -783,3 +783,30 @@ workflows:
             --assign --output artifacts/brain-projection-voice-repair-testflight-assignment.json
     artifacts:
       - artifacts/brain-projection-voice-repair-testflight-assignment.json
+
+  korlix-brain-testflight-readback-projection-voice-repair-20:
+    name: KORLIX Brain+Voice — projection voice repair TestFlight read-back
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    # Manual, read-only inspection after the ambiguous build-20 assignment POST.
+    # Reuses the unchanged reviewed helper, record and evidence pins.
+    # Omitting --assign keeps both execution and the Apple transport read-only.
+    # If unlinked, reports validated_only with deliveryVerified false.
+    # If linked, verifies the exact build/group/tester/state read-back before true.
+    # No assignment retry, upload, invitation, review or App Store publication.
+    scripts:
+      - name: Verify fixed build 20 evidence
+        script: |
+          set -euo pipefail
+          python3 -c 'import runpy; runpy.run_path("scripts/assign_brain_projection_voice_repair_testflight_build.py")["require_verified_source_upload"]()'
+      - name: Read existing internal TestFlight delivery state
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.brain-projection-voice-repair-readback-tools"
+          "$CM_BUILD_DIR/.brain-projection-voice-repair-readback-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+          "$CM_BUILD_DIR/.brain-projection-voice-repair-readback-tools/bin/python" scripts/assign_brain_projection_voice_repair_testflight_build.py \
+            --output artifacts/brain-projection-voice-repair-testflight-readback.json
+    artifacts:
+      - artifacts/brain-projection-voice-repair-testflight-readback.json
