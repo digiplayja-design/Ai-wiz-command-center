@@ -394,7 +394,8 @@ test('each discrete camera command cancels continuous motion while retaining its
 });
 
 
-function surfaceFixture({key = 'public-fixture-key', sdkDeferred = null, maxZoom = 3, importFailure = false} = {}) {
+function surfaceFixture({key = 'public-fixture-key', sdkDeferred = null, maxZoom = 3, importFailure = false,
+  readyWhenVisible = false, setPanoFailure = false} = {}) {
   class Element {
     constructor(tag = 'div') { this.tag = tag; this.hidden = false; this.textContent = ''; this.children = []; this.listeners = new Map(); this.attributes = {}; }
     setAttribute(name, value) { this.attributes[name] = value; }
@@ -424,8 +425,8 @@ function surfaceFixture({key = 'public-fixture-key', sdkDeferred = null, maxZoom
     getPov() { return {...this.pov}; }
     setPov(value) { this.pov = {...value}; }
     setZoom(value) { this.zoom = Math.max(0, Math.min(maxZoom, value)); }
-    setVisible(value) { this.visible = value; }
-    setPano(value) { this.pano = value; this.status = 'UNKNOWN_ERROR'; this.emit('pano_changed'); }
+    setVisible(value) { this.visible = value; if (value && readyWhenVisible && this.status !== 'OK') this.ready(); }
+    setPano(value) { this.pano = value; this.status = 'UNKNOWN_ERROR'; this.emit('pano_changed'); if (setPanoFailure) this.ready('UNKNOWN_ERROR'); }
     ready(status = 'OK', pano = this.pano) { this.pano = pano; this.status = status; this.emit('status_changed'); }
   }
   class Map3DElement extends Element {
@@ -556,6 +557,33 @@ test('a service match does not report viewer readiness before the matching panor
   const pano = f.calls.panoramas[0];
   pano.ready('OK', 'stale-id'); assert.equal(latestView(f).status, 'loading');
   pano.ready('OK', 'pano-0'); assert.equal(latestView(f).status, 'ready');
+  runtime.dispose();
+});
+
+test('a panorama that waits for visibility can finish its initial and reused destination loads', async () => {
+  const f = surfaceFixture({readyWhenVisible: true}), runtime = mountProjectionRenderer(f);
+  f.send(1); await flush(); f.reply(0); await flush();
+  assert.equal(latestView(f).status, 'ready');
+  assert.equal(latestView(f).sequence, 1);
+  assert.equal(f.calls.panoramas[0].visible, true);
+  assert.equal(f.timers.size, 0);
+  f.send(2); await flush(); f.reply(1, {pano: 'second'}); await flush();
+  assert.equal(latestView(f).status, 'ready');
+  assert.equal(latestView(f).sequence, 2);
+  assert.equal(f.calls.panoramas.length, 1);
+  assert.equal(f.calls.panoramas[0].pano, 'second');
+  assert.equal(f.calls.panoramas[0].visible, true);
+  assert.equal(f.timers.size, 0);
+  runtime.dispose();
+});
+
+test('a synchronous setPano failure cannot be made visible by the pending open operation', async () => {
+  const f = surfaceFixture({setPanoFailure: true}), runtime = mountProjectionRenderer(f);
+  f.send(1); await flush(); f.reply(0); await flush();
+  assert.equal(latestView(f).status, 'error');
+  assert.equal(f.calls.panoramas[0].visible, false);
+  assert.equal(f.calls.panoramas[0].host.hidden, true);
+  assert.equal(statusPosts(f).some(([value]) => value.status === 'ready' && value.reason === 'ready'), false);
   runtime.dispose();
 });
 

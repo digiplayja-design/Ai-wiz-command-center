@@ -247,7 +247,13 @@ export function mountProjectionRenderer({window: win, document: doc, loadLibrary
       const alreadyCurrent = panorama.getPano() === found.pano && panorama.getStatus() === 'OK';
       pendingStreet = {token, data: found};
       if (alreadyCurrent) finishStreet();
-      else panorama.setPano(found.pano);
+      else {
+        panorama.setPano(found.pano);
+        // Start the visible viewer before waiting for its lookup status. A
+        // hidden panorama can defer that work. A synchronous provider failure
+        // may already have cancelled this generation inside setPano().
+        if (current(token) && pendingStreet?.token === token) panorama.setVisible(true);
+      }
     } catch { failView(token); }
   }
   function steady(event) {

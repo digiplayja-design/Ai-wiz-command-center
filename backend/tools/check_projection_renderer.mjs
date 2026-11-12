@@ -69,8 +69,16 @@ function installImageryContractFixture(mode) {
     getPosition() { return records.get(this.id)?.location.latLng; }
     getZoom() { return this.zoom; } setZoom(value) { this.zoom = Math.max(0, Math.min(3, value)); }
     getPov() { return {...this.pov}; } setPov(value) { this.pov = {...value}; }
-    setVisible(value) { this.visible = value; }
-    setPano(id) { this.id = id; this.status = 'UNKNOWN_ERROR'; this.emit('pano_changed'); if (mode !== 'never-status') requestAnimationFrame(() => { if (this.id !== id) return; this.status = 'OK'; this.emit('status_changed'); }); }
+    loadIfVisible() {
+      if (!this.visible || !this.id || this.status === 'OK' || mode === 'never-status') return;
+      const id = this.id;
+      requestAnimationFrame(() => {
+        if (!this.visible || this.id !== id || this.status === 'OK') return;
+        this.status = 'OK'; this.emit('status_changed');
+      });
+    }
+    setVisible(value) { this.visible = value; this.loadIfVisible(); }
+    setPano(id) { this.id = id; this.status = 'UNKNOWN_ERROR'; this.emit('pano_changed'); this.loadIfVisible(); }
   }
   class Map3DElement extends HTMLElement {
     constructor(options) { super(); Object.assign(this, options); fixture.maps++; map = this; panel(this, '3D Earth'); }
