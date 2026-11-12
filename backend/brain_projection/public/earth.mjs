@@ -1,4 +1,4 @@
-import {parseCameraMessage, createCameraController, destinationCamera, MIN_CAMERA_ALTITUDE} from './camera.mjs';
+import {parseCameraMessage, createCameraController, initialCameraOptions, MIN_CAMERA_ALTITUDE} from './camera.mjs';
 import {checkedPanorama, panoramaPosition, headingToProperty, requestPanorama, createStreetCameraController} from './street.mjs';
 
 const noop = () => {};
@@ -273,8 +273,10 @@ export function mountProjectionRenderer({window: win, document: doc, loadLibrary
       pendingEarth = {token};
       earthHost.hidden = false;
       if (!map) {
-        map = new lib.Map3DElement({...destinationCamera({latitude: target.lat, longitude: target.lng,
-          height: command.camera.height, heading: command.camera.heading, pitch: command.camera.pitch}), mode: 'SATELLITE',
+        // altitudeMode belongs to animation CameraOptions, not the element's
+        // constructor options. Mount a valid map, then send the destination
+        // through flyCameraTo so its center remains relative to local terrain.
+        map = new lib.Map3DElement({...initialCameraOptions(), mode: 'SATELLITE',
           defaultUIHidden: true, description: 'Recorded 3D geographic imagery, not a live camera feed.',
           minAltitude: MIN_CAMERA_ALTITUDE, maxAltitude: 40000000, maxTilt: 85});
         earthController = createCameraController({map, selectedPlace: {latitude: target.lat, longitude: target.lng}, reducedMotion,
@@ -288,7 +290,8 @@ export function mountProjectionRenderer({window: win, document: doc, loadLibrary
         removers.push(() => observed.removeEventListener('gmp-steadychange', steady),
           () => observed.removeEventListener('gmp-error', error));
         earthHost.append(observed);
-      } else earthController.apply(command);
+      }
+      if (current(token)) earthController.apply(command);
     } catch { failView(token); }
   }
   function beginView(command) {
