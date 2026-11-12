@@ -1,0 +1,50 @@
+name: Projection live browser header audit (one attempt)
+on:
+  workflow_dispatch:
+  push:
+    branches: [test/brain-projection-live-headers-20261112]
+    paths:
+      - backend/tools/capture_projection_live_headers.mjs
+      - backend/test/brain_projection_live_headers.test.mjs
+      - .github/workflows/brain-projection-live-headers.yml
+permissions:
+  contents: read
+concurrency:
+  group: brain-projection-live-headers
+  cancel-in-progress: false
+jobs:
+  capture:
+    if: github.ref == 'refs/heads/test/brain-projection-live-headers-20261112'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/projection-live-header-browsers
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Check sanitized correlation fixtures (no provider requests)
+        run: |
+          node --check backend/tools/capture_projection_live_headers.mjs
+          node --test backend/test/brain_projection_live_headers.test.mjs
+      - name: Install pinned browser outside the repository
+        run: |
+          npm install --prefix "$RUNNER_TEMP/projection-live-header-tools" --no-audit --no-fund --ignore-scripts playwright@1.56.1
+          "$RUNNER_TEMP/projection-live-header-tools/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Observe one approved no-referrer scene without retries
+        env:
+          PROJECTION_LIVE_HEADER_DEPS: ${{ runner.temp }}/projection-live-header-tools
+          PROJECTION_LIVE_HEADER_ARTIFACTS: ${{ runner.temp }}/projection-live-header-audit
+          DEBUG: ''
+          PWDEBUG: '0'
+        run: timeout --signal=TERM --kill-after=10s 120s node backend/tools/capture_projection_live_headers.mjs --run-live-once
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: projection-live-browser-header-audit
+          path: ${{ runner.temp }}/projection-live-header-audit/report.json
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,37 @@
+{
+  "evidenceVersion": 1,
+  "check": "other_api_restriction",
+  "origin": "https://korlix-projection-check-20261111.onrender.com",
+  "productionActivation": false,
+  "overallVerification": "NOT_ESTABLISHED",
+  "startedAt": "2026-11-12T03:21:55.651Z",
+  "closedAt": "2026-11-12T03:21:55.935Z",
+  "observation": "DISALLOWED_API_DENIAL_OBSERVED",
+  "request": {
+    "method": "GET",
+    "endpoint": "https://identitytoolkit.googleapis.com/v1/projects",
+    "authentication": "Existing public acceptance key in X-Goog-Api-Key; value excluded",
+    "credentialsMode": "omit",
+    "redirectMode": "error",
+    "referrerPolicy": "strict-origin-when-cross-origin",
+    "referrerOverridden": false,
+    "requestBodySent": false,
+    "automaticRetries": 0,
+    "providerFetchAttempts": 1,
+    "actualRefererHeader": "NOT_CAPTURED_BY_PAGE"
+  },
+  "response": {
+    "httpStatus": 403,
+    "errorCode": 403,
+    "errorStatus": "PERMISSION_DENIED",
+    "errorInfo": [
+      {
+        "type": "type.googleapis.com/google.rpc.ErrorInfo",
+        "reason": "API_KEY_SERVICE_BLOCKED",
+        "domain": "googleapis.com",
+        "service": "identitytoolkit.googleapis.com"
+      }
+    ],
+    "detailsTruncated": false
+  }
+}
