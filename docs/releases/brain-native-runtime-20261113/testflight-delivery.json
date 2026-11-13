@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-11-13T22:58:37.019535+00:00",
+  "outcome": "DELIVERED_TO_EXISTING_INTERNAL_TESTFLIGHT_GROUP",
+  "assignmentJob": {
+    "id": "6af795a490e83b09c4f9ff1c",
+    "url": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6af795a490e83b09c4f9ff1c",
+    "workflow": "korlix-brain-testflight-assign-native-runtime-25",
+    "commit": "213411d945101fd1b55f94b2d0429086273a57bb",
+    "tree": "9b656684e98c7a3f49335e552baa1331e607bb24",
+    "branch": "ops/brain-native-runtime-build25-20261113",
+    "status": "finished"
+  },
+  "artifact": {
+    "filename": "artifacts/brain-native-runtime-testflight-assignment.json",
+    "bytes": 1455,
+    "sha256": "4d8a78da1b69ace7b71cb7ee7c81081144f608010d9dc5d58a65aeda59b4fa63",
+    "archiveBytes": 1095,
+    "archiveSha256": "b45688866add644ab61157156bc697a0fefd03328ad8ba990f00904f9ac0ac43"
+  },
+  "appleReadback": {
+    "checkedAt": "2026-11-13T22:57:32.511850+00:00",
+    "readOnly": false,
+    "sourceAttestedByApple": false,
+    "expectedSourceUpload": {
+      "codemagicBuildId": "6af7903890e83b09c4f9fd14",
+      "workflow": "korlix-brain-ios-testflight",
+      "commit": "e4ea030888c092311fcfb627febae21ccee4f03f",
+      "bundleId": "com.korlix.brain",
+      "version": "1.0.2",
+      "buildNumber": "25"
+    },
+    "reviewedArtifactRecord": {
+      "basis": "reviewed_local_artifact_record",
+      "recordPath": "docs/releases/brain-native-runtime-20261113/verified-upload.json",
+      "recordSha256": "d98accdcf0707936553c79419c08df947d3ebb78a72acde958c8247f3b76a0c0",
+      "verifiedAt": "2026-11-13T22:52:57.636535+00:00",
+      "sourceCommit": "e4ea030888c092311fcfb627febae21ccee4f03f",
+      "sourceTree": "cc5e4e8af9c6d213569796ce74fd6bdfc8418fc7",
+      "appleUploadId": "6f9a4943-f022-4f86-85fe-70153c790b70",
+      "appleBuildId": "6f9a4943-f022-4f86-85fe-70153c790b70",
+      "ipaSha256": "7413f966f979beff0c7df3a9791025a9108fdedfd9b0b4836eec003820e00967",
+      "ipaBytes": 34946781
+    },
+    "appId": "6829319523",
+    "bundleId": "com.korlix.brain",
+    "groupId": "ae86d9a2-5bdf-4f3d-910b-aa532675951f",
+    "groupName": "KORLIX Brain Internal",
+    "isInternalGroup": true,
+    "version": "1.0.2",
+    "buildNumber": "25",
+    "appleBuildId": "6f9a4943-f022-4f86-85fe-70153c790b70",
+    "internalBuildState": "IN_BETA_TESTING",
+    "existingTesterCount": 1,
+    "action": "assigned",
+    "deliveryVerified": true
+  },
+  "interpretation": {
+    "processedValidUnexpiredExactBuildCheckedBeforeAssignment": true,
+    "existingTesterMembershipPreserved": true,
+    "existingGroupBuildsPreserved": true,
+    "noInvitationsCreated": true,
+    "publicAppStoreSubmission": false,
+    "deviceInstallationObserved": false
+  },
+  "coverageLimits": [
+    "Delivery is verified by Apple relationship and IN_BETA_TESTING readback; installation or testing on the user device is not observed.",
+    "Native simulator and signed IPA audits do not establish physical ASR, live provider imagery, live WebRTC teardown or resolution of the reported swipe-close crash.",
+    "The immutable reviewed-upload record describes the pre-assignment state; this separate receipt records the subsequent delivery result."
+  ]
+}
