@@ -201,6 +201,37 @@ class _SpokenAddressHarness {
 void main() {
   for (final mode in BrainVoiceMode.values) {
     final label = mode == BrainVoiceMode.live ? 'Live' : 'Deep Think';
+    test('$label directly opens, closes and reopens Projection for the reported phrase', () async {
+      final h = _SpokenAddressHarness(mode);
+      addTearDown(h.dispose);
+      const phrase = 'Rici can you open projection mode';
+      expect(h.projection.isOpen, false);
+
+      await h.speak('open-projection', phrase);
+
+      expect(h.projection.isOpen, true);
+      expect(h.opens, 1);
+      expect(h.feedback['heard'], phrase);
+      expect(h.feedback['action'], 'Open Projection');
+      expect(h.repliesFor('open-projection'), hasLength(1));
+      expect(h.queries, isEmpty);
+      expect(h.reasoningRequests, isEmpty);
+
+      await h.speak('close-projection', 'Rici, can you close projection mode?');
+      expect(h.projection.isOpen, false);
+      expect(h.repliesFor('close-projection'), hasLength(1));
+
+      await h.speak('reopen-projection', phrase, duplicateProjectionTool: true);
+
+      expect(h.projection.isOpen, true);
+      expect(h.opens, 2, reason: 'A duplicate model call must not replay entry');
+      expect(h.repliesFor('reopen-projection'), hasLength(1));
+      expect(h.voiceStarts, 0, reason: 'Navigation keeps the existing conversation');
+      expect(h.queries, isEmpty, reason: 'The model cannot turn entry into a search');
+      expect(h.memoryRequests, isEmpty);
+      expect(h.reasoningRequests, isEmpty);
+    });
+
     for (final firstUtterance in [
       'Go to $_firstAddress',
       'Rici, search this address: $_firstAddress',
@@ -327,4 +358,43 @@ void main() {
       );
     });
   }
+
+  test('Live opens Projection even when an automatic reply finishes before ASR', () async {
+    final h = _SpokenAddressHarness(BrainVoiceMode.live);
+    addTearDown(h.dispose);
+    const id = 'late-open-transcript';
+    h.begin(id);
+    await h.live!.responseDone({
+      'id': 'auto-$id',
+      'status': 'completed',
+      'output': [
+        {
+          'type': 'message',
+          'role': 'assistant',
+          'content': [
+            {'type': 'output_text', 'text': 'Use the onscreen controls.'},
+          ],
+        },
+      ],
+    });
+    expect(h.projection.isOpen, false);
+
+    h.accept(id, 'Rici can you open projection mode');
+    await _flush();
+
+    expect(h.projection.isOpen, true);
+    expect(h.opens, 1);
+    expect(h.feedback['action'], 'Open Projection');
+    expect(h.sent.where((event) => event['type'] == 'output_audio_buffer.clear'), hasLength(1));
+    final replies = h.repliesFor(id);
+    expect(replies, hasLength(1));
+    final response = replies.single['response'] as Map;
+    final input = response['input'] as List;
+    final content = (input.single as Map)['content'] as List;
+    expect((content.single as Map)['text'], startsWith('Projection is open.'));
+    expect(h.voiceStarts, 0);
+    expect(h.queries, isEmpty);
+    expect(h.memoryRequests, isEmpty);
+    expect(h.reasoningRequests, isEmpty);
+  });
 }

@@ -821,12 +821,24 @@
       window.Korlix.postMessage(JSON.stringify({id,action,payload}));
     });
   }
+  function syncVoiceRestart(){
+    const idle=!voiceActive&&!voicePaused&&!voiceStarting&&!voiceStopping;
+    const deep=root.querySelector('input[name="brain-voice-mode"]:checked')?.value==='deep';
+    const label=deep?'Start Deep Think':'Start Live Conversation';
+    get('kb-start-label').textContent=label;
+    get('kb-replay-demo').textContent=label;
+    get('kb-start-voice').hidden=!idle;
+    get('kb-start-voice').disabled=!idle;
+    get('kb-active-voice-controls').hidden=idle;
+    root.dataset.voiceIdle=String(idle);
+  }
   window.KorlixBrainReceive=message=>{
     if(message.type==='reply'){
       const request=requests.get(message.id);if(!request)return;
       clearTimeout(request.timer);requests.delete(message.id);
       message.error?request.reject(new Error(message.error)):request.resolve(message.data);
     }else if(message.type==='voice'){
+      const focused=document.activeElement;
       if(message.phase!=='complete')stopWelcome();
       if(['complete','error','paused'].includes(message.phase)){voiceStarting=false;voicePausing=false;}
       if(['complete','error'].includes(message.phase))voiceStopping=false;
@@ -842,14 +854,21 @@
       get('kb-voice-modes').disabled=voiceActive||voicePaused;
       get('kb-voice-phase').textContent=message.message;
       get('kb-live-phase').textContent=message.message;
-      get('kb-return-voice').textContent=voicePaused?'Conversation paused':'Rici conversation active';
+      get('kb-return-voice').textContent=voicePaused?'Conversation paused':voiceActive?'Rici conversation active':'Conversation mode';
       get('kb-stop-voice').disabled=voiceStopping;
       get('kb-stop-label').textContent=voiceStopping?'Stopping…':'Stop';
       get('kb-pause-voice').disabled=!voiceActive||voiceStopping||voicePausing;
       get('kb-pause-label').textContent=voicePausing?'Pausing…':'Pause';
       get('kb-resume-voice').disabled=!voicePaused||voiceActive||voiceStarting||voiceStopping;
-      get('kb-replay-demo').textContent='Start conversation';
-      root.dataset.voiceActive=String(voiceActive);root.dataset.voicePaused=String(voicePaused);refreshMusic();welcomeUi();
+      // Keep the dock after Stop. The inline start link may be above a long
+      // transcript or on another screen; stopping must not remove the only
+      // currently visible way to talk again.
+      root.dataset.voiceControls='true';
+      root.dataset.voiceActive=String(voiceActive);root.dataset.voicePaused=String(voicePaused);
+      syncVoiceRestart();
+      if(root.dataset.voiceIdle==='true'&&['kb-stop-voice','kb-pause-voice','kb-resume-voice'].some(id=>get(id)===focused))
+        get('kb-start-voice').focus({preventScroll:true});
+      refreshMusic();welcomeUi();
     }else if(message.type==='transcript'&&message.text){
       transcriptMessages.set(message.id||'unavailable-'+Date.now(),message);
       while(transcriptMessages.size>60)transcriptMessages.delete(transcriptMessages.keys().next().value);
@@ -1090,6 +1109,7 @@
   get('kb-voice-modes').addEventListener('change',()=>{
     const deep=root.querySelector('input[name="brain-voice-mode"]:checked')?.value==='deep';
     get('kb-mode-hint').textContent=deep?'Deep Think uses Sol Max for every answer and takes longer.':'Live Conversation is ready. Stop the conversation to switch modes.';
+    syncVoiceRestart();
   });
   document.addEventListener('visibilitychange',syncMotion);reducedMotion.addEventListener('change',event=>{userPaused=event.matches;motionOverride=false;syncMotion();});
   get('kb-training-form').addEventListener('submit',event=>{event.preventDefault();review('training',get('kb-training').value,trainingSource);});
@@ -1120,12 +1140,13 @@
   get('kb-saved-back').addEventListener('click',()=>show('talk'));
   get('kb-saved-refresh').addEventListener('click',loadSavedTranscripts);
   get('kb-stop-voice').addEventListener('click',stopVoice);
+  get('kb-start-voice').addEventListener('click',()=>{show('talk');startVoice();});
   get('kb-pause-voice').addEventListener('click',pauseVoice);
   get('kb-resume-voice').addEventListener('click',resumeVoice);
   for(const [id,action] of [['kb-upload-pdf','openDocuments'],['kb-camera-ask','cameraAsk'],['kb-directions','directions']]){
     get(id).addEventListener('click',()=>{stopWelcome();native(action).then(()=>{if(action==='openDocuments')refresh();}).catch(fail);});
   }
-  setPhase(3);refresh();loadSavedTranscripts();
+  setPhase(3);syncVoiceRestart();refresh();loadSavedTranscripts();
 
   const resize=new ResizeObserver(measure);menus.forEach(menu=>resize.observe(menu.element));scenes.forEach(scene=>resize.observe(scene.canvas));
   resize.observe(transferStage);resize.observe(app);

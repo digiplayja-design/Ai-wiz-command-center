@@ -37,14 +37,19 @@ class _PropertyFixture {
               : {
                   'candidates': [_place],
                 },
-      onOpen: () {},
-      onClose: () {},
-      onStartVoice: () async {},
-      onStopVoice: () async {},
+      onOpen: () => opens++,
+      onClose: () => closes++,
+      onStartVoice: () async {
+        voiceStarts++;
+      },
+      onStopVoice: () async {
+        voiceStops++;
+      },
       onSave: (_, _) async => true,
     );
   }
   late final BrainProjection projection;
+  int opens = 0, closes = 0, voiceStarts = 0, voiceStops = 0;
   Map get camera => projection.snapshot['camera'] as Map;
   Map get feedback => projection.snapshot['lastVoiceCommand'] as Map;
 
@@ -65,6 +70,79 @@ class _PropertyFixture {
 }
 
 void main() {
+  test('the reported polite Projection request opens and closes from Home', () async {
+    const phrases = [
+      'Rici can you open projection mode',
+      'Rici, can you open projection mode?',
+      'Rici. Can you open projection mode?',
+      'Hey Rici, could you please open projection mode for me?',
+      'Please, Resee, can you open Projection Mode?',
+      'Could you, Rici, open the projection mode?',
+      'Risi, would you open projection mode, please.',
+      'Ree-see, open projection mode.',
+      'Reese, can you open projection mode?',
+      'Rici, I want you to open projection mode.',
+      'Rici, I would like you to open projection mode.',
+      'Open projection mode, Rici.',
+    ];
+    for (final phrase in phrases) {
+      final f = _PropertyFixture();
+      addTearDown(f.projection.dispose);
+      expect(f.projection.isOpen, false);
+      expect(f.projection.recognizesVoiceControl(phrase), true, reason: phrase);
+
+      // The transcript itself authorizes entry; no model tool call is needed.
+      final opened = await f.projection.voiceTurn('open', phrase, null);
+      expect(opened?['handled'], true, reason: phrase);
+      expect(opened?['ok'], true, reason: phrase);
+      expect(f.projection.isOpen, true, reason: phrase);
+      expect(f.opens, 1, reason: phrase);
+      expect(f.feedback['action'], 'Open Projection', reason: phrase);
+
+      const close = 'Rici, can you close projection mode?';
+      expect(f.projection.recognizesVoiceControl(close), true);
+      final closed = await f.projection.voiceTurn('close', close, null);
+      expect(closed?['handled'], true);
+      expect(f.projection.isOpen, false);
+      expect(f.closes, 1);
+      expect(f.voiceStarts, 0, reason: 'Entry must retain the current session');
+      expect(f.voiceStops, 0, reason: 'Exit must retain the current session');
+    }
+  });
+
+  test('Projection questions and negated or quoted entry requests stay conversational', () async {
+    const phrases = [
+      'Rici can you explain how to open projection mode?',
+      'Rici, can you tell me how to open projection mode?',
+      'How do I open projection mode?',
+      'What is projection mode?',
+      'Rici, do not open projection mode',
+      'Please, Resee, don’t open projection mode',
+      'Rici, could you never open projection mode?',
+      'I do not want you to open projection mode, Rici',
+      'Rici, remember that I want to open projection mode',
+      'Save the words open projection mode',
+      '"Rici can you open projection mode" is an example',
+      '“Rici can you open projection mode” is an example',
+      'Rici, open projection mode, actually do not open it',
+    ];
+    for (final initiallyOpen in [false, true]) {
+      final f = _PropertyFixture();
+      addTearDown(f.projection.dispose);
+      if (initiallyOpen) f.projection.open();
+      final before = Map.of(f.camera);
+      for (final phrase in phrases) {
+        expect(f.projection.recognizesVoiceControl(phrase), false, reason: phrase);
+        await f.projection.voiceTurn(phrase, phrase, {'action': 'open', 'value': ''});
+        expect(f.projection.isOpen, initiallyOpen, reason: phrase);
+        expect(f.camera, before, reason: phrase);
+      }
+      expect(f.opens, initiallyOpen ? 1 : 0);
+      expect(f.voiceStarts, 0);
+      expect(f.voiceStops, 0);
+    }
+  });
+
   test(
     'natural Rici names and narrow polite camera phrases control the view',
     () async {

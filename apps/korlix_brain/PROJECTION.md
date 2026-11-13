@@ -16,6 +16,14 @@ A small **Project virtual reality** shortcut opens the new view. A spoken
 Conversation or Deep Think session. Opening, switching rooms and closing the
 view do not start a new voice session or end the current one.
 
+**“Rici, can you open projection mode?”** also opens the view from Home while
+Live Conversation or Deep Think is listening. The native controller validates the
+original transcript and acknowledges its actual result. A canceled speculative
+Live reply is excluded from the visible transcript and saved conversation context.
+After Stop, the home conversation dock keeps **Start Live Conversation** (or
+**Start Deep Think** for that selected mode) available across screens. Projection
+keeps its own **Talk to Rici** restart control. Restart always requires a user tap.
+
 ## Immersive entrance
 
 Each newly opened native Projection screen plays a two-second decorative

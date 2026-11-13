@@ -9,6 +9,7 @@ import 'package:http/testing.dart';
 import 'package:korlix_brain/brain_api.dart';
 import 'package:korlix_brain/brain_auth.dart';
 import 'package:korlix_brain/brain_voice.dart';
+import 'package:korlix_brain/brain_projection.dart';
 import 'package:korlix_receipt_core/auth/korlix_session_refresh.dart';
 
 // Exercise the real voice coordinator, HTTP usage guard and WebRTC Dart
@@ -110,6 +111,94 @@ void main() {
     expect(h.microphoneEnabled.last, isFalse);
   });
 
+  test('Stop then fresh Live start retains Projection voice capability', () async {
+    const utterance = 'Rici can you open projection mode';
+    for (var session = 1; session <= 2; session++) {
+      h.events.clear();
+      h.sent.clear();
+      h.sessionHeaders['x-korlix-live-convo-session-id'] = 'restart-fixture-$session';
+      await h.voice.start();
+      expect(h.voice.active, isTrue);
+      expect(h.listening, isFalse);
+      expect(h.microphoneEnabled.last, isFalse);
+
+      final original = _serverSession();
+      await h.provider({'type': 'session.created', 'session': original});
+      final configured = Map<String, dynamic>.from(
+        h.sent.single['session'] as Map,
+      );
+      expect((configured['tools'] as List).map((tool) => tool['name']),
+          ['remember_in_brain', 'control_projection']);
+      expect(configured['instructions'], contains('from Home'));
+      expect(configured['instructions'], contains('use action open'));
+      await h.provider({
+        'type': 'session.updated',
+        'session': {...original, ...configured},
+      });
+      expect(h.listening, isTrue);
+      expect(h.microphoneEnabled.last, isTrue);
+
+      final turnId = 'projection-after-start-$session';
+      final responseId = 'automatic-$session';
+      await h.provider({'type': 'input_audio_buffer.speech_started',
+        'item_id': turnId});
+      await h.provider({'type': 'input_audio_buffer.speech_stopped',
+        'item_id': turnId});
+      await h.provider({'type': 'response.created',
+        'response': {'id': responseId}});
+      await h.provider({
+        'type': 'conversation.item.input_audio_transcription.completed',
+        'item_id': turnId,
+        'transcript': utterance,
+      });
+      expect(h.projection.isOpen, isTrue);
+      expect(h.projectionOpens, session);
+      expect(h.projectionVoiceStarts, 0,
+          reason: 'Opening Projection must preserve the current voice session.');
+      expect(h.sessionRequests, session);
+      expect(h.voice.active, isTrue);
+      expect(h.sent.where((event) => event['type'] == 'response.cancel')
+          .map((event) => event['response_id']), contains(responseId));
+      await h.provider({
+        'type': 'response.output_audio_transcript.done',
+        'response_id': responseId,
+        'transcript': 'I cannot open it from here. Use your onscreen controls.',
+      });
+      expect(h.events.where((event) => event['role'] == 'rici'), isEmpty);
+      await h.provider({'type': 'response.done', 'response': {
+        'id': responseId, 'status': 'cancelled', 'output': <Object>[]}});
+      final acknowledgement = h.sent.singleWhere((event) =>
+          event['type'] == 'response.create'
+          && (event['response'] as Map?)?['metadata'] is Map)['response'] as Map;
+      await h.provider({'type': 'response.created', 'response': {
+        'id': 'confirmed-$session',
+        'metadata': acknowledgement['metadata'],
+      }});
+      await h.provider({
+        'type': 'response.output_audio_transcript.done',
+        'response_id': 'confirmed-$session',
+        'transcript': 'Projection is open.',
+      });
+      await h.provider({'type': 'response.done', 'response': {
+        'id': 'confirmed-$session', 'status': 'completed',
+        'output': <Object>[],
+      }});
+      expect(h.events.where((event) => event['role'] == 'rici')
+          .map((event) => event['text']), ['Projection is open.']);
+
+      await h.voice.stop();
+      expect(h.voice.active, isFalse);
+      expect(h.voice.paused, isFalse);
+      expect(h.events.last['phase'], 'complete');
+      expect(h.microphoneEnabled.last, isFalse);
+      expect(h.usage.where((event) => event['ended'] == true).length, session);
+      h.projection.close();
+    }
+    expect(h.usage.where((event) => event['ended'] == true)
+        .map((event) => event['sessionId']),
+        ['restart-fixture-1', 'restart-fixture-2']);
+  });
+
   test(
     'a provider setup error never unmutes and is distinct from a manual stop',
     () async {
@@ -192,11 +281,34 @@ class _VoiceHarness {
         throw StateError('Unexpected HTTP endpoint ${request.url.path}');
       }),
     );
+    projection = BrainProjection(
+      backendUrl: 'https://api.example.test',
+      request: (method, path, body) async {
+        if (method == 'GET' && path == '/api/brain-projection/config') {
+          return {
+            'rendererUrl': 'https://api.example.test/brain-projection/earth.html',
+            'mapAvailable': true,
+            'geocodingAvailable': true,
+            'answersAvailable': false,
+          };
+        }
+        throw StateError('Unexpected Projection endpoint $path');
+      },
+      onOpen: () => projectionOpens++,
+      onClose: () {},
+      onStartVoice: () async { projectionVoiceStarts++; },
+      onStopVoice: () async {},
+      onSave: (_, _) async => throw StateError('No place save expected'),
+    );
     voice = BrainVoice(
       api,
-      events.add,
+      (event) {
+        events.add(event);
+        projection.receiveVoice(event);
+      },
       onSaved: (_) async {},
-      onProjection: (_, _, _) async => null,
+      onProjection: projection.voiceTurn,
+      recognizesProjection: projection.recognizesVoiceControl,
     );
     messenger.setMockMethodCallHandler(_plugin, _native);
     for (final channel in _eventChannels) {
@@ -223,6 +335,8 @@ class _VoiceHarness {
   late final BrainAuthController auth;
   late final BrainApi api;
   late final BrainVoice voice;
+  late final BrainProjection projection;
+  int projectionOpens = 0, projectionVoiceStarts = 0;
   final calls = <MethodCall>[];
   final events = <Map<String, dynamic>>[];
   final usage = <Map<String, dynamic>>[];
@@ -327,6 +441,7 @@ class _VoiceHarness {
 
   Future<void> dispose() async {
     await voice.stop();
+    projection.dispose();
     api.client.close();
     auth.dispose();
     messenger.setMockMethodCallHandler(_plugin, null);

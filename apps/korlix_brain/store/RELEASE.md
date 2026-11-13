@@ -1,3 +1,44 @@
+## Live Conversation restart and Projection command repair — build 23 candidate
+
+The reported Stop/restart failure has a confirmed UI cause: the fixed conversation
+dock was hidden as soon as voice became inactive, leaving only a Talk-scene start
+link that could be offscreen or unavailable on another screen. The dock now keeps
+a prominent Start Live Conversation / Start Deep Think control after Stop or an
+error, preserving the selected mode and keyboard focus. A new tap starts a fresh
+session; stopping does not silently restart the microphone.
+
+The exact reported phrase “Rici can you open projection mode” already matches the
+existing parser. The capability instructions now explicitly describe opening
+Projection from Home during an active conversation and the correct open/close
+tool actions. Native Live reply transcripts are bound to their original response
+and user turn: canceled speculative replies must not enter the visible transcript
+or the conversation history restored after Pause. Ordinary audio remains immediate.
+The original user transcript remains the authority for any view action.
+
+Regression coverage includes the exact phrase in Live and Deep Think, late ASR,
+conflicting duplicate tool proposals, stopped-state dock visibility after scrolling
+and navigation, and two complete native Start / acknowledged Listening / open
+Projection / Stop cycles using distinct metered session IDs. Real microphone and
+provider behavior on the user's physical device remains unobserved; these changes
+do not claim that the exact device failure has been reproduced end to end.
+
+Source build floor: 23. Verify exact-source CI, the actual signed package, Apple
+upload/processing, and assignment to the existing internal group independently.
+Retains build 22's entrance and the working Street View / spoken-address flow.
+
+## Verified build 22 baseline
+
+Native source `d4ff81195a4c5983edd7fc06cb340452deea4db6` passed CI run
+`43361320046` with 246 Flutter tests, 23 release guards and all six UI checkers.
+Signed upload job `6af68ad510a05158d8123f9b` finished successfully. The actual
+com.korlix.brain / 1.0.2 (22) IPA is 34,895,295 bytes with SHA-256
+`cdbf0f6bcc6c798fe233461981cd651b48183aa1b54c68ad4b8431f0efe4ee0d`.
+Assignment job `6af68f2610a05158d81240a2` verified Apple build
+`f6cdd887-36e5-45bf-ba49-fce73b2326eb` in KORLIX Brain Internal at
+`2026-11-13T04:17:29.691146Z`, `IN_BETA_TESTING`, `assigned`,
+`deliveryVerified:true`, retaining the existing tester. That verified delivery
+is distinct from acceptance of the newly reported Stop and spoken-open issues.
+
 ## Immersive Projection entrance — build 22 candidate
 
 Adds the approved two-second Awaken → Enter → Arrive presentation to Command

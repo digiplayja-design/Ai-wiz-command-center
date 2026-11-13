@@ -750,10 +750,14 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
       await page.locator('#stop-button').click();
       await page.waitForFunction(()=>document.querySelector('#voice-phase').textContent==='Microphone off');
       assert.equal(await page.evaluate(()=>window.projectionCommands.filter(c=>c.action==='stopVoice').length),1);
+      await assertVoiceEntry(page,'stopped-restart-'+width);
+      const restartCount=await page.evaluate(()=>window.projectionCommands.filter(c=>c.action==='startVoice').length);
 
       await page.evaluate(()=>{window.testHoldStart=false;window.testHoldPause=false;});
       await page.locator('#talk-button').click();
       await page.waitForFunction(()=>document.body.dataset.voice==='listening');
+      assert.equal(await page.evaluate(()=>window.projectionCommands.filter(c=>c.action==='startVoice').length),restartCount+1,
+        'The visible stopped-state Talk control starts exactly one new Projection conversation');
       await page.locator('#pause-button').click();
       await page.waitForFunction(()=>document.body.dataset.voice==='paused');
       await page.locator('#resume-button').click();

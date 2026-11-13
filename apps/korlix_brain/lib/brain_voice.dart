@@ -449,11 +449,18 @@ class BrainVoice {
             );
           } else if (type == 'response.output_audio_transcript.done' ||
               type == 'response.audio_transcript.done') {
-            _forward({
-              'type': 'transcript',
-              'role': 'rici',
-              'text': event['transcript']?.toString() ?? '',
-            });
+            final text = event['transcript']?.toString() ?? '';
+            if (mode.isLive) {
+              // Only the item-bound reply accepted by the Live coordinator may
+              // enter visible history or be restored after Pause. A canceled
+              // speculative answer must not contradict a local view action.
+              _live?.acceptAssistantTranscript(
+                event['response_id']?.toString(),
+                text,
+              );
+            } else {
+              _forward({'type': 'transcript', 'role': 'rici', 'text': text});
+            }
           } else if (type == 'error') {
             if ((event['error'] as Map?)?['code'] ==
                 'response_cancel_not_active') {

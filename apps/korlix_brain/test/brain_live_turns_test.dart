@@ -41,6 +41,165 @@ void main() {
     expect(h.events.single['text'], 'Hello');
     h.live.dispose();
   });
+
+  group('assistant transcript routing', () {
+    const command = 'Rici can you open projection mode';
+    const refusal = 'I cannot open Projection from here. Use the on-screen controls.';
+    const acknowledgement = 'Projection is open. Say an address or place.';
+    Map<String, dynamic> finished(String id, {String status = 'completed'}) => {
+      'id': id,
+      'status': status,
+      'output': <Object>[],
+    };
+    List<String> replies(Harness h) => h.events
+        .where((event) => event['type'] == 'transcript' && event['role'] == 'rici')
+        .map((event) => event['text'] as String)
+        .toList();
+    Harness controller() => Harness(
+      recognizes: (text) => text == command,
+      project: (_, _, _) async => {
+        'ok': true,
+        'handled': true,
+        'answer': acknowledgement,
+      },
+    );
+
+    test('ordinary reply audio stays immediate while text waits for its original ASR', () async {
+      final h = Harness();
+      addTearDown(h.live.dispose);
+      h.begin('one', 'reply');
+      h.live.audioStarted('reply');
+      h.live.acceptAssistantTranscript('reply', 'Hello there.');
+      await h.live.responseDone(finished('reply'));
+      expect(replies(h), isEmpty);
+      expect(h.timings, hasLength(1));
+      expect(h.sent, isEmpty, reason: 'Text gating must not mute or cancel audio.');
+
+      h.live.accept('one', 'Hello Rici');
+      expect(replies(h), ['Hello there.']);
+      h.live.acceptAssistantTranscript('reply', 'Hello there.');
+      expect(replies(h), ['Hello there.'], reason: 'GA/legacy duplicate events publish once.');
+      expect(h.requests, isEmpty);
+    });
+
+    test('ordinary transcript waits for successful completion and tolerates reversed final-event order', () async {
+      final h = Harness();
+      addTearDown(h.live.dispose);
+      h.begin('one', 'reply');
+      h.live.accept('one', 'How are you?');
+      h.live.acceptAssistantTranscript('reply', 'Ready to help.');
+      expect(replies(h), isEmpty);
+      await h.live.responseDone(finished('reply'));
+      expect(replies(h), ['Ready to help.']);
+
+      h.begin('two', 'reply2');
+      h.live.accept('two', 'Thank you');
+      await h.live.responseDone(finished('reply2'));
+      h.live.acceptAssistantTranscript('reply2', 'You are welcome.');
+      expect(replies(h), ['Ready to help.', 'You are welcome.']);
+    });
+
+    test('late ASR discards a completed speculative refusal and retains only the real controller acknowledgment', () async {
+      final h = controller();
+      addTearDown(h.live.dispose);
+      h.begin('one', 'automatic');
+      h.live.acceptAssistantTranscript('automatic', refusal);
+      await h.live.responseDone(finished('automatic'));
+      expect(replies(h), isEmpty);
+      h.live.accept('one', command);
+      await Future<void>.delayed(Duration.zero);
+      expect(h.projections.single, ['one', command, null]);
+      expect(replies(h), isEmpty);
+      h.live.acceptAssistantTranscript('automatic', refusal);
+
+      h.live.responseStarted({
+        'id': 'controller-ack',
+        'metadata': {'brain_turn': 'one', 'brain_projection_direct': 'true'},
+      });
+      h.live.acceptAssistantTranscript('controller-ack', acknowledgement);
+      expect(replies(h), isEmpty);
+      await h.live.responseDone(finished('controller-ack'));
+      expect(replies(h), [acknowledgement]);
+      expect(h.requests, isEmpty);
+    });
+
+    test('recognized local control drops an automatic transcript even when cancellation reports completed', () async {
+      final h = controller();
+      addTearDown(h.live.dispose);
+      h.begin('one', 'automatic');
+      h.live.accept('one', command);
+      h.live.acceptAssistantTranscript('automatic', refusal);
+      await h.live.responseDone(finished('automatic'));
+      await Future<void>.delayed(Duration.zero);
+      h.live.acceptAssistantTranscript('automatic', refusal);
+      expect(replies(h), isEmpty);
+      expect(h.projections, hasLength(1));
+      expect(h.sent.where((event) => event['type'] == 'response.create'), hasLength(1));
+    });
+
+    test('superseded replies cannot be attributed to a new turn or its active response', () async {
+      final h = Harness();
+      addTearDown(h.live.dispose);
+      h.begin('one', 'old');
+      h.live.acceptAssistantTranscript('old', 'Old answer');
+      h.begin('two', 'new');
+      h.live.accept('two', 'New question');
+      h.live.acceptAssistantTranscript(null, 'Missing response ID');
+      h.live.acceptAssistantTranscript('unknown', 'Unknown response ID');
+      h.live.acceptAssistantTranscript('old', 'Late old answer');
+      h.live.accept('one', 'Old question');
+      await h.live.responseDone(finished('old'));
+      expect(replies(h), isEmpty);
+      h.live.acceptAssistantTranscript('new', 'Current answer');
+      await h.live.responseDone(finished('new'));
+      expect(replies(h), ['Current answer']);
+    });
+
+    test('canceled and failed responses never publish buffered or late transcripts', () async {
+      for (final status in ['cancelled', 'failed']) {
+        final h = Harness();
+        addTearDown(h.live.dispose);
+        h.begin('one', 'reply');
+        h.live.accept('one', 'Hello');
+        h.live.acceptAssistantTranscript('reply', 'An incomplete answer');
+        await h.live.responseDone(finished('reply', status: status));
+        h.live.acceptAssistantTranscript('reply', 'Late incomplete answer');
+        expect(replies(h), isEmpty, reason: status);
+      }
+    });
+
+    testWidgets('ASR timeout, failure and session teardown retire pending assistant text', (tester) async {
+      for (final retirement in ['timeout', 'failure', 'dispose', 'account']) {
+        final h = Harness(timeout: const Duration(seconds: 1));
+        addTearDown(h.live.dispose);
+        h.begin('one', 'reply');
+        h.live.acceptAssistantTranscript('reply', 'Pending answer');
+        await h.live.responseDone(finished('reply'));
+        if (retirement == 'failure') h.live.transcriptionFailed('one');
+        if (retirement == 'dispose') h.live.dispose();
+        if (retirement == 'account') h.sessionCurrent = false;
+        await tester.pump(const Duration(seconds: 2));
+        h.sessionCurrent = true;
+        h.live.accept('one', 'Late original words');
+        h.live.acceptAssistantTranscript('reply', 'Late pending answer');
+        expect(replies(h), isEmpty, reason: retirement);
+      }
+    });
+
+    test('a current memory-tool continuation remains a normal assistant transcript', () async {
+      final h = Harness();
+      addTearDown(h.live.dispose);
+      h.begin('one', 'tool');
+      h.live.accept('one', 'Rici remember this: my dog is Joy');
+      await h.live.responseDone(done('tool'));
+      h.live.responseStarted({'id': 'followup', 'metadata': {'brain_turn': 'one'}});
+      h.live.acceptAssistantTranscript('followup', 'Saved that to your brain.');
+      await h.live.responseDone(finished('followup'));
+      expect(replies(h), ['Saved that to your brain.']);
+      expect(h.saved, hasLength(1));
+    });
+  });
+
   test('memory tool waits for its original transcript, then confirms the exact save', () async {
     final h = Harness();
     h.begin('user1', 'r1');

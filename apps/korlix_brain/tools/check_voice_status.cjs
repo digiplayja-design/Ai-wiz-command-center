@@ -17,18 +17,21 @@ const controls = section('  function stopVoice(){', "  root.querySelectorAll('[d
 
 function harness() {
   const nodes = new Map(), calls = [];
+  const document = {activeElement: null}, selectedMode = {value: 'live'};
   const get = id => {
-    if (!nodes.has(id)) nodes.set(id, {textContent: '', disabled: false, dataset: {}});
+    if (!nodes.has(id)) nodes.set(id, {textContent: '', disabled: false, dataset: {},
+      focus() { document.activeElement = this; }});
     return nodes.get(id);
   };
   const context = vm.createContext({
     window: {Korlix: {postMessage: raw => calls.push(JSON.parse(raw))}},
-    root: {dataset: {}, querySelector: () => ({value: 'live'})},
+    document,
+    root: {dataset: {}, querySelector: () => selectedMode},
     get, phases: ['listening', 'thinking', 'speaking', 'complete'].map(key => ({key})),
     stopWelcome() {}, setPhase() {}, refreshMusic() {}, welcomeUi() {},
     setTimeout: () => 1, clearTimeout() {},
   });
-  vm.runInContext(`${bridge}\n${controls}\nthis.voice = {startVoice, pauseVoice, resumeVoice, stopVoice};`, context);
+  vm.runInContext(`${bridge}\n${controls}\nthis.voice = {startVoice, pauseVoice, resumeVoice, stopVoice, syncVoiceRestart};`, context);
   const emit = (phase, message, extra = {}) => context.window.KorlixBrainReceive({type: 'voice', phase, message, ...extra});
   const pending = action => {
     const message = calls.findLast(call => call.action === action);
@@ -36,7 +39,7 @@ function harness() {
     return message;
   };
   const reply = (message, data, error) => context.window.KorlixBrainReceive({type: 'reply', id: message.id, data, error});
-  return {...context.voice, emit, pending, reply, get, calls, root: context.root};
+  return {...context.voice, emit, pending, reply, get, calls, root: context.root, document, selectedMode};
 }
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const status = (h, expected) => {
@@ -112,5 +115,34 @@ const status = (h, expected) => {
   await flush();
   status(h, 'Rici is listening');
   assert.equal(h.root.dataset.voiceActive, 'true');
+
+  // Stop used to remove the complete fixed dock. Keep a reachable start state
+  // even when the inline link is offscreen, with no implicit microphone start.
+  const startsBeforeStop = h.calls.filter(call => call.action === 'startVoice').length;
+  h.document.activeElement = h.get('kb-stop-voice');
+  h.stopVoice();
+  h.emit('complete', 'Microphone off');
+  h.reply(h.pending('stopVoice'), null);
+  await flush();
+  assert.equal(h.root.dataset.voiceControls, 'true');
+  assert.equal(h.root.dataset.voiceIdle, 'true');
+  assert.equal(h.get('kb-start-voice').hidden, false);
+  assert.equal(h.get('kb-start-voice').disabled, false);
+  assert.equal(h.get('kb-active-voice-controls').hidden, true);
+  assert.equal(h.get('kb-start-label').textContent, 'Start Live Conversation');
+  assert.equal(h.document.activeElement, h.get('kb-start-voice'));
+  assert.equal(h.calls.filter(call => call.action === 'startVoice').length, startsBeforeStop);
+  h.selectedMode.value = 'deep';
+  h.syncVoiceRestart();
+  assert.equal(h.get('kb-start-label').textContent, 'Start Deep Think');
+  h.startVoice();
+  h.startVoice();
+  assert.equal(h.calls.filter(call => call.action === 'startVoice').length, startsBeforeStop + 1);
+  assert.equal(h.pending('startVoice').payload.mode, 'deep');
+  h.emit('listening', 'Rici is listening');
+  h.reply(h.pending('startVoice'), {active: true});
+  await flush();
+  assert.equal(h.get('kb-start-voice').hidden, true);
+  assert.equal(h.get('kb-active-voice-controls').hidden, false);
   console.log('Brain voice status regressions passed (shipped JS; no hardware simulation).');
 })().catch(error => {console.error(error); process.exitCode = 1;});
