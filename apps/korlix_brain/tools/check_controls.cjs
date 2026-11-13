@@ -446,7 +446,7 @@ async function readingPosition(page) {
       await page.locator('#cinema-kb-return-voice').click();
       await page.getByRole('radio', {name: /Deep Think/}).check();
       await restartable(page, width, 'Start Deep Think');
-      await page.locator('[data-screen="talk"] [data-go="saved"]').click();
+      await page.locator('section[data-screen="talk"] [data-go="saved"]').click();
       await restartable(page, width, 'Start Deep Think');
       assert.equal(await page.evaluate(() => window.controlsFixture.calls.filter(c => c.action === 'startVoice').length), startsAtHome,
         'Stopped-state navigation and mode changes never start the microphone');
