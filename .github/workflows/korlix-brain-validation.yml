@@ -236,8 +236,11 @@ jobs:
           (artifacts / 'simulator-inventory.json').write_text(json.dumps(data, indent=2) + '\n')
           runtimes = {r['identifier']: r for r in data['runtimes']
                       if r.get('isAvailable') and '.iOS-' in r['identifier']
+                      and r.get('version') == '26.2'
                       and isinstance(r.get('supportedArchitectures'), list)
                       and 'x86_64' in r['supportedArchitectures']}
+          if not runtimes:
+              raise SystemExit('Required available iOS 26.2 runtime with x86_64 support is absent')
           types = {t['identifier']: t for t in data['devicetypes']
                    if t['name'].startswith('iPhone')}
           # Use only runtime/type pairs present in the available device inventory.
@@ -246,7 +249,7 @@ jobs:
                         for device in devices if device.get('isAvailable') and
                         device.get('deviceTypeIdentifier') in types}
           if not candidates:
-              raise SystemExit('No listed available iPhone runtime/device-type pair supporting x86_64')
+              raise SystemExit('No listed available iPhone device-type pair for iOS 26.2 supporting x86_64')
           candidates = sorted(candidates, reverse=True, key=lambda pair: (
               tuple(int(n) for n in re.findall(r'\d+', runtimes[pair[0]]['version'])),
               types[pair[1]]['name']))
@@ -300,11 +303,34 @@ jobs:
                   attempts.append(attempt)
                   (artifacts / 'simulator-preparation.json').write_text(json.dumps(attempts, indent=2) + '\n')
               if udid:
+                  attempt['cleanup'] = []
                   for operation in ['shutdown', 'delete']:
+                      cleanup = {'operation': operation, 'udid': udid,
+                                 'timeoutSeconds': 30, 'exitCode': None, 'timedOut': False,
+                                 'outputFile': f'simulator-cleanup-attempt-{number}-{operation}.log'}
+                      captured = ''
                       try:
-                          simctl(operation, udid, timeout=30)
-                      except subprocess.SubprocessError as error:
-                          print(f'Cleanup of created simulator {udid}: {error}', flush=True)
+                          captured = simctl(operation, udid, timeout=30)
+                          cleanup['exitCode'] = 0
+                      except (subprocess.SubprocessError, OSError) as error:
+                          cleanup['error'] = str(error)
+                          cleanup['exitCode'] = getattr(error, 'returncode', None)
+                          cleanup['timedOut'] = isinstance(error, subprocess.TimeoutExpired)
+                          captured = getattr(error, 'output', '') or ''
+                      finally:
+                          if isinstance(captured, bytes):
+                              captured = captured.decode(errors='replace')
+                          (artifacts / cleanup['outputFile']).write_text(captured)
+                          attempt['cleanup'].append(cleanup)
+                          (artifacts / 'simulator-preparation.json').write_text(json.dumps(attempts, indent=2) + '\n')
+                          print('Created simulator cleanup status:', json.dumps(cleanup), flush=True)
+                  attempt['cleanupSucceeded'] = all(result['exitCode'] == 0 and not result['timedOut']
+                                                    for result in attempt['cleanup'])
+                  if not attempt['cleanupSucceeded']:
+                      attempt['replacementBlocked'] = True
+                  (artifacts / 'simulator-preparation.json').write_text(json.dumps(attempts, indent=2) + '\n')
+                  if not attempt['cleanupSucceeded']:
+                      raise SystemExit('Created simulator cleanup did not complete successfully; refusing a replacement attempt')
           if not attempts[-1]['ready']:
               raise SystemExit('Native simulator readiness failed on both bounded fresh-device attempts')
           PY
