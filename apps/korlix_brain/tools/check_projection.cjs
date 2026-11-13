@@ -141,6 +141,26 @@ async function entryControlPoint(page,selector) {
   return {x:point.x,y:point.y};
 }
 
+async function changeEntryMotionPreference(page,preference) {
+  // Media-query notifications come from the browser's real rendering cycle,
+  // not the mocked JS clock. Observe that event before checking app cleanup.
+  const wasReduced=await page.evaluate(()=>{
+    const query=window.matchMedia('(prefers-reduced-motion: reduce)');
+    window.entryMotionChanged=new Promise(resolve=>query.addEventListener('change',event=>resolve(event.matches),{once:true}));
+    return query.matches;
+  });
+  assert.notEqual(wasReduced,preference==='reduce','This case must change the real media preference');
+  await page.emulateMedia({reducedMotion:preference});
+  let timer;
+  try {
+    const reduced=await Promise.race([
+      page.evaluate(()=>window.entryMotionChanged),
+      new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Motion preference change event was not delivered')),2000);})
+    ]);
+    assert.equal(reduced,preference==='reduce');
+  } finally {clearTimeout(timer);}
+}
+
 async function assertEntryLifecycle(browser,errors) {
   const page=await browser.newPage({viewport:{width:390,height:844},reducedMotion:'no-preference'});
   page.on('pageerror',error=>errors.push(error.message));
@@ -281,8 +301,7 @@ async function assertEntryLifecycle(browser,errors) {
   assert.equal(await page.evaluate(()=>document.activeElement?.id),'projection-heading','Skip returns its own focus to the Projection heading');
 
   await connectEntry(page,'entry-preference-change');
-  await page.emulateMedia({reducedMotion:'reduce'});
-  await page.clock.runFor(32);
+  await changeEntryMotionPreference(page,'reduce');
   await assertEntryState(page,'complete',false,'reduced');
   await connectEntry(page,'entry-reduced-session');
   await assertEntryState(page,'arrive',true,'reduced');
@@ -299,8 +318,7 @@ async function assertEntryLifecycle(browser,errors) {
   await assertEntryState(page,'complete',false,'reduced');
   assert.equal(await page.evaluate(()=>document.activeElement?.id),'destination-input');
   await connectEntry(page,'entry-return-to-full');
-  await page.emulateMedia({reducedMotion:'no-preference'});
-  await page.clock.runFor(32);
+  await changeEntryMotionPreference(page,'no-preference');
   await assertEntryState(page,'complete',false);
   await connectEntry(page,'entry-return-to-full');
   await assertEntryState(page,'complete',false);
