@@ -2,6 +2,23 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 
+async function observeSavedVolume(page){
+  return page.evaluate(()=>{
+    let savedVolume;
+    try{savedVolume=localStorage.getItem('korlix-brain-ambience-volume');}
+    catch(error){savedVolume={unavailable:error.name};}
+    return {
+      savedVolume,
+      sliderValue:document.querySelector('#cinema-kb-music-volume')?.value??null,
+      displayedVolume:document.querySelector('#cinema-kb-music-volume-value')?.textContent??null,
+      activeElement:document.activeElement?.id||document.activeElement?.tagName||null,
+      readyState:document.readyState,
+      visibilityState:document.visibilityState,
+      hasFocus:document.hasFocus()
+    };
+  });
+}
+
 (async()=>{
   const browser=await chromium.launch({headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
   try{
@@ -64,8 +81,17 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
       await page.waitForFunction(()=>document.querySelector('.kb-product').dataset.music==='playing');
       await play.click();
       assert.equal(await page.evaluate(()=>window.testAudioType),'auto','Stop releases media category');
+      const volumeBeforeReload=await observeSavedVolume(page);
       await page.reload();
-      await page.waitForFunction(()=>document.querySelector('#cinema-kb-music-volume').value==='8');
+      try{
+        await page.waitForFunction(()=>document.querySelector('#cinema-kb-music-volume').value==='8');
+      }catch(error){
+        const volumeAfterReload=await observeSavedVolume(page).catch(()=>({unavailable:true}));
+        console.error('Ambience saved-volume reload diagnostic:',JSON.stringify({
+          audioSessionSupported:supported,beforeReload:volumeBeforeReload,afterReload:volumeAfterReload
+        }));
+        throw error;
+      }
       assert.equal(await page.evaluate(()=>window.testMusicContext===undefined),true,'Remember volume without autoplay');
       assert.deepEqual(errors,[]);
       await page.close();

@@ -803,6 +803,8 @@
   let training='', memories=[], pending=null, deletion=null, canUndo=false;
   let memorySource='Typed entry',trainingSource='Typed instructions';
   let voiceActive=false, voicePaused=false, voicePausing=false, voiceStopping=false, voiceStarting=false, lastUserTranscript='', ready=false, writing=false;
+  let voicePhase='complete';
+  let voiceRestartFocus=null;
   let requestNumber=0, voiceRequestEpoch=0;
   const requests=new Map();
   const transcriptMessages=new Map(), savedMessages=new Map(), transcriptBusy=new Set();
@@ -814,23 +816,53 @@
     const id=String(++requestNumber);
     return new Promise((resolve,reject)=>{
       const timeout=['pickFile','openDocuments','cameraAsk','directions'].includes(action)?3600000:['startVoice','resumeVoice'].includes(action)?90000:65000;
-      const timer=setTimeout(()=>{requests.delete(id);reject(new Error('The response was interrupted. Refresh My Brain before trying a change again.'));},timeout);
+      const interrupted=action==='startVoice'?'Rici could not finish connecting. Tap Start conversation to try again.':action==='resumeVoice'?'Rici could not finish reconnecting. Tap Resume to try again.':'The response was interrupted. Refresh My Brain before trying a change again.';
+      const timer=setTimeout(()=>{requests.delete(id);reject(new Error(interrupted));},timeout);
       requests.set(id,{resolve,reject,timer});
       window.Korlix.postMessage(JSON.stringify({id,action,payload}));
     });
   }
+  function syncVoiceRestart(){
+    const idle=!voiceActive&&!voicePaused&&!voiceStarting&&!voiceStopping;
+    const deep=root.querySelector('input[name="brain-voice-mode"]:checked')?.value==='deep';
+    const label=deep?'Start Deep Think':'Start Live Conversation';
+    get('kb-start-label').textContent=label;
+    get('kb-replay-demo').textContent=label;
+    get('kb-start-voice').hidden=!idle;
+    get('kb-start-voice').disabled=!idle;
+    get('kb-active-voice-controls').hidden=idle;
+    root.dataset.voiceIdle=String(idle);
+  }
+  function voiceFocusIntent(event){
+    if(!voiceRestartFocus)return;
+    if(event.type==='keydown'){
+      if(event.key==='Tab'||event.key==='Escape')voiceRestartFocus=null;
+      return;
+    }
+    // Disabling Stop may blur it to the document while native shutdown is
+    // pending. That browser fallback is different from the user choosing a
+    // new control, clicking elsewhere, or leaving with the keyboard.
+    if(event.type==='focusin'&&(event.target===document.body||event.target===document.documentElement))return;
+    if(event.target!==voiceRestartFocus&&!voiceRestartFocus.contains?.(event.target))voiceRestartFocus=null;
+  }
+  document.addEventListener('focusin',voiceFocusIntent);
+  document.addEventListener('pointerdown',voiceFocusIntent,true);
+  document.addEventListener('keydown',voiceFocusIntent,true);
   window.KorlixBrainReceive=message=>{
     if(message.type==='reply'){
       const request=requests.get(message.id);if(!request)return;
       clearTimeout(request.timer);requests.delete(message.id);
       message.error?request.reject(new Error(message.error)):request.resolve(message.data);
     }else if(message.type==='voice'){
+      const focused=document.activeElement;
+      if(['kb-stop-voice','kb-pause-voice','kb-resume-voice'].some(id=>get(id)===focused))voiceRestartFocus=focused;
       if(message.phase!=='complete')stopWelcome();
       if(['complete','error','paused'].includes(message.phase)){voiceStarting=false;voicePausing=false;}
       if(['complete','error'].includes(message.phase))voiceStopping=false;
       if(voiceStopping&&!['complete','error'].includes(message.phase))message={...message,phase:'stopping',message:'Stopping conversation…'};
+      voicePhase=message.phase;
       const index=phases.findIndex(p=>p.key===message.phase);
-      if(index>=0)setPhase(index);else if(message.phase==='paused')setPhase(3);
+      if(index>=0)setPhase(index);else if(['paused','error'].includes(message.phase))setPhase(3);
       voiceActive=!['complete','error','paused'].includes(message.phase);
       voicePaused=message.phase==='paused'||message.paused===true;
       if(['complete','error'].includes(message.phase))voicePaused=false;
@@ -839,14 +871,24 @@
       get('kb-voice-modes').disabled=voiceActive||voicePaused;
       get('kb-voice-phase').textContent=message.message;
       get('kb-live-phase').textContent=message.message;
-      get('kb-return-voice').textContent=voicePaused?'Conversation paused':'Rici conversation active';
+      get('kb-return-voice').textContent=voicePaused?'Conversation paused':voiceActive?'Rici conversation active':'Conversation mode';
       get('kb-stop-voice').disabled=voiceStopping;
       get('kb-stop-label').textContent=voiceStopping?'Stopping…':'Stop';
       get('kb-pause-voice').disabled=!voiceActive||voiceStopping||voicePausing;
       get('kb-pause-label').textContent=voicePausing?'Pausing…':'Pause';
       get('kb-resume-voice').disabled=!voicePaused||voiceActive||voiceStarting||voiceStopping;
-      get('kb-replay-demo').textContent='Start conversation';
-      root.dataset.voiceActive=String(voiceActive);root.dataset.voicePaused=String(voicePaused);refreshMusic();welcomeUi();
+      // Keep the dock after Stop. The inline start link may be above a long
+      // transcript or on another screen; stopping must not remove the only
+      // currently visible way to talk again.
+      root.dataset.voiceControls='true';
+      root.dataset.voiceActive=String(voiceActive);root.dataset.voicePaused=String(voicePaused);
+      syncVoiceRestart();
+      if(root.dataset.voiceIdle==='true'){
+        const restore=voiceRestartFocus&&(focused===voiceRestartFocus||focused===document.body||focused===document.documentElement);
+        voiceRestartFocus=null;
+        if(restore)get('kb-start-voice').focus({preventScroll:true});
+      }
+      refreshMusic();welcomeUi();
     }else if(message.type==='transcript'&&message.text){
       transcriptMessages.set(message.id||'unavailable-'+Date.now(),message);
       while(transcriptMessages.size>60)transcriptMessages.delete(transcriptMessages.keys().next().value);
@@ -1028,12 +1070,14 @@
     voiceStarting=true;
     window.KorlixBrainReceive({type:'voice',phase:'connecting',message:'Connecting to Rici…'});
     native('startVoice',{mode:root.querySelector('input[name="brain-voice-mode"]:checked')?.value||'live'}).then(result=>{
-      // Consent can be declined without creating a voice session.
-      if(epoch===voiceRequestEpoch&&result?.active===false)
+      // Consent can be declined without creating a voice session. Native
+      // terminal events carry startup failures and must survive this reply.
+      if(epoch===voiceRequestEpoch&&result?.active===false&&voicePhase==='connecting')
         window.KorlixBrainReceive({type:'voice',phase:'complete',message:'Microphone off'});
     }).catch(error=>{
       if(epoch!==voiceRequestEpoch)return;
-      window.KorlixBrainReceive({type:'voice',phase:'complete',message:'Microphone off'});fail(error);
+      if(voicePhase==='connecting')window.KorlixBrainReceive({type:'voice',phase:'error',message:error.message||'Rici could not connect. Tap Start conversation to try again.'});
+      fail(error);
     }).finally(()=>{if(epoch===voiceRequestEpoch)voiceStarting=false;});
   }
   function pauseVoice(){
@@ -1056,10 +1100,11 @@
     window.KorlixBrainReceive({type:'voice',phase:'connecting',paused:true,message:'Resuming Rici…'});
     native('resumeVoice').then(result=>{
       if(epoch!==voiceRequestEpoch)return;
-      if(result?.active===false&&(!result.paused||voiceActive))window.KorlixBrainReceive({type:'voice',phase:result.paused?'paused':'complete',paused:result.paused===true,message:result.paused?'Paused · microphone off':'Microphone off'});
+      if(result?.active===false&&voicePhase==='connecting')window.KorlixBrainReceive({type:'voice',phase:result.paused?'paused':'complete',paused:result.paused===true,message:result.paused?'Paused · microphone off':'Microphone off'});
     }).catch(error=>{
       if(epoch!==voiceRequestEpoch)return;
-      window.KorlixBrainReceive({type:'voice',phase:'paused',paused:true,message:'Resume interrupted · tap Resume again'});fail(error);
+      if(voicePhase==='connecting')window.KorlixBrainReceive({type:'voice',phase:'paused',paused:true,message:error.message||'Rici could not reconnect. Tap Resume to try again.'});
+      fail(error);
     }).finally(()=>{if(epoch===voiceRequestEpoch)voiceStarting=false;});
   }
   function toggleVoice(){voicePaused?resumeVoice():voiceActive?stopVoice():startVoice();}
@@ -1084,6 +1129,7 @@
   get('kb-voice-modes').addEventListener('change',()=>{
     const deep=root.querySelector('input[name="brain-voice-mode"]:checked')?.value==='deep';
     get('kb-mode-hint').textContent=deep?'Deep Think uses Sol Max for every answer and takes longer.':'Live Conversation is ready. Stop the conversation to switch modes.';
+    syncVoiceRestart();
   });
   document.addEventListener('visibilitychange',syncMotion);reducedMotion.addEventListener('change',event=>{userPaused=event.matches;motionOverride=false;syncMotion();});
   get('kb-training-form').addEventListener('submit',event=>{event.preventDefault();review('training',get('kb-training').value,trainingSource);});
@@ -1114,12 +1160,18 @@
   get('kb-saved-back').addEventListener('click',()=>show('talk'));
   get('kb-saved-refresh').addEventListener('click',loadSavedTranscripts);
   get('kb-stop-voice').addEventListener('click',stopVoice);
+  get('kb-start-voice').addEventListener('click',()=>{
+    // Restart in place when the user is already reading the conversation.
+    // A redundant navigation clears status content and changes scroll extent.
+    if(currentScreen!=='talk')show('talk');
+    startVoice();
+  });
   get('kb-pause-voice').addEventListener('click',pauseVoice);
   get('kb-resume-voice').addEventListener('click',resumeVoice);
   for(const [id,action] of [['kb-upload-pdf','openDocuments'],['kb-camera-ask','cameraAsk'],['kb-directions','directions']]){
     get(id).addEventListener('click',()=>{stopWelcome();native(action).then(()=>{if(action==='openDocuments')refresh();}).catch(fail);});
   }
-  setPhase(3);refresh();loadSavedTranscripts();
+  setPhase(3);syncVoiceRestart();refresh();loadSavedTranscripts();
 
   const resize=new ResizeObserver(measure);menus.forEach(menu=>resize.observe(menu.element));scenes.forEach(scene=>resize.observe(scene.canvas));
   resize.observe(transferStage);resize.observe(app);

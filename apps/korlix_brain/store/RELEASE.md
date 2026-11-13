@@ -1,3 +1,198 @@
+## Native Projection controls and voice routing — build 25 candidate
+
+The user reports that build 24 still remains at the first address, can speak a
+refusal for the next destination, loses Pause/Stop/Resume/Back, does not change
+format when the phone is tilted, and produces a TestFlight crash notice after
+swipe-close. Desktop layout fixtures did not establish the native behavior.
+
+Projection-enabled Live sessions now wait for the original item-bound transcript
+before scheduling a response. The native controller handles navigation and its
+confirmation first; the same Realtime model handles ordinary conversation after
+that recognition step. This removes the automatic-reply race at the cost of
+waiting for speech transcription. Explicit requests for another address without
+the address begin a controller-owned follow-up state. Existing confirmation and
+latest-search ordering apply to every destination.
+
+Projection has a persistent native Back/Talk/Pause/Resume/Stop rail outside its
+WebView, plus Auto and Landscape controls. The exact spoken request “Show
+projection mode in landscape format” changes the native layout preference and
+requests orientation. A fixed native wrapper supplies landscape presentation
+when the operating system does not rotate the window. Native viewport bounds
+drive the web layout; rotation retains the controller, provider and drafts.
+
+Backgrounding releases capture before termination and preserves a paused
+conversation. Dictation serializes singleton ownership, including delayed
+permission/start callbacks. Native welcome audio unregisters its callbacks at
+engine detachment. These repair concrete lifecycle gaps; the user's reported
+native crash still requires the submitted Apple crash log for attribution.
+
+Release acceptance requires the Flutter controller/session/lifecycle tests,
+both desktop browser platforms, and the new iPhone simulator integration with
+real WKWebView, native control taps, keyboard and orientation behavior. The
+signed IPA, actual build identity, Apple upload/processing and internal group
+assignment must be checked independently. Physical microphone interpretation
+and swipe-close confirmation remain distinct from simulator coverage.
+
+Source build floor: 25. Backend renderer and subscription configuration are
+unchanged by this repair.
+
+## Repeated destinations and landscape Projection — build 24 candidate
+
+The user confirmed that build 23 can open the first spoken address, then reported
+a refusal on a second destination. Source inspection found no one-search limit:
+an open Projection already accepts a second complete bare street address. It did
+find bounded follow-up phrasing gaps, including “Now…”, “The next address is…” and
+“Switch the address to…”, which can fall through to ordinary conversation. This
+candidate adds replacement-address recognition and explicit repeat-search
+capability instructions. The exact failed device utterance remains unobserved.
+
+Projection gains a landscape command-center layout and projected controls using
+cyan/violet edge lighting, layered console surfaces and depth. The existing
+Executive Bridge and Celestial Dome direction, two-second entrance, real Street
+View, provider attribution and current Rici session remain the reference. Native
+iPhone/iPad and Android settings already allow landscape; no orientation lock or
+new microphone session is required for rotation.
+
+Regression acceptance includes first, second and third spoken destinations in one
+session, replacing an unconfirmed result, explicit spoken confirmation, and
+portrait → landscape → portrait with the selected place, provider frame and
+voice state retained. Desktop browser fixtures and native tests do not establish
+physical microphone or device-rotation acceptance.
+
+Source build floor: 24. Exact-source CI, actual signed IPA identity/assets, Apple
+upload/processing and assignment to the existing internal TestFlight group must
+be verified separately. No backend renderer deployment is needed.
+
+## Verified build 23 baseline
+
+Native source `5d5ca7d5e2b473c55d30e4ff2685df5825d84269` passed CI run
+`43407921493` with 266 Flutter tests, 23 release guards and all six UI checkers.
+The actual signed com.korlix.brain / 1.0.2 (23) IPA is 34,899,999 bytes with
+SHA-256 `e6f5e861af6400ecfe85ab42c9d233d4c98c4c9ed11836c293f1c497cbe8dd11`.
+Upload job `6af6e61705c8b21ba24ef0b4` finished successfully. Delivery job
+`6af6eabe05c8b21ba24ef2a5` verified Apple build
+`117586ba-db5f-42d1-af3c-9ff30b7ebadb` in KORLIX Brain Internal at
+`2026-11-13T10:48:59.400584+00:00`, `IN_BETA_TESTING`, `assigned`,
+`deliveryVerified:true`, preserving the existing tester. The user subsequently
+confirmed the first spoken address worked and reported the follow-up issue above.
+
+## Live Conversation restart and Projection command repair — build 23 candidate
+
+The reported Stop/restart failure has a confirmed UI cause: the fixed conversation
+dock was hidden as soon as voice became inactive, leaving only a Talk-scene start
+link that could be offscreen or unavailable on another screen. The dock now keeps
+a prominent Start Live Conversation / Start Deep Think control after Stop or an
+error, preserving the selected mode and keyboard focus. A new tap starts a fresh
+session; stopping does not silently restart the microphone.
+
+The exact reported phrase “Rici can you open projection mode” already matches the
+existing parser. The capability instructions now explicitly describe opening
+Projection from Home during an active conversation and the correct open/close
+tool actions. Native Live reply transcripts are bound to their original response
+and user turn: canceled speculative replies must not enter the visible transcript
+or the conversation history restored after Pause. Ordinary audio remains immediate.
+The original user transcript remains the authority for any view action.
+
+Regression coverage includes the exact phrase in Live and Deep Think, late ASR,
+conflicting duplicate tool proposals, stopped-state dock visibility after scrolling
+and navigation, and two complete native Start / acknowledged Listening / open
+Projection / Stop cycles using distinct metered session IDs. Real microphone and
+provider behavior on the user's physical device remains unobserved; these changes
+do not claim that the exact device failure has been reproduced end to end.
+
+Source build floor: 23. Verify exact-source CI, the actual signed package, Apple
+upload/processing, and assignment to the existing internal group independently.
+Retains build 22's entrance and the working Street View / spoken-address flow.
+
+## Verified build 22 baseline
+
+Native source `d4ff81195a4c5983edd7fc06cb340452deea4db6` passed CI run
+`43361320046` with 246 Flutter tests, 23 release guards and all six UI checkers.
+Signed upload job `6af68ad510a05158d8123f9b` finished successfully. The actual
+com.korlix.brain / 1.0.2 (22) IPA is 34,895,295 bytes with SHA-256
+`cdbf0f6bcc6c798fe233461981cd651b48183aa1b54c68ad4b8431f0efe4ee0d`.
+Assignment job `6af68f2610a05158d81240a2` verified Apple build
+`f6cdd887-36e5-45bf-ba49-fce73b2326eb` in KORLIX Brain Internal at
+`2026-11-13T04:17:29.691146Z`, `IN_BETA_TESTING`, `assigned`,
+`deliveryVerified:true`, retaining the existing tester. That verified delivery
+is distinct from acceptance of the newly reported Stop and spoken-open issues.
+
+## Immersive Projection entrance — build 22 candidate
+
+Adds the approved two-second Awaken → Enter → Arrive presentation to Command
+Center and Discovery Theater. The real provider, original address search,
+confirmation and Rici conversation continue immediately while the surrounding
+room animates. Provider imagery and its attribution retain their complete,
+untransformed rectangle. The separate synthetic mockup image is not shipped.
+
+The entrance is once per native screen nonce. Skip, Close, backgrounding and
+motion-preference changes finish it safely; ordinary snapshots, voice events,
+new addresses and room changes do not replay it. Reduced motion uses a brief
+240 ms fade. A native foreground snapshot makes app-background cancellation
+explicit without changing the voice or address-search lifecycle.
+
+Source build floor: 22. Exact-source CI, signed package identity, Apple upload,
+processing and existing-group delivery must be verified independently before
+claiming availability. Physical iPhone/iPad entrance, Reduce Motion, provider
+attribution and microphone-to-search acceptance remain required after delivery.
+No backend renderer deployment is needed.
+
+## Verified build 21 baseline — spoken street-address search
+
+Source `c7817628b9825eef0ee81487a098ac3fde954003` passed all four CI jobs,
+245 Flutter tests, responsive UI checks and iOS/Android build checks in run
+`43324793588`. Signed version 1.0.2 (21) was independently inspected with
+Projection HTML/JS/CSS matching the tested source. Upload job
+`6af6466c10a05158d8122e55` finished successfully. Guarded delivery job
+`6af64cd810a05158d8123028` finished successfully from operations commit
+`bef3e6946b905c2b1841586829df6db94b2ea378`. Apple read-back at
+`2026-11-12T23:34:47.094120Z` confirmed build
+`6ce93e8f-16a6-47be-beff-805f5ab40fe7` in KORLIX Brain Internal with
+`IN_BETA_TESTING`, `assigned`, `deliveryVerified:true`, and the existing tester
+membership preserved. That delivery does not establish physical-device
+acceptance of the new entrance. The original spoken-address candidate notes
+follow as historical context.
+
+### Spoken street-address search repair — build 21 source notes
+
+The user confirmed that Street View works in delivered version 1.0.2 (20), but
+reported that Rici cannot start an address search automatically. Source review
+found a reproducible recognition gap: a standalone address was only accepted
+while the controller was waiting for its first destination, and was rejected
+after selecting a property. Natural commands such as “Search [address]” also
+fell outside the existing parser. Both main-screen and Projection voice sessions
+already share the native search dispatcher; there is no separate missing bridge.
+The exact failed utterance on the physical device has not yet been observed.
+
+This candidate accepts strong standalone street addresses while Projection is
+open, including subsequent destinations, and bounded explicit search phrases
+that can also open Projection from home. The original address text remains the
+authority. Voice searches update the address field and lookup progress, and
+reveal matching candidates. Confirmation remains explicit and can be spoken.
+Current-turn ASR, stale-result protection, memory/research boundaries and the
+working Street View renderer remain in place.
+
+The source build floor is 21. Exact-source CI, signed package inspection, Apple
+upload/processing, delivery and physical-device acceptance must be recorded
+separately before claiming this candidate is available. Do not reuse build 20's
+package, upload receipt or assignment pins. The requested immersive Projection
+animation is an isolated visual/motion concept; it is not part of this repair.
+
+Physical-device checks are in [testflight-notes.txt](apple/testflight-notes.txt).
+Record the installed build, voice phase, exact recognized words and view-control
+result if address speech fails. No backend renderer deployment is needed.
+
+## Verified build 20 baseline
+
+Source `6202cd06d94dae7eaf9fea097d63254de51a357e` passed clean Flutter analysis,
+230 tests, responsive UI checks, Android build and iOS simulator/release compile.
+Signed version 1.0.2 (20) was independently verified and assigned to the existing
+KORLIX Brain Internal group. A separate Apple read-back at
+2026-11-12T21:34:03.749217Z confirmed `IN_BETA_TESTING`, `already_linked`, and
+`deliveryVerified: true`, preserving its existing tester membership. That
+successful delivery does not establish acceptance of the newly reported
+spoken-address behavior. Historical release records follow.
+
 ## Native subscription and AI GAS candidate — build 14
 
 The approved USD 34.99 monthly plan includes 60 Live minutes. The three retained AI GAS packs add 60 / 120 / 180 minutes for USD 30 / 55 / 80. The four products and exact US prices are now configured and verified in both stores; Apple availability is currently USA only. Native checkout, server verification, durable minute accounting, restore and refund handling are implemented. Production billing remains disabled pending native purchase tests and completion of store review requirements.

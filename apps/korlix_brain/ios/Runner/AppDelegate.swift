@@ -27,6 +27,7 @@ final class BrainWelcomePlayer: NSObject, FlutterPlugin, AVAudioPlayerDelegate {
   private var player: AVAudioPlayer?
   private var token: Int?
   private var ownsSession = false
+  private var attached = true
 
   static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(
@@ -34,6 +35,8 @@ final class BrainWelcomePlayer: NSObject, FlutterPlugin, AVAudioPlayerDelegate {
     let instance = BrainWelcomePlayer(
       channel: channel, assetKey: registrar.lookupKey(forAsset: "assets/web/welcome-v1.wav"))
     registrar.addMethodCallDelegate(instance, channel: channel)
+    // Flutter delivers detachFromEngine only to a published plugin instance.
+    registrar.publish(instance)
   }
 
   init(channel: FlutterMethodChannel, assetKey: String) {
@@ -46,9 +49,15 @@ final class BrainWelcomePlayer: NSObject, FlutterPlugin, AVAudioPlayerDelegate {
       name: UIScene.willDeactivateNotification, object: nil)
     NotificationCenter.default.addObserver(self, selector: #selector(interrupted(_:)),
       name: AVAudioSession.interruptionNotification, object: nil)
+    NotificationCenter.default.addObserver(self, selector: #selector(terminate),
+      name: UIApplication.willTerminateNotification, object: nil)
   }
 
   func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard attached else {
+      result(FlutterError(code: "engine_detached", message: "Welcome audio closed", details: nil))
+      return
+    }
     let data = call.arguments as? [String: Any]
     switch call.method {
     case "play":
@@ -94,21 +103,26 @@ final class BrainWelcomePlayer: NSObject, FlutterPlugin, AVAudioPlayerDelegate {
   private func finish(reason: String) {
     let endedToken = token
     token = nil
-    player?.stop()
-    player?.delegate = nil
+    let finishedPlayer = player
     player = nil
+    finishedPlayer?.delegate = nil
+    finishedPlayer?.stop()
     if ownsSession {
       ownsSession = false
       try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
-    if let endedToken = endedToken {
+    if attached, let endedToken = endedToken {
       channel.invokeMethod("ended", arguments: ["token": endedToken, "reason": reason])
     }
   }
 
-  @objc private func background() { finish(reason: "background") }
+  @objc private func background() {
+    guard attached else { return }
+    finish(reason: "background")
+  }
 
   @objc private func interrupted(_ notification: Notification) {
+    guard attached else { return }
     if let type = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
        type == AVAudioSession.InterruptionType.began.rawValue {
       finish(reason: "interrupted")
@@ -116,12 +130,31 @@ final class BrainWelcomePlayer: NSObject, FlutterPlugin, AVAudioPlayerDelegate {
   }
 
   func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-    if player === self.player { finish(reason: flag ? "completed" : "error") }
+    if attached, player === self.player { finish(reason: flag ? "completed" : "error") }
   }
 
   func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
-    if player === self.player { finish(reason: "error") }
+    if attached, player === self.player { finish(reason: "error") }
   }
 
-  deinit { NotificationCenter.default.removeObserver(self) }
+  func detachFromEngine(for registrar: FlutterPluginRegistrar) {
+    shutdown()
+    channel.setMethodCallHandler(nil)
+  }
+
+  @objc private func terminate() { shutdown() }
+
+  private func shutdown() {
+    guard attached else { return }
+    // Do not send an ended event through a messenger whose engine is closing.
+    attached = false
+    NotificationCenter.default.removeObserver(self)
+    finish(reason: "closed")
+  }
+
+  deinit {
+    NotificationCenter.default.removeObserver(self)
+    player?.delegate = nil
+    player?.stop()
+  }
 }

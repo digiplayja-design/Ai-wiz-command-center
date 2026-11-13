@@ -11,6 +11,7 @@
 <body data-room="command" data-map="illustration" data-voice="complete">
   <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <defs>
+      <linearGradient id="projection-entry-spectrum" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#80e6f2"/><stop offset=".5" stop-color="#ac91f3"/><stop offset="1" stop-color="#ead5ff"/></linearGradient>
       <symbol id="icon-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
       <symbol id="icon-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 11-8 11S4 16 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></symbol>
       <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
@@ -33,6 +34,16 @@
     </defs>
   </svg>
 
+  <div class="spatial-room-shell" aria-hidden="true">
+    <span class="spatial-ceiling"></span><span class="spatial-ceiling-rib rib-near"></span><span class="spatial-ceiling-rib rib-far"></span>
+    <span class="spatial-sidewall wall-left"></span><span class="spatial-sidewall wall-right"></span>
+    <span class="spatial-floor"></span><span class="spatial-floor-ring"></span><span class="spatial-console-base base-left"></span><span class="spatial-console-base base-right"></span>
+  </div>
+
+  <div id="projection-entry-room" class="projection-entry-room" aria-hidden="true">
+    <div class="entry-room-depth"><span class="entry-room-crown"></span><span class="entry-room-wall entry-room-wall-left"></span><span class="entry-room-wall entry-room-wall-right"></span><span class="entry-room-floor"></span></div>
+  </div>
+
   <div class="projection-shell">
     <header class="app-header">
       <div class="brand" aria-label="KORLIX Brain and Voice">
@@ -40,12 +51,12 @@
         <div><strong>KORLIX</strong><span>BRAIN+VOICE</span></div>
       </div>
       <div class="header-session"><span class="status-dot"></span><span id="connection-label">Connecting to your workspace</span></div>
-      <button id="close-projection" class="close-button" type="button" aria-label="Close projection and return to KORLIX"><span>Close projection</span><svg><use href="#icon-close"/></svg></button>
+      <div class="entry-header-actions"><span class="entry-skip-slot"><button id="projection-entry-skip" class="projection-entry-skip" type="button" aria-label="Skip entrance animation" hidden>Skip</button></span><button id="close-projection" class="close-button" type="button" aria-label="Close projection and return to KORLIX"><span>Close projection</span><svg><use href="#icon-close"/></svg></button></div>
     </header>
 
     <main>
       <div class="workspace-heading">
-        <div class="workspace-name"><span class="eyebrow">RICI SPATIAL WORKSPACE</span><h1>Projection</h1></div>
+        <div class="workspace-name"><span class="eyebrow">RICI SPATIAL WORKSPACE</span><h1 id="projection-heading" tabindex="-1">Projection</h1></div>
         <div class="room-switch" role="group" aria-label="Projection room">
           <button id="room-command" class="room-button" type="button" data-room-choice="command" aria-pressed="true"><svg><use href="#icon-command"/></svg><span>Command Center</span></button>
           <button id="room-discovery" class="room-button" type="button" data-room-choice="discovery" aria-pressed="false"><svg><use href="#icon-theater"/></svg><span>Discovery Theater</span></button>
@@ -56,50 +67,75 @@
       <div class="workspace-grid">
         <section class="scene-column" aria-label="Projected world">
           <div class="scene-stage" id="scene-stage">
+            <span class="entry-scene-corner entry-corner-top-left" aria-hidden="true"></span><span class="entry-scene-corner entry-corner-top-right" aria-hidden="true"></span><span class="entry-scene-corner entry-corner-bottom-left" aria-hidden="true"></span><span class="entry-scene-corner entry-corner-bottom-right" aria-hidden="true"></span><span class="entry-scene-rail entry-rail-left" aria-hidden="true"></span><span class="entry-scene-rail entry-rail-right" aria-hidden="true"></span>
             <canvas id="world-canvas" aria-hidden="true"></canvas>
             <div id="map-container" class="map-container" hidden></div>
             <div class="room-architecture" aria-hidden="true"><div class="architecture-ring ring-one"></div><div class="architecture-ring ring-two"></div><div class="architecture-floor"></div><div class="architecture-edge edge-left"></div><div class="architecture-edge edge-right"></div></div>
 
+            <div id="projection-entry-illustration" class="projection-entry-illustration" aria-hidden="true">
+              <div class="entry-brain"><span class="entry-brain-halo"></span><span class="entry-brain-orbit"></span><span class="entry-brain-orbit entry-brain-orbit-violet"></span><svg class="entry-brain-mark"><use href="#icon-brain"/></svg></div>
+              <div class="entry-portals"><span class="entry-portal"></span><span class="entry-portal"></span><span class="entry-portal"></span><span class="entry-portal"></span><span class="entry-portal"></span></div>
+              <svg class="entry-rays" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M0 17 42 48M100 17 58 48M0 85 42 55M100 85 58 55M0 45 40 51M100 45 60 51"/></svg>
+            </div>
+
             <div class="scene-topline">
-              <div class="scene-heading"><span class="eyebrow" id="room-overline">COMMAND CENTER / 01</span><h2 id="scene-title">A new perspective.</h2><p id="scene-subtitle">Choose a place. Let Rici guide you.</p></div>
+              <div class="scene-heading"><span class="entry-scene-accent" aria-hidden="true"><span class="entry-accent-orbit"></span><svg class="entry-accent-brain"><use href="#icon-brain"/></svg></span><span class="eyebrow" id="room-overline">COMMAND CENTER / 01</span><h2 id="scene-title">A new perspective.</h2><p id="scene-subtitle">Choose a place. Let Rici guide you.</p></div>
               <span id="map-badge" class="map-badge"><span></span>Illustrative globe</span>
             </div>
 
             <div class="scene-crosshair" aria-hidden="true"><span></span><span></span></div>
-            <div class="world-caption" id="world-caption"><span class="caption-line"></span><span id="world-caption-text">Illustrative globe · connect a map provider to explore</span></div>
+            <div class="world-caption" id="world-caption"><span class="caption-line"></span><span id="world-caption-text">Checking property imagery…</span></div>
 
-            <div class="camera-controls" role="group" aria-label="Map camera controls">
-              <button type="button" data-camera="closer" aria-label="Go closer to the building" title="Go closer"><svg><use href="#icon-plus"/></svg></button>
-              <button type="button" data-camera="farther" aria-label="Move farther away" title="Move farther"><svg><use href="#icon-minus"/></svg></button>
+            <div class="camera-controls" role="group" aria-label="Property view controls">
+              <button type="button" data-camera="closer" aria-label="Go closer to the building" title="Go closer"><svg><use href="#icon-plus"/></svg><span class="camera-key-label">Closer</span></button>
+              <button type="button" data-camera="farther" aria-label="Move farther away" title="Move farther"><svg><use href="#icon-minus"/></svg><span class="camera-key-label">Farther</span></button>
+              <button type="button" data-camera="stopCamera" aria-label="Stop zooming" title="Stop zooming"><svg><use href="#icon-stop"/></svg><span class="camera-key-label">Stop zoom</span></button>
               <span class="control-divider"></span>
-              <button type="button" data-camera="left" aria-label="Rotate left" title="Rotate left"><svg><use href="#icon-left"/></svg></button>
-              <button type="button" data-camera="right" aria-label="Rotate right" title="Rotate right"><svg><use href="#icon-right"/></svg></button>
-              <button type="button" data-camera="reset" aria-label="Reset view" title="Reset view"><svg><use href="#icon-reset"/></svg></button>
+              <button type="button" data-camera="left" aria-label="Rotate left" title="Rotate left"><svg><use href="#icon-left"/></svg><span class="camera-key-label">Look left</span></button>
+              <button type="button" data-camera="right" aria-label="Rotate right" title="Rotate right"><svg><use href="#icon-right"/></svg><span class="camera-key-label">Look right</span></button>
+              <button type="button" data-camera="reset" aria-label="Reset view" title="Reset view"><svg><use href="#icon-reset"/></svg><span class="camera-key-label">Reset</span></button>
             </div>
 
             <div class="place-banner" id="place-banner" hidden><span class="place-pin"><svg><use href="#icon-pin"/></svg></span><div><span class="eyebrow">SELECTED PLACE</span><strong id="place-label"></strong><span id="place-address"></span><span id="place-match" class="partial-match-warning" hidden>Check address — partial match</span><span id="place-source" class="map-data-credit" translate="no" hidden>Google Maps</span></div><span class="place-confirmed">Confirmed</span></div>
           </div>
 
-          <section class="destination-panel" aria-label="Find a destination">
+          <div class="view-toolbar"><div class="view-switch" role="group" aria-label="Property view"><button type="button" data-view-mode="street" aria-pressed="true">Street View</button><button type="button" data-view-mode="earth" aria-pressed="false">3D Earth</button></div><p>Street View faces the selected location from nearby imagery.</p></div>
+
+          <section id="voice-command-feedback" class="voice-command-feedback" aria-label="Last voice command details" hidden><div><span>You said</span><strong id="voice-command-heard"></strong></div><div><span>View control</span><strong id="voice-command-action"></strong></div><p id="voice-command-result"></p></section>
+
+          <section class="destination-panel" aria-label="Explore a property">
+            <label class="destination-label" for="destination-input">Explore a property</label>
             <form id="search-form" class="search-form" role="search">
               <svg class="search-icon"><use href="#icon-search"/></svg>
-              <label class="sr-only" for="destination-input">Address, city, or place</label>
-              <input id="destination-input" type="search" maxlength="300" placeholder="Where would you like to go?" autocomplete="off" enterkeyhint="search">
+              <input id="destination-input" type="search" maxlength="500" placeholder="Say or enter a full address or place" autocomplete="off" enterkeyhint="search">
               <button type="submit" id="search-button" aria-label="Find destination"><span>Explore</span><svg><use href="#icon-arrow"/></svg></button>
             </form>
-            <div id="search-help" class="search-help"><span>Say “Go to…” or enter an address.</span><span>Confirm a result before traveling.</span></div>
+            <div id="search-help" class="search-help" role="status" aria-live="polite"><span>Tap Talk to Rici, then say a full street address.</span><span>Confirm a result to open Street View.</span></div>
             <div id="candidates-panel" class="candidates-panel" hidden><div class="candidates-heading"><span class="eyebrow">CONFIRM YOUR DESTINATION</span><span id="candidate-count"></span></div><div id="candidates-list"></div></div>
             <div class="directions-panel"><button id="directions-button" class="directions-button" type="button" aria-label="Review destination for directions" aria-describedby="directions-help" disabled><svg aria-hidden="true"><use href="#icon-arrow"/></svg><span>Directions</span></button><p id="directions-help">Confirm a destination to review directions.</p></div>
           </section>
 
-          <div class="scene-footnote"><span><svg><use href="#icon-globe"/></svg><span id="imagery-disclosure">Map imagery is not a live camera feed.</span></span><span id="provider-label">PROJECTION / EARTH</span></div>
+          <div class="scene-footnote"><span><svg><use href="#icon-globe"/></svg><span id="imagery-disclosure">Recorded imagery · not a live camera feed.</span></span><span id="provider-label">PROJECTION / STREET VIEW</span></div>
         </section>
+
+        <aside id="spatial-console" class="spatial-console" aria-label="Projected exploration console" hidden>
+          <div class="spatial-console-crown" aria-hidden="true"><span class="spatial-brain"><svg><use href="#icon-brain"/></svg><i></i><i></i></span><span>RICI / SPATIAL CONSOLE<small>Your world within reach.</small></span><b></b></div>
+          <div class="spatial-console-switch" role="group" aria-label="Projection consoles">
+            <button id="console-explore" type="button" data-console-choice="explore" aria-controls="spatial-explore-pane" aria-pressed="true"><svg aria-hidden="true"><use href="#icon-pin"/></svg><span>Explore</span></button>
+            <button id="console-rici" type="button" data-console-choice="rici" aria-controls="spatial-rici-pane" aria-pressed="false"><svg aria-hidden="true"><use href="#icon-brain"/></svg><span>Rici</span></button>
+          </div>
+          <div id="spatial-console-scroll" class="spatial-console-scroll">
+            <div id="spatial-explore-pane" class="spatial-console-pane"></div>
+            <div id="spatial-rici-pane" class="spatial-console-pane"></div>
+            <div id="spatial-console-notices"></div>
+          </div>
+        </aside>
 
         <aside class="rici-panel" aria-label="Rici exploration assistant">
           <div class="rici-heading"><span class="rici-orb"><svg><use href="#icon-brain"/></svg></span><div><span class="eyebrow">YOUR EXPLORATION COMPANION</span><h2>Rici</h2></div><span class="rici-presence" id="rici-presence">Ready</span></div>
           <section class="answer-panel" aria-label="Rici response"><span class="eyebrow answer-label">A WORLD OF POSSIBILITIES</span><div id="answer-text" class="answer-text" aria-live="polite">Your Command Center is open. Where would you like to explore?</div><p id="answer-context" class="answer-context" hidden></p><div id="answer-sources" class="answer-sources" hidden></div></section>
 
-          <section class="ask-section" aria-label="Ask about this place"><h3>Look a little deeper</h3><div class="question-chips"><button type="button" data-question="What is located next to this address?">What’s nearby?<svg><use href="#icon-arrow"/></svg></button><button type="button" data-question="When was this building built?">Building history<svg><use href="#icon-arrow"/></svg></button><button type="button" data-question="What do you know about the crime rate in this area?">Area crime data<svg><use href="#icon-arrow"/></svg></button><button type="button" data-question="Show me a live view of this address.">Live view?<svg><use href="#icon-arrow"/></svg></button></div><form id="question-form" class="question-form"><label class="sr-only" for="question-input">Ask Rici about this place</label><input id="question-input" maxlength="1000" placeholder="Ask Rici about this place…" autocomplete="off"><button type="submit" id="question-button" aria-label="Ask Rici"><svg><use href="#icon-arrow"/></svg></button></form><p id="question-help" class="section-help">Select a destination to ask about its surroundings.</p></section>
+          <section class="ask-section" aria-label="Ask about this place"><h3>Look a little deeper</h3><div class="question-chips"><button type="button" data-question="What is located next to this address?">What’s nearby?<svg><use href="#icon-arrow"/></svg></button><button type="button" data-question="When was this building built?">Building history<svg><use href="#icon-arrow"/></svg></button><button type="button" data-question="What do you know about the crime rate in this area?">Area crime data<svg><use href="#icon-arrow"/></svg></button><button type="button" data-question="Show me a live view of this address.">Live camera availability<svg><use href="#icon-arrow"/></svg></button></div><form id="question-form" class="question-form"><label class="sr-only" for="question-input">Ask Rici about this place</label><input id="question-input" maxlength="1000" placeholder="Ask Rici about this place…" autocomplete="off"><button type="submit" id="question-button" aria-label="Ask Rici"><svg><use href="#icon-arrow"/></svg></button></form><p id="question-help" class="section-help">Select a destination to ask about its surroundings.</p></section>
 
           <details class="conversation-details" id="conversation-details"><summary><span>Conversation</span><span id="transcript-count">0 messages</span></summary><div id="transcript-list" class="transcript-list"><p class="section-help">Your conversation with Rici will appear here.</p></div></details>
 
@@ -110,13 +146,14 @@
       <p id="projection-notice" class="projection-notice" role="status" aria-live="polite">Your existing KORLIX conversation stays with you.</p>
 
       <section class="voice-dock" aria-label="Conversation controls">
-        <div class="voice-identity"><div class="voice-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><div><strong id="voice-phase" role="status" aria-live="polite">Ready when you are</strong><span id="voice-hint">Talk to Rici or type a destination.</span></div></div>
-        <button id="talk-button" class="talk-button" type="button" aria-label="Start conversation"><span class="talk-microphone"><svg aria-hidden="true"><use href="#icon-mic"/></svg></span><span><strong id="talk-label">Talk to Rici</strong><small id="talk-detail">Start conversation</small></span></button>
+        <div class="voice-identity"><div class="voice-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><div><strong id="voice-phase" role="status" aria-live="polite">Microphone off</strong><span id="voice-hint">Tap Talk to Rici to control the view by voice.</span></div></div>
+        <button id="talk-button" class="talk-button" type="button" aria-label="Start conversation"><span class="talk-microphone"><svg aria-hidden="true"><use href="#icon-mic"/></svg></span><span><strong id="talk-label">Talk to Rici</strong><small id="talk-detail">Enable voice controls</small></span></button>
         <div class="voice-actions" role="group" aria-label="Live conversation controls">
           <button id="pause-button" class="voice-control pause-button" type="button" aria-label="Pause conversation" disabled><svg aria-hidden="true"><use href="#icon-pause"/></svg><span id="pause-label">Pause</span></button>
           <button id="resume-button" class="voice-control resume-button" type="button" aria-label="Resume conversation" disabled><svg aria-hidden="true"><use href="#icon-play"/></svg><span>Resume</span></button>
           <button id="stop-button" class="voice-control stop-button" type="button" aria-label="Stop conversation" disabled><svg aria-hidden="true"><use href="#icon-stop"/></svg><span id="stop-label">Stop</span></button>
         </div>
+        <div id="voice-command-summary" class="voice-command-summary" aria-label="Last voice command" aria-live="polite" hidden><p><span>You said</span><strong id="voice-summary-heard"></strong></p><p><span>View control</span><strong id="voice-summary-action"></strong></p></div>
       </section>
       <footer class="workspace-footer"><span>Same Rici. Same conversation. A new dimension.</span><span>No headset required.</span></footer>
     </main>

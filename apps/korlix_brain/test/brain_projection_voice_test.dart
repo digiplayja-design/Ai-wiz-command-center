@@ -59,6 +59,18 @@ Future<void> _flush() => Future<void>.delayed(Duration.zero);
 
 void main() {
   group('projection session negotiation', () {
+    test('default Deep, legacy Live and Projection Live keep their intended reply ownership', () {
+      bool automatic(BrainVoiceSessionGate gate) {
+        final session = gate.configuration['session'] as Map;
+        final input = (session['audio'] as Map)['input'] as Map;
+        return (input['turn_detection'] as Map)['create_response'] as bool;
+      }
+      expect(automatic(BrainVoiceSessionGate()), false);
+      expect(automatic(BrainVoiceSessionGate(mode: BrainVoiceMode.live)), true);
+      expect(automatic(BrainVoiceSessionGate(
+          mode: BrainVoiceMode.live, projectionEnabled: true)), false);
+    });
+
     test('legacy Live retains one tool and its original partial update', () {
       final gate = BrainVoiceSessionGate(mode: BrainVoiceMode.live);
       gate.observe({'type': 'session.created', 'session': _serverSession()});
@@ -97,6 +109,8 @@ void main() {
           startsWith('${server['instructions']}\n\n'),
         );
         expect(update.containsKey('model'), isFalse);
+        expect(((update['audio'] as Map)['input'] as Map)['turn_detection'],
+            containsPair('create_response', false));
         expect(
           gate.observe(_ack({...server, ...update})),
           BrainSessionAction.ready,
@@ -131,15 +145,202 @@ void main() {
     });
 
     test(
-      'enabled gate rejects missing, extra or duplicate tools and lost context',
+      'an earlier server acknowledgement does not cancel projection setup',
+      () {
+        final gate = BrainVoiceSessionGate(
+          mode: BrainVoiceMode.live,
+          projectionEnabled: true,
+        );
+        expect(
+          gate.observe({'type': 'session.created', 'session': {}}),
+          BrainSessionAction.configure,
+        );
+        expect(
+          gate.observe(_ack(_serverSession())),
+          BrainSessionAction.configure,
+        );
+        final projectionAcknowledgement = _ack({
+          ..._serverSession(),
+          ...gate.configuration['session'] as Map,
+        });
+
+        // The provider can acknowledge the earlier partial update before the
+        // update that appends Projection. This must not open the microphone,
+        // resend configuration, or close an otherwise valid pending session.
+        expect(gate.observe(_ack(_serverSession())), BrainSessionAction.none);
+        expect(
+          gate.observe(projectionAcknowledgement),
+          BrainSessionAction.ready,
+        );
+      },
+    );
+
+    test('configured creation also tolerates an original acknowledgement', () {
+      final gate = BrainVoiceSessionGate(
+        mode: BrainVoiceMode.live,
+        projectionEnabled: true,
+      );
+      expect(
+        gate.observe({'type': 'session.created', 'session': _serverSession()}),
+        BrainSessionAction.configure,
+      );
+      expect(gate.observe(_ack(_serverSession())), BrainSessionAction.none);
+      expect(
+        gate.observe(
+          _ack({..._serverSession(), ...gate.configuration['session'] as Map}),
+        ),
+        BrainSessionAction.ready,
+      );
+    });
+
+    test('earlier acknowledgements never make setup ready and are bounded', () {
+      final gate = BrainVoiceSessionGate(
+        mode: BrainVoiceMode.live,
+        projectionEnabled: true,
+      )..observe({'type': 'session.created', 'session': _serverSession()});
+      final update = gate.configuration;
+      for (var i = 0; i < 2; i++) {
+        expect(gate.observe(_ack(_serverSession())), BrainSessionAction.none);
+        expect(gate.configuration, update);
+        expect(gate.rejectionCode, isNull);
+      }
+      expect(gate.observe(_ack(_serverSession())), BrainSessionAction.reject);
+      expect(gate.rejectionCode, 'stale_configuration_limit');
+      // Rejection is terminal even if a late acknowledgement arrives while
+      // the caller is closing the data channel.
+      expect(
+        gate.observe(_ack({..._serverSession(), ...update['session'] as Map})),
+        BrainSessionAction.reject,
+      );
+    });
+
+    test('original configuration is rejected after projection was ready', () {
+      final gate = BrainVoiceSessionGate(
+        mode: BrainVoiceMode.live,
+        projectionEnabled: true,
+      )..observe({'type': 'session.created', 'session': _serverSession()});
+      expect(
+        gate.observe(
+          _ack({..._serverSession(), ...gate.configuration['session'] as Map}),
+        ),
+        BrainSessionAction.ready,
+      );
+      expect(gate.observe(_ack(_serverSession())), BrainSessionAction.reject);
+      expect(gate.rejectionCode, 'configuration_downgrade');
+    });
+
+    test(
+      'an earlier acknowledgement must preserve original account context',
+      () {
+        final changed = [
+          {..._serverSession(), 'instructions': 'Different account context'},
+          {
+            ..._serverSession(),
+            'tools': [
+              {
+                ..._memoryTool,
+                'parameters': {
+                  'type': 'object',
+                  'properties': {
+                    'replacement': {'type': 'string'},
+                  },
+                },
+              },
+            ],
+          },
+          {
+            ..._serverSession(),
+            'audio': {
+              'input': {
+                'transcription': {'model': 'gpt-transcribe'},
+                'turn_detection': {
+                  'type': 'semantic_vad',
+                  'create_response': 'false',
+                },
+              },
+            },
+          },
+        ];
+        for (final session in changed) {
+          final gate = BrainVoiceSessionGate(
+            mode: BrainVoiceMode.live,
+            projectionEnabled: true,
+          )..observe({'type': 'session.created', 'session': _serverSession()});
+          expect(gate.observe(_ack(session)), BrainSessionAction.reject);
+        }
+      },
+    );
+
+    test(
+      'stale matching compares JSON values independently of object key order',
       () {
         final gate = BrainVoiceSessionGate(
           mode: BrainVoiceMode.live,
           projectionEnabled: true,
         )..observe({'type': 'session.created', 'session': _serverSession()});
+        final reordered = {
+          ..._serverSession(),
+          'tools': [
+            {
+              'parameters': {
+                'additionalProperties': false,
+                'properties': <String, dynamic>{},
+                'type': 'object',
+              },
+              'description': _memoryTool['description'],
+              'name': 'remember_in_brain',
+              'type': 'function',
+            },
+          ],
+        };
+        expect(gate.observe(_ack(reordered)), BrainSessionAction.none);
+      },
+    );
+
+    test('the captured original tool is isolated from caller mutation', () {
+      final server =
+          jsonDecode(jsonEncode(_serverSession())) as Map<String, dynamic>;
+      final gate = BrainVoiceSessionGate(
+        mode: BrainVoiceMode.live,
+        projectionEnabled: true,
+      )..observe({'type': 'session.created', 'session': server});
+      ((server['tools'] as List).single['parameters']
+              as Map)['additionalProperties'] =
+          true;
+      expect(gate.observe(_ack(server)), BrainSessionAction.reject);
+    });
+
+    test(
+      'augmented acknowledgements retain provider normalization compatibility',
+      () {
+        final gate = BrainVoiceSessionGate(
+          mode: BrainVoiceMode.live,
+          projectionEnabled: true,
+        )..observe({'type': 'session.created', 'session': _serverSession()});
+        final update = gate.configuration['session'] as Map;
+        final normalizedTools = [
+          for (final tool in update['tools'] as List)
+            {...tool as Map, 'strict': null},
+        ];
+        expect(
+          gate.observe(
+            _ack({..._serverSession(), ...update, 'tools': normalizedTools}),
+          ),
+          BrainSessionAction.ready,
+        );
+      },
+    );
+
+    test(
+      'enabled gate rejects missing, extra or duplicate tools and lost context',
+      () {
+        BrainVoiceSessionGate freshGate() => BrainVoiceSessionGate(
+          mode: BrainVoiceMode.live,
+          projectionEnabled: true,
+        )..observe({'type': 'session.created', 'session': _serverSession()});
         final ready = {
           ..._serverSession(),
-          ...gate.configuration['session'] as Map,
+          ...freshGate().configuration['session'] as Map,
         };
         for (final tools in [
           [_memoryTool],
@@ -152,12 +353,14 @@ void main() {
           ],
         ]) {
           expect(
-            gate.observe(_ack({...ready, 'tools': tools})),
+            freshGate().observe(_ack({...ready, 'tools': tools})),
             BrainSessionAction.reject,
           );
         }
         expect(
-          gate.observe(_ack({...ready, 'instructions': 'Lost memory context'})),
+          freshGate().observe(
+            _ack({...ready, 'instructions': 'Lost memory context'}),
+          ),
           BrainSessionAction.reject,
         );
       },
@@ -174,6 +377,22 @@ void main() {
           gate.observe(_ack({..._serverSession(), 'instructions': ''})),
           BrainSessionAction.reject,
         );
+      },
+    );
+
+    test(
+      'Projection Live cannot unmute with automatic model responses enabled',
+      () {
+        final gate = BrainVoiceSessionGate(
+          mode: BrainVoiceMode.live,
+          projectionEnabled: true,
+        )..observe({'type': 'session.created', 'session': _serverSession()});
+        final update = jsonDecode(jsonEncode(gate.configuration['session'])) as Map;
+        (((update['audio'] as Map)['input'] as Map)['turn_detection'] as Map)
+            ['create_response'] = true;
+        expect(gate.observe(_ack({..._serverSession(), ...update})),
+            BrainSessionAction.reject);
+        expect(gate.rejectionCode, 'projection_automatic_response');
       },
     );
 

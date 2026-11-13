@@ -1,13 +1,14 @@
-KORLIX Brain+Voice 1.0.2 — conversation controls and knowledge tools
+KORLIX Brain+Voice 1.0.2 — Native Projection controls and voice routing
 
-Pause, Resume and Stop are separate controls in conversation and Projection views. Pause closes microphone audio and the active usage session. Resume reconnects in the same mode with recent conversation context after the previous session is confirmed closed. Stop clears resumable context. Live Conversation also has refreshed authentication for usage reports, reliable heartbeat timing and clearer balance/session errors.
+This build adds persistent native Back, Talk, Pause, Resume and Stop controls around Projection, plus Auto and Landscape controls. Rici handles recognized view commands before speaking their results. Requests for another address can be given in one sentence or as a two-step conversation.
 
-Upload PDF from Home or the Memory/Training file action. Choose Memory, Training, or both; review and edit the extracted knowledge before approving a save. Existing text, Markdown, DOCX, CSV and JSON imports remain available. Training imports append to current instructions after review.
+On an iPhone or iPad:
+1. Start Live Conversation and wait for Listening. Say “Show projection mode in landscape format.” Projection should open in landscape format with the native controls visible. Back returns to the existing conversation; Stop leaves Projection open with Talk available.
+2. Say “Search 10 Downing Street, London SW1A 2AA” and confirm the matching result. Say “Can you take me to a different address?” Then give “350 Fifth Avenue, New York, NY 10118” and confirm. Give a third full address in the same conversation. Each confirmed result should replace the property without restarting voice or typing.
+3. Tap Auto and rotate both directions. Test Landscape, Pause, Resume, Stop and Talk. Open the address keyboard and check that Back and Stop remain reachable. The selected property and drafts should survive layout changes.
+4. Background the app while listening, then return. The microphone should be paused until you tap Resume. Swipe up to close, then reopen. If TestFlight still reports a crash, submit its crash feedback so the exact native stack can be inspected.
+5. Repeat the destination sequence in Deep Think. Check Street View/Earth and continuous zoom independently of Pause/Stop conversation.
 
-Camera Ask uses the same image-analysis service as KORLIX AI: take or select up to three photos, choose an analysis mode, ask follow-ups, and copy, share or report the answer. Camera Ask uses the existing shared credit allowance and answer history. It does not automatically save Memory or Training.
+For a failed command, include the installed build, device, voice state, exact “You said” text, and displayed result. A spoken acknowledgement alone does not establish that the property changed. Native simulator coverage and physical microphone/closing behavior are separate checks.
 
-Directions access is enabled for the requested support account. Enter or speak the complete destination, choose driving/walking/transit, review it, and open Apple or Google Maps. The map app confirms the address match before navigation. Embedded Projection imagery still depends on separately verified map-provider configuration.
-
-Device checks: try Pause during speech, Resume, Stop while connecting, sign-out/account switching, a network interruption, and a long Live Conversation. Verify microphone/speaker shutdown, restored context, current balance, PDF review/save, camera permission and capture, and both Maps choices. New native behavior must be tested on physical iOS and Android devices before store release.
-
-Existing account, plan, AI GAS, welcome, ambience, and transcript controls are preserved. This candidate does not activate store billing or submit an App Store release.
+Street View uses recorded imagery; coverage and facade visibility vary. This build is for the existing internal TestFlight group.

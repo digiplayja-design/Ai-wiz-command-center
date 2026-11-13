@@ -8,28 +8,190 @@
   const clip = (value, length = 2000) => typeof value === 'string' ? value.slice(0, length) : '';
   const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
   const finite = (value, min, max) => typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
-  const operations = new Set(['closer', 'farther', 'left', 'right', 'reset']);
+  const operations = new Set(['closer', 'farther', 'left', 'right', 'reset', 'zoomInContinuous', 'zoomOutContinuous', 'stopCamera']);
   const isLocalLiveQuestion = question => /\b(live|real[ -]?time)\b.*\b(view|camera|feed|video|imagery)\b/i.test(question);
   const phases = new Set(['complete', 'connecting', 'listening', 'thinking', 'speaking', 'pausing', 'paused', 'stopping', 'error']);
   const terminalVoicePhases = new Set(['complete','error']);
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const requests = new Map();
   const transcripts = [];
-  const shell = document.querySelector('.projection-shell');
   const busy = {search:false, select:false, ask:false, save:false, directions:false, close:false};
   let nonce = '', nextId = 0, connected = false, searchEpoch = 0, askEpoch = 0;
   let voiceAction = '', voiceEpoch = 0;
-  let voiceViewportActive = false;
-  let frame = null, frameOrigin = '', frameUrl = '', mapStatus = 'illustration', lastCamera = '';
+  let frame = null, frameOrigin = '', frameUrl = '', frameReady = false, mapStatus = 'illustration', lastCamera = '';
   let rendererTimer = null, canvasInvalidated = true;
   let localNotice = '', localNoticeKind = '', lastSavedPlace = '', pendingQuestionLocal = false;
+  let lastSearchSequence = 0, revealedVoiceSearchSequence = 0;
+  let entranceNonce = '', entranceEpoch = 0, entranceRunning = false;
+  let entranceTimers = [];
+  let nativePresentation = {nativeControls:false, viewport:null};
+  let nativeFocusRevealFrame = 0;
 
   const emptyState = () => ({
-    open:true, room:'command', loading:false, selectedPlace:null, candidates:[], answer:null,
-    notice:'', camera:{sequence:0, operation:'reset'},
-    config:{rendererUrl:null, mapAvailable:false, geocodingAvailable:false, directionsAvailable:false, answersAvailable:false, answerCredits:0, answerCostLabel:''},
+    open:true, foreground:true, room:'command', loading:false, selectedPlace:null, candidates:[], answer:null,
+    notice:'', camera:{sequence:0, operation:'reset', viewMode:'street'}, lastVoiceCommand:null,
+    destinationSearch:{sequence:0, query:'', active:false, source:'typed'},
+    config:{rendererUrl:null, mapAvailable:false, geocodingAvailable:false, directionsAvailable:false, answersAvailable:false, checking:false, checkFailed:false, answerCredits:0, answerCostLabel:''},
     voice:{active:false, paused:false, phase:'complete', message:''}
   });
   let state = emptyState();
+
+  // Landscape rearranges the same local controls into a nearby console. The
+  // provider frame and native connection never move or reconnect on rotation.
+  const wideRoom = window.matchMedia('(min-width:600px) and (orientation:landscape)');
+  const compactRoom = window.matchMedia('(max-height:600px)');
+  const spatial = {wide:false, compact:false, console:'explore'};
+  const spatialMoves = [
+    ['.workspace-heading',null],
+    ['.destination-panel','spatial-explore-pane'],
+    ['#place-banner','spatial-explore-pane'],
+    ['.view-toolbar','spatial-explore-pane'],
+    ['#world-caption','spatial-explore-pane'],
+    ['.scene-footnote','spatial-explore-pane'],
+    ['#save-details','spatial-explore-pane'],
+    ['.rici-panel','spatial-rici-pane'],
+    ['#voice-command-feedback','spatial-rici-pane'],
+    ['#projection-notice','spatial-console-notices']
+  ].map(([selector,target])=>{
+    const node=document.querySelector(selector),marker=document.createComment('projection layout home');
+    node.parentNode.insertBefore(marker,node);
+    return {node,marker,target};
+  });
+
+  function chooseSpatialConsole(name,{reveal=false}={}) {
+    spatial.console=name==='rici'?'rici':'explore';
+    document.body.dataset.console=spatial.console;
+    document.querySelectorAll('[data-console-choice]').forEach(button=>
+      button.setAttribute('aria-pressed',String(button.dataset.consoleChoice===spatial.console)));
+    if(!spatial.wide||!reveal)return;
+    const scroll=$('spatial-console-scroll'),pane=$('spatial-'+spatial.console+'-pane');
+    if(spatial.compact)scroll.scrollTop=0;
+    else scroll.scrollTop+=pane.getBoundingClientRect().top-scroll.getBoundingClientRect().top;
+  }
+
+  function syncSpatialLayout() {
+    const viewport=nativePresentation.viewport;
+    const wide=viewport ? viewport.landscape : wideRoom.matches;
+    const compact=wide&&(viewport ? viewport.height<=600 : compactRoom.matches);
+    const focused=document.activeElement;
+    const selection=focused instanceof HTMLInputElement||focused instanceof HTMLTextAreaElement
+      ? {start:focused.selectionStart,end:focused.selectionEnd}:null;
+    if(wide!==spatial.wide){
+      spatial.wide=wide;
+      for(const move of spatialMoves){
+        if(wide){
+          if(move.target)$(move.target).append(move.node);
+          else document.querySelector('.app-header').insertBefore(move.node,document.querySelector('.entry-header-actions'));
+        }else move.marker.parentNode.insertBefore(move.node,move.marker.nextSibling);
+      }
+    }
+    spatial.compact=compact;
+    document.body.dataset.layout=wide?'landscape':'portrait';
+    document.body.dataset.consoleCompact=String(compact);
+    $('spatial-console').hidden=!wide;
+    if(wide&&focused!==document.body){
+      if($('spatial-rici-pane').contains(focused))spatial.console='rici';
+      else if($('spatial-explore-pane').contains(focused))spatial.console='explore';
+    }
+    chooseSpatialConsole(spatial.console);
+    // The two landscape-only shortcuts disappear on rotation. Move their
+    // existing focus to the page heading, never to a field that opens a keyboard.
+    if(!wide&&focused instanceof HTMLElement&&focused.matches('[data-console-choice]')){
+      $('projection-heading').focus({preventScroll:true});
+    }
+    // Moving an input must retain its draft/caret without opening a keyboard
+    // for voice searches or taking focus from unrelated controls.
+    if(focused instanceof HTMLElement&&focused!==document.body&&focused.isConnected
+      &&document.activeElement!==focused&&focused.getClientRects().length){
+      focused.focus({preventScroll:true});
+      if(selection&&selection.start!==null&&selection.end!==null)focused.setSelectionRange(selection.start,selection.end);
+    }
+    measureVoiceDock();
+    revealNativeFocusedEditable();
+  }
+  document.querySelectorAll('[data-console-choice]').forEach(button=>
+    button.addEventListener('click',()=>chooseSpatialConsole(button.dataset.consoleChoice,{reveal:true})));
+  window.addEventListener('resize',syncSpatialLayout);
+
+  function revealNativeFocusedEditable() {
+    cancelAnimationFrame(nativeFocusRevealFrame);
+    nativeFocusRevealFrame=0;
+    if(!nativePresentation.nativeControls||!nativePresentation.viewport)return;
+    // WKWebView can retain its old innerHeight while the native keyboard and
+    // persistent rail shorten the measured scrollport. Reveal only the field
+    // already being edited after those bounds/DOM moves have been committed.
+    nativeFocusRevealFrame=requestAnimationFrame(()=>{
+      nativeFocusRevealFrame=0;
+      if(!nativePresentation.nativeControls||!nativePresentation.viewport||!state.open||!state.foreground)return;
+      const focused=document.activeElement;
+      if((focused instanceof HTMLInputElement||focused instanceof HTMLTextAreaElement)
+        &&focused.isConnected&&focused.getClientRects().length) {
+        focused.scrollIntoView({block:'nearest',inline:'nearest',behavior:'auto'});
+      }
+    });
+  }
+  document.addEventListener('focusin',revealNativeFocusedEditable);
+
+  function updatePresentation(raw) {
+    if(!isObject(raw))return;
+    const viewport=isObject(raw.viewport)&&finite(raw.viewport.width,1,20000)
+      &&finite(raw.viewport.height,1,20000)&&typeof raw.viewport.landscape==='boolean'
+      ? {width:raw.viewport.width,height:raw.viewport.height,landscape:raw.viewport.landscape}:null;
+    nativePresentation={nativeControls:raw.nativeControls===true,viewport};
+    document.body.dataset.nativeControls=String(nativePresentation.nativeControls);
+    for(const name of ['width','height']) {
+      if(viewport)document.documentElement.style.setProperty('--native-viewport-'+name,viewport[name]+'px');
+      else document.documentElement.style.removeProperty('--native-viewport-'+name);
+    }
+    syncSpatialLayout();
+  }
+
+  // The entrance decorates this room; it never owns provider or voice readiness.
+  // A fresh native screen nonce is the only start signal. Native snapshots and
+  // address/voice updates cannot restart or extend this bounded presentation.
+  function finishEntrance() {
+    entranceEpoch++;
+    entranceTimers.forEach(timer => clearTimeout(timer)); entranceTimers = [];
+    entranceRunning = false;
+    document.body.dataset.entryActive = 'false';
+    document.body.dataset.entryState = 'complete';
+    const skip = $('projection-entry-skip');
+    // A temporary Skip control must not strand keyboard focus when it leaves.
+    // Inputs, voice controls and all other focus targets are never changed.
+    if (document.activeElement === skip && state.open && state.foreground && !document.hidden) {
+      $('projection-heading').focus({preventScroll:true});
+    }
+    skip.hidden = true;
+  }
+
+  function startEntrance(openingNonce) {
+    if (entranceNonce === openingNonce) return;
+    finishEntrance(); entranceNonce = openingNonce;
+    if (!state.open || !state.foreground || document.hidden) return;
+    const epoch = entranceEpoch;
+    const reduced = reducedMotion.matches;
+    // Commit the finished decorative styles before a renewed nonce starts.
+    // This restarts CSS timelines even for a rapid close/reopen in one frame.
+    void $('projection-heading').offsetHeight;
+    entranceRunning = true;
+    document.body.dataset.entryMotion = reduced ? 'reduced' : 'full';
+    document.body.dataset.entryState = reduced ? 'arrive' : 'awaken';
+    document.body.dataset.entryActive = 'true';
+    $('projection-entry-skip').hidden = reduced;
+    const schedule = (delay, action) => {
+      entranceTimers.push(setTimeout(() => {
+        if (epoch !== entranceEpoch || !entranceRunning) return;
+        action();
+      }, delay));
+    };
+    if (!reduced) {
+      schedule(500, () => { document.body.dataset.entryState = 'enter'; });
+      schedule(1500, () => { document.body.dataset.entryState = 'arrive'; });
+    }
+    // CSS animations can be suppressed by accessibility settings or interrupted
+    // by WebView disposal. Cleanup deliberately does not await animationend.
+    schedule(reduced ? 240 : 2000, finishEntrance);
+  }
 
   function safeUrl(value) {
     try {
@@ -46,11 +208,12 @@
   }
 
   function cameraValue(raw) {
-    const camera = {sequence:0, operation:'reset'};
+    const camera = {sequence:0, operation:'reset', viewMode:'street'};
     if (!isObject(raw)) return camera;
+    camera.viewMode = raw.viewMode === 'earth' ? 'earth' : 'street';
     if (Number.isSafeInteger(raw.sequence) && raw.sequence >= 0) camera.sequence = raw.sequence;
     if (operations.has(raw.operation) || raw.operation === 'flyTo') camera.operation = raw.operation;
-    for (const [key,min,max] of [['latitude',-90,90],['longitude',-180,180],['height',25,40000000],['heading',-360,360],['pitch',-90,0]]) {
+    for (const [key,min,max] of [['latitude',-90,90],['longitude',-180,180],['height',1,40000000],['heading',-360,360],['pitch',-90,0]]) {
       if (finite(raw[key],min,max)) camera[key] = raw[key];
     }
     return camera;
@@ -67,6 +230,7 @@
     const base = emptyState();
     if (!isObject(raw)) return base;
     base.open = raw.open !== false;
+    base.foreground = raw.foreground !== false;
     base.room = raw.room === 'discovery' ? 'discovery' : 'command';
     base.loading = raw.loading === true;
     base.selectedPlace = placeValue(raw.selectedPlace);
@@ -74,10 +238,22 @@
     base.notice = clip(raw.notice,1500);
     base.camera = cameraValue(raw.camera);
     base.voice = voiceValue(raw.voice);
+    if (isObject(raw.destinationSearch) && Number.isSafeInteger(raw.destinationSearch.sequence)
+      && raw.destinationSearch.sequence > 0) {
+      const search = raw.destinationSearch;
+      base.destinationSearch = {sequence:search.sequence, query:clip(search.query,500),
+        active:search.active === true, source:search.source === 'voice' ? 'voice' : 'typed'};
+    }
+    if (isObject(raw.lastVoiceCommand)) {
+      const command = raw.lastVoiceCommand;
+      const statuses = new Set(['idle','heard','running','unrecognized','sent','completed','failed','interrupted','limit']);
+      base.lastVoiceCommand = {heard:clip(command.heard,600), action:clip(command.action,100), result:clip(command.result,1000),
+        status:statuses.has(command.status) ? command.status : 'idle'};
+    }
     const config = isObject(raw.config) ? raw.config : {};
     base.config = {rendererUrl:safeUrl(config.rendererUrl), mapAvailable:config.mapAvailable === true,
       geocodingAvailable:config.geocodingAvailable === true, answersAvailable:config.answersAvailable === true,
-      directionsAvailable:config.directionsAvailable === true,
+      directionsAvailable:config.directionsAvailable === true, checking:config.checking === true, checkFailed:config.checkFailed === true,
       answerCredits:finite(config.answerCredits,0,1000000) ? config.answerCredits : 0, answerCostLabel:clip(config.answerCostLabel,300)};
     if (isObject(raw.answer) && clip(raw.answer.text,18000)) {
       base.answer = {text:clip(raw.answer.text,18000), scope:clip(raw.answer.scope,500), date:clip(raw.answer.date,100),
@@ -148,7 +324,11 @@
     $('place-source').hidden = place?.provider !== 'google';
     $('place-match').hidden = !place?.partialMatch;
     $('place-banner').querySelector('.place-confirmed').textContent = place?.partialMatch ? 'Partial match' : 'Confirmed';
-    $('provider-label').textContent = place?.provider && place.provider !== 'google' ? clip(place.provider,60).toUpperCase() : 'PROJECTION / EARTH';
+    $('provider-label').textContent = state.camera.viewMode === 'earth' ? 'PROJECTION / 3D EARTH' : 'PROJECTION / STREET VIEW';
+    document.querySelectorAll('[data-view-mode]').forEach(button => {
+      button.setAttribute('aria-pressed',String(button.dataset.viewMode === state.camera.viewMode));
+      button.disabled = !connected || !place || !state.config.mapAvailable;
+    });
     $('save-button').disabled = !connected || !place || busy.save;
     $('save-button').textContent = busy.save ? 'Saving…' : 'Save place';
     $('place-note').disabled = !place || busy.save;
@@ -162,7 +342,7 @@
     if (!place) $('save-status').textContent = 'Choose and confirm a destination first.';
     else if ($('save-status').textContent === 'Choose and confirm a destination first.') $('save-status').textContent = '';
     document.querySelectorAll('[data-camera]').forEach(button => {
-      button.disabled = !connected || !place || !state.config.mapAvailable || mapStatus !== 'ready';
+      button.disabled = !connected || !place || !state.config.mapAvailable || (button.dataset.camera !== 'stopCamera' && mapStatus !== 'ready');
     });
   }
 
@@ -190,6 +370,20 @@
       });
       list.append(button);
     });
+    const search = state.destinationSearch;
+    if (search.source === 'voice' && !search.active && state.candidates.length
+      && search.sequence !== revealedVoiceSearchSequence) {
+      revealedVoiceSearchSequence = search.sequence;
+      if(spatial.wide)chooseSpatialConsole('explore',{reveal:true});
+      // A spoken search must reveal its confirmation choices without opening
+      // the keyboard. The scrollport already reserves the microphone dock.
+      requestAnimationFrame(() => {
+        if (state.destinationSearch.sequence === search.sequence && state.candidates.length) {
+          const target=spatial.wide?list.firstElementChild:document.querySelector('.destination-panel');
+          target.scrollIntoView({block:spatial.wide?'nearest':'start', behavior:'auto'});
+        }
+      });
+    }
   }
 
   function renderAnswer() {
@@ -219,19 +413,30 @@
     });
     $('question-input').disabled = !canAsk;
     $('question-button').disabled = !canAsk;
-    $('question-help').textContent = busy.ask ? (pendingQuestionLocal ? 'Checking live-view availability…' : 'Rici is checking sources…') : !state.selectedPlace
+    $('question-help').textContent = busy.ask ? (pendingQuestionLocal ? 'Checking live camera availability…' : 'Rici is checking sources…') : !state.selectedPlace
       ? 'Select a destination to ask about its surroundings.' : !state.config.answersAvailable
       ? 'Location research will be available when its service is connected.'
       : (state.config.answerCostLabel || (state.config.answerCredits ? state.config.answerCredits + ' credits per sourced lookup.' : 'Answers use sources. Current facts include their available dates.'));
   }
 
   function renderSearch() {
-    $('search-button').disabled = !connected || !state.config.geocodingAvailable || busy.search;
-    $('search-button').querySelector('span').textContent = busy.search ? 'Finding…' : 'Explore';
+    const search = state.destinationSearch;
+    if (search.sequence > 0 && search.sequence !== lastSearchSequence) {
+      lastSearchSequence = search.sequence;
+      $('destination-input').value = search.query;
+      if(spatial.wide&&search.source==='voice')chooseSpatialConsole('explore',{reveal:true});
+    }
+    const finding = busy.search || search.active;
+    $('search-button').disabled = !connected || state.config.checking || !state.config.geocodingAvailable || finding;
+    $('search-button').setAttribute('aria-busy',String(finding));
+    $('search-button').querySelector('span').textContent = finding ? 'Finding…' : 'Explore';
     const help = $('search-help');
-    help.firstElementChild.textContent = busy.search ? 'Finding matching destinations…' : connected && !state.config.geocodingAvailable
-      ? 'Address search is waiting for a map connection.' : 'Say “Go to…” or enter an address.';
-    help.lastElementChild.textContent = 'Confirm a result before traveling.';
+    help.firstElementChild.textContent = state.config.checking ? 'Checking address search…' : finding ? 'Finding matching destinations…' : state.config.checkFailed
+      ? 'Could not check address search. Close and reopen Projection to try again.' : connected && !state.config.geocodingAvailable
+      ? 'Address search is not connected yet. You can still talk to Rici.' : 'While Rici is listening, say a full street address or “Search for…” a place.';
+    help.lastElementChild.textContent = state.candidates.length === 1
+      ? 'Say “Yes, that’s it” to confirm.' : state.candidates.length > 1
+      ? 'Say “Choose the first result”, or tap a match.' : 'Confirm a result to open Street View.';
   }
 
   function measureVoiceDock() {
@@ -257,22 +462,23 @@
   function renderVoice() {
     const voice = state.voice;
     const controls = voiceControls(), phase = controls.phase;
-    const viewportActive = !terminalVoicePhases.has(phase);
-    const transition = viewportActive !== voiceViewportActive;
-    const scrollOffset = transition ? (voiceViewportActive ? shell.scrollTop : window.scrollY) : 0;
     document.body.dataset.voice = phase;
     document.body.dataset.voiceActive = String(voice.active);
-    $('voice-phase').textContent = phase === 'stopping' ? 'Stopping conversation…' : phase === 'connecting' ? 'Connecting to Rici…'
+    $('voice-phase').textContent = !controls.session ? 'Microphone off'
+      : phase === 'stopping' ? 'Stopping conversation…' : phase === 'connecting' ? 'Connecting to Rici…'
       : phase === 'pausing' ? 'Pausing conversation…' : phase === 'paused' ? 'Conversation paused'
       : voice.message || (controls.session ? 'Rici is with you' : 'Ready when you are');
     $('voice-hint').textContent = phase === 'paused' ? 'Microphone off. Resume when you’re ready.'
       : phase === 'pausing' ? 'Turning off the microphone and audio…'
-      : controls.session ? 'Your KORLIX conversation continues in this room.' : 'Talk to Rici or type a destination.';
+      : controls.session ? 'Say “Rici, zoom in”, “keep zooming in”, or “stop zooming”.'
+      : voice.message && !['Microphone off','Ready when you are'].includes(voice.message)
+      ? voice.message : 'Tap Talk to Rici to control the view by voice.';
+    $('voice-hint').title = $('voice-hint').textContent;
     $('talk-button').disabled = !controls.start;
     $('talk-label').textContent = phase === 'paused' ? 'Conversation paused' : controls.session
       ? (phase === 'connecting' ? 'Connecting…' : phase === 'stopping' ? 'Finishing…' : phase === 'pausing' ? 'Pausing…' : 'Rici is with you') : 'Talk to Rici';
     $('talk-detail').textContent = phase === 'paused' ? 'Microphone off' : controls.session
-      ? (phase === 'listening' ? 'Microphone on' : phase === 'speaking' ? 'Rici is speaking' : phase === 'thinking' ? 'Thinking with you' : 'Conversation controls below') : 'Start conversation';
+      ? (phase === 'listening' ? 'Listening for your voice' : phase === 'speaking' ? 'Rici is speaking' : phase === 'thinking' ? 'Thinking with you' : 'Conversation controls below') : 'Enable voice controls';
     $('pause-button').disabled = !controls.pause;
     $('pause-button').setAttribute('aria-busy',String(phase === 'pausing'));
     $('pause-label').textContent = phase === 'pausing' ? 'Pausing…' : 'Pause';
@@ -284,16 +490,6 @@
     $('rici-presence').textContent = phase === 'listening' ? 'Listening' : phase === 'speaking' ? 'Speaking' : phase === 'thinking' ? 'Thinking'
       : phase === 'paused' ? 'Paused' : phase === 'pausing' ? 'Pausing' : phase === 'stopping' ? 'Stopping' : controls.session ? 'Connecting' : 'Ready';
     measureVoiceDock();
-    if (transition) {
-      voiceViewportActive = viewportActive;
-      if (viewportActive) {
-        window.scrollTo(0,0);
-        shell.scrollTop = scrollOffset;
-      } else {
-        shell.scrollTop = 0;
-        window.scrollTo(0,scrollOffset);
-      }
-    }
   }
 
   function syncVoiceGuards(previousVoice) {
@@ -324,57 +520,89 @@
     renderTranscripts();
   }
 
+  function renderVoiceCommand() {
+    const command = state.lastVoiceCommand;
+    const panel = $('voice-command-feedback');
+    panel.hidden = !command || !(command.heard || command.result);
+    panel.dataset.status = command?.status || 'idle';
+    $('voice-command-heard').textContent = command?.heard || 'No words received';
+    $('voice-command-action').textContent = command?.action || 'Waiting for a view command';
+    $('voice-command-result').textContent = command?.result || '';
+    // Keep a compact last-heard/action result beside the microphone controls.
+    // The complete text remains in the detailed panel outside the map surface.
+    const summary = $('voice-command-summary');
+    summary.hidden = panel.hidden;
+    summary.dataset.status = panel.dataset.status;
+    $('voice-summary-heard').textContent = command?.heard || 'No words received';
+    $('voice-summary-action').textContent = [command?.action,command?.result].filter(Boolean).join(' · ');
+    $('voice-summary-heard').title = $('voice-summary-heard').textContent;
+    $('voice-summary-action').title = $('voice-summary-action').textContent;
+    measureVoiceDock();
+  }
+
   function setMapStatus(status, message = '') {
     const previousStatus = mapStatus;
     mapStatus = status;
     const ready = status === 'ready';
-    const remoteActive = !!frame && ['loading','ready'].includes(status);
+    const remoteActive = !!frame && ['loading','ready','error'].includes(status);
+    const street = state.camera.viewMode === 'street';
     document.body.dataset.map = ready ? 'ready' : 'illustration';
     document.body.dataset.renderer = remoteActive ? 'active' : 'inactive';
     $('map-container').hidden = !remoteActive;
     $('world-canvas').hidden = remoteActive;
-    $('map-badge').lastChild.textContent = ready ? '3D Earth imagery' : status === 'loading' ? 'Connecting map' : 'Illustrative globe';
-    $('world-caption-text').textContent = ready ? 'Earth imagery · not a live camera feed' : status === 'loading'
-      ? 'Connecting recorded 3D imagery · not a live camera feed' : 'Illustrative globe · map provider not connected';
+    $('map-badge').lastChild.textContent = ready ? (street ? 'Recorded Street View' : '3D Earth imagery')
+      : status === 'error' ? (street ? 'Street View unavailable' : '3D Earth unavailable')
+      : status === 'loading' || state.config.checking ? 'Connecting property view' : 'Illustrative globe';
+    $('world-caption-text').textContent = ready ? (street ? 'Recorded Street View facing the selected location · visibility varies' : 'Recorded 3D Earth imagery · overhead view')
+      : status === 'loading' ? (state.selectedPlace ? 'Loading the selected property view…' : 'Confirm an address to open Street View.')
+      : state.config.checking ? 'Checking property imagery…' : state.config.checkFailed
+      ? 'Could not check property imagery. Close and reopen Projection to try again.' : status === 'error'
+      ? (message || (street ? 'Street View could not load here. You can choose 3D Earth.' : '3D Earth could not load. Try Street View.'))
+      : 'Property imagery is not connected yet.';
+    $('imagery-disclosure').textContent = 'Recorded imagery · not a live camera feed. Capture dates appear when available.';
     if (message && status === 'error') notice(message,'error');
     canvasInvalidated = true; renderPlace();
     if (connected && status !== previousStatus && ['ready','loading','error'].includes(status)) {
-      send('rendererReady',{status}).catch(fail);
+      send('rendererReady',{status,sequence:state.camera.sequence,viewMode:state.camera.viewMode}).catch(fail);
     }
   }
 
   function disposeFrame() {
     clearTimeout(rendererTimer);
-    frame?.remove(); frame = null; frameOrigin = ''; frameUrl = ''; lastCamera = '';
+    frame?.remove(); frame = null; frameOrigin = ''; frameUrl = ''; frameReady = false; lastCamera = '';
     $('map-container').replaceChildren(); setMapStatus('illustration');
   }
 
   function syncRenderer() {
     const url = state.config.mapAvailable ? state.config.rendererUrl : null;
-    if (!url) { if (frame) disposeFrame(); return; }
+    if (!url) { if (frame) disposeFrame(); else setMapStatus('illustration'); return; }
     if (url === frameUrl) { sendCamera(); return; }
     disposeFrame();
     // The native controller additionally validates the API origin and exact
     // renderer path. This layer rejects non-HTTPS and credential-bearing URLs.
     frameOrigin = new URL(url).origin; frameUrl = url;
-    frame = document.createElement('iframe'); frame.title = 'KORLIX 3D Earth map';
+    frame = document.createElement('iframe'); frame.title = 'KORLIX property view';
     // Provider-owned links may open a separate window. The iframe still cannot
     // navigate the local workspace, submit forms or receive its native bridge.
     frame.setAttribute('sandbox','allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox');
     frame.setAttribute('referrerpolicy','no-referrer');
     frame.setAttribute('allow',"camera 'none'; microphone 'none'; geolocation 'none'; payment 'none'; clipboard-read 'none'; clipboard-write 'none'");
     frame.src = url; $('map-container').append(frame); setMapStatus('loading');
-    rendererTimer = setTimeout(() => { if (mapStatus === 'loading') setMapStatus('error','The map has not connected. You can keep talking to Rici.'); },45000);
+    rendererTimer = setTimeout(() => { if (mapStatus === 'loading' && (!frameReady || state.selectedPlace)) setMapStatus('error','The property view has not connected. Try the other view or another address.'); },45000);
   }
 
   function sendCamera() {
-    if (!frame || mapStatus !== 'ready') return;
+    // Transport readiness is independent of imagery readiness. An address must
+    // reach Street View before it can load; Stop and mode changes must also
+    // reach it while a provider lookup is pending or has failed.
+    if (!frame || !frameReady) return;
     const place = state.selectedPlace ? {id:state.selectedPlace.id,label:state.selectedPlace.label,
       latitude:state.selectedPlace.latitude,longitude:state.selectedPlace.longitude} : null;
     const data = {type:'korlix-projection-camera',camera:state.camera,place};
     const serialized = JSON.stringify(data);
     if (serialized === lastCamera) return;
     lastCamera = serialized;
+    if (place && state.camera.operation === 'flyTo') setMapStatus('loading');
     frame.contentWindow.postMessage(data,frameOrigin);
   }
 
@@ -382,39 +610,69 @@
     if (!frame || event.source !== frame.contentWindow || event.origin !== frameOrigin) return;
     const data = event.data;
     if (!isObject(data)) return;
+    if (data.type === 'korlix-projection-transport-ready') {
+      frameReady = true;
+      sendCamera();
+      return;
+    }
     // The provider owns its full iframe surface, including controls/credits.
     // No remote geometry, HTML or styling messages are consumed by the shell.
-    if (data.type !== 'korlix-projection-status' || !['loading','ready','error'].includes(data.status)) return;
-    const wasReady = mapStatus === 'ready';
-    if (data.status !== 'loading') clearTimeout(rendererTimer);
-    setMapStatus(data.status,clip(data.message,500));
-    if (data.status === 'ready') {
-      if (!wasReady) lastCamera = '';
-      sendCamera();
+    if (data.type === 'korlix-projection-camera-status') {
+      if (!Number.isSafeInteger(data.sequence) || data.sequence !== state.camera.sequence
+        || (data.viewMode !== undefined && data.viewMode !== state.camera.viewMode)
+        || !['stopped','limit'].includes(data.state)
+        || !['closest','farthest','stopped','interrupted'].includes(data.reason)) return;
+      // The renderer may report only a bounded motion outcome. The native
+      // controller owns wording and rejects a stale sequence independently.
+      send('cameraStatus',{sequence:data.sequence,viewMode:state.camera.viewMode,state:data.state,reason:data.reason}).catch(fail);
+      return;
     }
+    if (data.type !== 'korlix-projection-status' || !['loading','ready','error'].includes(data.status)) return;
+    if (data.viewMode !== undefined && data.viewMode !== state.camera.viewMode) return;
+    if (data.sequence !== undefined && data.sequence !== state.camera.sequence) return;
+    // Older renderers used their first ready status as the transport handshake.
+    // The awaiting-destination state is never presented as loaded imagery.
+    if (data.status === 'ready') frameReady = true;
+    if (data.status !== 'loading') clearTimeout(rendererTimer);
+    const status = data.reason === 'awaiting-destination' || (!state.selectedPlace && data.status === 'ready') ? 'loading' : data.status;
+    setMapStatus(status,clip(data.message,500));
+    sendCamera();
   });
 
   function render() {
+    if (entranceRunning && (!state.open || !state.foreground)) finishEntrance();
     $('connection-label').textContent = connected ? 'Your KORLIX workspace' : 'Preview · open inside KORLIX';
     $('close-projection').disabled = busy.close;
-    renderRoom(); renderPlace(); renderCandidates(); renderAnswer(); renderSearch(); renderVoice(); renderNotice(); syncRenderer();
+    renderRoom(); renderPlace(); renderCandidates(); renderAnswer(); renderSearch(); renderVoice(); renderVoiceCommand(); renderNotice(); syncRenderer();
   }
 
   window.KorlixProjectionConnect = connection => {
     if (!isObject(connection) || !clip(connection.nonce,512)) return;
-    if (nonce && nonce !== connection.nonce) {
+    const nextNonce = clip(connection.nonce,512);
+    if (nonce && nonce !== nextNonce) {
+      finishEntrance();
       voiceEpoch++; voiceAction = '';
+      searchEpoch++; busy.search = false;
+      lastSearchSequence = 0; revealedVoiceSearchSequence = 0;
+      $('destination-input').value = '';
       requests.forEach(request => { clearTimeout(request.timer); request.reject(new Error('The projection connection was renewed. Please try again.')); });
       requests.clear(); disposeFrame();
     }
-    nonce = clip(connection.nonce,512); connected = true;
+    nonce = nextNonce; connected = true;
+    updatePresentation(connection.presentation);
     state = normalize(connection.snapshot); localNotice = ''; localNoticeKind = '';
     syncTranscripts(connection.snapshot);
     syncVoiceGuards(); render();
+    startEntrance(nonce);
   };
 
   window.KorlixProjectionReceive = message => {
     if (!connected || !isObject(message)) return;
+    if(message.type==='presentation') {
+      updatePresentation(message.presentation);
+      resizeCanvas();
+      return;
+    }
     if (message.type === 'snapshot') {
       const previousId = state.selectedPlace?.id, previousVoice = state.voice;
       state = normalize(message.state);
@@ -453,18 +711,23 @@
 
   $('close-projection').addEventListener('click',async () => {
     if (busy.close) return;
+    finishEntrance();
     busy.close = true; $('close-projection').disabled = true;
     try { await send('close'); }
     catch (error) { fail(error); }
     finally { busy.close = false; $('close-projection').disabled = false; }
   });
 
+  $('projection-entry-skip').addEventListener('click',() => {
+    finishEntrance();
+  });
+
   $('search-form').addEventListener('submit',async event => {
     event.preventDefault();
     const query = $('destination-input').value.trim();
-    if (!query || busy.search || !connected || !state.config.geocodingAvailable) return;
+    if (!query || busy.search || state.destinationSearch.active || !connected || state.config.checking || !state.config.geocodingAvailable) return;
     const epoch = ++searchEpoch; busy.search = true; notice(''); renderSearch();
-    try { await send('search',{query:query.slice(0,300)}); }
+    try { await send('search',{query:query.slice(0,500)}); }
     catch (error) { if (epoch === searchEpoch) fail(error); }
     finally { if (epoch === searchEpoch) { busy.search = false; renderSearch(); } }
   });
@@ -480,6 +743,8 @@
   document.querySelectorAll('[data-question]').forEach(button => button.addEventListener('click',() => ask(button.dataset.question)));
   $('question-form').addEventListener('submit',event => { event.preventDefault(); ask($('question-input').value.trim()); });
   document.querySelectorAll('[data-camera]').forEach(button => button.addEventListener('click',() => send('camera',{operation:button.dataset.camera}).catch(fail)));
+  document.querySelectorAll('[data-view-mode]').forEach(button => button.addEventListener('click',() =>
+    send('camera',{operation:button.dataset.viewMode === 'earth' ? 'earthView' : 'streetView'}).catch(fail)));
 
   $('save-form').addEventListener('submit',async event => {
     event.preventDefault();
@@ -544,7 +809,6 @@
   // as geocoded locations, satellite imagery, street view, or a live feed.
   const canvas = $('world-canvas');
   const ctx = canvas.getContext('2d');
-  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   let canvasWidth = 0, canvasHeight = 0, lastDraw = 0;
   const stars = Array.from({length:95},(_,i) => ({x:((i * 197 + 19) % 997) / 997,y:((i * 131 + 89) % 991) / 991,r:i % 5 === 0 ? 1 : .55}));
   const lands = [
@@ -615,7 +879,15 @@
   }
   new ResizeObserver(resizeCanvas).observe($('scene-stage'));
   new ResizeObserver(measureVoiceDock).observe(document.querySelector('.voice-dock'));
-  reducedMotion.addEventListener('change',() => { canvasInvalidated=true; });
-  document.addEventListener('visibilitychange',() => { canvasInvalidated=true; });
-  render(); resizeCanvas(); requestAnimationFrame(animate);
+  reducedMotion.addEventListener('change',() => {
+    canvasInvalidated=true;
+    if (entranceRunning) finishEntrance();
+    document.body.dataset.entryMotion = reducedMotion.matches ? 'reduced' : 'full';
+  });
+  document.addEventListener('visibilitychange',() => {
+    canvasInvalidated=true;
+    if (document.hidden) finishEntrance();
+  });
+  window.addEventListener('pagehide',finishEntrance);
+  syncSpatialLayout(); finishEntrance(); render(); resizeCanvas(); requestAnimationFrame(animate);
 })();

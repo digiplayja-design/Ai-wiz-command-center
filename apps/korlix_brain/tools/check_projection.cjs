@@ -5,8 +5,8 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const app = path.resolve(__dirname,'..');
 const screenDirectory = process.env.PROJECTION_SCREENSHOTS;
 
-async function fixture(page) {
-  await page.addInitScript(() => {
+async function fixture(page,{connect=true}={}) {
+  await page.addInitScript(({connect}) => {
     // Playwright also evaluates init scripts in child frames. Only the bundled
     // top-level shell receives the native workspace fixture and session nonce.
     if(window !== window.top)return;
@@ -24,8 +24,8 @@ async function fixture(page) {
     window.testHoldStop = false;
     window.testGeocodingProvider = 'Test geocoder';
     window.projectionState = {
-      open:true,room:'command',loading:false,selectedPlace:null,candidates:[],answer:null,notice:'',
-      camera:{sequence:0,operation:'reset'},
+      open:true,foreground:true,room:'command',loading:false,selectedPlace:null,candidates:[],answer:null,notice:'',
+      camera:{sequence:0,operation:'reset',viewMode:'street'},
       config:{rendererUrl:null,mapAvailable:false,geocodingAvailable:true,directionsAvailable:true,answersAvailable:true,answerCredits:4,answerCostLabel:'4 credits per successful sourced lookup.'},
       voice:{active:false,paused:false,phase:'complete',message:'Ready when you are'}
     };
@@ -45,7 +45,7 @@ async function fixture(page) {
           state.notice='Choose a matching destination to confirm.'; window.sendSnapshot(); return reply({requiresConfirmation:true});
         case 'select':
           state.selectedPlace=state.candidates.find(place=>place.id===command.payload.placeId); state.candidates=[]; state.answer=null;
-          state.camera={sequence:state.camera.sequence+1,operation:'flyTo',latitude:state.selectedPlace.latitude,longitude:state.selectedPlace.longitude,height:800};
+          state.camera={sequence:state.camera.sequence+1,operation:'flyTo',viewMode:'street',latitude:state.selectedPlace.latitude,longitude:state.selectedPlace.longitude,height:800};
           state.notice='Destination confirmed.'; window.sendSnapshot(); return reply({selected:true});
         case 'ask':
           if(/\b(live|real[ -]?time)\b.*\b(view|camera|feed|video|imagery)\b/i.test(command.payload.question)){
@@ -55,7 +55,13 @@ async function fixture(page) {
           window.testResearchCalls++;
           state.answer={text:'This is a sourced response fixture, not a claim about a real place. [1]',scope:'Confirmed destination',date:'2026-11-07',sources:[{title:'Test source',url:'https://example.com/source',date:'2026-11-07'}]};
           window.sendSnapshot(); return reply({answered:true});
-        case 'camera': state.camera={...state.camera,sequence:state.camera.sequence+1,operation:command.payload.operation}; window.sendSnapshot(); return reply({moved:true});
+        case 'camera': {
+          const mode = ['streetView','earthView'].includes(command.payload.operation);
+          state.camera={...state.camera,sequence:state.camera.sequence+1,
+            operation:mode?'flyTo':command.payload.operation,
+            viewMode:mode?(command.payload.operation==='earthView'?'earth':'street'):state.camera.viewMode};
+          window.sendSnapshot(); return reply({moved:true});
+        }
         case 'directions': return reply({ok:true,answer:'Review the full address and choose a maps app for directions.'});
         case 'savePlace':
           if(window.testFailSave)return reply(null,'Storage is unavailable. Your note has not been saved.');
@@ -82,15 +88,359 @@ async function fixture(page) {
       }
     }};
     document.addEventListener('DOMContentLoaded',()=>{
-      window.KorlixProjectionConnect({nonce:'test-session-nonce-123456789',snapshot:window.projectionState});
+      if(connect)window.KorlixProjectionConnect({nonce:'test-session-nonce-123456789',snapshot:window.projectionState});
     });
-  });
+  },{connect});
   await page.goto('file://' + path.join(app,'assets/web/projection.html'));
-  await page.waitForFunction(()=>document.querySelector('#connection-label').textContent==='Your KORLIX workspace');
+  if(connect)await page.waitForFunction(()=>document.querySelector('#connection-label').textContent==='Your KORLIX workspace');
 }
 
 async function settleLayout(page) {
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+}
+
+async function routeProjectionRenderer(page) {
+  await page.route('https://projection.test/brain-projection/earth.html',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:`<!doctype html><html><head><meta charset="utf-8"><style>
+    html,body{height:100%;margin:0;overflow:hidden;background:#142135;color:white;font:11px/1.5 system-ui}
+    body{background:linear-gradient(140deg,#1b3245,#0c1729)}
+    .provider-label{position:absolute;top:8px;left:8px;padding:6px;background:#031019}
+    .provider-controls{position:absolute;top:8px;right:8px;display:flex;gap:4px}
+    .provider-controls button{color:white;background:#273d50;border:1px solid #7191a3;padding:5px}
+    #provider-attribution{position:absolute;left:0;right:0;bottom:0;padding:8px;background:#030b13;overflow-wrap:anywhere}a{color:#b3e1ff}
+    </style></head><body><span class="provider-label">Provider surface fixture</span><div class="provider-controls"><button>Map control</button></div><div id="provider-attribution">Google Maps · Synthetic imagery supplied by Example City Survey Office; Example Regional Mapping Group; Example Geospatial Imagery Cooperative; Example Municipal Cartography Archive. Attribution fixture only; no real imagery is requested. <a id="provider-terms" href="https://provider-links.test/terms" target="_blank">Provider link fixture</a></div><script>
+    window.received=[];window.addEventListener('message',e=>window.received.push(e.data));
+    window.emitTransport=()=>parent.postMessage({type:'korlix-projection-transport-ready'},'*');
+    window.emitStatus=(status,extra={})=>{document.body.dataset.phase=status;const camera=window.received.at(-1)?.camera;parent.postMessage({type:'korlix-projection-status',status,...(camera?{sequence:camera.sequence,viewMode:camera.viewMode}:{}),...extra},'*');};
+    window.emitCreditHeight=height=>parent.postMessage({type:'korlix-projection-credits',height},'*');
+    window.emitStatus('loading');
+    </script></body></html>`}));
+}
+
+async function connectEntry(page,nonce,patch={}) {
+  await page.evaluate(({nonce,patch})=>{
+    Object.assign(window.projectionState,patch);
+    window.KorlixProjectionConnect({nonce,snapshot:window.projectionState});
+  },{nonce,patch});
+}
+
+async function assertEntryState(page,phase,active,motion='full') {
+  assert.deepEqual(await page.evaluate(()=>({
+    phase:document.body.dataset.entryState,active:document.body.dataset.entryActive,
+    motion:document.body.dataset.entryMotion,skip:!document.getElementById('projection-entry-skip').hidden
+  })),{phase,active:String(active),motion,skip:active&&motion==='full'});
+}
+
+async function entryControlPoint(page,selector) {
+  const point=await page.locator(selector).evaluate(element=>{
+    const box=element.getBoundingClientRect(),x=box.x+box.width/2,y=box.y+box.height/2;
+    const hit=document.elementFromPoint(x,y);
+    return {x,y,visible:box.width>0&&box.height>0&&box.top>=0&&box.bottom<=innerHeight,
+      hittable:hit===element||element.contains(hit),disabled:element.disabled===true};
+  });
+  assert.ok(point.visible&&point.hittable&&!point.disabled,'Entrance leaves control usable: '+selector+' '+JSON.stringify(point));
+  return {x:point.x,y:point.y};
+}
+
+async function changeEntryMotionPreference(page,preference) {
+  // Media-query notifications come from the browser's real rendering cycle,
+  // not the mocked JS clock. Observe that event before checking app cleanup.
+  const wasReduced=await page.evaluate(()=>{
+    const query=window.matchMedia('(prefers-reduced-motion: reduce)');
+    window.entryMotionChanged=new Promise(resolve=>query.addEventListener('change',event=>resolve(event.matches),{once:true}));
+    return query.matches;
+  });
+  assert.notEqual(wasReduced,preference==='reduce','This case must change the real media preference');
+  await page.emulateMedia({reducedMotion:preference});
+  let timer;
+  try {
+    const reduced=await Promise.race([
+      page.evaluate(()=>window.entryMotionChanged),
+      new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('Motion preference change event was not delivered')),2000);})
+    ]);
+    assert.equal(reduced,preference==='reduce');
+  } finally {clearTimeout(timer);}
+}
+
+async function assertEntryLifecycle(browser,errors) {
+  const page=await browser.newPage({viewport:{width:390,height:844},reducedMotion:'no-preference'});
+  page.on('pageerror',error=>errors.push(error.message));
+  // Only lifecycle assertions use a controlled clock. Visual evidence below
+  // uses real time because CSS animation timelines are independent of this clock.
+  await page.clock.install({time:new Date('2026-11-13T00:00:00Z')});
+  await fixture(page,{connect:false});
+  await page.clock.pauseAt(new Date('2026-11-13T00:01:00Z'));
+  assert.equal(await page.locator('body').getAttribute('data-entry-active'),'false','No entrance before the native bridge connects');
+  assert.equal(await page.locator('#projection-entry-skip').isVisible(),false);
+  await connectEntry(page,'');
+  assert.equal(await page.locator('body').getAttribute('data-entry-active'),'false','An invalid connection cannot start the entrance');
+  await connectEntry(page,'entry-first-session');
+  let elapsed=0;
+  const advanceTo=async target=>{await page.clock.runFor(target-elapsed);elapsed=target;};
+  await assertEntryState(page,'awaken',true);
+  assert.equal(await page.evaluate(()=>window.projectionCommands.length),0,'Entrance does not start voice or issue camera commands');
+  await advanceTo(32);
+  await entryControlPoint(page,'#close-projection');
+  const start=await entryControlPoint(page,'#talk-button');
+  await page.mouse.click(start.x,start.y);
+  assert.equal(await page.evaluate(()=>window.projectionCommands.at(-1).action),'startVoice','Voice starts before arrival');
+  await advanceTo(33);
+  await entryControlPoint(page,'#stop-button');
+
+  const query='21 Oak Street, Apt 4B, Example City';
+  await page.evaluate(query=>{
+    const state=window.projectionState;
+    state.destinationSearch={sequence:1,query,active:true,source:'voice'};
+    window.sendSnapshot();
+  },query);
+  assert.equal(await page.locator('#destination-input').inputValue(),query);
+  assert.equal(await page.locator('#search-button span').textContent(),'Finding…');
+  assert.equal(await page.evaluate(()=>window.projectionCommands.some(command=>command.action==='search')),false,'Entrance does not duplicate the native voice search');
+  await page.evaluate(query=>{
+    const state=window.projectionState;
+    state.destinationSearch.active=false;
+    state.candidates=[{id:'entry-place',label:'Spoken entrance match',address:query,userQuery:query,latitude:40.71,longitude:-74,provider:'Test'}];
+    window.sendSnapshot();
+  },query);
+  await advanceTo(65);
+  assert.notEqual(await page.evaluate(()=>document.activeElement?.id),'destination-input','Voice results do not open the keyboard');
+  const candidate=await entryControlPoint(page,'.candidate-button');
+  assert.equal(await page.evaluate(()=>window.projectionCommands.some(command=>command.action==='select')),false,'Destination still requires confirmation');
+  await page.mouse.click(candidate.x,candidate.y);
+  await advanceTo(66);
+  assert.equal(await page.locator('#place-label').textContent(),'Spoken entrance match');
+  await page.evaluate(()=>{
+    window.projectionState.destinationSearch={sequence:2,query:'32 Pine Avenue, Example City',active:true,source:'voice'};
+    window.sendSnapshot();
+  });
+  assert.equal(await page.locator('#destination-input').inputValue(),'32 Pine Avenue, Example City','Next address arrives without replaying the entrance');
+  const stop=await entryControlPoint(page,'#stop-button');
+  await page.mouse.click(stop.x,stop.y);
+  assert.equal(await page.evaluate(()=>window.projectionCommands.at(-1).action),'stopVoice','Stop dispatches during Awaken');
+  await advanceTo(67);
+  await assertEntryState(page,'awaken',true);
+  await advanceTo(499);
+  await assertEntryState(page,'awaken',true);
+  await advanceTo(500);
+  await assertEntryState(page,'enter',true);
+  await connectEntry(page,'entry-first-session');
+  await page.evaluate(()=>{
+    window.projectionState.room='discovery';window.sendSnapshot();
+    window.KorlixProjectionReceive({type:'voice',active:false,phase:'complete',message:'Microphone off'});
+    window.KorlixProjectionReceive({type:'transcript',role:'user',text:'A continuing conversation'});
+  });
+  await page.locator('#destination-input').focus();
+  await advanceTo(1499);
+  await assertEntryState(page,'enter',true);
+  await advanceTo(1500);
+  await assertEntryState(page,'arrive',true);
+  await advanceTo(2000);
+  await assertEntryState(page,'complete',false);
+  assert.equal(await page.evaluate(()=>document.activeElement?.id),'destination-input','Automatic arrival preserves input focus');
+  await connectEntry(page,'entry-first-session');
+  await assertEntryState(page,'complete',false);
+
+  await page.evaluate(()=>document.querySelector('.projection-shell').scrollTop=0);
+  await connectEntry(page,'entry-close-session');
+  await page.clock.runFor(600);
+  const close=await entryControlPoint(page,'#close-projection');
+  await page.mouse.click(close.x,close.y);
+  await assertEntryState(page,'complete',false);
+  assert.equal(await page.evaluate(()=>window.projectionCommands.at(-1).action),'close','Close does not await arrival or its reply');
+  assert.equal(await page.evaluate(()=>window.projectionCommands.filter(command=>command.action==='stopVoice').length),1,'Closing never stops the shared conversation');
+  await page.clock.runFor(200);
+  await connectEntry(page,'entry-reopened-session');
+  await page.clock.runFor(700);
+  await assertEntryState(page,'enter',true);
+  await page.clock.runFor(500);
+  await assertEntryState(page,'enter',true,'full');
+  await page.clock.runFor(300);
+  await assertEntryState(page,'arrive',true);
+  await page.clock.runFor(500);
+  await assertEntryState(page,'complete',false);
+
+  await connectEntry(page,'entry-typed-search',{
+    selectedPlace:null,candidates:[],destinationSearch:{sequence:0,query:'',active:false,source:'typed'}
+  });
+  await page.locator('#destination-input').fill('10 Downing Street, London');
+  await page.locator('#search-form').evaluate(form=>form.scrollIntoView({block:'center'}));
+  await page.clock.runFor(32);
+  const searchButton=await entryControlPoint(page,'#search-button');
+  await page.mouse.click(searchButton.x,searchButton.y);
+  assert.equal(await page.evaluate(()=>window.projectionCommands.filter(command=>command.action==='search').at(-1)?.payload.query),'10 Downing Street, London','Typed search dispatches during the entrance');
+  await page.clock.runFor(1);
+  assert.equal(await page.locator('.candidate-button').count(),2);
+  await assertEntryState(page,'awaken',true);
+
+  for(const reason of ['foreground','closed','visibility','pagehide']) {
+    const nonce='entry-cancel-'+reason;
+    await connectEntry(page,nonce,{foreground:true,open:true});
+    await page.evaluate(reason=>{
+      if(reason==='foreground'||reason==='closed') {
+        window.projectionState[reason==='foreground'?'foreground':'open']=false;window.sendSnapshot();
+      } else if(reason==='visibility') {
+        Object.defineProperty(document,'hidden',{configurable:true,value:true});
+        document.dispatchEvent(new Event('visibilitychange'));
+      } else window.dispatchEvent(new Event('pagehide'));
+    },reason);
+    await assertEntryState(page,'complete',false);
+    await page.evaluate(()=>{delete document.hidden;document.dispatchEvent(new Event('visibilitychange'));});
+    await connectEntry(page,nonce,{foreground:true,open:true});
+    await page.clock.runFor(2100);
+    await assertEntryState(page,'complete',false);
+  }
+  await connectEntry(page,'entry-keyboard-completion');
+  await page.locator('#projection-entry-skip').focus();
+  await page.clock.runFor(2000);
+  await assertEntryState(page,'complete',false);
+  assert.equal(await page.evaluate(()=>document.activeElement?.id),'projection-heading','Natural completion does not leave keyboard focus on hidden Skip');
+  await connectEntry(page,'entry-skip-session');
+  await page.locator('#projection-entry-skip').focus();
+  const skip=await entryControlPoint(page,'#projection-entry-skip');
+  await page.mouse.click(skip.x,skip.y);
+  await assertEntryState(page,'complete',false);
+  assert.equal(await page.evaluate(()=>document.activeElement?.id),'projection-heading','Skip returns its own focus to the Projection heading');
+
+  await connectEntry(page,'entry-preference-change');
+  await changeEntryMotionPreference(page,'reduce');
+  await assertEntryState(page,'complete',false,'reduced');
+  await connectEntry(page,'entry-reduced-session');
+  await assertEntryState(page,'arrive',true,'reduced');
+  assert.equal(await page.locator('#projection-entry-illustration').evaluate(element=>getComputedStyle(element).display),'none','Reduced motion has no portal geometry');
+  const reducedProperties=await page.evaluate(()=>document.getAnimations().filter(animation=>{
+    const target=animation.effect?.target;
+    return target instanceof Element&&target.closest('#projection-entry-room,#projection-entry-illustration,.entry-scene-accent,.entry-scene-corner,.entry-scene-rail');
+  }).flatMap(animation=>animation.effect.getKeyframes().flatMap(frame=>Object.keys(frame).filter(key=>!['offset','computedOffset','easing','composite'].includes(key)))));
+  assert.ok(reducedProperties.every(property=>property==='opacity'),'Reduced entrance effects only change opacity: '+JSON.stringify(reducedProperties));
+  await page.locator('#destination-input').focus();
+  await page.clock.runFor(239);
+  await assertEntryState(page,'arrive',true,'reduced');
+  await page.clock.runFor(1);
+  await assertEntryState(page,'complete',false,'reduced');
+  assert.equal(await page.evaluate(()=>document.activeElement?.id),'destination-input');
+  await connectEntry(page,'entry-return-to-full');
+  await changeEntryMotionPreference(page,'no-preference');
+  await assertEntryState(page,'complete',false);
+  await connectEntry(page,'entry-return-to-full');
+  await assertEntryState(page,'complete',false);
+  await page.close();
+}
+
+async function assertEntryVisualStages(browser,errors,width,height) {
+  const page=await browser.newPage({viewport:{width,height},reducedMotion:'no-preference'});
+  page.on('pageerror',error=>errors.push(error.message));
+  await fixture(page,{connect:false});
+  assert.equal(await page.locator('#projection-entry-illustration .entry-portal').count(),5,'The entrance retains five decorative portals');
+  for(const selector of ['#projection-entry-room','#projection-entry-illustration']) {
+    assert.equal(await page.locator(selector).getAttribute('aria-hidden'),'true','Entrance artwork is decorative');
+  }
+  const captures=[];
+  const phases=['awaken','enter','arrive','complete'];
+  for(const phase of phases.slice(0,3)) {
+    // Each real opening owns its own capture, so a slow PNG cannot skip the
+    // next requested stage. Encoding may legitimately cross a phase boundary.
+    const startedAt=await page.evaluate(()=>performance.now());
+    await connectEntry(page,'entry-visual-'+width+'-'+phase);
+    await page.waitForFunction(phase=>document.body.dataset.entryState===phase,phase,{timeout:3000,polling:10});
+    const before=await page.evaluate(()=>({phase:document.body.dataset.entryState,at:performance.now()}));
+    const pixels=screenDirectory?await page.screenshot({animations:'allow'}):null;
+    const after=await page.evaluate(()=>({phase:document.body.dataset.entryState,at:performance.now()}));
+    const interval=before.phase===after.phase?before.phase:before.phase+'-to-'+after.phase;
+    const file=`projection-entrance-${interval}-${width}.png`;
+    if(screenDirectory) {
+      fs.mkdirSync(screenDirectory,{recursive:true});
+      fs.writeFileSync(path.join(screenDirectory,file),pixels);
+    }
+    captures.push({requestedPhase:phase,startedAt,file:pixels?file:null,before,after});
+    assert.equal(before.phase,phase);
+    assert.ok(phases.indexOf(after.phase)>=phases.indexOf(phase),'The real entrance progresses monotonically during capture at '+width);
+  }
+  await page.waitForFunction(()=>document.body.dataset.entryState==='complete',{},{timeout:3000,polling:10});
+  if(screenDirectory)fs.writeFileSync(path.join(screenDirectory,`projection-entrance-timing-${width}.json`),JSON.stringify({clock:'real',captureMode:'fresh opening per requested stage',captures},null,2));
+  await assertEntryState(page,'complete',false);
+
+  await routeProjectionRenderer(page);
+  await connectEntry(page,'entry-provider-'+width,{
+    selectedPlace:{id:'entry-provider',label:'Entrance provider fixture',address:'Synthetic attribution test',latitude:40.71,longitude:-74,provider:'Test'},
+    camera:{sequence:1,operation:'flyTo',viewMode:'street',latitude:40.71,longitude:-74,height:650,heading:0,pitch:-45},
+    config:{rendererUrl:'https://projection.test/brain-projection/earth.html',mapAvailable:true,geocodingAvailable:true,directionsAvailable:true,answersAvailable:true},
+    voice:{active:true,phase:'listening',message:'Rici is listening'}
+  });
+  await page.locator('#map-container iframe').waitFor();
+  const renderer=await (await page.locator('#map-container iframe').elementHandle()).contentFrame();
+  await renderer.waitForFunction(()=>typeof window.emitTransport==='function');
+  await settleRendererLayout(page,renderer,'entry-loading-'+width);
+  await alignRendererInViewport(page);
+  assert.equal(await page.locator('body').getAttribute('data-entry-active'),'true','Provider loads during the full entrance at '+width);
+  assert.equal(await page.locator('#projection-entry-illustration').evaluate(element=>getComputedStyle(element).display),'none','Loading provider immediately hides the illustrative portal overlay');
+  await assertClearRendererSurface(page,'entry-loading-'+width,{activeVoice:true});
+  await renderer.evaluate(()=>window.emitTransport());
+  await renderer.waitForFunction(()=>window.received.length===1);
+  assert.equal(await renderer.evaluate(()=>window.received[0].camera.operation),'flyTo','Camera reaches the provider before arrival');
+  assert.equal(await page.locator('body').getAttribute('data-entry-active'),'true');
+  await renderer.evaluate(()=>window.emitStatus('ready'));
+  await page.waitForFunction(()=>document.body.dataset.map==='ready');
+  await assertClearRendererSurface(page,'entry-ready-'+width,{activeVoice:true});
+  assert.equal(await page.evaluate(()=>window.projectionCommands.some(command=>['startVoice','resumeVoice','stopVoice','camera'].includes(command.action))),false,'Entrance preserves the active voice session and native camera intent');
+  await page.waitForFunction(()=>document.body.dataset.entryState==='complete',{},{timeout:3000,polling:10});
+  await assertClearRendererSurface(page,'entry-finished-'+width,{activeVoice:true,capture:true});
+  await page.close();
+}
+
+async function assertSpokenAddressFeedback(browser, errors, width, height) {
+  const page = await browser.newPage({viewport:{width,height},reducedMotion:'reduce'});
+  page.on('pageerror',error=>errors.push(error.message));
+  await fixture(page);
+  const query = 'Twenty one Oak Street, Apt 4B, Example City, NY 10001';
+  await page.evaluate(query=>{
+    const state=window.projectionState;
+    state.voice={active:true,phase:'listening',message:'Rici is listening'};
+    state.loading=true;
+    state.destinationSearch={sequence:1,query,active:true,source:'voice'};
+    state.lastVoiceCommand={heard:query,action:'Find destination',status:'running',result:'Applying the view command.'};
+    window.sendSnapshot();
+  },query);
+  assert.equal(await page.locator('#destination-input').inputValue(),query,'Voice query populates the original full address at '+width);
+  assert.equal(await page.locator('#search-button span').textContent(),'Finding…','Native lookup shows progress without a form submission');
+  assert.equal(await page.locator('#search-button').getAttribute('aria-busy'),'true');
+  assert.equal(await page.locator('#search-button').isEnabled(),false);
+  assert.equal(await page.evaluate(()=>window.projectionCommands.some(c=>c.action==='search')),false,'Rendering native search must not submit a duplicate request');
+  await page.evaluate(query=>{
+    const state=window.projectionState;
+    state.loading=false;state.destinationSearch.active=false;
+    state.candidates=[
+      {id:'spoken-a',label:'First spoken match',address:'Example address fixture',userQuery:query,latitude:40.71,longitude:-74,provider:'Test'},
+      {id:'spoken-b',label:'Second spoken match',address:'Alternate example fixture',userQuery:query,latitude:40.72,longitude:-73.98,provider:'Test'}
+    ];
+    state.lastVoiceCommand={...state.lastVoiceCommand,status:'completed',result:'Choose a matching destination.'};
+    window.sendSnapshot();
+  },query);
+  await settleLayout(page);
+  assert.match(await page.locator('#search-help').textContent(),/Choose the first result/);
+  assert.equal(await page.locator('#search-button').getAttribute('aria-busy'),'false');
+  const visibility=await page.evaluate(()=>{
+    const candidate=document.querySelector('.candidate-button'),box=candidate.getBoundingClientRect();
+    const dock=document.querySelector('.voice-dock').getBoundingClientRect();
+    return {top:box.top,bottom:box.bottom,dockTop:dock.top,focused:document.activeElement?.id,
+      hittable:document.elementFromPoint(box.x+box.width/2,box.y+box.height/2)?.closest('button')===candidate};
+  });
+  assert.ok(visibility.top>=0&&visibility.bottom<=visibility.dockTop&&visibility.hittable,'Spoken results are visible above the voice dock: '+JSON.stringify(visibility));
+  assert.notEqual(visibility.focused,'destination-input','Spoken search must not raise the keyboard');
+  assert.equal(await page.evaluate(()=>window.projectionCommands.some(c=>c.action==='select')),false,'Spoken search still requires destination confirmation');
+  await page.locator('.candidate-button').first().click();
+  await page.locator('#place-banner').waitFor();
+  await page.locator('#destination-input').fill('An unfinished typed draft');
+  await page.evaluate(()=>{window.projectionState.loading=true;window.sendSnapshot();});
+  assert.equal(await page.locator('#destination-input').inputValue(),'An unfinished typed draft','Unrelated snapshots do not overwrite a new draft');
+  assert.equal(await page.locator('#search-button span').textContent(),'Explore','A research request is not address-search progress');
+  await page.evaluate(()=>{
+    const state=window.projectionState;
+    state.selectedPlace=null;state.candidates=[];
+    state.destinationSearch={sequence:2,query:'32 Pine Avenue, Example City',active:true,source:'voice'};
+    window.sendSnapshot();
+  });
+  assert.equal(await page.locator('#destination-input').inputValue(),'32 Pine Avenue, Example City','The next spoken address replaces the previous query');
+  if(screenDirectory){fs.mkdirSync(screenDirectory,{recursive:true});await page.screenshot({path:path.join(screenDirectory,`projection-spoken-search-${width}.png`)});}
+  await page.close();
 }
 
 async function assertVoiceControls(page,label) {
@@ -108,7 +458,7 @@ async function assertVoiceControls(page,label) {
 }
 
 async function settleRendererLayout(page,renderer,label) {
-  // Window size and the active voice scrollport can resize the iframe. Wait for
+  // Window size and the voice controls can resize the iframe. Wait for
   // both documents to agree without inspecting any provider-owned internals.
   let previous='',last;
   const deadline=Date.now()+5000;
@@ -132,14 +482,30 @@ async function settleRendererLayout(page,renderer,label) {
 async function alignRendererInViewport(page) {
   await page.evaluate(()=>{
     const shell=document.querySelector('.projection-shell'),frame=document.querySelector('#map-container iframe');
-    const active=!['complete','error'].includes(document.body.dataset.voice);
-    const clip=active?shell.getBoundingClientRect():{top:0,height:innerHeight};
+    const clip=shell.getBoundingClientRect();
     const rect=frame.getBoundingClientRect();
     const change=rect.top-(clip.top+Math.max(8,(clip.height-rect.height)/2));
-    if(active)shell.scrollTop+=change;
-    else window.scrollBy(0,change);
+    shell.scrollTop+=change;
   });
   await settleLayout(page);
+}
+
+async function assertVoiceEntry(page,label) {
+  await settleLayout(page);
+  const geometry=await page.evaluate(()=>{
+    const button=document.getElementById('talk-button'),status=document.getElementById('voice-phase');
+    const dock=document.querySelector('.voice-dock'),shell=document.querySelector('.projection-shell');
+    const box=button.getBoundingClientRect(),state=status.getBoundingClientRect();
+    return {button:box.toJSON(),status:state.toJSON(),dock:dock.getBoundingClientRect().toJSON(),shell:shell.getBoundingClientRect().toJSON(),
+      text:status.textContent,disabled:button.disabled,height:innerHeight,width:innerWidth,
+      hittable:document.elementFromPoint(box.x+box.width/2,box.y+box.height/2)?.closest('button')===button};
+  });
+  assert.equal(geometry.text,'Microphone off','Inactive microphone is explicit at '+label);
+  assert.equal(geometry.disabled,false,'Voice can be started at '+label);
+  assert.ok(geometry.button.width>=44&&geometry.button.height>=44,'Voice start has a 44px touch target at '+label);
+  assert.ok(geometry.button.top>=0&&geometry.button.bottom<=geometry.height&&geometry.hittable,'Voice start is reachable without auto-scrolling at '+label);
+  assert.ok(geometry.status.top>=0&&geometry.status.bottom<=geometry.height,'Microphone state is visible at '+label);
+  assert.ok(geometry.shell.bottom<=geometry.dock.top-10,'Inactive voice dock reserves its own space at '+label);
 }
 
 async function assertClearRendererSurface(page,label,{activeVoice=false,capture=false}={}) {
@@ -147,17 +513,27 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
     const frame=document.querySelector('#map-container iframe'),stage=document.getElementById('scene-stage');
     const shell=document.querySelector('.projection-shell'),dock=document.querySelector('.voice-dock'),stop=document.getElementById('stop-button');
     const rect=frame.getBoundingClientRect(),button=stop.getBoundingClientRect();
-    const selectors=['.scene-topline','.scene-heading','.map-badge','.world-caption','.camera-controls','.place-banner','.room-architecture','.scene-crosshair','#world-canvas','.voice-dock'];
+    const selectors=['.scene-topline','.scene-heading','.map-badge','.world-caption','.camera-controls','.place-banner','.room-architecture','.scene-crosshair','#world-canvas','.voice-dock','.view-toolbar','.voice-command-feedback','.voice-command-summary','.spatial-console','#projection-entry-illustration','.entry-scene-accent','.entry-scene-corner','.entry-scene-rail','#projection-entry-skip'];
     const points=[[rect.left+2,rect.top+2],[rect.right-2,rect.top+2],[rect.left+2,rect.bottom-2],[rect.right-2,rect.bottom-2],[rect.left+rect.width/2,rect.top+rect.height/2]];
     return {frame:rect.toJSON(),shell:shell.getBoundingClientRect().toJSON(),dock:dock.getBoundingClientRect().toJSON(),stop:button.toJSON(),
       width:innerWidth,height:innerHeight,phase:document.body.dataset.map,renderer:document.body.dataset.renderer,
       before:getComputedStyle(stage,'::before').content,after:getComputedStyle(stage,'::after').content,
       dockShadow:getComputedStyle(dock).boxShadow,
       riciShadow:getComputedStyle(document.querySelector('.rici-panel')).boxShadow,
-      overlays:Object.fromEntries(selectors.map(selector=>{
-        const element=document.querySelector(selector),style=getComputedStyle(element),box=element.getBoundingClientRect();
-        return [selector,{visible:style.display!=='none'&&style.visibility!=='hidden'&&box.width>0&&box.height>0,rect:box.toJSON()}];
-      })),
+      overlays:Object.fromEntries(selectors.flatMap(selector=>Array.from(document.querySelectorAll(selector),(element,index)=>{
+        const style=getComputedStyle(element),box=element.getBoundingClientRect();
+        return [selector+'['+index+']',{visible:style.display!=='none'&&style.visibility!=='hidden'&&box.width>0&&box.height>0,rect:box.toJSON()}];
+      }))),
+      providerAncestors:Array.from((function*(){for(let element=frame;element;element=element.parentElement)yield element;})(),element=>{
+        const style=getComputedStyle(element);
+        return {tag:element.id||element.className||element.tagName,transform:style.transform,filter:style.filter,perspective:style.perspective,
+          opacity:Number(style.opacity),translate:style.translate,scale:style.scale,rotate:style.rotate};
+      }),
+      entranceBackground:(()=>{
+        const room=document.getElementById('projection-entry-room'),style=getComputedStyle(room);
+        return {sibling:room.parentElement===shell.parentElement,hiddenFromAccessibility:room.getAttribute('aria-hidden')==='true',
+          pointerEvents:style.pointerEvents,zIndex:Number(style.zIndex),shellZIndex:Number(getComputedStyle(shell).zIndex)};
+      })(),
       hits:points.map(([x,y])=>{const hit=document.elementFromPoint(x,y);return {x,y,frame:hit===frame,hit:hit?.id||hit?.className||hit?.tagName};}),
       scrollTop:shell.scrollTop,windowScroll:scrollY,
       stopHittable:document.elementFromPoint(button.x+button.width/2,button.y+button.height/2)?.closest('#stop-button')===stop};
@@ -172,6 +548,17 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
     assert.equal(geometry.after,'none','App vignette cannot cover the iframe at '+label);
     assert.equal(geometry.dockShadow,'none','Voice dock decoration cannot shade the provider surface at '+label);
     assert.equal(geometry.riciShadow,'none','Rici panel decoration cannot shade the provider surface at '+label);
+    for(const ancestor of geometry.providerAncestors) {
+      assert.equal(ancestor.transform,'none','Entrance does not transform provider ancestor '+ancestor.tag+' at '+label);
+      assert.equal(ancestor.filter,'none','Entrance does not filter provider ancestor '+ancestor.tag+' at '+label);
+      assert.equal(ancestor.perspective,'none','Entrance does not add provider perspective at '+label);
+      assert.equal(ancestor.opacity,1,'Entrance does not fade the provider at '+label);
+      for(const property of ['translate','scale','rotate'])assert.equal(ancestor[property],'none','Entrance does not '+property+' provider ancestor '+ancestor.tag+' at '+label);
+    }
+    assert.ok(geometry.entranceBackground.sibling&&geometry.entranceBackground.hiddenFromAccessibility,'Entrance background is a decorative sibling at '+label);
+    assert.equal(geometry.entranceBackground.pointerEvents,'none');
+    assert.ok(Number.isFinite(geometry.entranceBackground.zIndex)&&Number.isFinite(geometry.entranceBackground.shellZIndex)
+      &&geometry.entranceBackground.zIndex<geometry.entranceBackground.shellZIndex,'Entrance background is painted behind the workspace at '+label);
     const frame=geometry.frame;
     for(const [selector,overlay] of Object.entries(geometry.overlays)) {
       if(!overlay.visible)continue;
@@ -180,12 +567,12 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
       const overlapHeight=Math.max(0,Math.min(frame.bottom,box.bottom)-Math.max(frame.top,box.top));
       assert.ok(overlapWidth*overlapHeight<.5,selector+' stays entirely outside the provider iframe at '+label);
     }
-    const clip=activeVoice?geometry.shell:{top:0,bottom:geometry.height};
+    const clip=geometry.shell;
     assert.ok(frame.top>=clip.top&&frame.bottom<=clip.bottom,'Complete iframe can scroll into view at '+label);
     assert.ok(geometry.hits.every(hit=>hit.frame),'All iframe corners and its center remain hittable at '+label);
+    assert.ok(geometry.shell.bottom<=geometry.dock.top-10,'Scroll viewport ends above the voice dock at '+label);
+    assert.ok(frame.bottom<geometry.dock.top,'Voice dock never covers the provider surface at '+label);
     if(activeVoice) {
-      assert.ok(geometry.shell.bottom<=geometry.dock.top-10,'Scroll viewport ends above the active voice dock at '+label);
-      assert.ok(frame.bottom<geometry.dock.top,'Voice dock never covers the provider surface at '+label);
       assert.ok(geometry.stop.y>=0&&geometry.stop.bottom<=geometry.height&&geometry.stopHittable,'Stop stays visible and hittable at '+label);
     }
   } catch(error) {
@@ -195,16 +582,357 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
   }
 }
 
+async function assertLandscapeGeometry(page,renderer,label,{capture=false}={}) {
+  await settleRendererLayout(page,renderer,label);
+  const geometry=await page.evaluate(()=>{
+    const box=selector=>document.querySelector(selector).getBoundingClientRect().toJSON();
+    const shell=document.querySelector('.projection-shell'),room=document.querySelector('.spatial-room-shell');
+    const entry=document.getElementById('projection-entry-room');
+    const controls=Array.from(document.querySelectorAll('#room-command,#room-discovery,#close-projection,#console-explore,#console-rici,[data-camera]'),element=>{
+      const rect=element.getBoundingClientRect(),label=element.querySelector('.camera-key-label');
+      const hit=document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2);
+      return {id:element.id||element.dataset.camera,rect:rect.toJSON(),hittable:hit===element||element.contains(hit),
+        label:label?{text:label.textContent,rect:label.getBoundingClientRect().toJSON(),display:getComputedStyle(label).display}:null};
+    });
+    return {width:innerWidth,height:innerHeight,layout:document.body.dataset.layout,compact:document.body.dataset.consoleCompact,
+      shell:box('.projection-shell'),stage:box('.scene-stage'),frame:box('#map-container iframe'),console:box('#spatial-console'),dock:box('.voice-dock'),
+      shellScrollTop:shell.scrollTop,shellScrollHeight:shell.scrollHeight,shellClientHeight:shell.clientHeight,
+      documentWidth:document.documentElement.scrollWidth,controls,
+      background:{display:getComputedStyle(room).display,pointerEvents:getComputedStyle(room).pointerEvents,
+        hidden:room.getAttribute('aria-hidden'),z:Number(getComputedStyle(room).zIndex),shellZ:Number(getComputedStyle(shell).zIndex),
+        entranceAfterRoom:!!(room.compareDocumentPosition(entry)&Node.DOCUMENT_POSITION_FOLLOWING)},
+      identity:{frame:document.querySelector('#map-container iframe')===window.rotationFrame,
+        window:document.querySelector('#map-container iframe').contentWindow===window.rotationWindow,
+        destination:document.getElementById('destination-input')===window.rotationDestination,
+        question:document.getElementById('question-input')===window.rotationQuestion},
+      entryActive:document.body.dataset.entryActive,selected:window.projectionState.selectedPlace?.id,voice:window.projectionState.voice};
+  });
+  const provider=await renderer.evaluate(()=>({height:innerHeight,width:innerWidth,attribution:document.getElementById('provider-attribution').getBoundingClientRect().toJSON()}));
+  if(screenDirectory&&capture) {
+    await page.screenshot({path:path.join(screenDirectory,`projection-landscape-${label}.png`)});
+    fs.writeFileSync(path.join(screenDirectory,`projection-landscape-${label}.json`),JSON.stringify({geometry,provider},null,2));
+  }
+  try {
+    assert.equal(geometry.layout,'landscape','Wide viewport uses the room layout at '+label);
+    assert.equal(geometry.compact,String(geometry.height<=600),'Short landscape uses the console switch at '+label);
+    assert.ok(geometry.documentWidth<=geometry.width+1,'Landscape has no horizontal overflow at '+label);
+    assert.ok(geometry.shellScrollHeight<=geometry.shellClientHeight+1&&Math.abs(geometry.shellScrollTop)<1,'The room fits without scrolling the page at '+label);
+    for(const region of ['stage','console']) {
+      assert.ok(geometry[region].top>=geometry.shell.top&&geometry[region].bottom<=geometry.shell.bottom+1,region+' fits above the voice rail at '+label);
+    }
+    assert.ok(geometry.stage.width>=geometry.width*.55,'The world remains the primary landscape surface at '+label);
+    assert.ok(geometry.frame.width>=240&&geometry.frame.height>=140,'The property has a usable viewport at '+label);
+    assert.ok(geometry.console.left>=geometry.stage.right+8,'The projected console sits beside the world at '+label);
+    assert.ok(provider.attribution.top>=0&&provider.attribution.bottom<=provider.height+1,'The complete provider attribution is visible in its own surface at '+label);
+    assert.ok(provider.attribution.left>=0&&provider.attribution.right<=provider.width+1,'Provider attribution is not clipped horizontally at '+label);
+    assert.equal(geometry.background.display,'block');
+    assert.equal(geometry.background.pointerEvents,'none');
+    assert.equal(geometry.background.hidden,'true');
+    assert.ok(geometry.background.z<geometry.background.shellZ&&geometry.background.entranceAfterRoom,'The persistent room stays behind both entrance light and workspace at '+label);
+    assert.ok(Object.values(geometry.identity).every(Boolean),'Rotation preserves the provider and local control nodes at '+label);
+    assert.equal(geometry.entryActive,'false','Resize never replays the entrance at '+label);
+    for(const control of geometry.controls) {
+      const rect=control.rect;
+      assert.ok(rect.width>=44&&rect.height>=44,'Each projected control retains a 44px target at '+label+': '+control.id);
+      assert.ok(rect.left>=0&&rect.right<=geometry.width&&rect.top>=0&&rect.bottom<=geometry.height&&control.hittable,'Each projected control is reachable at '+label+': '+control.id);
+      if(control.label) {
+        assert.notEqual(control.label.display,'none','Camera controls have visible labels at '+label);
+        assert.ok(control.label.text.trim()&&control.label.rect.left>=rect.left&&control.label.rect.right<=rect.right&&control.label.rect.bottom<=rect.bottom,'Camera labels fit their controls at '+label+': '+control.id);
+      }
+    }
+  } catch(error) {
+    console.error('Landscape workspace geometry:',JSON.stringify({label,geometry,provider}));
+    if(screenDirectory&&!capture)await page.screenshot({path:path.join(screenDirectory,`projection-landscape-failure-${label}.png`)});
+    throw error;
+  }
+  await assertVoiceControls(page,label);
+  await assertClearRendererSurface(page,label,{activeVoice:geometry.voice.active||geometry.voice.paused});
+}
+
+async function assertLandscapeWorkspace(browser,errors) {
+  const page=await browser.newPage({viewport:{width:844,height:390},reducedMotion:'reduce'});
+  page.on('pageerror',error=>errors.push(error.message));
+  await routeProjectionRenderer(page);
+  await fixture(page);
+  await page.waitForFunction(()=>document.body.dataset.entryActive==='false');
+  for(const room of ['command','discovery']) {
+    await page.locator('#room-'+room).click();
+    if(screenDirectory)await page.screenshot({path:path.join(screenDirectory,`projection-landscape-room-${room}-844x390.png`)});
+  }
+  await page.setViewportSize({width:390,height:844});
+  await page.waitForFunction(()=>document.body.dataset.layout==='portrait');
+  await page.locator('#destination-input').fill('21 Oak Street, Example City');
+  await page.locator('#search-button').click();
+  await page.locator('.candidate-button').first().click();
+  await page.locator('#place-banner').waitFor();
+  await page.evaluate(()=>{
+    window.projectionState.config={...window.projectionState.config,mapAvailable:true,rendererUrl:'https://projection.test/brain-projection/earth.html'};
+    window.sendSnapshot();
+  });
+  await page.locator('#map-container iframe').waitFor();
+  const renderer=await (await page.locator('#map-container iframe').elementHandle()).contentFrame();
+  await renderer.waitForFunction(()=>typeof window.emitTransport==='function');
+  // Search confirmation can scroll the portrait shell below the provider.
+  // Bring its document into view before animation-frame-based handshake checks.
+  await settleRendererLayout(page,renderer,'landscape-provider-loading');
+  await alignRendererInViewport(page);
+  await renderer.evaluate(()=>window.emitTransport());
+  await renderer.waitForFunction(()=>window.received.length>0);
+  await renderer.evaluate(()=>window.emitStatus('ready'));
+  await page.waitForFunction(()=>document.body.dataset.map==='ready');
+  await page.locator('#talk-button').click();
+  await page.waitForFunction(()=>document.body.dataset.voice==='listening');
+  await page.evaluate(()=>{
+    window.rotationFrame=document.querySelector('#map-container iframe');
+    window.rotationWindow=window.rotationFrame.contentWindow;
+    window.rotationDestination=document.getElementById('destination-input');
+    window.rotationQuestion=document.getElementById('question-input');
+    window.projectionState.lastVoiceCommand={heard:'Rici, open the property in Street View',action:'Street View',result:'The selected property view is ready.',status:'completed'};
+    window.sendSnapshot();
+  });
+
+  async function rotate(width,height) {
+    const before=await page.evaluate(()=>({commands:window.projectionCommands.length,place:window.projectionState.selectedPlace,
+      camera:window.projectionState.camera,voice:window.projectionState.voice}));
+    await page.setViewportSize({width,height});
+    await page.waitForFunction(wide=>document.body.dataset.layout===(wide?'landscape':'portrait'),width>=600&&width>height);
+    await settleRendererLayout(page,renderer,'rotate-'+width+'x'+height);
+    assert.deepEqual(await page.evaluate(()=>({commands:window.projectionCommands.length,place:window.projectionState.selectedPlace,
+      camera:window.projectionState.camera,voice:window.projectionState.voice})),before,'Rotation preserves destination, camera, conversation and native command count at '+width+'x'+height);
+    assert.equal(await page.evaluate(()=>document.querySelector('#map-container iframe')===window.rotationFrame
+      &&document.querySelector('#map-container iframe').contentWindow===window.rotationWindow),true,'Rotation keeps the same live provider document');
+  }
+
+  await page.locator('#destination-input').fill('An unfinished address draft');
+  await page.locator('#destination-input').evaluate(input=>input.setSelectionRange(3,12));
+  await rotate(844,390);
+  assert.deepEqual(await page.locator('#destination-input').evaluate(input=>({same:input===window.rotationDestination,focused:document.activeElement===input,value:input.value,start:input.selectionStart,end:input.selectionEnd})),
+    {same:true,focused:true,value:'An unfinished address draft',start:3,end:12},'Portrait-to-landscape keeps the focused address draft and caret');
+  await page.locator('#console-rici').click();
+  await page.locator('#question-input').fill('A research draft retained through rotation');
+  await page.locator('#question-input').evaluate(input=>input.setSelectionRange(2,15));
+  await rotate(390,844);
+  assert.deepEqual(await page.locator('#question-input').evaluate(input=>({same:input===window.rotationQuestion,focused:document.activeElement===input,value:input.value,start:input.selectionStart,end:input.selectionEnd})),
+    {same:true,focused:true,value:'A research draft retained through rotation',start:2,end:15},'Landscape-to-portrait keeps the research draft and caret');
+  await rotate(667,340);
+  assert.equal(await page.locator('body').getAttribute('data-console'),'rici','Rotation reveals the console containing the already-focused field');
+  await page.locator('#question-button').click();
+  await page.waitForFunction(()=>window.testResearchCalls===1);
+  assert.match(await page.locator('#answer-text').textContent(),/sourced response fixture/,'The compact Rici console performs the real question action');
+  await page.locator('#console-rici').focus();
+  await rotate(390,844);
+  assert.equal(await page.evaluate(()=>document.activeElement.id),'projection-heading','Hiding a focused landscape shortcut hands focus to the visible page heading');
+  await rotate(667,340);
+  await page.locator('#console-explore').click();
+  assert.equal(await page.locator('#destination-input').inputValue(),'An unfinished address draft','Console switches retain the unsent address');
+  assert.equal(await page.locator('#question-input').isVisible(),false,'Inactive compact console is neither visible nor focusable');
+  assert.equal(await page.locator('#question-input').evaluate(input=>{input.focus();return document.activeElement===input;}),false,'A hidden compact input cannot take keyboard focus');
+
+  for(const [width,height] of [[667,340],[667,375],[844,369],[844,390],[1024,768],[1366,1024]]) {
+    await rotate(width,height);
+    for(const room of ['command','discovery']) {
+      await page.locator('#room-'+room).click();
+      await page.locator('#console-explore').click();
+      await assertLandscapeGeometry(page,renderer,`${room}-${width}x${height}`,{capture:true});
+      const cameraSequence=await page.evaluate(()=>window.projectionState.camera.sequence);
+      await page.locator('[data-camera="right"]').click();
+      await renderer.waitForFunction(sequence=>window.received.at(-1).camera.operation==='right'&&window.received.at(-1).camera.sequence>sequence,cameraSequence);
+      assert.equal(await page.evaluate(()=>window.projectionCommands.at(-1).action),'camera','Projected camera key sends its real native action');
+      await page.locator('#console-rici').click();
+      assert.equal(await page.locator('.rici-panel').isVisible(),true,'Rici remains reachable in '+room+' at '+width+'x'+height);
+      if(height<=600)assert.equal(await page.locator('.destination-panel').isVisible(),false,'The compact console shows one readable pane at a time');
+      await page.locator('#console-explore').click();
+    }
+    await page.locator('#pause-button').click();
+    await page.waitForFunction(()=>document.body.dataset.voice==='paused');
+    await assertLandscapeGeometry(page,renderer,`paused-${width}x${height}`);
+    await page.locator('#resume-button').click();
+    await page.waitForFunction(()=>document.body.dataset.voice==='listening');
+    await page.locator('#stop-button').click();
+    await page.waitForFunction(()=>document.body.dataset.voice==='complete');
+    await assertVoiceEntry(page,`landscape-stopped-${width}x${height}`);
+    await assertLandscapeGeometry(page,renderer,`stopped-${width}x${height}`,{capture:width===667&&height===340});
+    await page.locator('#talk-button').click();
+    await page.waitForFunction(()=>document.body.dataset.voice==='listening');
+  }
+
+  // A real native voice-search snapshot must reveal confirmation in the small
+  // console without typing, an extra lookup, or focusing a text input.
+  await rotate(667,340);
+  await page.locator('#console-rici').click();
+  const beforeVoiceSearch=await page.evaluate(()=>window.projectionCommands.filter(command=>command.action==='search').length);
+  await page.evaluate(()=>{
+    const query='32 Pine Avenue, Example City';
+    window.projectionState.destinationSearch={sequence:1,query,active:true,source:'voice'};
+    window.projectionState.lastVoiceCommand={heard:query,action:'Find destination',result:'Finding a matching address.',status:'running'};
+    window.sendSnapshot();
+  });
+  assert.equal(await page.locator('body').getAttribute('data-console'),'explore','Spoken address automatically opens the Explore console');
+  assert.equal(await page.locator('#destination-input').inputValue(),'32 Pine Avenue, Example City');
+  await page.evaluate(()=>{
+    const state=window.projectionState;
+    state.destinationSearch.active=false;
+    state.candidates=[{id:'landscape-spoken',label:'Spoken address match',address:'32 Pine Avenue, Example City',userQuery:state.destinationSearch.query,latitude:40.72,longitude:-73.98,provider:'Test'}];
+    state.lastVoiceCommand={...state.lastVoiceCommand,result:'Confirm the matching destination.',status:'completed'};
+    window.sendSnapshot();
+  });
+  await settleLayout(page);
+  const spoken=await page.locator('.candidate-button').evaluate(button=>{
+    const rect=button.getBoundingClientRect(),clip=document.getElementById('spatial-console-scroll').getBoundingClientRect();
+    return {rect:rect.toJSON(),clip:clip.toJSON(),focused:document.activeElement.id,
+      hittable:document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2)?.closest('button')===button};
+  });
+  assert.ok(spoken.rect.top>=spoken.clip.top&&spoken.rect.bottom<=spoken.clip.bottom&&spoken.hittable,'The spoken match is immediately visible in the compact console: '+JSON.stringify(spoken));
+  assert.notEqual(spoken.focused,'destination-input','Voice search never raises the address keyboard');
+  assert.equal(await page.evaluate(()=>window.projectionCommands.filter(command=>command.action==='search').length),beforeVoiceSearch,'Native voice search does not submit a duplicate typed request');
+  await assertLandscapeGeometry(page,renderer,'spoken-search-667x340',{capture:true});
+  await page.locator('.candidate-button').click();
+  await renderer.waitForFunction(()=>window.received.at(-1).place.id==='landscape-spoken');
+  await renderer.evaluate(()=>window.emitStatus('ready'));
+  await page.waitForFunction(()=>document.body.dataset.map==='ready');
+  assert.equal(await page.locator('#place-label').textContent(),'Spoken address match','Confirmation still selects the spoken address');
+  await page.locator('#console-explore').click();
+  await page.locator('[data-view-mode="earth"]').click();
+  await renderer.waitForFunction(()=>window.received.at(-1).camera.viewMode==='earth');
+  await renderer.evaluate(()=>window.emitStatus('ready'));
+  await page.waitForFunction(()=>document.body.dataset.map==='ready');
+  await page.locator('[data-view-mode="street"]').click();
+  await renderer.waitForFunction(()=>window.received.at(-1).camera.viewMode==='street');
+  await renderer.evaluate(()=>window.emitStatus('ready'));
+  await page.waitForFunction(()=>document.body.dataset.map==='ready');
+  await page.locator('#close-projection').click();
+  assert.equal(await page.evaluate(()=>window.projectionCommands.at(-1).action),'close','The landscape Close key remains separate from stopping conversation');
+  assert.equal(await page.locator('body').getAttribute('data-voice'),'listening','Closing sends no implicit Stop');
+  await rotate(390,844);
+  assert.equal(await page.locator('#spatial-console').isVisible(),false);
+  assert.equal(await page.locator('.destination-panel').evaluate(node=>node.parentElement.className),'scene-column','Portrait restores the original exploration flow');
+  await alignRendererInViewport(page);
+  await assertClearRendererSurface(page,'portrait-after-landscape',{activeVoice:true});
+  await page.close();
+}
+
+async function assertNativeHostPresentation(browser,errors) {
+  const page=await browser.newPage({viewport:{width:375,height:533},reducedMotion:'reduce'});
+  page.on('pageerror',error=>errors.push(error.message));
+  await routeProjectionRenderer(page);
+  await fixture(page);
+  await page.waitForFunction(()=>document.body.dataset.entryActive==='false');
+  await page.evaluate(()=>{
+    window.projectionState.config.rendererUrl='https://projection.test/brain-projection/earth.html';
+    window.projectionState.config.mapAvailable=true;
+    window.projectionState.selectedPlace={id:'native-fixture',label:'Native fixture property',address:'32 Pine Avenue, Example City',latitude:40.71,longitude:-74,provider:'fixture'};
+    window.sendSnapshot();
+  });
+  await page.waitForFunction(()=>document.querySelector('#map-container iframe')?.contentWindow);
+  await page.evaluate(()=>{
+    const frame=document.querySelector('#map-container iframe');
+    window.nativeIdentity={input:document.getElementById('destination-input'),frame,providerWindow:frame.contentWindow};
+  });
+  const present=async (viewport,nativeControls=true)=>{
+    await page.evaluate(presentation=>window.KorlixProjectionReceive({type:'presentation',presentation}),{nativeControls,viewport});
+    await settleLayout(page);
+  };
+  // The native control rail owns these actions in every voice phase. Exercise
+  // the shipped bridge, including layout changes whose WebView inner size lags.
+  for(const viewport of [{width:375,height:533,landscape:false},{width:667,height:265,landscape:true},{width:1024,height:648,landscape:true}]) {
+    await present(viewport);
+    for(const room of ['command','discovery'])for(const phase of ['complete','connecting','listening','thinking','speaking','pausing','paused','stopping','error']) {
+      await page.evaluate(({room,phase})=>{
+        window.projectionState.room=room;
+        window.projectionState.voice={phase,active:!['complete','paused','error'].includes(phase),paused:phase==='paused',message:phase};
+        window.sendSnapshot();
+      },{room,phase});
+      const visible=await page.evaluate(()=>({
+        dock:getComputedStyle(document.querySelector('.voice-dock')).display,
+        close:getComputedStyle(document.getElementById('close-projection')).display,
+      }));
+      assert.deepEqual(visible,{dock:'none',close:'none'},'Native controls stay exclusive at '+JSON.stringify({viewport,room,phase}));
+    }
+  }
+  await present(null,false);
+  assert.notEqual(await page.locator('.voice-dock').evaluate(node=>getComputedStyle(node).display),'none','Standalone web voice controls remain available');
+  assert.notEqual(await page.locator('#close-projection').evaluate(node=>getComputedStyle(node).display),'none','Standalone web Close remains available');
+
+  await present({width:375,height:533,landscape:false});
+  await page.evaluate(()=>{
+    window.projectionState.room='command';
+    window.projectionState.voice={phase:'listening',active:true,paused:false,message:'Rici is listening'};
+    window.sendSnapshot();
+    const input=document.getElementById('destination-input');
+    input.value='An unfinished native address';
+    input.scrollIntoView({block:'center'});
+    input.focus({preventScroll:true});
+    input.setSelectionRange(5,12);
+  });
+  await settleLayout(page);
+  const scrollBefore=await page.locator('.projection-shell').evaluate(node=>node.scrollTop);
+  // Actual M2 evidence: WKWebView innerHeight remained 533 while the native
+  // keyboard reduced the measured platform-view height to 205.125. This is a
+  // browser regression for that bridge geometry, not a native keyboard claim.
+  await present({width:375,height:205.125,landscape:false});
+  const keyboard=await page.evaluate(()=>{
+    const input=document.getElementById('destination-input'),frame=document.querySelector('#map-container iframe');
+    const rect=input.getBoundingClientRect(),shell=document.querySelector('.projection-shell');
+    return {input:rect.toJSON(),shell:shell.getBoundingClientRect().toJSON(),body:document.body.getBoundingClientRect().toJSON(),
+      focused:document.activeElement===input,draft:input.value,caret:[input.selectionStart,input.selectionEnd],
+      innerHeight,scrollTop:shell.scrollTop,hittable:document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2)===input,
+      identity:input===window.nativeIdentity.input&&frame===window.nativeIdentity.frame&&frame.contentWindow===window.nativeIdentity.providerWindow};
+  });
+  assert.equal(keyboard.innerHeight,533,'Regression retains the stale WKWebView-sized browser window');
+  assert.ok(keyboard.focused&&keyboard.identity,'Native resize retains the focused input and provider browsing context');
+  assert.equal(keyboard.draft,'An unfinished native address');
+  assert.deepEqual(keyboard.caret,[5,12]);
+  assert.ok(keyboard.input.top>=keyboard.shell.top&&keyboard.input.bottom<=keyboard.shell.bottom+.5
+    &&keyboard.input.bottom<=keyboard.body.bottom+.5&&keyboard.hittable,'Focused address stays above native controls after keyboard shrink: '+JSON.stringify(keyboard));
+  assert.ok(keyboard.scrollTop>scrollBefore,'The native portrait scrollport reveals the existing focused field');
+  if(screenDirectory) {
+    fs.mkdirSync(screenDirectory,{recursive:true});
+    await page.screenshot({path:path.join(screenDirectory,'projection-native-host-keyboard-browser.png')});
+    fs.writeFileSync(path.join(screenDirectory,'projection-native-host-keyboard-browser.json'),JSON.stringify(keyboard,null,2));
+  }
+  await page.evaluate(()=>document.getElementById('destination-input').blur());
+  const unfocusedScroll=await page.locator('.projection-shell').evaluate(node=>node.scrollTop);
+  await present({width:375,height:220,landscape:false});
+  assert.equal(await page.locator('.projection-shell').evaluate(node=>node.scrollTop),unfocusedScroll,'Native viewport updates do not scroll or focus an unrelated control');
+  assert.equal(await page.evaluate(()=>document.activeElement===document.getElementById('destination-input')),false,'Viewport updates cannot open the address keyboard');
+  await page.close();
+}
+
 (async()=>{
   const browser = await chromium.launch({headless:true,executablePath:process.env.BROWSER_EXECUTABLE_PATH||undefined,args:['--no-sandbox','--disable-dev-shm-usage']});
   const errors=[];
   try {
+    await assertNativeHostPresentation(browser,errors);
+    await assertEntryLifecycle(browser,errors);
+    for(const [width,height] of [[390,844],[768,1024],[844,390],[1366,1024]])await assertEntryVisualStages(browser,errors,width,height);
+    await assertLandscapeWorkspace(browser,errors);
     for(const [width,height] of [[320,850],[390,844],[768,1024],[1024,768],[1440,1000]]) {
       const page = await browser.newPage({viewport:{width,height},reducedMotion:'reduce'});
       page.on('pageerror',error=>errors.push(error.message));
       await fixture(page);
+      await assertVoiceEntry(page,'initial-'+width);
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'No horizontal overflow at '+width);
-      assert.equal(await page.locator('#world-caption-text').textContent(),'Illustrative globe · connect a map provider to explore');
+      assert.equal(await page.locator('#world-caption-text').textContent(),'Property imagery is not connected yet.');
+      assert.equal(await page.locator('label[for="destination-input"]').textContent(),'Explore a property');
+      assert.equal(await page.locator('label[for="destination-input"]').isVisible(),true,'Address exploration is visibly labeled at '+width);
+      assert.equal(await page.locator('#search-button').isEnabled(),true,'Address lookup is available independently of 3D imagery');
+      await page.evaluate(()=>{window.projectionState.config.checking=true;window.sendSnapshot();});
+      assert.equal(await page.locator('#search-button').isEnabled(),false,'Address lookup waits for fresh capabilities');
+      assert.equal(await page.locator('#search-help').first().textContent(),'Checking address search…Confirm a result to open Street View.');
+      assert.equal(await page.locator('#world-caption-text').textContent(),'Checking property imagery…');
+      await page.locator('#destination-input').fill('10 Downing Street, London SW1A 2AA');
+      await page.locator('#search-form').evaluate(form=>form.requestSubmit());
+      assert.equal(await page.evaluate(()=>window.projectionCommands.some(c=>c.action==='search')),false,'Submitting during refresh cannot use stale capabilities');
+      await page.evaluate(()=>{window.projectionState.config.checking=false;window.projectionState.config.geocodingAvailable=false;window.sendSnapshot();});
+      assert.equal(await page.locator('#search-button').isEnabled(),false);
+      assert.match(await page.locator('#search-help').textContent(),/Address search is not connected yet/);
+      assert.match(await page.locator('#world-caption-text').textContent(),/Property imagery is not connected yet/);
+      await page.evaluate(()=>{window.projectionState.config.checkFailed=true;window.sendSnapshot();});
+      assert.match(await page.locator('#search-help').textContent(),/Could not check address search\. Close and reopen Projection to try again\./);
+      assert.match(await page.locator('#world-caption-text').textContent(),/Could not check property imagery/);
+      await page.evaluate(()=>{window.projectionState.config.checkFailed=false;window.projectionState.config.geocodingAvailable=true;window.sendSnapshot();});
+      assert.equal(await page.locator('#search-button').isEnabled(),true,'A refreshed address service re-enables search');
+      await page.locator('#destination-input').fill('');
       assert.equal(await page.evaluate(()=>window.projectionCommands.some(c=>c.action==='startVoice')),false,'Opening must not start a second conversation');
       assert.equal(await page.locator('#talk-button').isEnabled(),true);
       assert.equal(await page.locator('#pause-button').isEnabled(),false);
@@ -222,6 +950,7 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
 
       await page.evaluate(()=>{window.projectionState.config.answersAvailable=false;window.sendSnapshot();});
       const liveChip=page.locator('[data-question]').last();
+      assert.equal(await liveChip.textContent(),'Live camera availability');
       assert.equal(await liveChip.isEnabled(),true,'Local live-view status is available without a research service or destination');
       assert.equal(await page.locator('[data-question]').first().isEnabled(),false,'Sourced questions still require research availability');
       await liveChip.click();
@@ -339,10 +1068,14 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
       await page.locator('#stop-button').click();
       await page.waitForFunction(()=>document.querySelector('#voice-phase').textContent==='Microphone off');
       assert.equal(await page.evaluate(()=>window.projectionCommands.filter(c=>c.action==='stopVoice').length),1);
+      await assertVoiceEntry(page,'stopped-restart-'+width);
+      const restartCount=await page.evaluate(()=>window.projectionCommands.filter(c=>c.action==='startVoice').length);
 
       await page.evaluate(()=>{window.testHoldStart=false;window.testHoldPause=false;});
       await page.locator('#talk-button').click();
       await page.waitForFunction(()=>document.body.dataset.voice==='listening');
+      assert.equal(await page.evaluate(()=>window.projectionCommands.filter(c=>c.action==='startVoice').length),restartCount+1,
+        'The visible stopped-state Talk control starts exactly one new Projection conversation');
       await page.locator('#pause-button').click();
       await page.waitForFunction(()=>document.body.dataset.voice==='paused');
       await page.locator('#resume-button').click();
@@ -435,27 +1168,19 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
       }
     }
 
+    for(const [width,height] of [[390,844],[768,1024]]) {
+      await assertSpokenAddressFeedback(browser,errors,width,height);
+    }
+
     const page = await browser.newPage({viewport:{width:1024,height:768},reducedMotion:'reduce'});
     page.on('pageerror',error=>errors.push(error.message));
     await page.context().route('https://provider-links.test/terms',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:'<!doctype html><html><head><meta charset="utf-8"></head><body><h1>Provider link fixture</h1><form action="/accepted" method="get"><button type="submit">Continue fixture</button></form></body></html>'}));
     await page.context().route('https://provider-links.test/accepted**',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:'<!doctype html><html><body><h1>Separate provider page accepted</h1></body></html>'}));
-    await page.route('https://projection.test/brain-projection/earth.html',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:`<!doctype html><html><head><meta charset="utf-8"><style>
-      html,body{height:100%;margin:0;overflow:hidden;background:#142135;color:white;font:11px/1.5 system-ui}
-      body{background:linear-gradient(140deg,#1b3245,#0c1729)}
-      .provider-label{position:absolute;top:8px;left:8px;padding:6px;background:#031019}
-      .provider-controls{position:absolute;top:8px;right:8px;display:flex;gap:4px}
-      .provider-controls button{color:white;background:#273d50;border:1px solid #7191a3;padding:5px}
-      #provider-attribution{position:absolute;left:0;right:0;bottom:0;padding:8px;background:#030b13;overflow-wrap:anywhere}a{color:#b3e1ff}
-      </style></head><body><span class="provider-label">Provider surface fixture</span><div class="provider-controls"><button>Map control</button></div><div id="provider-attribution">Google Maps · Synthetic imagery supplied by Example City Survey Office; Example Regional Mapping Group; Example Geospatial Imagery Cooperative; Example Municipal Cartography Archive. Attribution fixture only; no real imagery is requested. <a id="provider-terms" href="https://provider-links.test/terms" target="_blank">Provider link fixture</a></div><script>
-      window.received=[];window.addEventListener('message',e=>window.received.push(e.data));
-      window.emitStatus=status=>{document.body.dataset.phase=status;parent.postMessage({type:'korlix-projection-status',status},'*');};
-      window.emitCreditHeight=height=>parent.postMessage({type:'korlix-projection-credits',height},'*');
-      window.emitStatus('loading');
-      </script></body></html>`}));
+    await routeProjectionRenderer(page);
     await fixture(page);
     await page.evaluate(()=>{
       window.projectionState.selectedPlace={id:'renderer-fixture',label:'Camera fixture',address:'Not a real location claim',latitude:40.71,longitude:-74,provider:'Test'};
-      window.projectionState.camera={sequence:1,operation:'flyTo',latitude:40.71,longitude:-74,height:650,heading:0,pitch:-45};
+      window.projectionState.camera={sequence:1,operation:'flyTo',viewMode:'street',latitude:40.71,longitude:-74,height:650,heading:0,pitch:-45};
       window.projectionState.config={...window.projectionState.config,mapAvailable:true,rendererUrl:'https://projection.test/brain-projection/earth.html'};window.sendSnapshot();
     });
     await page.locator('#map-container iframe').waitFor();
@@ -466,7 +1191,14 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
     assert.equal(await page.locator('#map-container').isVisible(),true,'The provider owns a visible unobstructed surface while loading');
     assert.equal(await page.locator('#world-canvas').isVisible(),false,'The illustrative globe cannot cover a loading provider');
     assert.equal(await page.locator('[data-camera="closer"]').isEnabled(),false,'Loading is not camera readiness');
-    assert.equal(await renderer.evaluate(()=>window.received.length),0,'Camera commands wait for actual renderer readiness');
+    assert.equal(await renderer.evaluate(()=>window.received.length),0,'Camera commands wait for the verified frame transport');
+    await page.evaluate(()=>window.dispatchEvent(new MessageEvent('message',{origin:'https://attacker.test',source:document.querySelector('iframe').contentWindow,data:{type:'korlix-projection-transport-ready'}})));
+    assert.equal(await renderer.evaluate(()=>window.received.length),0,'A forged handshake cannot release camera commands');
+    await renderer.evaluate(()=>window.emitTransport());
+    await renderer.waitForFunction(()=>window.received.length===1);
+    assert.equal(await renderer.evaluate(()=>window.received[0].camera.viewMode),'street','Street View is the default camera mode');
+    assert.equal(await page.locator('[data-camera="closer"]').isEnabled(),false,'Transport does not claim loaded imagery');
+    assert.equal(await page.locator('[data-camera="stopCamera"]').isEnabled(),true,'Stop stays available while imagery loads');
     await renderer.evaluate(()=>window.emitStatus('ready'));
     await page.waitForFunction(()=>document.body.dataset.map==='ready');
     await renderer.waitForFunction(()=>window.received.length>0);
@@ -528,12 +1260,25 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
           await settleRendererLayout(page,renderer,label);
           assert.equal(await page.locator('[data-camera="closer"]').isEnabled(),phase==='ready','App camera readiness remains accurate at '+label);
           assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false,'Remote map layout fits '+label);
+          const startsBefore=await page.evaluate(()=>window.projectionCommands.filter(c=>['startVoice','resumeVoice'].includes(c.action)).length);
+          for(const voicePhase of ['complete','error']) {
+            await page.evaluate(voicePhase=>{
+              window.projectionState.voice={active:false,paused:false,phase:voicePhase,message:voicePhase==='error'?'Voice connection failed. Tap Talk to Rici to reconnect.':'Microphone off'};
+              window.sendSnapshot();
+              document.querySelector('.projection-shell').scrollTop=0;
+            },voicePhase);
+            await assertVoiceEntry(page,`${voicePhase}-initial-${label}`);
+            await alignRendererInViewport(page);
+            await assertVoiceEntry(page,`${voicePhase}-map-${label}`);
+            await assertClearRendererSurface(page,`${voicePhase}-${label}`);
+          }
+          assert.equal(await page.evaluate(()=>window.projectionCommands.filter(c=>['startVoice','resumeVoice'].includes(c.action)).length),startsBefore,'Visible microphone controls never start capture automatically at '+label);
           await alignRendererInViewport(page);
           await assertClearRendererSurface(page,label);
           if(screenDirectory&&width<500&&phase==='ready')await page.screenshot({path:path.join(screenDirectory,`projection-map-layout-${room}-${width}.png`),fullPage:true});
 
           await page.evaluate(()=>{
-            window.scrollBeforeVoice=scrollY;
+            window.scrollBeforeVoice=document.querySelector('.projection-shell').scrollTop;
             window.projectionState.voice={active:true,phase:'listening',message:'Rici is listening'};window.sendSnapshot();
           });
           assert.equal(await page.evaluate(()=>Math.abs(document.querySelector('.projection-shell').scrollTop-window.scrollBeforeVoice)<1),true,'Starting voice preserves the reading position at '+label);
@@ -551,22 +1296,86 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
             window.scrollBeforeStop=document.querySelector('.projection-shell').scrollTop;
             window.projectionState.voice={active:false,phase:'complete',message:'Microphone off'};window.sendSnapshot();
           });
-          assert.equal(await page.evaluate(()=>Math.abs(scrollY-window.scrollBeforeStop)<1),true,'Stopping voice restores normal page scrolling at '+label);
+          assert.equal(await page.evaluate(()=>Math.abs(document.querySelector('.projection-shell').scrollTop-window.scrollBeforeStop)<1),true,'Stopping voice preserves the view and keeps the voice entry visible at '+label);
+          await assertVoiceEntry(page,'stopped-'+label);
         }
       }
     }
     await page.locator('[data-camera="closer"]').click();
     await renderer.waitForFunction(()=>window.received.at(-1).camera.operation==='closer');
+    await page.evaluate(()=>{
+      window.projectionState.camera={...window.projectionState.camera,sequence:window.projectionState.camera.sequence+1,operation:'zoomInContinuous'};
+      window.sendSnapshot();
+    });
+    await renderer.waitForFunction(()=>window.received.at(-1).camera.operation==='zoomInContinuous');
+    const cameraSequence=await page.evaluate(()=>window.projectionState.camera.sequence);
+    await page.evaluate(sequence=>{
+      const source=document.querySelector('iframe').contentWindow;
+      for(const [origin,windowSource,record] of [
+        ['https://attacker.test',source,{sequence,state:'limit',reason:'closest'}],
+        ['https://projection.test',window,{sequence,state:'limit',reason:'closest'}],
+        ['https://projection.test',source,{sequence:sequence-1,state:'limit',reason:'closest'}],
+        ['https://projection.test',source,{sequence,state:'script',reason:'closest'}],
+      ]) window.dispatchEvent(new MessageEvent('message',{origin,source:windowSource,data:{type:'korlix-projection-camera-status',...record}}));
+    },cameraSequence);
+    assert.equal(await page.evaluate(()=>window.projectionCommands.filter(c=>c.action==='cameraStatus').length),0,'Untrusted/stale camera outcomes never reach native');
+    await renderer.evaluate(sequence=>parent.postMessage({type:'korlix-projection-camera-status',sequence,state:'limit',reason:'closest'},'*'),cameraSequence);
+    await page.waitForFunction(()=>window.projectionCommands.some(c=>c.action==='cameraStatus'));
+    assert.deepEqual(await page.evaluate(()=>window.projectionCommands.filter(c=>c.action==='cameraStatus').at(-1).payload),{sequence:cameraSequence,viewMode:'street',state:'limit',reason:'closest'});
+    await page.locator('[data-camera="stopCamera"]').click();
+    await renderer.waitForFunction(()=>window.received.at(-1).camera.operation==='stopCamera');
+    assert.equal(await page.evaluate(()=>window.projectionCommands.at(-1).action),'camera','Camera stop is distinct from conversation Stop');
     await renderer.evaluate(()=>window.emitStatus('error'));
     await page.waitForFunction(()=>document.body.dataset.map==='illustration');
-    assert.equal(await page.locator('#world-canvas').isVisible(),true,'Renderer failure returns to honest illustration');
+    assert.equal(await page.locator('#world-canvas').isVisible(),false,'Coverage errors keep the provider status visible without fabricated imagery');
+    assert.equal(await page.locator('[data-camera="closer"]').isEnabled(),false,'Unavailable imagery cannot accept zoom');
+    assert.equal(await page.locator('[data-view-mode="earth"]').isEnabled(),true,'Explicit Earth choice stays available after no coverage');
     assert.equal(await page.evaluate(()=>window.projectionCommands.filter(c=>c.action==='rendererReady').at(-1).payload.status),'error','Renderer failure reaches native so voice cannot claim camera movement');
+    const oldSequence=await page.evaluate(()=>window.projectionState.camera.sequence);
+    await page.locator('[data-view-mode="earth"]').click();
+    await renderer.waitForFunction(()=>window.received.at(-1).camera.viewMode==='earth');
+    assert.equal(await renderer.evaluate(()=>window.received.at(-1).camera.operation),'flyTo','Mode selection uses the existing flyTo contract');
+    assert.equal(await page.locator('[data-view-mode="earth"]').getAttribute('aria-pressed'),'true');
+    await renderer.evaluate(sequence=>window.emitStatus('ready',{sequence,viewMode:'street'}),oldSequence);
+    assert.equal(await page.locator('[data-camera="closer"]').isEnabled(),false,'Stale Street View readiness cannot enable Earth controls');
+    await page.locator('[data-camera="stopCamera"]').click();
+    await renderer.waitForFunction(()=>window.received.at(-1).camera.operation==='stopCamera');
+    assert.equal(await page.locator('[data-camera="closer"]').isEnabled(),false,'Stop crosses the transport without claiming loaded imagery');
+    await renderer.evaluate(()=>window.emitStatus('ready'));
+    await page.waitForFunction(()=>document.body.dataset.map==='ready');
+    assert.match(await page.locator('#map-badge').textContent(),/3D Earth/);
+    await page.locator('[data-view-mode="street"]').click();
+    await renderer.waitForFunction(()=>window.received.at(-1).camera.viewMode==='street');
+    await renderer.evaluate(()=>window.emitStatus('error',{reason:'no-coverage',message:'No recorded Street View is available near this location.'}));
+    await page.waitForFunction(()=>document.getElementById('world-caption-text').textContent.includes('No recorded Street View'));
+    assert.equal(await page.locator('[data-view-mode="street"]').getAttribute('aria-pressed'),'true','No coverage never silently changes to Earth');
+    await page.evaluate(()=>{
+      window.projectionState.lastVoiceCommand={heard:'Reese, zoom in <img src=x onerror=alert(1)>',action:'Zoom in',result:'The property view is unavailable. Try another view.',status:'failed'};
+      window.sendSnapshot();
+    });
+    assert.match(await page.locator('#voice-command-heard').textContent(),/Reese, zoom in <img/);
+    assert.equal(await page.locator('#voice-command-feedback img').count(),0,'Recognized speech is rendered as text');
+    assert.equal(await page.locator('#voice-command-action').textContent(),'Zoom in');
+    assert.equal(await page.locator('#voice-command-feedback').getAttribute('data-status'),'failed');
+    assert.match(await page.locator('#voice-command-result').textContent(),/unavailable/);
+    assert.match(await page.locator('#voice-summary-heard').textContent(),/Reese, zoom in <img/);
+    assert.equal(await page.locator('#voice-command-summary img').count(),0,'Compact voice feedback is text, never injected HTML');
+    assert.match(await page.locator('#voice-summary-action').textContent(),/Zoom in.*unavailable/);
+    for(const width of [320,390,768,1024]) {
+      await page.setViewportSize({width,height:844});
+      await settleRendererLayout(page,renderer,'voice-feedback-'+width);
+      await alignRendererInViewport(page);
+      await assertVoiceEntry(page,'voice-feedback-'+width);
+      const bounds=await page.locator('#voice-command-summary').boundingBox();
+      assert.ok(bounds&&bounds.y>=0&&bounds.y+bounds.height<=844,'Last heard/action feedback remains visible beside imagery at '+width);
+      await assertClearRendererSurface(page,'voice-feedback-'+width);
+    }
     for(const rendererUrl of ['http://projection.test/earth.html','javascript:alert(1)','https://name:password@projection.test/earth.html']){
       await page.evaluate(rendererUrl=>{window.projectionState.config.rendererUrl=rendererUrl;window.sendSnapshot();},rendererUrl);
       assert.equal(await page.locator('iframe').count(),0,'Unsafe renderer URL rejected: '+rendererUrl);
     }
     await page.close();
     assert.deepEqual(errors,[],'No uncaught browser errors');
-    console.log('Projection UI passed: five viewport sizes, both rooms, explicit place confirmation, reviewed userQuery directions with account entitlement, Google address attribution without a map, source safety, cost disclosure, save failure/success, separate 44px Pause/Resume/Stop controls, explicit resume, cancellation of pending resume, stale reply protection, close/stop separation, renderer origin isolation, unobstructed provider surfaces while loading/ready and paused, separate provider popups, dock clearance with scroll preservation, and no credential transfer.');
+    console.log('Projection UI passed: exclusive native controls across layouts/rooms/voice phases, native measured-viewport shrink retaining a visible focused draft and provider context, bounded one-shot full/reduced entrances, immediate voice and typed/spoken search, rapid close/reopen and lifecycle cleanup, real-time portrait/landscape stage evidence, clear loading/ready provider surfaces during full motion, six compact/tablet landscape sizes, both projected room consoles, 44px labeled camera keys, viewport fit with intact provider attribution, rotation preserving provider document/drafts/caret/destination/voice without native actions, compact spoken-result reveal, five original viewport sizes, explicit place confirmation, reviewed userQuery directions with account entitlement, Google address attribution without a map, source safety, cost disclosure, save failure/success, visible idle/error microphone entry without auto-start, compact last-heard/action feedback, separate 44px Pause/Resume/Stop controls, explicit resume, cancellation of pending resume, stale reply protection, close/stop separation, renderer origin isolation, unobstructed provider surfaces while loading/ready and paused, separate provider popups, dock clearance with scroll preservation, and no credential transfer.');
   } finally { await browser.close(); }
 })().catch(error=>{console.error(error);process.exitCode=1;});

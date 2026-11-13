@@ -7,12 +7,17 @@ on:
       - apps/korlix_brain/**
       - packages/korlix_receipt_core/**
       - .github/workflows/korlix-brain-validation.yml
+      - scripts/run_brain_native_projection.py
+      - scripts/tests/test_brain_native_projection.py
+      - codemagic.yaml
   push:
     branches: [feature/korlix-brain-voice-20261031, feature/brain-projection-20261107]
     paths:
       - apps/korlix_brain/**
       - packages/korlix_receipt_core/**
       - .github/workflows/korlix-brain-validation.yml
+      - scripts/run_brain_native_projection.py
+      - scripts/tests/test_brain_native_projection.py
       - scripts/prepare_brain_ios.py
       - scripts/prepare_ios_release.py
       - scripts/verify_ios_ipa.py
@@ -31,7 +36,17 @@ env:
   COCOAPODS_DISABLE_STATS: 'true'
 jobs:
   projection-ui:
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            playwright: 1.56.1
+            artifact: korlix-brain-projection-screenshots
+          - os: macos-26
+            playwright: 1.62.1
+            artifact: korlix-brain-projection-screenshots-macos
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -39,7 +54,7 @@ jobs:
           persist-credentials: false
       - name: Install isolated browser test dependencies
         run: |
-          npm install --prefix "$RUNNER_TEMP/projection-browser" --no-audit --no-fund playwright@1.56.1
+          npm install --prefix "$RUNNER_TEMP/projection-browser" --no-audit --no-fund playwright@${{ matrix.playwright }}
           "$RUNNER_TEMP/projection-browser/node_modules/.bin/playwright" install --with-deps chromium
       - name: Check responsive Projection and original home interactions
         env:
@@ -49,12 +64,13 @@ jobs:
           node apps/korlix_brain/tools/check_projection.cjs
           node apps/korlix_brain/tools/check_ui.cjs
           node apps/korlix_brain/tools/check_controls.cjs
+          node apps/korlix_brain/tools/check_voice_status.cjs
           node apps/korlix_brain/tools/check_ambience.cjs
           node apps/korlix_brain/tools/check_welcome.cjs
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
-          name: korlix-brain-projection-screenshots
+          name: ${{ matrix.artifact }}
           path: projection-screenshots
           if-no-files-found: warn
           retention-days: 14
@@ -67,6 +83,8 @@ jobs:
           persist-credentials: false
       - name: Verify Apple identity and build numbering safeguards
         run: python3 -m unittest discover -s scripts/tests -p 'test_*ios_release.py' -v
+      - name: Verify native Projection execution safeguards
+        run: python3 -m unittest discover -s scripts/tests -p 'test_brain_native_projection.py' -v
   android:
     runs-on: ubuntu-24.04
     timeout-minutes: 35

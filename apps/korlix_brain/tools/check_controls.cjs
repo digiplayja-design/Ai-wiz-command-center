@@ -6,6 +6,7 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const app = path.resolve(__dirname, '..');
 const buttonIds = ['cinema-kb-pause-voice', 'cinema-kb-resume-voice', 'cinema-kb-stop-voice'];
 const widths = [320, 390, 768];
+const screenDirectory = process.env.UI_SCREENSHOTS || process.env.PROJECTION_SCREENSHOTS;
 
 // Explicit native contract fixture. This suite proves WebView behavior, not
 // microphone hardware, provider connections, account billing or photo capture.
@@ -22,11 +23,11 @@ function nativeFixture() {
   fixture.reply = (message, data, error) => window.KorlixBrainReceive({
     type: 'reply', id: message.id, data, error,
   });
-  fixture.finish = (action, data) => {
+  fixture.finish = (action, data, error) => {
     const message = fixture.held[action];
     if (!message) throw new Error(`No held ${action}`);
     delete fixture.held[action];
-    fixture.reply(message, data);
+    fixture.reply(message, data, error);
   };
   window.Korlix = {postMessage(raw) {
     const message = JSON.parse(raw);
@@ -107,6 +108,39 @@ async function geometry(page, width) {
       `${b.id} stays in viewport at ${width}: ${JSON.stringify(b)}`);
     assert.ok(b.reachable, `${b.id} center is not obscured at ${width}`);
   }
+}
+
+async function restartable(page, width, label = 'Start Live Conversation') {
+  assert.equal(await page.locator('.kb-live-banner').isVisible(), true,
+    'Stop preserves the visible conversation dock');
+  const start = page.getByRole('button', {name: label, exact: true}).and(page.locator('#cinema-kb-start-voice'));
+  assert.equal(await start.isEnabled(), true, 'Stopped conversation has an enabled restart control');
+  assert.equal(await page.locator('#cinema-kb-active-voice-controls').isVisible(), false,
+    'Inactive Pause/Resume/Stop controls are replaced by Start');
+  const target = await start.evaluate(element => {
+    const rect = element.getBoundingClientRect();
+    const center = document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+    return {x: rect.x, y: rect.y, width: rect.width, height: rect.height,
+      viewportWidth: innerWidth, viewportHeight: innerHeight,
+      reachable: center === element || element.contains(center)};
+  });
+  assert.ok(target.width >= 44 && target.height >= 44 && target.x >= 0 && target.y >= 0 &&
+    target.x + target.width <= target.viewportWidth + 1 && target.y + target.height <= target.viewportHeight + 1 && target.reachable,
+    `Restart remains reachable without scrolling at ${width}: ${JSON.stringify(target)}`);
+  return start;
+}
+
+async function readingPosition(page) {
+  return page.evaluate(() => {
+    const inline = document.getElementById('cinema-kb-replay-demo');
+    const status = document.getElementById('cinema-kb-status');
+    return {scrollY, documentHeight: document.documentElement.scrollHeight,
+      viewportHeight: innerHeight, screen: document.querySelector('.kb-product').dataset.screen,
+      inlineHeight: inline.getBoundingClientRect().height,
+      inlineVisibility: getComputedStyle(inline).visibility,
+      statusHeight: status.getBoundingClientRect().height, status: status.textContent,
+      focus: document.activeElement.id};
+  });
 }
 
 (async () => {
@@ -203,7 +237,7 @@ async function geometry(page, width) {
       await state(page, false, true);
       await page.locator('#cinema-kb-stop-voice').click();
       await state(page, false, false);
-      assert.equal(await page.locator('.kb-live-banner').isVisible(), false, 'Stop ends paused conversation');
+      await restartable(page, width);
 
       await page.locator('#cinema-kb-replay-demo').click();
       await listening(page);
@@ -219,7 +253,8 @@ async function geometry(page, width) {
       await state(page, false, false);
       await page.evaluate(() => window.controlsFixture.finish('resumeVoice', {active: true, paused: false}));
       await state(page, false, false);
-      assert.equal(await page.locator('.kb-live-banner').isVisible(), false,
+      await restartable(page, width);
+      assert.equal(await page.locator('#cinema-kb-resume-voice').isDisabled(), true,
         'Late resume acknowledgement cannot undo Stop');
 
       // Cancellation during Stop ignores stale playback UI until terminal end.
@@ -263,7 +298,7 @@ async function geometry(page, width) {
       assert.equal(await page.locator('#cinema-kb-resume-voice').isDisabled(), true);
       assert.equal(await page.locator('#cinema-kb-voice-modes').isEnabled(), true);
       assert.equal(await page.locator('#cinema-kb-replay-demo').isEnabled(), true);
-      assert.equal(await page.locator('.kb-live-banner').isVisible(), false);
+      await restartable(page, width);
       await page.locator('#cinema-kb-replay-demo').click();
       await listening(page);
       assert.equal(await page.locator('#cinema-kb-pause-voice').isEnabled(), true,
@@ -272,10 +307,162 @@ async function geometry(page, width) {
       await page.locator('#cinema-kb-stop-voice').click();
       await state(page, false, false);
 
-      if (process.env.UI_SCREENSHOTS) {
-        fs.mkdirSync(process.env.UI_SCREENSHOTS, {recursive: true});
+      // A native startup failure must remain on the conversation screen after
+      // the later bridge reply. It must not disappear behind "Microphone off".
+      const startupFailure = 'Voice setup could not be confirmed. Tap Start conversation to retry.';
+      await page.evaluate(() => window.controlsFixture.hold.startVoice = true);
+      for (const bridgeError of [undefined, 'Could not complete this action.']) {
+        await page.locator('#cinema-kb-replay-demo').click();
+        await state(page, true, false);
+        await page.evaluate(({message, error}) => {
+          window.controlsFixture.emit('complete', {paused: false, message});
+          window.controlsFixture.finish('startVoice', {active: false}, error);
+        }, {message: startupFailure, error: bridgeError});
+        await state(page, false, false);
+        assert.equal(await page.locator('#cinema-kb-voice-phase').textContent(), startupFailure,
+          'Start reply preserves the native startup failure');
+        assert.equal(await page.locator('#cinema-kb-live-phase').textContent(), startupFailure);
+        assert.equal(await page.locator('#cinema-kb-replay-demo').isEnabled(), true);
+      }
+
+      // Errors before native voice events also need persistent text, and retry
+      // must start one independent conversation after the failed attempt.
+      const microphoneFailure = 'Microphone access is needed to talk. Allow access and try again.';
+      await page.locator('#cinema-kb-replay-demo').click();
+      await page.evaluate(error => window.controlsFixture.finish('startVoice', null, error), microphoneFailure);
+      await state(page, false, false);
+      assert.equal(await page.locator('#cinema-kb-voice-phase').textContent(), microphoneFailure,
+        'Bridge-only startup errors remain visible');
+      await page.evaluate(() => window.controlsFixture.hold.startVoice = false);
+      await page.locator('#cinema-kb-replay-demo').click();
+      await listening(page);
+      await page.locator('#cinema-kb-pause-voice').click();
+      await state(page, false, true);
+
+      const resumeFailure = 'The conversation could not be restored. Tap Resume to try again.';
+      await page.evaluate(() => window.controlsFixture.hold.resumeVoice = true);
+      await page.locator('#cinema-kb-resume-voice').click();
+      await page.evaluate(message => {
+        window.controlsFixture.emit('paused', {paused: true, message});
+        window.controlsFixture.finish('resumeVoice', null, 'Could not complete this action.');
+      }, resumeFailure);
+      await state(page, false, true);
+      assert.equal(await page.locator('#cinema-kb-voice-phase').textContent(), resumeFailure,
+        'Resume reply preserves the native reason for remaining paused');
+      assert.equal(await page.locator('#cinema-kb-resume-voice').isEnabled(), true);
+
+      await page.locator('#cinema-kb-resume-voice').click();
+      await page.evaluate(error => window.controlsFixture.finish('resumeVoice', null, error), resumeFailure);
+      await state(page, false, true);
+      assert.equal(await page.locator('#cinema-kb-voice-phase').textContent(), resumeFailure,
+        'Bridge-only resume errors remain visible');
+
+      // A delayed failure belongs to its canceled attempt; it must not replace
+      // the user's later Stop state or make the stopped session resumable.
+      await page.locator('#cinema-kb-resume-voice').click();
+      await state(page, true, true);
+      await page.locator('#cinema-kb-stop-voice').click();
+      await state(page, false, false);
+      await page.evaluate(error => window.controlsFixture.finish('resumeVoice', null, error), resumeFailure);
+      assert.equal(await page.locator('#cinema-kb-voice-phase').textContent(), 'Fixture complete');
+      await state(page, false, false);
+      assert.equal(await page.locator('#cinema-kb-resume-voice').isDisabled(), true);
+      await page.evaluate(() => window.controlsFixture.hold.resumeVoice = false);
+
+      // Reproduce the reported disappearing controls after a long conversation.
+      // Do not use locator auto-scroll to find a hidden inline start link.
+      await page.evaluate(() => {
+        for (let i = 0; i < 18; i++) window.KorlixBrainReceive({
+          type: 'transcript', id: `restart-${i}`, role: i % 2 ? 'rici' : 'user',
+          text: `A long conversation message ${i}. `.repeat(8),
+        });
+        window.scrollTo({top: document.documentElement.scrollHeight, behavior: 'instant'});
+      });
+      const beforeRestart = await readingPosition(page);
+      assert.ok(beforeRestart.scrollY > 900, 'Fixture genuinely scrolls past the inline start control: '+JSON.stringify(beforeRestart));
+      await restartable(page, width);
+      const startsBefore = await page.evaluate(() => window.controlsFixture.calls.filter(c => c.action === 'startVoice').length);
+      await page.locator('#cinema-kb-start-voice').click();
+      await listening(page);
+      assert.equal(await page.evaluate(() => window.controlsFixture.calls.filter(c => c.action === 'startVoice').length), startsBefore + 1,
+        'One explicit restart creates exactly one new session');
+      const afterRestart = await readingPosition(page);
+      assert.ok(Math.abs(afterRestart.scrollY - beforeRestart.scrollY) < 3,
+        'Starting again preserves the current transcript position: '+JSON.stringify({width,beforeRestart,afterRestart}));
+      assert.equal(await page.locator('#cinema-kb-replay-demo').isVisible(), false,
+        'The reserved inline restart is hidden while the conversation is active');
+      const hiddenRestart = await page.locator('#cinema-kb-replay-demo').evaluate(element => {
+        const focused = document.activeElement;
+        element.focus({preventScroll: true});
+        return {pointerEvents: getComputedStyle(element).pointerEvents,
+          focusUnchanged: document.activeElement === focused};
+      });
+      assert.equal(hiddenRestart.pointerEvents, 'none', 'Reserved inline restart cannot receive pointer clicks');
+      assert.equal(hiddenRestart.focusUnchanged, true, 'Reserved inline restart cannot take keyboard focus');
+      await page.locator('#cinema-kb-stop-voice').click();
+      await state(page, false, false);
+      await restartable(page, width);
+      assert.equal(await page.evaluate(() => document.activeElement.id), 'cinema-kb-start-voice',
+        'Focus moves from the removed Stop control to Start without a scroll jump');
+      const afterStop = await readingPosition(page);
+      assert.ok(Math.abs(afterStop.scrollY - afterRestart.scrollY) < 3 && Math.abs(afterStop.scrollY - beforeRestart.scrollY) < 3,
+        'Stop and the full restart cycle preserve the current transcript position: '+JSON.stringify({width,beforeRestart,afterRestart,afterStop}));
+      assert.equal(await page.locator('#cinema-kb-replay-demo').isVisible(), true,
+        'Inline restart returns when stopped without changing its reserved height');
+      if (screenDirectory) {
+        fs.mkdirSync(screenDirectory, {recursive: true});
+        await page.screenshot({path: path.join(screenDirectory, `brain-stopped-restart-${width}.png`)});
+      }
+      await page.keyboard.press('Enter');
+      await listening(page);
+      assert.equal(await page.evaluate(() => window.controlsFixture.calls.filter(c => c.action === 'startVoice').length), startsBefore + 2,
+        'Keyboard restart uses the same single native start action');
+
+      // Shutdown may finish after the user has deliberately focused another
+      // control. Keep the restart available without taking that focus back.
+      await page.evaluate(() => window.controlsFixture.hold.stopVoice = true);
+      await page.locator('#cinema-kb-stop-voice').click();
+      await page.locator('#cinema-kb-return-voice').click();
+      assert.equal(await page.evaluate(() => document.activeElement.id), 'cinema-kb-return-voice');
+      await page.evaluate(() => {
+        window.controlsFixture.emit('complete', {paused: false});
+        window.controlsFixture.finish('stopVoice', {active: false, paused: false});
+        window.controlsFixture.hold.stopVoice = false;
+      });
+      await state(page, false, false);
+      await restartable(page, width);
+      assert.equal(await page.evaluate(() => document.activeElement.id), 'cinema-kb-return-voice',
+        'Stop completion never steals focus from another control the user selected');
+      await page.locator('#cinema-kb-start-voice').click();
+      await listening(page);
+
+      // Home and other screens must keep an obvious restart without requiring
+      // users to rediscover Talk after the fixed active controls disappear.
+      await page.locator('section[data-screen="talk"] [data-go="home"]').click();
+      await page.locator('#cinema-kb-stop-voice').click();
+      await state(page, false, false);
+      await restartable(page, width);
+      const startsAtHome = await page.evaluate(() => window.controlsFixture.calls.filter(c => c.action === 'startVoice').length);
+      await page.locator('#cinema-kb-return-voice').click();
+      await page.getByRole('radio', {name: /Deep Think/}).check();
+      await restartable(page, width, 'Start Deep Think');
+      await page.locator('section[data-screen="talk"] [data-go="saved"]').click();
+      await restartable(page, width, 'Start Deep Think');
+      assert.equal(await page.evaluate(() => window.controlsFixture.calls.filter(c => c.action === 'startVoice').length), startsAtHome,
+        'Stopped-state navigation and mode changes never start the microphone');
+      await page.locator('#cinema-kb-start-voice').click();
+      await listening(page);
+      assert.equal(await page.evaluate(() => window.controlsFixture.calls.filter(c => c.action === 'startVoice').at(-1).payload.mode), 'deep',
+        'Restart honors Deep Think instead of silently forcing Live');
+      await page.locator('#cinema-kb-stop-voice').click();
+      await state(page, false, false);
+      await page.getByRole('radio', {name: /Live Conversation/}).check();
+      await restartable(page, width);
+
+      if (screenDirectory) {
+        fs.mkdirSync(screenDirectory, {recursive: true});
         await page.evaluate(() => window.controlsFixture.emit('paused', {paused: true}));
-        await page.screenshot({path: path.join(process.env.UI_SCREENSHOTS, `brain-paused-controls-${width}.png`)});
+        await page.screenshot({path: path.join(screenDirectory, `brain-paused-controls-${width}.png`)});
       }
       console.log(`Brain controls: ${width}px passed`);
       await page.close();

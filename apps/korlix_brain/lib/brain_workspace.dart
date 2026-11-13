@@ -2,9 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show appBuildName, appBuildNumber;
 import 'package:korlix_receipt_core/privacy/korlix_third_party_ai_consent.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:speech_to_text/speech_to_text.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:webview_flutter_android/webview_flutter_android.dart';
@@ -23,6 +23,7 @@ import 'brain_model.dart';
 import 'brain_transcripts.dart';
 import 'brain_pronunciation.dart';
 import 'brain_welcome.dart';
+import 'brain_dictation.dart';
 import 'brain_billing.dart';
 import 'brain_billing_screen.dart';
 import 'brain_projection.dart';
@@ -44,13 +45,18 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
   late final BrainWelcome _welcome;
   late final BrainBilling _billing;
   late final WebViewController _web;
-  final _speech = SpeechToText();
+  late final BrainDictation _dictation;
   final _inFlight = <String>{};
-  bool _disposed = false, _pickerBusy = false, _dictating = false;
+  final _pendingWebEvents = <String>[];
+  bool _disposed = false, _pickerBusy = false, _backgroundReleased = false;
   int _voiceStartRequest = 0;
   bool _captureStarting = false;
   String? _pageError;
   BrainTranscripts? _transcripts;
+
+  bool get _foreground => !_disposed && mounted &&
+      WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+  bool get _dictating => _dictation.active;
 
   BrainTranscripts get _transcriptStore {
     final session = widget.auth.session;
@@ -107,12 +113,18 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
       _api,
       _emit,
       onProjection: _projection.voiceTurn,
+      recognizesProjection: _projection.recognizesVoiceControl,
       onSaved: (result) async {
         // A confirmed write must remain visible even if the subsequent refresh fails.
         final memory = Map<String, dynamic>.from(result['memory'] as Map);
         _repository.acceptVoiceMemory(memory);
         _emit({'type': 'brainSnapshot', 'snapshot': _repository.snapshot});
       },
+    );
+    _dictation = BrainDictation(
+      canListen: () => _foreground,
+      prepare: () => _voice.stop(reason: 'dictation_started'),
+      emit: _emit,
     );
     _welcome = BrainWelcome(
       canPlay: () =>
@@ -148,7 +160,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
                 : NavigationDecision.prevent;
           },
           onWebResourceError: (error) {
-            if (mounted && error.isForMainFrame == true) {
+            if (!_disposed && mounted && error.isForMainFrame == true) {
               setState(
                 () => _pageError = 'The app screen could not load. Tap Retry.',
               );
@@ -169,20 +181,45 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_disposed) return;
     if (state != AppLifecycleState.resumed) {
       unawaited(_welcome.stop(dismiss: false).catchError((Object _) {}));
     } else {
-      unawaited(_voice.refreshUsage());
+      final wasBackgrounded = _backgroundReleased;
+      _backgroundReleased = false;
+      _flushWebEvents();
+      unawaited(_voice.refreshUsage().catchError((Object _) {}));
+      if (wasBackgrounded) {
+        // Returning to the app restores presentation, never microphone capture.
+        _emit({
+          'type': 'dictationStatus', 'active': false,
+          'message': 'Dictation stopped. Review your text before saving.',
+        });
+        if (_voice.paused) {
+          _emit({
+            'type': 'voice', 'phase': 'paused', 'paused': true,
+            'message': 'Paused · Microphone off. Tap Resume when ready.',
+          });
+        }
+      }
     }
     _emit({
       'type': 'appLifecycle',
       'active': state == AppLifecycleState.resumed,
     });
-    if (state == AppLifecycleState.paused ||
+    if (state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
-      unawaited(_stopDictation());
+      if (_backgroundReleased) return;
+      _backgroundReleased = true;
+      ++_voiceStartRequest;
+      _captureStarting = false;
+      _projection.cancelPending();
+      unawaited(_stopDictation(cancel: true).catchError((Object _) {}));
+      // Pause detaches microphone/playback before its asynchronous bookkeeping,
+      // and retains conversation context for an explicit foreground Resume.
+      unawaited(_voice.pause(reason: 'app_backgrounded').catchError((Object _) {}));
     }
-    if (state == AppLifecycleState.detached) unawaited(_voice.stop());
   }
 
   void _emit(Map<String, dynamic> event) {
@@ -202,11 +239,27 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
       }
     }
     _projection.receiveVoice(event);
+    final encoded = jsonEncode(event);
+    if (!_foreground) {
+      // Preserve completed command replies and state while native WebViews are
+      // inactive. Commands cannot be newly issued until the app is foreground.
+      _pendingWebEvents.add(encoded);
+      return;
+    }
     unawaited(
       _web
-          .runJavaScript('window.KorlixBrainReceive?.(${jsonEncode(event)});')
+          .runJavaScript('window.KorlixBrainReceive?.($encoded);')
           .catchError((Object _) {}),
     );
+  }
+
+  void _flushWebEvents() {
+    if (!_foreground || _pendingWebEvents.isEmpty) return;
+    final events = _pendingWebEvents.join(',');
+    _pendingWebEvents.clear();
+    unawaited(_web.runJavaScript(
+      'for (const event of [$events]) { window.KorlixBrainReceive?.(event); }',
+    ).catchError((Object _) {}));
   }
 
   String _text(
@@ -227,7 +280,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
   }
 
   Future<void> _message(String message) async {
-    if (_disposed || message.length > 75000) return;
+    if (!_foreground || message.length > 75000) return;
     String? id;
     try {
       final value = jsonDecode(message);
@@ -268,6 +321,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
   }
 
   Future<Object?> _dispatch(String action, Map<String, dynamic> data) async {
+    if (_disposed) return null;
     // Welcome controls are local, available even when account syncing fails.
     if (action == 'welcomeState') {
       return {
@@ -321,7 +375,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
           if (await _consent('Resume Rici', {
             KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts,
             KorlixThirdPartyAiDataCategory.agentTrainingAndMemory,
-          }) && !_disposed && mounted && request == _voiceStartRequest) {
+          }) && _foreground && request == _voiceStartRequest) {
             await _voice.resume();
           }
           return {'active': _voice.active, 'paused': _voice.paused};
@@ -430,8 +484,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
             KorlixThirdPartyAiDataCategory.voiceAudioAndTranscripts,
             KorlixThirdPartyAiDataCategory.agentTrainingAndMemory,
           })) {
-            if (!_disposed &&
-                mounted &&
+            if (_foreground &&
                 startRequest == _voiceStartRequest &&
                 widget.auth.session != null) {
               await _voice.start(
@@ -446,13 +499,15 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
           if (startRequest == _voiceStartRequest) _captureStarting = false;
         }
       case 'dictate':
+        final dictationRequest = ++_voiceStartRequest;
         _captureStarting = true;
         try {
           await _welcome.stop();
+          if (!_foreground || dictationRequest != _voiceStartRequest) return null;
           await _dictate(_kind(data));
           return null;
         } finally {
-          _captureStarting = false;
+          if (dictationRequest == _voiceStartRequest) _captureStarting = false;
         }
       case 'stopDictation':
         await _stopDictation();
@@ -551,81 +606,17 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
     dataCategories: categories,
   );
 
-  Future<void> _dictate(String kind) async {
-    if (_dictating) {
-      await _stopDictation();
-      return;
-    }
-    await _voice.stop();
-    if (!mounted || _disposed) return;
-    final available = await _speech.initialize(
-      onError: (_) {
-        _dictating = false;
-        _emit({
-          'type': 'dictationStatus',
-          'active': false,
-          'message': 'Dictation stopped. Check microphone and speech permissions, or type instead.',
-        });
-      },
-      onStatus: (status) {
-        if (status == 'done' || status == 'notListening') {
-          _dictating = false;
-          _emit({
-            'type': 'dictationStatus',
-            'active': false,
-            'message': 'Dictation stopped. Review your text before saving.',
-          });
-        }
-      },
-    );
-    if (!available) {
-      throw const BrainApiException(
-        'Enable microphone and speech recognition in your device settings, or type instead.',
-      );
-    }
-    if (!mounted || _disposed) return;
-    _dictating = true;
-    await _speech.listen(
-      onResult: (result) => _emit({
-        'type': 'dictation',
-        'kind': kind,
-        'text': result.recognizedWords,
-        'final': result.finalResult,
-      }),
-      listenOptions: SpeechListenOptions(
-        listenFor: const Duration(minutes: 1),
-        pauseFor: const Duration(seconds: 5),
-        partialResults: true,
-        cancelOnError: true,
-        listenMode: ListenMode.dictation,
-      ),
-    );
-    _emit({
-      'type': 'dictationStatus',
-      'active': _dictating,
-      'message': 'Listening… tap Stop dictation when finished.',
-    });
-  }
+  Future<void> _dictate(String kind) => _dictation.toggle(kind);
 
-  Future<void> _stopDictation() async {
-    final wasDictating = _dictating;
-    _dictating = false;
-    await _speech.stop();
-    if (wasDictating) {
-      _emit({
-        'type': 'dictationStatus',
-        'active': false,
-        'message': 'Dictation stopped. Review your text before saving.',
-      });
-    }
-  }
+  Future<void> _stopDictation({bool cancel = false}) =>
+      _dictation.stop(cancel: cancel);
 
   Future<void> _pauseForFeature() async {
     ++_voiceStartRequest;
     _captureStarting = false;
     await _welcome.stop();
     await _stopDictation();
-    if (_voice.active) await _voice.pause();
+    await _voice.pause();
   }
 
   Future<Map<String, dynamic>> _openDocuments(String kind) async {
@@ -736,7 +727,9 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
             ListTile(
               title: const Text('KORLIX Brain+Voice'),
               subtitle: Text(
-                '${widget.auth.session?.email ?? 'Your account'}\nVersion 1.0.1 · Build 14',
+                '${widget.auth.session?.email ?? 'Your account'}\n'
+                '${appBuildName == null ? 'Version information unavailable' : 'Version $appBuildName'}'
+                '${appBuildNumber == null ? '' : ' · Build $appBuildNumber'}',
               ),
             ),
             const Padding(
@@ -779,7 +772,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
     if (action == 'billing') {
       await _openBilling();
     } else if (action == 'signout') {
-      await _voice.stop();
+      await _voice.stop(reason: 'account_changed');
       await _stopDictation();
       await widget.auth.signOut();
     } else if (action == 'delete') {
@@ -826,12 +819,16 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
   @override
   void dispose() {
     _disposed = true;
+    _pendingWebEvents.clear();
+    ++_voiceStartRequest;
+    _captureStarting = false;
     _projection.dispose();
     _billing.dispose();
     unawaited(_welcome.dispose().catchError((Object _) {}));
     WidgetsBinding.instance.removeObserver(this);
-    unawaited(_speech.cancel());
-    unawaited(_voice.stop().whenComplete(_api.dispose));
+    unawaited(_dictation.dispose().catchError((Object _) {}));
+    unawaited(_voice.stop(reason: 'workspace_disposed')
+        .whenComplete(_api.dispose).catchError((Object _) {}));
     super.dispose();
   }
 
@@ -840,7 +837,7 @@ class _BrainWorkspaceState extends State<BrainWorkspace>
     _captureStarting = false;
     await _welcome.stop();
     await _stopDictation();
-    await _voice.stop();
+    await _voice.stop(reason: 'billing_opened');
     if (!mounted || _disposed) return;
     unawaited(_billing.refresh());
     await Navigator.of(context).push(

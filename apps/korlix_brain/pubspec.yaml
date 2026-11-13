@@ -1,7 +1,7 @@
 name: korlix_brain
 description: Standalone KORLIX Brain with shared accounts, approved memory and live Rici voice.
 publish_to: none
-version: 1.0.2+15
+version: 1.0.2+25
 environment:
   sdk: ^3.13.5
 dependencies:
@@ -27,6 +27,8 @@ dependencies:
   in_app_purchase_storekit: 0.4.10+1
 dev_dependencies:
   flutter_test:
+    sdk: flutter
+  integration_test:
     sdk: flutter
   flutter_lints: ^6.0.0
 flutter:
