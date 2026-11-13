@@ -84,14 +84,14 @@ void main() {
           'latitude': 40.71, 'longitude': -74.0, 'provider': 'fixture',
         }]};
       },
-      onOpen: () {}, onClose: () {}, onSave: (_, __) async => false,
+      onOpen: () {}, onClose: () {}, onSave: (_, _) async => false,
       onStartVoice: () async { starts++; ++voiceEpoch; phase('listening'); },
       onPauseVoice: () async { pauses++; ++voiceEpoch; phase('paused'); },
       onResumeVoice: () async {
         resumes++;
         final epoch = ++voiceEpoch;
         phase('connecting');
-        if (resumeGate != null) await resumeGate!.future;
+        if (resumeGate != null) await resumeGate.future;
         if (epoch == voiceEpoch) phase('listening');
       },
       onStopVoice: () async { stops++; ++voiceEpoch; phase('complete'); },
@@ -100,7 +100,7 @@ void main() {
     phase('listening');
     projection.open();
     await projection.search('32 Pine Avenue, Example City');
-    await projection.select('native-runtime-place');
+    projection.select('native-runtime-place');
     await tester.pumpWidget(MaterialApp(home: ListenableBuilder(
       listenable: projection,
       builder: (context, _) => projection.isOpen
@@ -156,8 +156,10 @@ void main() {
       measured['webViewCreations'] = webCreations;
       measured['sameWebViewElement'] = identical(webElement,
           tester.element(find.byKey(const ValueKey('brain-projection-webview'))));
-      if (platformElement != null) measured['sameUiKitViewElement'] = identical(platformElement,
-          tester.element(find.byType(UiKitView)));
+      if (platformElement != null) {
+        measured['sameUiKitViewElement'] = identical(platformElement,
+            tester.element(find.byType(UiKitView)));
+      }
       expect(measured['dockDisplay'], 'none');
       expect(measured['draft'], 'An unfinished native address');
       expect((measured['identity'] as Map).values.every((value) => value == true), isTrue);
@@ -214,7 +216,7 @@ void main() {
     expect(tester.widget<OutlinedButton>(control('stop')).onPressed, isNotNull);
     await tester.tap(control('stop'));
     await tester.pump();
-    resumeGate!.complete();
+    resumeGate.complete();
     await until(tester, () async => (await inspect(web, geometry))['phase'] == 'complete', 'Stop superseding pending resume');
     expect(stops, 1);
     expect(projection.isOpen, isTrue);
@@ -243,7 +245,9 @@ void main() {
     binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     await until(tester, () async => find.text('Retry projection').evaluate().isNotEmpty,
         'Native page failure fallback');
-    for (final action in ['back', 'pause', 'resume', 'stop']) expect(control(action), findsOneWidget);
+    for (final action in ['back', 'pause', 'resume', 'stop']) {
+      expect(control(action), findsOneWidget);
+    }
     await tester.tap(control('stop'));
     await tester.pump();
     expect(stops, 2);

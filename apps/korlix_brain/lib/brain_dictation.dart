@@ -95,7 +95,9 @@ class BrainDictation {
         await _speech.listen(
           onResult: (result) {
             if (_disposed || !_ownsNative || !canListen() ||
-                _resultGeneration != generation) return;
+                _resultGeneration != generation) {
+              return;
+            }
             emit({
               'type': 'dictation',
               'kind': kind,
@@ -154,7 +156,9 @@ class BrainDictation {
 
   void _onError(SpeechRecognitionError error) {
     if (_disposed || !_ownsNative || _resultGeneration != _generation ||
-        (!_active && _starting == null)) return;
+        (!_active && _starting == null)) {
+      return;
+    }
     _active = false;
     _status('Dictation stopped. Check microphone and speech permissions, or type instead.');
   }

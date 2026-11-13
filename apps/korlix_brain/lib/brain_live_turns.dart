@@ -446,7 +446,9 @@ class BrainLiveTurns {
     if (!current) return;
     final id = response['id']?.toString();
     if (id == null || id.isEmpty || _responses.containsKey(id) ||
-        _completedResponses.contains(id)) return;
+        _completedResponses.contains(id)) {
+      return;
+    }
     final metadata = response['metadata'];
     final continuation = metadata is Map
         ? metadata['brain_turn']?.toString()

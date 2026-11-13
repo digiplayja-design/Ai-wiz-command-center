@@ -230,7 +230,9 @@ class _BrainProjectionScreenState extends State<BrainProjectionScreen>
     );
     if (_viewport['width'] == next['width'] &&
         _viewport['height'] == next['height'] &&
-        _viewport['landscape'] == next['landscape']) return;
+        _viewport['landscape'] == next['landscape']) {
+      return;
+    }
     _viewport = next;
     if (_viewportSendScheduled) return;
     _viewportSendScheduled = true;
