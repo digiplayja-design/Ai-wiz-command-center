@@ -130,6 +130,19 @@ async function restartable(page, width, label = 'Start Live Conversation') {
   return start;
 }
 
+async function readingPosition(page) {
+  return page.evaluate(() => {
+    const inline = document.getElementById('cinema-kb-replay-demo');
+    const status = document.getElementById('cinema-kb-status');
+    return {scrollY, documentHeight: document.documentElement.scrollHeight,
+      viewportHeight: innerHeight, screen: document.querySelector('.kb-product').dataset.screen,
+      inlineHeight: inline.getBoundingClientRect().height,
+      inlineVisibility: getComputedStyle(inline).visibility,
+      statusHeight: status.getBoundingClientRect().height, status: status.textContent,
+      focus: document.activeElement.id};
+  });
+}
+
 (async () => {
   const browser = await chromium.launch({headless: true,
     executablePath: process.env.BROWSER_EXECUTABLE_PATH || undefined,
@@ -363,23 +376,39 @@ async function restartable(page, width, label = 'Start Live Conversation') {
           type: 'transcript', id: `restart-${i}`, role: i % 2 ? 'rici' : 'user',
           text: `A long conversation message ${i}. `.repeat(8),
         });
-        window.scrollTo(0, document.documentElement.scrollHeight);
+        window.scrollTo({top: document.documentElement.scrollHeight, behavior: 'instant'});
       });
-      const scrollBeforeRestart = await page.evaluate(() => scrollY);
-      assert.ok(scrollBeforeRestart > 900, 'Fixture genuinely scrolls past the inline start control');
+      const beforeRestart = await readingPosition(page);
+      assert.ok(beforeRestart.scrollY > 900, 'Fixture genuinely scrolls past the inline start control: '+JSON.stringify(beforeRestart));
       await restartable(page, width);
       const startsBefore = await page.evaluate(() => window.controlsFixture.calls.filter(c => c.action === 'startVoice').length);
       await page.locator('#cinema-kb-start-voice').click();
       await listening(page);
       assert.equal(await page.evaluate(() => window.controlsFixture.calls.filter(c => c.action === 'startVoice').length), startsBefore + 1,
         'One explicit restart creates exactly one new session');
+      const afterRestart = await readingPosition(page);
+      assert.ok(Math.abs(afterRestart.scrollY - beforeRestart.scrollY) < 3,
+        'Starting again preserves the current transcript position: '+JSON.stringify({width,beforeRestart,afterRestart}));
+      assert.equal(await page.locator('#cinema-kb-replay-demo').isVisible(), false,
+        'The reserved inline restart is hidden while the conversation is active');
+      const hiddenRestart = await page.locator('#cinema-kb-replay-demo').evaluate(element => {
+        const focused = document.activeElement;
+        element.focus({preventScroll: true});
+        return {pointerEvents: getComputedStyle(element).pointerEvents,
+          focusUnchanged: document.activeElement === focused};
+      });
+      assert.equal(hiddenRestart.pointerEvents, 'none', 'Reserved inline restart cannot receive pointer clicks');
+      assert.equal(hiddenRestart.focusUnchanged, true, 'Reserved inline restart cannot take keyboard focus');
       await page.locator('#cinema-kb-stop-voice').click();
       await state(page, false, false);
       await restartable(page, width);
       assert.equal(await page.evaluate(() => document.activeElement.id), 'cinema-kb-start-voice',
         'Focus moves from the removed Stop control to Start without a scroll jump');
-      assert.ok(Math.abs(await page.evaluate(() => scrollY) - scrollBeforeRestart) < 3,
-        'Stop does not force the user back to the top of a long transcript');
+      const afterStop = await readingPosition(page);
+      assert.ok(Math.abs(afterStop.scrollY - afterRestart.scrollY) < 3 && Math.abs(afterStop.scrollY - beforeRestart.scrollY) < 3,
+        'Stop and the full restart cycle preserve the current transcript position: '+JSON.stringify({width,beforeRestart,afterRestart,afterStop}));
+      assert.equal(await page.locator('#cinema-kb-replay-demo').isVisible(), true,
+        'Inline restart returns when stopped without changing its reserved height');
       if (screenDirectory) {
         fs.mkdirSync(screenDirectory, {recursive: true});
         await page.screenshot({path: path.join(screenDirectory, `brain-stopped-restart-${width}.png`)});

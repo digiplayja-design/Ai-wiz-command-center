@@ -367,7 +367,9 @@ html,body{margin:0;background:#100b1b;color:#fff9e9;min-height:100%;font-family:
 #korlix-silent-storm .kb-stop-conversation:focus-visible{outline:3px solid #fff;outline-offset:3px}
 #korlix-silent-storm .kb-stop-conversation:disabled{opacity:1;background:#693044;color:#fff;cursor:wait}
 #korlix-silent-storm .kb-stop-square{width:16px;height:16px;background:currentColor;border-radius:3px}
-#korlix-silent-storm [data-voice-active="true"] #cinema-kb-replay-demo{display:none}
+/* Keep the inline restart's space while the fixed dock owns active controls.
+   Collapsing it shifts a transcript the user is reading farther down. */
+#korlix-silent-storm [data-voice-active="true"] #cinema-kb-replay-demo{visibility:hidden;pointer-events:none}
 @media(max-width:359px){#korlix-silent-storm .kb-live-status [role="status"]{max-width:110px}}
 
 #korlix-silent-storm .kb-bubble p{white-space:pre-wrap;overflow-wrap:anywhere}
@@ -418,6 +420,6 @@ html,body{margin:0;background:#100b1b;color:#fff9e9;min-height:100%;font-family:
 #korlix-silent-storm .kb-voice-control-row button:focus-visible{outline:3px solid #fff;outline-offset:2px}
 #korlix-silent-storm [data-voice-paused="true"] .kb-live-banner{display:flex}
 #korlix-silent-storm .kb-product[data-voice-paused="true"]{padding-bottom:calc(132px + env(safe-area-inset-bottom))!important}
-#korlix-silent-storm [data-voice-paused="true"] #cinema-kb-replay-demo{display:none}
+#korlix-silent-storm [data-voice-paused="true"] #cinema-kb-replay-demo{visibility:hidden;pointer-events:none}
 #korlix-silent-storm [data-voice-paused="true"] .kb-live-dot{background:#d9beff}
 @media(max-width:359px){#korlix-silent-storm .kb-voice-control-row{gap:6px}#korlix-silent-storm .kb-voice-control-row button{font-size:13px;gap:5px}#korlix-silent-storm .kb-feature-tools{gap:6px}#korlix-silent-storm .kb-feature-tools strong{font-size:12px}}

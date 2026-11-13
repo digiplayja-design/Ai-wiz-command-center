@@ -1160,7 +1160,12 @@
   get('kb-saved-back').addEventListener('click',()=>show('talk'));
   get('kb-saved-refresh').addEventListener('click',loadSavedTranscripts);
   get('kb-stop-voice').addEventListener('click',stopVoice);
-  get('kb-start-voice').addEventListener('click',()=>{show('talk');startVoice();});
+  get('kb-start-voice').addEventListener('click',()=>{
+    // Restart in place when the user is already reading the conversation.
+    // A redundant navigation clears status content and changes scroll extent.
+    if(currentScreen!=='talk')show('talk');
+    startVoice();
+  });
   get('kb-pause-voice').addEventListener('click',pauseVoice);
   get('kb-resume-voice').addEventListener('click',resumeVoice);
   for(const [id,action] of [['kb-upload-pdf','openDocuments'],['kb-camera-ask','cameraAsk'],['kb-directions','directions']]){
