@@ -932,3 +932,38 @@ workflows:
           "$CM_BUILD_DIR/.brain-crash-diagnostic-tools/bin/python" scripts/read_brain_build24_crashes.py
     artifacts:
       - artifacts/brain-build24-crashes/**
+
+  korlix-brain-testflight-assign-native-runtime-25:
+    name: KORLIX Brain+Voice — Native runtime repair internal TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    # Manual only. Exact inspected native build: 1.0.2 (25); source floor: 25.
+    # Native source: e4ea030888c092311fcfb627febae21ccee4f03f.
+    # Native tree: cc5e4e8af9c6d213569796ce74fd6bdfc8418fc7.
+    # Five-job CI: 43458849768; signed native/IPA/upload job: 6af7903890e83b09c4f9fd14.
+    # Apple build: 6f9a4943-f022-4f86-85fe-70153c790b70 (separately observed from equal upload receipt).
+    # IPA SHA256: 7413f966f979beff0c7df3a9791025a9108fdedfd9b0b4836eec003820e00967.
+    # Reviewed record SHA256: d98accdcf0707936553c79419c08df947d3ebb78a72acde958c8247f3b76a0c0.
+    # Fixed source, upload and independently inspected IPA pins are required.
+    # The fresh Apple build must match the separately observed build resource ID.
+    # No latest-build fallback, environment override or substitution of builds 17–24.
+    # Preflight must fail before release tools or managed credentials are initialized.
+    # The only allowed write adds the exact fresh-validated build to the existing group.
+    # No tester invitation, upload, compliance change, review or public release.
+    scripts:
+      - name: Validate exact internal delivery guards
+        script: |
+          set -euo pipefail
+          python3 -B -m unittest discover -s scripts/tests -p 'test_brain_native_runtime_testflight_assignment.py' -v
+          python3 -B -c 'import runpy; runpy.run_path("scripts/assign_brain_native_runtime_testflight_build.py")["require_verified_source_upload"]()'
+      - name: Assign verified build to existing internal testers
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.brain-native-runtime-testflight-tools"
+          "$CM_BUILD_DIR/.brain-native-runtime-testflight-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+          "$CM_BUILD_DIR/.brain-native-runtime-testflight-tools/bin/python" scripts/assign_brain_native_runtime_testflight_build.py \
+            --assign --output artifacts/brain-native-runtime-testflight-assignment.json
+    artifacts:
+      - artifacts/brain-native-runtime-testflight-assignment.json

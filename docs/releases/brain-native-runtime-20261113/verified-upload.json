@@ -1,0 +1,1169 @@
+{
+  "schemaVersion": 1,
+  "preparedAt": "2026-11-13T22:49:27.443758+00:00",
+  "verifiedAt": "2026-11-13T22:52:57.636535+00:00",
+  "sourceBuildFloor": 25,
+  "sourceUpload": {
+    "codemagicBuildId": "6af7903890e83b09c4f9fd14",
+    "workflow": "korlix-brain-ios-testflight",
+    "commit": "e4ea030888c092311fcfb627febae21ccee4f03f",
+    "bundleId": "com.korlix.brain",
+    "version": "1.0.2",
+    "buildNumber": "25"
+  },
+  "sourceTree": "cc5e4e8af9c6d213569796ce74fd6bdfc8418fc7",
+  "publishingStatus": "uploaded",
+  "appleUploadId": "6f9a4943-f022-4f86-85fe-70153c790b70",
+  "appleBuildId": "6f9a4943-f022-4f86-85fe-70153c790b70",
+  "appleBuildIdBasis": "Completed Codemagic App Store distribution post-processing log; separately observed exact Found uploaded build line, not inferred from receipt",
+  "appleBuildObservedAt": "2026-11-13T22:51:44.721252+00:00",
+  "ipa": {
+    "file": "BrainVoice.ipa",
+    "sha256": "7413f966f979beff0c7df3a9791025a9108fdedfd9b0b4836eec003820e00967",
+    "bytes": 34946781,
+    "infoPlist": {
+      "CFBundleIdentifier": "com.korlix.brain",
+      "CFBundleShortVersionString": "1.0.2",
+      "CFBundleVersion": "25",
+      "CFBundleSupportedPlatforms": [
+        "iPhoneOS"
+      ],
+      "MinimumOSVersion": "15.0",
+      "DTSDKName": "iphoneos26.5",
+      "DTXcode": "2660",
+      "UISupportedInterfaceOrientations": [
+        "UIInterfaceOrientationPortrait",
+        "UIInterfaceOrientationLandscapeLeft",
+        "UIInterfaceOrientationLandscapeRight"
+      ],
+      "UISupportedInterfaceOrientations~ipad": [
+        "UIInterfaceOrientationPortrait",
+        "UIInterfaceOrientationPortraitUpsideDown",
+        "UIInterfaceOrientationLandscapeLeft",
+        "UIInterfaceOrientationLandscapeRight"
+      ],
+      "UIBackgroundModes": [
+        "audio"
+      ],
+      "ITSAppUsesNonExemptEncryption": false
+    },
+    "executableArchitecture": "arm64"
+  },
+  "pipelineVerificationReport": {
+    "file": "BrainVoice-verification.json",
+    "bytes": 314,
+    "sha256": "6cf3e88571e7cdcf95658cb0304cbc1991cc495811b33d4330f54b6fa25f1071",
+    "report": {
+      "CFBundleIdentifier": "com.korlix.brain",
+      "CFBundleShortVersionString": "1.0.2",
+      "CFBundleVersion": "25",
+      "bytes": 34946781,
+      "sha256": "7413f966f979beff0c7df3a9791025a9108fdedfd9b0b4836eec003820e00967",
+      "profile_type": "app_store",
+      "signature_verified": true,
+      "production_push_required": false
+    },
+    "signatureVerificationBasis": "Mac pipeline codesign --verify --deep --strict on these exact IPA bytes"
+  },
+  "sourceEvidence": {
+    "commit": "e4ea030888c092311fcfb627febae21ccee4f03f",
+    "tree": "cc5e4e8af9c6d213569796ce74fd6bdfc8418fc7",
+    "branch": "fix/brain-property-street-voice-20261112",
+    "appTree": "257e1d673516eb2f85d749c46ce1a6d9397bd4bb",
+    "appTreeEvidence": "Full remote app tree independently verified by root; full source/merge tree equivalence independently checked in this audit.",
+    "releaseBranch": "release/brain-native-runtime-e4ea030",
+    "appFiles": 177,
+    "changedRepositoryFiles": 33,
+    "correctedManifest": {
+      "file": "corrected-33-file-manifest.json",
+      "sha256": "f61054edbe5583be6579f84df91cb989f95bac5c396431ba37e0a46f25489726",
+      "rows": 33
+    },
+    "preflightReview": {
+      "file": "preflight-audit.json",
+      "sha256": "f438eff5be4cb44992d01d9c660ebc53f17833ec9f10075953178b6a96d1b888",
+      "checkedAt": "2026-11-13T22:33:09.369330+00:00",
+      "result": "PASS_AFTER_DOCUMENTED_MANIFEST_RECONCILIATION",
+      "reconstructedAppManifestEqualsRemote": true
+    },
+    "manifestReconciliation": {
+      "historicalManifestPreserved": true,
+      "originalRows": 32,
+      "omittedVerifiedRow": {
+        "path": "apps/korlix_brain/tools/check_projection.cjs",
+        "mode": "100644",
+        "bytes": 109278,
+        "sha": "2110e00d5c961d5d24616e77b6b58562e8882cfd",
+        "sha256": "800074c70e589568f52ee62e2673d000a3a94eeca1c4b608a4582cc0aa10008b"
+      },
+      "correctedManifestPath": "/workspace/scratch/670b89f13d7e/release-audit/corrected-33-file-manifest.json",
+      "correctedManifestSha256": "f61054edbe5583be6579f84df91cb989f95bac5c396431ba37e0a46f25489726",
+      "finalRows": 33
+    }
+  },
+  "sourceCi": {
+    "reviewedAt": "2026-11-13T16:12:28.635944+00:00",
+    "verified": true,
+    "scope": "Final five-job GitHub PR CI verification for this exact source revision. This does not certify the separate native runtime run or a signed release.",
+    "evidenceFile": "native-ci-evidence-43458849768.json",
+    "evidenceSha256": "ed8a390bec985358113c5b462658137c0b5828fbaf54584724e9a5ab16c260a3",
+    "source": {
+      "commit": "e4ea030888c092311fcfb627febae21ccee4f03f",
+      "tree": "cc5e4e8af9c6d213569796ce74fd6bdfc8418fc7",
+      "branch": "fix/brain-property-street-voice-20261112",
+      "appTree": "257e1d673516eb2f85d749c46ce1a6d9397bd4bb",
+      "appTreeEvidence": "Full remote app tree independently verified by root; full source/merge tree equivalence independently checked in this audit."
+    },
+    "ci": {
+      "runId": 43458849768,
+      "runNumber": 58,
+      "attempt": 1,
+      "workflow": "KORLIX Brain+Voice mobile validation",
+      "workflowPath": ".github/workflows/korlix-brain-validation.yml",
+      "event": "pull_request",
+      "url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43458849768",
+      "headSha": "e4ea030888c092311fcfb627febae21ccee4f03f",
+      "status": "completed",
+      "conclusion": "success",
+      "startedAt": "2026-11-13T16:03:42Z",
+      "completedJobAt": "2026-11-13T16:11:24Z",
+      "pullRequest": 72,
+      "mergeSha": "54152b055e656fb3784b8377b924fc255111aa1d",
+      "mergeTree": "cc5e4e8af9c6d213569796ce74fd6bdfc8418fc7",
+      "mergeParents": [
+        "f2b339d89f910243c39b9920b1389a1e1b5290d6",
+        "e4ea030888c092311fcfb627febae21ccee4f03f"
+      ],
+      "sourceTreeEqualsMergeTree": true,
+      "allFiveCheckoutLogsVerified": true
+    },
+    "summary": {
+      "successfulJobs": 5,
+      "failedJobs": 0,
+      "releaseIdentityTests": 23,
+      "nativeHelperUnitTests": 23,
+      "flutterTests": 317,
+      "flutterAnalyzer": "No issues found",
+      "browserSuites": [
+        "ubuntu-24.04 / Playwright1.56.1",
+        "macos-26 / Playwright1.62.1"
+      ],
+      "androidDebugApkBuilt": true,
+      "iosSimulatorAppBuilt": true,
+      "unsignedIPhoneOSArm64ReleaseCompiled": true,
+      "artifactCount": 4
+    },
+    "jobs": [
+      {
+        "id": 132000078302,
+        "name": "projection-ui (macos-26, 1.62.1, korlix-brain-projection-screenshots-macos)",
+        "category": "macos-browser",
+        "url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43458849768/job/132000078302",
+        "status": "completed",
+        "conclusion": "success",
+        "startedAt": "2026-11-13T16:03:45Z",
+        "completedAt": "2026-11-13T16:06:58Z",
+        "runnerLabels": [
+          "macos-26"
+        ],
+        "observedCheckout": "54152b055e656fb3784b8377b924fc255111aa1d",
+        "reviewedLog": {
+          "file": "132000078302.log",
+          "bytes": 27585,
+          "sha256": "12ffc679a3f2bfb9b6a6f57ac0da0da9f7ce8217d96a8b76e4b60a7d35df14a1"
+        },
+        "validationSteps": [
+          {
+            "name": "Install isolated browser test dependencies",
+            "conclusion": "success",
+            "started_at": "2026-11-13T16:03:54Z",
+            "completed_at": "2026-11-13T16:04:17Z"
+          },
+          {
+            "name": "Check responsive Projection and original home interactions",
+            "conclusion": "success",
+            "started_at": "2026-11-13T16:04:17Z",
+            "completed_at": "2026-11-13T16:06:49Z"
+          },
+          {
+            "name": "Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+            "conclusion": "success",
+            "started_at": "2026-11-13T16:06:49Z",
+            "completed_at": "2026-11-13T16:06:52Z"
+          }
+        ]
+      },
+      {
+        "id": 132000078619,
+        "name": "release-identity",
+        "category": "release-identity",
+        "url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43458849768/job/132000078619",
+        "status": "completed",
+        "conclusion": "success",
+        "startedAt": "2026-11-13T16:03:44Z",
+        "completedAt": "2026-11-13T16:03:51Z",
+        "runnerLabels": [
+          "ubuntu-24.04"
+        ],
+        "observedCheckout": "54152b055e656fb3784b8377b924fc255111aa1d",
+        "reviewedLog": {
+          "file": "release-identity.log",
+          "bytes": 23090,
+          "sha256": "a745fe4126ff6417296f9dbe1ebd88322505456619b5b01e9693c355ff3ad533"
+        },
+        "validationSteps": [
+          {
+            "name": "Verify Apple identity and build numbering safeguards",
+            "conclusion": "success",
+            "started_at": "2026-11-13T16:03:48Z",
+            "completed_at": "2026-11-13T16:03:48Z"
+          },
+          {
+            "name": "Verify native Projection execution safeguards",
+            "conclusion": "success",
+            "started_at": "2026-11-13T16:03:48Z",
+            "completed_at": "2026-11-13T16:03:49Z"
+          }
+        ]
+      },
+      {
+        "id": 132000078719,
+        "name": "android",
+        "category": "android",
+        "url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43458849768/job/132000078719",
+        "status": "completed",
+        "conclusion": "success",
+        "startedAt": "2026-11-13T16:03:44Z",
+        "completedAt": "2026-11-13T16:09:48Z",
+        "runnerLabels": [
+          "ubuntu-24.04"
+        ],
+        "observedCheckout": "54152b055e656fb3784b8377b924fc255111aa1d",
+        "reviewedLog": {
+          "file": "132000078719.log",
+          "bytes": 123333,
+          "sha256": "06607571fdaa237731a7637bf06cc8f077d42e859bf27ab858ea4c9416e694fd"
+        },
+        "validationSteps": [
+          {
+            "name": "Validate account and memory behavior",
+            "conclusion": "success",
+            "started_at": "2026-11-13T16:04:09Z",
+            "completed_at": "2026-11-13T16:04:43Z"
+          },
+          {
+            "name": "Build Android test APK",
+            "conclusion": "success",
+            "started_at": "2026-11-13T16:04:43Z",
+            "completed_at": "2026-11-13T16:09:39Z"
+          },
+          {
+            "name": "Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+            "conclusion": "success",
+            "started_at": "2026-11-13T16:09:39Z",
+            "completed_at": "2026-11-13T16:09:45Z"
+          }
+        ]
+      },
+      {
+        "id": 132000078749,
+        "name": "projection-ui (ubuntu-24.04, 1.56.1, korlix-brain-projection-screenshots)",
+        "category": "linux-browser",
+        "url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43458849768/job/132000078749",
+        "status": "completed",
+        "conclusion": "success",
+        "startedAt": "2026-11-13T16:03:44Z",
+        "completedAt": "2026-11-13T16:06:14Z",
+        "runnerLabels": [
+          "ubuntu-24.04"
+        ],
+        "observedCheckout": "54152b055e656fb3784b8377b924fc255111aa1d",
+        "reviewedLog": {
+          "file": "132000078749.log",
+          "bytes": 42433,
+          "sha256": "8eec697f05ea197a098b7e41060402d85702e9e742c9563871a8dbe9e510bf6f"
+        },
+        "validationSteps": [
+          {
+            "name": "Install isolated browser test dependencies",
+            "conclusion": "success",
+            "started_at": "2026-11-13T16:03:49Z",
+            "completed_at": "2026-11-13T16:04:14Z"
+          },
+          {
+            "name": "Check responsive Projection and original home interactions",
+            "conclusion": "success",
+            "started_at": "2026-11-13T16:04:14Z",
+            "completed_at": "2026-11-13T16:06:10Z"
+          },
+          {
+            "name": "Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+            "conclusion": "success",
+            "started_at": "2026-11-13T16:06:10Z",
+            "completed_at": "2026-11-13T16:06:13Z"
+          }
+        ]
+      },
+      {
+        "id": 132000078954,
+        "name": "ios",
+        "category": "ios",
+        "url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43458849768/job/132000078954",
+        "status": "completed",
+        "conclusion": "success",
+        "startedAt": "2026-11-13T16:03:44Z",
+        "completedAt": "2026-11-13T16:11:24Z",
+        "runnerLabels": [
+          "macos-26"
+        ],
+        "observedCheckout": "54152b055e656fb3784b8377b924fc255111aa1d",
+        "reviewedLog": {
+          "file": "132000078954.log",
+          "bytes": 34914,
+          "sha256": "b9bce08775f8f209bedf753f24992c69198a73569c4ede198b3283afd1e2066f"
+        },
+        "validationSteps": [
+          {
+            "name": "Build iOS simulator app",
+            "conclusion": "success",
+            "started_at": "2026-11-13T16:04:43Z",
+            "completed_at": "2026-11-13T16:08:28Z"
+          },
+          {
+            "name": "Run actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02",
+            "conclusion": "success",
+            "started_at": "2026-11-13T16:08:28Z",
+            "completed_at": "2026-11-13T16:08:33Z"
+          },
+          {
+            "name": "Compile iPhone release binary",
+            "conclusion": "success",
+            "started_at": "2026-11-13T16:08:33Z",
+            "completed_at": "2026-11-13T16:11:16Z"
+          }
+        ]
+      }
+    ],
+    "artifacts": [
+      {
+        "id": 14055293401,
+        "name": "korlix-brain-voice-android-debug",
+        "size_in_bytes": 106586872,
+        "url": "https://api.github.com/repos/digiplayja-design/Ai-wiz-command-center/actions/artifacts/14055293401",
+        "digest": "sha256:952a24d11bee0f54cb362912ca2c4c2ab42c508253fa03f2e97815448809cdc9",
+        "created_at": "2026-11-13T16:09:45Z",
+        "expired": false,
+        "uploadLogMetadataMatches": true,
+        "binaryDownloadedForVerification": false,
+        "digestBasis": "Observed GitHub artifact metadata matched completed upload logs; binary not downloaded in this CI audit"
+      },
+      {
+        "id": 14055057734,
+        "name": "korlix-brain-projection-screenshots",
+        "size_in_bytes": 28279276,
+        "url": "https://api.github.com/repos/digiplayja-design/Ai-wiz-command-center/actions/artifacts/14055057734",
+        "digest": "sha256:02066564507e2ee5989651c0f39585e201e8adb0b3b8f05dfb0d378f04d6f3cd",
+        "created_at": "2026-11-13T16:06:12Z",
+        "expired": false,
+        "uploadLogMetadataMatches": true,
+        "binaryDownloadedForVerification": false,
+        "digestBasis": "Observed GitHub artifact metadata matched completed upload logs; binary not downloaded in this CI audit"
+      },
+      {
+        "id": 14055002972,
+        "name": "korlix-brain-projection-screenshots-macos",
+        "size_in_bytes": 28378537,
+        "url": "https://api.github.com/repos/digiplayja-design/Ai-wiz-command-center/actions/artifacts/14055002972",
+        "digest": "sha256:ccd4bbc79a283e7f4b0ef1b97ac58922ef6f8ca723e4939bdfe31227f1417b8c",
+        "created_at": "2026-11-13T16:06:53Z",
+        "expired": false,
+        "uploadLogMetadataMatches": true,
+        "binaryDownloadedForVerification": false,
+        "digestBasis": "Observed GitHub artifact metadata matched completed upload logs; binary not downloaded in this CI audit"
+      },
+      {
+        "id": 14054174773,
+        "name": "korlix-brain-voice-ios-simulator",
+        "size_in_bytes": 77473744,
+        "url": "https://api.github.com/repos/digiplayja-design/Ai-wiz-command-center/actions/artifacts/14054174773",
+        "digest": "sha256:72a6ae8cdcf2ca27efb7205811169dacf4efea80c274797ec88283cc202218f0",
+        "created_at": "2026-11-13T16:08:33Z",
+        "expired": false,
+        "uploadLogMetadataMatches": true,
+        "binaryDownloadedForVerification": false,
+        "digestBasis": "Observed GitHub artifact metadata matched completed upload logs; binary not downloaded in this CI audit"
+      }
+    ],
+    "limits": [
+      "Native helper tests are unit tests of the orchestration safeguards, not evidence of a real simulator scenario.",
+      "The separate unsigned Codemagic native runtime run must be evaluated on its own exact app tree, gate report, driver result and screenshots.",
+      "Browser fixtures and successful iOS compilation do not prove physical speech recognition, live imagery, audible playback or the reported physical force-close behavior.",
+      "This CI audit did not perform a signed IPA, TestFlight upload or tester assignment; later signed release and delivery observations are recorded separately."
+    ]
+  },
+  "nativeRuntime": {
+    "review": {
+      "file": "independent-native-review.json",
+      "bytes": 18572,
+      "sha256": "6e1f736f35a51737a14e819986d341b5234bed8736ba3c80428769d847bf502b",
+      "checkedAt": "2026-11-13T22:47:59.621915+00:00",
+      "result": "PASS_WITH_DOCUMENTED_CAPTURE_LIMITS",
+      "scope": "Actual native simulator gate artifact from the approved signed-release Codemagic job, before IPA creation. Does not replace signed IPA or Apple processing/assignment verification."
+    },
+    "codemagicBuildId": "6af7903890e83b09c4f9fd14",
+    "workflow": "korlix-brain-ios-testflight",
+    "branch": "release/brain-native-runtime-e4ea030",
+    "source": {
+      "appPath": "apps/korlix_brain",
+      "appTree": "257e1d673516eb2f85d749c46ce1a6d9397bd4bb",
+      "head": "e4ea030888c092311fcfb627febae21ccee4f03f",
+      "gitLogsMatchReport": true,
+      "localReviewedFiles": [
+        {
+          "path": "scripts/run_brain_native_projection.py",
+          "bytes": 23300,
+          "gitBlob": "02284f56e1e1820fd1ffa32ca0706157beda0667",
+          "sha256": "648f20d95ee840893e0e4f5fa39a15baccd9d608173d813c59ced4ee589f5829"
+        },
+        {
+          "path": "scripts/prepare_brain_ios.py",
+          "bytes": 9292,
+          "gitBlob": "b0c85abd38c41b7b235d36313f486eb871cdf7ff",
+          "sha256": "5fb243bc6ce21c87d9d6324c8cca0707120e1f6f81e27feac5b30c15ddb3317b"
+        },
+        {
+          "path": "apps/korlix_brain/integration_test/brain_projection_runtime_test.dart",
+          "bytes": 20289,
+          "gitBlob": "24492e3ed81ec5a7eda856edea9153246ee6c3cd",
+          "sha256": "20c430356c4a205c4eb343aab28b1d845039023f1ad578fe9bc143b057df12c7"
+        },
+        {
+          "path": "apps/korlix_brain/test_driver/brain_projection_driver.dart",
+          "bytes": 1018,
+          "gitBlob": "879302ca84d1922c2d5be6a4b67f7113aab28625",
+          "sha256": "0540331703bb50b51cc51e0ac680157cc79e02981dc0c33cfb0a7595c208f37b"
+        },
+        {
+          "path": "apps/korlix_brain/lib/brain_app.dart",
+          "bytes": 14062,
+          "gitBlob": "2cb6c58d39539fdf34fa353dc7cc9bbbbeb5affc",
+          "sha256": "0745edfd56b7338acebd49bdf5b5f0683ac32e8d84a92ffbc21a3d26e963f383"
+        }
+      ],
+      "provenanceLimits": "HEAD and HEAD:apps/korlix_brain attest committed source, not a clean generated working tree. Exact release preparation writes only a managed profile outside repo, CM_ENV release identity and artifacts/brain-apple-setup.json; it does not rewrite app source. Native fixture entry point precedes explicit production lib/main.dart IPA build."
+    },
+    "archive": {
+      "bytes": 5139343,
+      "sha256": "d60fa96010145d452d1a524109a912a4806aa970d40ed8913e2ac728a02d6d7d",
+      "matchesObservedJobDigest": true,
+      "entries": 46,
+      "unique": true,
+      "crcValid": true,
+      "safePathsAndNoSymlinks": true,
+      "extractedBytesMatchArchive": true,
+      "zipEntryTimes": "Default 1980-01-01 timestamps from ZipFile.open; not used as freshness evidence."
+    },
+    "archiveFile": "BrainVoice-native-runtime.zip",
+    "gate": {
+      "file": "native-runtime-gate.json",
+      "sha256": "fd7ecbd69f0a70b5a91f2aced264c30b26a1e38ebaa694d7b24cb9821f15c74e",
+      "runId": "c0b430abf99a4bdda5f2097532be1b79",
+      "startedAt": "2026-11-13T22:38:26.781253+00:00",
+      "finishedAt": "2026-11-13T22:43:30.697801+00:00",
+      "elapsedSeconds": 303.91656995799997,
+      "success": true,
+      "exitCode": 0,
+      "evidenceVerified": true,
+      "host": {
+        "architecture": "arm64",
+        "os": "ProductName:\t\tmacOS\nProductVersion:\t\t26.5.1\nBuildVersion:\t\t25F80",
+        "xcode": "Xcode 26.6\nBuild version 17F113"
+      },
+      "native": {
+        "elapsedSeconds": 189.43049387500002,
+        "exitCode": 0,
+        "started": true,
+        "timedOut": false
+      },
+      "simulator": {
+        "attempt": 1,
+        "bootstatusExitCode": 0,
+        "bootstatusFailureLines": [],
+        "bootstatusTimedOut": false,
+        "cleanBootReported": true,
+        "cleanup": [
+          {
+            "exitCode": 0,
+            "operation": "shutdown",
+            "timedOut": false
+          },
+          {
+            "exitCode": 0,
+            "operation": "delete",
+            "timedOut": false
+          }
+        ],
+        "cleanupSucceeded": true,
+        "compatibilityEvidence": "runtime.supportedDeviceTypes",
+        "creationConfirmed": true,
+        "deviceType": "com.apple.CoreSimulator.SimDeviceType.iPhone-SE-3rd-generation",
+        "migrationReportedFailure": false,
+        "model": "iPhone SE (3rd generation)",
+        "nativeExecutionPermitted": true,
+        "observedState": "Booted",
+        "runtime": "com.apple.CoreSimulator.SimRuntime.iOS-26-5",
+        "runtimeBuildVersion": "23F77",
+        "runtimeSupportedArchitectures": [
+          "arm64"
+        ],
+        "runtimeVersion": "26.5",
+        "udid": "26EAFEC6-387C-4E18-8C69-175B1F4CB7C3",
+        "versionParts": [
+          26,
+          5
+        ]
+      },
+      "allCommandsExitZero": true,
+      "allCommandsWithoutTimeout": true,
+      "nativeCommand": [
+        "flutter",
+        "drive",
+        "--verbose",
+        "--no-pub",
+        "--device-id",
+        "26EAFEC6-387C-4E18-8C69-175B1F4CB7C3",
+        "--driver=test_driver/brain_projection_driver.dart",
+        "--target=integration_test/brain_projection_runtime_test.dart"
+      ],
+      "cleanupCommands": [
+        [
+          "xcrun",
+          "simctl",
+          "shutdown",
+          "26EAFEC6-387C-4E18-8C69-175B1F4CB7C3"
+        ],
+        [
+          "xcrun",
+          "simctl",
+          "delete",
+          "26EAFEC6-387C-4E18-8C69-175B1F4CB7C3"
+        ]
+      ],
+      "cleanupScopedToCreatedDevice": true
+    },
+    "executionLogEvidence": {
+      "buildSucceeded": true,
+      "appInstalled": true,
+      "appLaunchedProcessId": 4112,
+      "vmServiceConnected": true,
+      "allTestsPassed": true,
+      "failureMarkerCounts": {
+        "EXCEPTION CAUGHT": 0,
+        "TestFailure": 0,
+        "Failure Details": 0,
+        "SIGABRT": 0,
+        "SIGSEGV": 0,
+        "Unhandled Exception": 0
+      },
+      "logs": {
+        "native-runtime.stdout.log": {
+          "bytes": 3643031,
+          "sha256": "9537c71870ca2a9baf894b7d80b083e0710c18eaa8a2e193ef25721af871fce4"
+        },
+        "native-runtime.stderr.log": {
+          "bytes": 809,
+          "sha256": "48d66c617bc8d848d1335cd12d8fcf8c3c4b19610ed9a20dbda1acac21d44fd8"
+        },
+        "simulator-bootstatus-attempt-1.stdout.log": {
+          "bytes": 12085,
+          "sha256": "1717a8a690361b57b4b8b751729720c35e65507f3d6b0c7e7a33a3abe551dd29"
+        }
+      }
+    },
+    "scenario": {
+      "report": {
+        "file": "projection-runtime-evidence.json",
+        "bytes": 14689,
+        "sha256": "f724ea16241218561529be0a5ab73d3ce8fc91e337f251b6b82b96b6f88a1ea0"
+      },
+      "outcome": {
+        "scenarioCompleted": true,
+        "webViewCreations": 1,
+        "starts": 1,
+        "pauses": 2,
+        "resumes": 2,
+        "stops": 2
+      },
+      "stageNames": [
+        "portrait",
+        "keyboard",
+        "landscape",
+        "paused",
+        "stopped",
+        "auto-landscape"
+      ],
+      "allSixStages": {
+        "singleWebViewAndPreservedElements": true,
+        "inputFrameWindowIdentityPreserved": true,
+        "draftAndPropertyPreserved": true,
+        "essentialTargetsAtLeast44AndInsideAvailableWindow": true,
+        "webDockAndCloseHidden": true,
+        "threeStableGeometrySamples": true
+      },
+      "landscapeWindow": [
+        667,
+        375
+      ],
+      "landscapeWebView": [
+        667,
+        315
+      ],
+      "keyboard": {
+        "trigger": "WKWebView.evaluateJavaScript element.focus()",
+        "inputFocused": true,
+        "inputHitTestable": true,
+        "inputFullyInsideVisibleBody": true,
+        "inputBottom": 204.5,
+        "bodyHeight": 205,
+        "actualInset": 328.0,
+        "controlsBottom": 333.0,
+        "availableWindowBottom": 339.0
+      },
+      "completedSourceAssertions": [
+        "Exact landscape phrase through controller preserves property/camera without start/stop",
+        "Stop supersedes pending resume; normal stopped controls remain visible",
+        "Auto follows native portrait then landscape without recreating view",
+        "Fallback Stop callback count becomes 2",
+        "Back returns to conversation without another Stop",
+        "Widget unmount, guarded model disposal, orientation reset and final no-exception assertions finish before scenarioCompleted=true"
+      ]
+    },
+    "screenshots": [
+      {
+        "file": "projection-native-portrait.png",
+        "bytes": 432250,
+        "sha256": "181af4fc3976cc20275438f71c0637a3b5be29974b8050f4458b97c051df3223",
+        "dimensions": [
+          750,
+          1334
+        ],
+        "visuallyReviewed": true,
+        "observation": "Rendered page and native Back, Pause, Resume, Stop visible; Auto selected; listening state. Provider rectangle intentionally empty."
+      },
+      {
+        "file": "projection-native-keyboard.png",
+        "bytes": 300961,
+        "sha256": "963ed33a904c10adac4172eb17724d8b99f46a72ca7481221e3533e4f6498f2c",
+        "dimensions": [
+          750,
+          1334
+        ],
+        "visuallyReviewed": true,
+        "observation": "Focused draft field visible directly above native controls; Back, Pause, Resume, Stop retained. UIKit image shows accessory bar but not out-of-process keyboard keys."
+      },
+      {
+        "file": "projection-native-landscape.png",
+        "bytes": 1057863,
+        "sha256": "c2ebdbb60e3cec7d5cc27334cfee1775e32af2029c4733bce55683d7a6629b55",
+        "dimensions": [
+          1334,
+          750
+        ],
+        "visuallyReviewed": true,
+        "observation": "Two-column layout and native Back, Pause, Resume, Stop visible inside short landscape window. Landscape selected; listening state; provider remains fixture."
+      },
+      {
+        "file": "projection-native-paused.png",
+        "bytes": 1059508,
+        "sha256": "e0bb0229df4cf8d4dfd8b8a1c08f6f5046f1f30a4089257422bd611d258a0f9d",
+        "dimensions": [
+          1334,
+          750
+        ],
+        "visuallyReviewed": true,
+        "observation": "Paused \u00b7 mic off visible; Resume and Stop enabled, Pause retained disabled; layout and draft stable."
+      },
+      {
+        "file": "projection-native-stopped.png",
+        "bytes": 1057576,
+        "sha256": "1ed0322dc958ac19432b9126b30fbfffbc1c285901105df9e62b487ac59b8d88",
+        "dimensions": [
+          1334,
+          750
+        ],
+        "visuallyReviewed": true,
+        "observation": "Microphone off visible; Talk enabled; Pause, Resume, Stop retained disabled; selected property and draft unchanged."
+      },
+      {
+        "file": "projection-native-auto-landscape.png",
+        "bytes": 1057726,
+        "sha256": "41d7d8fd393ed761a0b43b0df8357e0d49ba19b6b506df0e30fda1be16e91610",
+        "dimensions": [
+          1334,
+          750
+        ],
+        "visuallyReviewed": true,
+        "observation": "Auto visibly selected after test observed native portrait then landscape; stopped state and persistent controls retained."
+      },
+      {
+        "file": "projection-native-page-error.png",
+        "bytes": 110646,
+        "sha256": "2e3e35cda8c76313a1d57b3099ee699d381c5a358cb6d62e9b522480a1e97a31",
+        "dimensions": [
+          1334,
+          750
+        ],
+        "visuallyReviewed": true,
+        "observation": "Retry projection and persistent native controls visible. Image still shows listening/active Stop after asserted Stop callback; direct unsynchronized capture does not certify settled stopped paint. Error label is dark under test MaterialApp default light theme."
+      }
+    ],
+    "freshness": {
+      "newGateRunAndDevice": true,
+      "driverReportsExactlySevenScreenshots": true,
+      "driverMetadataMatchesActualPngs": true,
+      "method": "Unchanged helper moves prior runtime-screenshots and archive aside before fresh output creation; actual successful driver emits the seven files and its current response report. New run ID, device, execution logs and report tie these outputs to this job. Hash uniqueness across runs is not a freshness requirement.",
+      "sameBytesAsBaseline": [
+        "projection-native-landscape.png",
+        "projection-native-auto-landscape.png"
+      ],
+      "sameBytesExplanation": "The two stable fixture renders are byte-identical across runs; five other PNGs and scenario capture-frame data differ. ZIP default timestamps do not establish freshness."
+    },
+    "executionOrder": {
+      "sameSignedWorkflow": true,
+      "nativeGateFinishedAt": "2026-11-13T22:43:30.697801+00:00",
+      "ipaCreatingStepRequiresNativeGateSuccess": true,
+      "basis": "Codemagic completed step order and visible Show command for Build and verify Brain+Voice IPA, plus downloaded native gate and verification reports",
+      "separateStepObservation": {
+        "file": "build-order-observation.json",
+        "bytes": 2413,
+        "sha256": "86229e2b1de8dd527a0873cf523dfe573a05d57d6ba6db383458691bf64d723e",
+        "observation": {
+          "observedAt": "2026-11-13T22:49:33.193191+00:00",
+          "basis": "Codemagic completed step order and visible Show command for Build and verify Brain+Voice IPA, plus downloaded native gate and verification reports",
+          "codemagicBuildId": "6af7903890e83b09c4f9fd14",
+          "sourceCommit": "e4ea030888c092311fcfb627febae21ccee4f03f",
+          "nativeGateBeforeIpa": true,
+          "nativeGateFinishedAt": "2026-11-13T22:43:30.697801+00:00",
+          "completedSteps": [
+            {
+              "name": "Validate Brain+Voice",
+              "duration": "1m 1s",
+              "flutterTestsPassed": 317
+            },
+            {
+              "name": "Check welcome, ambience, voice handoff and transcript layouts",
+              "duration": "2m 11s"
+            },
+            {
+              "name": "Exercise native Brain Projection before IPA creation",
+              "duration": "5m 5s"
+            },
+            {
+              "name": "Build and verify Brain+Voice IPA",
+              "duration": "1m 53s"
+            },
+            {
+              "name": "Publishing",
+              "duration": "1m 37s",
+              "uploaderTimestamp": "2026-11-13 22:47:01.431"
+            }
+          ],
+          "commandGuard": "set -euo pipefail",
+          "productionCommands": [
+            "flutter build ios --release --config-only --no-codesign --no-pub --target=lib/main.dart --build-name=\"$KORLIX_IOS_VERSION\" --build-number=\"$KORLIX_IOS_BUILD_NUMBER\"",
+            "xcode-project use-profiles --project ios/Runner.xcodeproj --export-options-plist \"$CM_BUILD_DIR/brain-ios-export.plist\" --custom-export-options '{\"manageAppVersionAndBuildNumber\": false}'",
+            "flutter build ipa --release --no-pub --target=lib/main.dart --build-name=\"$KORLIX_IOS_VERSION\" --build-number=\"$KORLIX_IOS_BUILD_NUMBER\" --export-options-plist=\"$CM_BUILD_DIR/brain-ios-export.plist\"",
+            "python3 \"$CM_BUILD_DIR/scripts/verify_ios_ipa.py\" \"${IPA_FILES[0]}\" --bundle-id com.korlix.brain --version \"$KORLIX_IOS_VERSION\" --build \"$KORLIX_IOS_BUILD_NUMBER\" --output artifacts/BrainVoice-verification.json"
+          ],
+          "observedSuccessMessages": [
+            "Built build/ios/archive/Runner.xcarchive (215.9MB)",
+            "Built IPA to build/ios/ipa (35.1MB)",
+            "UPLOAD SUCCEEDED with no errors"
+          ],
+          "limits": [
+            "Individual IPA step start timestamp was not emitted in the retained observation; ordering is established by the frozen sequential workflow, observed step progression, successful verifier report, and subsequent upload.",
+            "The simulator test entrypoint is a fixture; the signed IPA step explicitly resets and builds lib/main.dart."
+          ]
+        }
+      },
+      "gateCompletedBeforeObservedUpload": true,
+      "nativeGateBeforeIpaObserved": true,
+      "productionEntryPoint": "lib/main.dart",
+      "individualIpaStepStartTimestampObserved": false
+    },
+    "limits": [
+      "This native gate uses a debug simulator test entry point inside the signed-release workflow; it is not execution of the final signed IPA or production BrainApp bootstrap.",
+      "Native view, bundled document, orientation requests, focus and keyboard inset are real; account, provider and voice responses are fixtures. No physical speech recognition, live WebRTC teardown or live map/provider readiness is established.",
+      "The exact landscape phrase is injected at the controller boundary; OS orientation is requested by the test. No physical phone tilt or ASR test is claimed.",
+      "The provider rectangle is intentionally unavailable; Connecting property view and a black frame do not establish loaded imagery.",
+      "Keyboard focus is triggered with WKWebView.evaluateJavaScript. UIKit screenshot omits out-of-process letter keys; measured keyboard inset is real.",
+      "Six normal screenshots wait for advancing WebKit frames and three stable geometry samples; UIKit hierarchy screenshots alone do not guarantee every compositor pixel is fresh.",
+      "Page-error screenshot follows only one pump after Stop and bypasses the stable capture helper. It still shows listening and active Stop, so settled stopped paint in error fallback is not certified. Stop callback count and Back/no-extra-Stop assertions pass; the normal stopped screenshot is separately stabilized.",
+      "Test MaterialApp uses its default light theme; production BrainApp uses a dark theme. The fallback label contrast in this PNG is not production-theme validation.",
+      "Injected inactive/resumed lifecycle, widget unmount and model disposal do not reproduce physical swipe-up termination. The reported TestFlight crash cause and resolution remain unverified without matching crash evidence."
+    ]
+  },
+  "rootIpaInspection": {
+    "file": "root-ipa-inspection.json",
+    "bytes": 1208,
+    "sha256": "44035b284941f21ad96f13c5d4ee3a2b4895fda664129cc1e4be01b3f3825875",
+    "observation": {
+      "inspectedAt": "2026-11-13T22:46:55.807443+00:00",
+      "bytes": 34946781,
+      "sha256": "7413f966f979beff0c7df3a9791025a9108fdedfd9b0b4836eec003820e00967",
+      "infoPlist": {
+        "CFBundleIdentifier": "com.korlix.brain",
+        "CFBundleShortVersionString": "1.0.2",
+        "CFBundleVersion": "25",
+        "CFBundleSupportedPlatforms": [
+          "iPhoneOS"
+        ],
+        "MinimumOSVersion": "15.0",
+        "DTSDKName": "iphoneos26.5",
+        "DTXcode": "2660",
+        "UISupportedInterfaceOrientations": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ],
+        "UISupportedInterfaceOrientations~ipad": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationPortraitUpsideDown",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ],
+        "UIBackgroundModes": [
+          "audio"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "mainExecutableArchitecture": "arm64",
+      "independentInfoPlistVerified": true,
+      "scope": "Read-only archive/plist/Mach-O header inspection; separate independent audit verifies assets, entitlements/profile; Mac pipeline verifies cryptographic signatures."
+    }
+  },
+  "independentIpaInspection": {
+    "file": "signed-ipa-audit.json",
+    "bytes": 13994,
+    "sha256": "e95575db5d8679b7eeff5d0ee2a102d767a647aba8bee98694c60dbb848f9936",
+    "checkedAt": "2026-11-13T22:46:49.779970+00:00",
+    "result": "PASS",
+    "source": {
+      "sourceCommit": "e4ea030888c092311fcfb627febae21ccee4f03f",
+      "sourceTree": "cc5e4e8af9c6d213569796ce74fd6bdfc8418fc7",
+      "appTree": "257e1d673516eb2f85d749c46ce1a6d9397bd4bb"
+    },
+    "archive": {
+      "bytes": 34946781,
+      "sha256": "7413f966f979beff0c7df3a9791025a9108fdedfd9b0b4836eec003820e00967",
+      "zipEntries": 241,
+      "safeUniquePaths": true,
+      "crcPassed": true
+    },
+    "identity": {
+      "CFBundleIdentifier": "com.korlix.brain",
+      "CFBundleShortVersionString": "1.0.2",
+      "CFBundleVersion": "25"
+    },
+    "profile": {
+      "uuid": "6b139391-72cb-4cf7-98ae-ceae16dfd10a",
+      "name": "KORLIX Brain Voice App Store 20261031211115",
+      "team": [
+        "FJKJ9MUDZ4"
+      ],
+      "expiration": "2027-06-23T01:29:02+00:00",
+      "applicationIdentifier": "FJKJ9MUDZ4.com.korlix.brain",
+      "getTaskAllow": false,
+      "profileType": "app_store",
+      "sha256": "a1a89b7d1ff677a3a571016cd63e853aa166a06b37055d72e485a5b4c439b6bd",
+      "cmsContentSignatureVerified": true,
+      "cmsCertificateChainIndependentlyTrusted": false,
+      "developerCertificateSha256": [
+        "8bc829fe7dd9265381356c9c037ffcf37f773337a051f176136104e58d35adcb"
+      ]
+    },
+    "binaries": [
+      {
+        "path": "Payload/Runner.app/Frameworks/App.framework/App",
+        "bytes": 7399296,
+        "sha256": "ec686a654c89fae246fcad172010145e29ff9b631caccf260ff8dbb523e9415a",
+        "architectures": [
+          "arm64"
+        ],
+        "signingTeams": [
+          "FJKJ9MUDZ4"
+        ],
+        "entitlements": null
+      },
+      {
+        "path": "Payload/Runner.app/Frameworks/Flutter.framework/Flutter",
+        "bytes": 9432832,
+        "sha256": "63a881d0ede52830585799cd31229765e82d79bb4bc6bc76ea346b17a95395eb",
+        "architectures": [
+          "arm64"
+        ],
+        "signingTeams": [
+          "FJKJ9MUDZ4"
+        ],
+        "entitlements": null
+      },
+      {
+        "path": "Payload/Runner.app/Frameworks/WebRTC.framework/WebRTC",
+        "bytes": 12006464,
+        "sha256": "0016c2fddb46de855a1f69c69d419c1ad3dccfa1b229fa6269ff713961bbc694",
+        "architectures": [
+          "arm64"
+        ],
+        "signingTeams": [
+          "FJKJ9MUDZ4"
+        ],
+        "entitlements": null
+      },
+      {
+        "path": "Payload/Runner.app/Frameworks/objective_c.framework/objective_c",
+        "bytes": 203120,
+        "sha256": "8193e3fd474b55f8e7edff8675a6efe795e38c460fa7490d03a3c678cec82999",
+        "architectures": [
+          "arm64"
+        ],
+        "signingTeams": [
+          "FJKJ9MUDZ4"
+        ],
+        "entitlements": null
+      },
+      {
+        "path": "Payload/Runner.app/Runner",
+        "bytes": 3105184,
+        "sha256": "59909df0862b339e76235b924257fb994e792da4d9610fda81f37085fcb7bcec",
+        "architectures": [
+          "arm64"
+        ],
+        "signingTeams": [
+          "FJKJ9MUDZ4"
+        ],
+        "entitlements": {
+          "application-identifier": "FJKJ9MUDZ4.com.korlix.brain",
+          "beta-reports-active": true,
+          "com.apple.developer.team-identifier": "FJKJ9MUDZ4",
+          "get-task-allow": false
+        }
+      }
+    ],
+    "packagedAssetCount": 11,
+    "packagedSourceAssetsMatch": true,
+    "sourceAssets": [
+      {
+        "sourcePath": "apps/korlix_brain/assets/branding/brain-icon-1024.png",
+        "bytes": 1762312,
+        "gitBlob": "bf5780880549144cac940e0fd22552545eae8231",
+        "sha256": "18c317226e77ba7decd624b3c0ca9a4f319b8529a524202c8c59af287adc38f1",
+        "sourceMatches": true,
+        "resourceSealMatches": true
+      },
+      {
+        "sourcePath": "apps/korlix_brain/assets/web/RAJDHANI-OFL.txt",
+        "bytes": 4372,
+        "gitBlob": "74605dfbd41d6e69b46c18cf00ac6c81c13537a1",
+        "sha256": "793bdd8538a0c03afb5bc10906be27ad1dc76f143cfeac8c55cd9075a5b3a55c",
+        "sourceMatches": true,
+        "resourceSealMatches": true
+      },
+      {
+        "sourcePath": "apps/korlix_brain/assets/web/app.css",
+        "bytes": 460492,
+        "gitBlob": "316271b84cedf9337324eaecbad4b3f92f981a80",
+        "sha256": "ec1e1dc5517f9e56389847486e3dbb1822e188656a7c058a8072e9968ac643cf",
+        "sourceMatches": true,
+        "resourceSealMatches": true
+      },
+      {
+        "sourcePath": "apps/korlix_brain/assets/web/app.js",
+        "bytes": 70828,
+        "gitBlob": "90b7380988c7264b8364fc201aee7e8ff5d5b8cf",
+        "sha256": "c418dbac8f308cb7774d6fbcb47000600e48c3f2f18fd97d4d804bb2f5a9ec72",
+        "sourceMatches": true,
+        "resourceSealMatches": true
+      },
+      {
+        "sourcePath": "apps/korlix_brain/assets/web/icons.js",
+        "bytes": 39,
+        "gitBlob": "55a5fc72188cd2b4ac53f00a720e21e4a30e6a66",
+        "sha256": "4d0c17638e23fa5ca19df58a8f4d7ed036a814cc968312ed291722ce346862b2",
+        "sourceMatches": true,
+        "resourceSealMatches": true
+      },
+      {
+        "sourcePath": "apps/korlix_brain/assets/web/index.html",
+        "bytes": 368874,
+        "gitBlob": "3683a5451d66dc6c8e26d38c0bd0773802596d5f",
+        "sha256": "51b982f1760051152d4486ace426fa3c418be450d9564efe119a7f76a48d4c8c",
+        "sourceMatches": true,
+        "resourceSealMatches": true
+      },
+      {
+        "sourcePath": "apps/korlix_brain/assets/web/lucide.min.js",
+        "bytes": 357796,
+        "gitBlob": "93c7e308c058d2758cfb2c7b67898e2ea447d161",
+        "sha256": "3411692820cb8d47543f69496aa25fd603a358f4498046f41c508a5a3342210e",
+        "sourceMatches": true,
+        "resourceSealMatches": true
+      },
+      {
+        "sourcePath": "apps/korlix_brain/assets/web/projection.css",
+        "bytes": 79203,
+        "gitBlob": "4c0e8580cb96f12311f3e753b49eaf15c939dbd0",
+        "sha256": "c8bde9eae7b6eb0d0e2b50020f71d05829006c91f65ad2a713f56a823a6b0b29",
+        "sourceMatches": true,
+        "resourceSealMatches": true
+      },
+      {
+        "sourcePath": "apps/korlix_brain/assets/web/projection.html",
+        "bytes": 18860,
+        "gitBlob": "19e6a36f9aeec80d5868123d447491038d42c014",
+        "sha256": "615151f33016c445405c97129facced63e52b3b1d71346d0d286e8641ba3bde6",
+        "sourceMatches": true,
+        "resourceSealMatches": true
+      },
+      {
+        "sourcePath": "apps/korlix_brain/assets/web/projection.js",
+        "bytes": 53324,
+        "gitBlob": "497ad126f436fc7564fe4a0d2a27eefe39347183",
+        "sha256": "2e0279b0dd9377d78e26e62997325f2542e28cadb7e2ac9ed6ded8ee3b5ff15c",
+        "sourceMatches": true,
+        "resourceSealMatches": true
+      },
+      {
+        "sourcePath": "apps/korlix_brain/assets/web/welcome-v1.wav",
+        "bytes": 690188,
+        "gitBlob": "6c3ab2df542709591bd77c758ae2e9f683e7c609",
+        "sha256": "023761454a65f317e50252f9452e59d8b01fc66931a6d6f69ee55909f40c02f4",
+        "sourceMatches": true,
+        "resourceSealMatches": true
+      }
+    ],
+    "limits": [
+      "Mac pipeline codesign --verify --deep --strict attestation is tied to exact IPA bytes; Linux inspection does not reimplement Apple code-signature validation.",
+      "Provisioning CMS content signature is verified with embedded certificates; Apple certificate-chain trust is not independently re-established on Linux.",
+      "Exact packaged source comparison covers all 11 app asset files, not compiled Dart/Swift source; compiled-source provenance must be tied to the signed job's pinned checkout and entrypoint logs.",
+      "Fixture native execution and signed packaging do not establish physical ASR, live imagery, real audio teardown, or a repaired swipe-close crash."
+    ]
+  },
+  "uploadObservation": {
+    "file": "upload-observation.json",
+    "bytes": 866,
+    "sha256": "9f3686425c3d1a5c60137b66a11952edd050659756444c78d8890fa5f55aa836",
+    "observation": {
+      "observedAt": "2026-11-13T22:48:10.310995+00:00",
+      "source": "Codemagic Publishing visible log",
+      "codemagicBuildId": "6af7903890e83b09c4f9fd14",
+      "workflow": "korlix-brain-ios-testflight",
+      "sourceCommit": "e4ea030888c092311fcfb627febae21ccee4f03f",
+      "jobUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6af7903890e83b09c4f9fd14",
+      "buildIndex": 33,
+      "buildDuration": "13m 27s",
+      "bundleId": "com.korlix.brain",
+      "version": "1.0.2",
+      "buildNumber": "25",
+      "publishingStatus": "uploaded",
+      "uploadMessage": "UPLOAD SUCCEEDED with no errors",
+      "uploaderTimestamp": "2026-11-13 22:47:01.431",
+      "uploaderTimestampTimezone": "UTC (Codemagic host)",
+      "appleUploadId": "6f9a4943-f022-4f86-85fe-70153c790b70",
+      "transferredBytes": 34946781,
+      "appleBuildId": null,
+      "appleProcessingVerified": false,
+      "internalDeliveryVerified": false
+    }
+  },
+  "downloadManifest": {
+    "file": "download-manifest.json",
+    "bytes": 6348,
+    "sha256": "4d7434569ae6a579e8a964ecd90e8ebf9987825d2323b8e1005cb718f6bf6de7",
+    "artifacts": [
+      {
+        "name": "BrainVoice-native-runtime.zip",
+        "bytes": 5139343,
+        "sha256": "d60fa96010145d452d1a524109a912a4806aa970d40ed8913e2ac728a02d6d7d"
+      },
+      {
+        "name": "BrainVoice.ipa",
+        "bytes": 34946781,
+        "sha256": "7413f966f979beff0c7df3a9791025a9108fdedfd9b0b4836eec003820e00967"
+      },
+      {
+        "name": "Ai-wiz-command-center_33_artifacts.zip",
+        "bytes": 34643716,
+        "sha256": "a9c4d91ecd0937eeda1716f0d8e48a5beb7bfee5b778444c8177e1efabad7003"
+      }
+    ]
+  },
+  "baselineBuild24CrashFeedback": {
+    "file": "baseline-build24-crash-feedback.json",
+    "sha256": "8299fcaa20114c90a0f6de0e29fcf3fab163fbb413bf43290450fec35ccfd561",
+    "observation": {
+      "checkedAt": "2026-11-13T13:16:52.187495+00:00",
+      "readOnly": true,
+      "appId": "6829319523",
+      "bundleId": "com.korlix.brain",
+      "version": "1.0.2",
+      "buildNumber": "24",
+      "appleBuildId": "0435ec43-7c84-4beb-bb6c-76c253be9c6b",
+      "feedbackCount": 0,
+      "moreFeedbackAvailable": false,
+      "feedback": []
+    },
+    "causeConfirmed": false,
+    "matchingCrashStackAvailable": false,
+    "note": "Zero submitted feedback at the recorded time does not establish zero crashes or a verified cause; retain lifecycle-hardening wording."
+  },
+  "appleProcessing": {
+    "state": "build_resource_observed_in_completed_post_processing",
+    "buildResourceObserved": true,
+    "processingState": null,
+    "internalBuildState": null,
+    "processingStateVerified": false,
+    "internalEligibilityVerified": false,
+    "note": "Fresh Apple processingState, internal eligibility and fixed-group membership must be validated by the assignment helper before any write."
+  },
+  "testflightDelivery": {
+    "status": "pending_fresh_internal_eligibility_assignment_and_readback",
+    "verified": false,
+    "appId": "6829319523",
+    "groupId": "ae86d9a2-5bdf-4f3d-910b-aa532675951f",
+    "groupName": "KORLIX Brain Internal",
+    "preserveExistingTesterMembership": true
+  },
+  "sourceAttestedByApple": false,
+  "note": "Exact source/CI, same-signed-job native execution, signed IPA identity/assets, successful upload and separately observed processed Apple build resource are reviewed. The upload and build IDs happen to match but were independently observed. This immutable pre-assignment record does not establish fresh Apple eligibility or internal delivery. Physical ASR, live imagery/audio and swipe-close crash resolution are not certified.",
+  "recordState": "REVIEWED_UPLOAD_AWAITING_FRESH_INTERNAL_ASSIGNMENT",
+  "appleBuildObservation": {
+    "file": "apple-processing-observation.json",
+    "bytes": 1401,
+    "sha256": "a493f34e2715ca0cbb278e1211d2aed0b1821f28595ec36657e0a78a7727a975",
+    "observation": {
+      "observedAt": "2026-11-13T22:51:44.721252+00:00",
+      "source": "Completed Codemagic App Store distribution post-processing log",
+      "jobUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6af7903890e83b09c4f9fd14",
+      "codemagicBuildId": "6af7903890e83b09c4f9fd14",
+      "workflow": "korlix-brain-ios-testflight",
+      "sourceCommit": "e4ea030888c092311fcfb627febae21ccee4f03f",
+      "appId": "6829319523",
+      "bundleId": "com.korlix.brain",
+      "version": "1.0.2",
+      "buildNumber": "25",
+      "jobStatus": "finished",
+      "buildDuration": "13m 27s",
+      "postProcessingDuration": "2m 57s",
+      "appleBuildId": "6f9a4943-f022-4f86-85fe-70153c790b70",
+      "observedLine": "Found uploaded build on App Store Connect 6f9a4943-f022-4f86-85fe-70153c790b70",
+      "followingObservedLine": "Update beta build localization info in TestFlight for uploaded build",
+      "appleUploadId": "6f9a4943-f022-4f86-85fe-70153c790b70",
+      "separatelyObservedFromUploadReceipt": true,
+      "idsHappenToBeEqual": true,
+      "processingState": null,
+      "internalBuildState": null,
+      "groupAssignmentVerified": false,
+      "qualification": "Apple build resource was independently observed in completed post-processing logs. Upload and build IDs happen to be equal; build ID was not inferred from the receipt. Exact processingState, eligibility and group delivery will be freshly queried by the fixed assignment helper before any relationship write."
+    }
+  }
+}
