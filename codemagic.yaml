@@ -815,3 +815,35 @@ workflows:
             --assign --output artifacts/brain-spoken-address-testflight-assignment.json
     artifacts:
       - artifacts/brain-spoken-address-testflight-assignment.json
+
+  korlix-brain-testflight-assign-projection-entrance-22:
+    name: KORLIX Brain+Voice — Projection entrance internal TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    # Manual only. Exact verified native build: 22. Native source floor: 22.
+    # Native source: d4ff81195a4c5983edd7fc06cb340452deea4db6
+    # Native tree: 7a4700c4838d8aaa88512bc534a92f9b12215d1e
+    # Exact-source CI 43361320046 passed; actual IPA and successful Apple upload reviewed.
+    # Codemagic distribution finished; Apple eligibility and group delivery need fresh read-back.
+    # Fixed source, upload and independently inspected IPA pins are required.
+    # No latest-build fallback, environment override or substitution of builds 17–21.
+    # Preflight must fail before release tools or managed credentials are initialized.
+    # The only allowed write adds the exact verified build to the existing group.
+    # No tester invitation, upload, compliance change, review or public release.
+    scripts:
+      - name: Validate exact internal delivery guards
+        script: |
+          set -euo pipefail
+          python3 -B -m unittest discover -s scripts/tests -p 'test_brain_projection_entrance_testflight_assignment.py' -v
+          python3 -B -c 'import runpy; runpy.run_path("scripts/assign_brain_projection_entrance_testflight_build.py")["require_verified_source_upload"]()'
+      - name: Assign verified build to existing internal testers
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.brain-projection-entrance-testflight-tools"
+          "$CM_BUILD_DIR/.brain-projection-entrance-testflight-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+          "$CM_BUILD_DIR/.brain-projection-entrance-testflight-tools/bin/python" scripts/assign_brain_projection_entrance_testflight_build.py \
+            --assign --output artifacts/brain-projection-entrance-testflight-assignment.json
+    artifacts:
+      - artifacts/brain-projection-entrance-testflight-assignment.json

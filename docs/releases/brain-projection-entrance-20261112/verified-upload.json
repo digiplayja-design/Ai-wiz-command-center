@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-11-13T04:13:08Z",
+  "sourceUpload": {
+    "codemagicBuildId": "6af68ad510a05158d8123f9b",
+    "workflow": "korlix-brain-ios-testflight",
+    "commit": "d4ff81195a4c5983edd7fc06cb340452deea4db6",
+    "bundleId": "com.korlix.brain",
+    "version": "1.0.2",
+    "buildNumber": "22"
+  },
+  "sourceTree": "7a4700c4838d8aaa88512bc534a92f9b12215d1e",
+  "publishingStatus": "uploaded",
+  "publishingStatusBasis": "observed_successful_apple_upload",
+  "appleUploadId": "f6cdd887-36e5-45bf-ba49-fce73b2326eb",
+  "uploadObservation": {
+    "basis": "parent_observed_codemagic_publishing_ui",
+    "sourceBranch": "release/brain-projection-entrance-d4ff811",
+    "observedAt": "2026-11-13T04:09:01Z",
+    "uploadSucceededAt": "2026-11-13T04:06:30.466Z",
+    "appleUploadResult": "UPLOAD SUCCEEDED with no errors",
+    "transferredBytes": 34895295,
+    "codemagicTerminalStatusObserved": true,
+    "codemagicTerminalStatus": "finished",
+    "codemagicObservedStatus": "finished",
+    "postProcessingAction": "What to test notes",
+    "postProcessingComplete": true,
+    "completedObservedAt": "2026-11-13T04:12:32.144894+00:00",
+    "appleFoundBuildId": "f6cdd887-36e5-45bf-ba49-fce73b2326eb",
+    "betaLocalizationUpdated": true,
+    "betaLocalizationId": "a7426d7b-9784-44ed-aff1-d9809f7fe6f7",
+    "betaLocalizationLocale": "en-US"
+  },
+  "sourceCi": {
+    "basis": "parent_observed_exact_source_ci_and_independent_evidence_review",
+    "runId": "43361320046",
+    "sourceCommit": "d4ff81195a4c5983edd7fc06cb340452deea4db6",
+    "conclusion": "success",
+    "successfulJobs": 4,
+    "flutterAnalyze": "No issues found",
+    "flutterTestsPassed": 246,
+    "releaseIdentityTestsPassed": 23,
+    "uiCheckerSuitesPassed": 6,
+    "mergeCheckoutCommit": "505fc974fd5b55dbb1ab81be3047d71168be61aa",
+    "mergeContentIdenticalToTestedSource": true,
+    "androidDebugApkBuilt": true,
+    "iosSimulatorBuilt": true,
+    "iphoneOSArm64ReleaseCompiled": true
+  },
+  "ipa": {
+    "sha256": "cdbf0f6bcc6c798fe233461981cd651b48183aa1b54c68ad4b8431f0efe4ee0d",
+    "bytes": 34895295,
+    "infoPlist": {
+      "CFBundleIdentifier": "com.korlix.brain",
+      "CFBundleShortVersionString": "1.0.2",
+      "CFBundleVersion": "22",
+      "CFBundleSupportedPlatforms": [
+        "iPhoneOS"
+      ],
+      "DTPlatformName": "iphoneos",
+      "MinimumOSVersion": "15.0"
+    },
+    "executableArchitecture": "arm64",
+    "verificationReport": {
+      "file": "BrainVoice-verification.json",
+      "sha256": "141297429d4ca4a81eb4f28b37bde4d1312fa975109433f2adf6221276bdc5d8",
+      "reportedSignatureVerified": true,
+      "reportedProfileType": "app_store",
+      "cryptographicSignatureIndependentlyReverifiedLocally": false
+    }
+  },
+  "testflightDelivery": {
+    "status": "pending_fresh_apple_eligibility_and_assignment_check",
+    "verified": false
+  },
+  "sourceAttestedByApple": false,
+  "appleBuildObservation": {
+    "appleBuildResourceObserved": true,
+    "appleBuildId": "f6cdd887-36e5-45bf-ba49-fce73b2326eb",
+    "processingStateObserved": false,
+    "internalGroupDeliveryVerified": false,
+    "observationBasis": "parent_observed_codemagic_distribution_log"
+  },
+  "independentInspection": {
+    "file": "voice-route-independent-build22-inspection.json",
+    "reportSha256": "113dbcb6cd7d870d33d194effb78bae036f7744805279435d5983adf84be8d9f",
+    "reportJson": "{\n  \"schemaVersion\": 1,\n  \"checkedAt\": \"2026-11-13T04:08:12.000295+00:00\",\n  \"inspection\": \"independent_local_build22_package_inspection\",\n  \"packageChecksPassed\": true,\n  \"expectedSource\": {\n    \"sourceCommit\": \"d4ff81195a4c5983edd7fc06cb340452deea4db6\",\n    \"sourceTree\": \"7a4700c4838d8aaa88512bc534a92f9b12215d1e\",\n    \"ciRun\": 43361320046,\n    \"signedBuildId\": \"6af68ad510a05158d8123f9b\"\n  },\n  \"sourceVerificationMap\": {\n    \"file\": \"entrance-source-verification.json\",\n    \"sha256\": \"ce503f79509672f67d31ff3b0b3a246f0ad6ea6e2f31ac4427da8893709acddb\",\n    \"pinChecks\": {\n      \"sourceCommit\": true,\n      \"sourceTree\": true,\n      \"ciRun\": true,\n      \"signedBuildId\": true\n    }\n  },\n  \"ipa\": {\n    \"file\": \"BrainVoice.ipa\",\n    \"bytes\": 34895295,\n    \"sha256\": \"cdbf0f6bcc6c798fe233461981cd651b48183aa1b54c68ad4b8431f0efe4ee0d\",\n    \"mainInfoPlist\": \"Payload/Runner.app/Info.plist\",\n    \"infoPlist\": {\n      \"CFBundleIdentifier\": \"com.korlix.brain\",\n      \"CFBundleShortVersionString\": \"1.0.2\",\n      \"CFBundleVersion\": \"22\",\n      \"CFBundleSupportedPlatforms\": [\n        \"iPhoneOS\"\n      ],\n      \"DTPlatformName\": \"iphoneos\",\n      \"MinimumOSVersion\": \"15.0\"\n    },\n    \"identityChecks\": {\n      \"bundleId\": true,\n      \"version\": true,\n      \"buildNumber\": true,\n      \"supportedPlatform\": true,\n      \"platformName\": true,\n      \"minimumOSVersion\": true\n    }\n  },\n  \"projectionAssets\": [\n    {\n      \"file\": \"projection.html\",\n      \"packagedPath\": \"Payload/Runner.app/Frameworks/App.framework/flutter_assets/assets/web/projection.html\",\n      \"bytes\": 16877,\n      \"sha256\": \"140a2c6fa9fa19ed3f05d8d9964f0da48aaefe3aa8bbe85e1794cce932bc55c7\",\n      \"gitBlobSha\": \"d5bbbd9020edd523db5ea53d308457b5d23a927a\",\n      \"sourcePath\": \"apps/korlix_brain/assets/web/projection.html\",\n      \"localBytesMatchPinnedMap\": true,\n      \"packagedBytesMatchLocalSource\": true,\n      \"packagedBytesMatchPinnedMap\": true\n    },\n    {\n      \"file\": \"projection.css\",\n      \"packagedPath\": \"Payload/Runner.app/Frameworks/App.framework/flutter_assets/assets/web/projection.css\",\n      \"bytes\": 51323,\n      \"sha256\": \"e00ef78e57b1e6a10b25681a1c042342643b5bdc4c3414b7774ca6bca82c1477\",\n      \"gitBlobSha\": \"a9c437f3be0729e70a820c4049fc3f9058021fde\",\n      \"sourcePath\": \"apps/korlix_brain/assets/web/projection.css\",\n      \"localBytesMatchPinnedMap\": true,\n      \"packagedBytesMatchLocalSource\": true,\n      \"packagedBytesMatchPinnedMap\": true\n    },\n    {\n      \"file\": \"projection.js\",\n      \"packagedPath\": \"Payload/Runner.app/Frameworks/App.framework/flutter_assets/assets/web/projection.js\",\n      \"bytes\": 46958,\n      \"sha256\": \"11a11d4071a5d3eb3e9568cee1d57a26c191afcf666095c1384503755405af42\",\n      \"gitBlobSha\": \"9b3741c2a45970663b75ebe9e1b0fdf014b5c72e\",\n      \"sourcePath\": \"apps/korlix_brain/assets/web/projection.js\",\n      \"localBytesMatchPinnedMap\": true,\n      \"packagedBytesMatchLocalSource\": true,\n      \"packagedBytesMatchPinnedMap\": true\n    }\n  ],\n  \"pipelineVerificationReport\": {\n    \"file\": \"BrainVoice-verification.json\",\n    \"bytes\": 314,\n    \"sha256\": \"141297429d4ca4a81eb4f28b37bde4d1312fa975109433f2adf6221276bdc5d8\",\n    \"matchesActualIpa\": true,\n    \"consistencyChecks\": {\n      \"CFBundleIdentifier\": true,\n      \"CFBundleShortVersionString\": true,\n      \"CFBundleVersion\": true,\n      \"bytes\": true,\n      \"sha256\": true\n    },\n    \"reportedSignatureVerified\": true,\n    \"reportedProfileType\": \"app_store\",\n    \"reportedProductionPushRequired\": false\n  },\n  \"signingEvidence\": {\n    \"mainCodeResourcesPresent\": true,\n    \"provisioningProfilePresent\": true,\n    \"cryptographicSignatureIndependentlyReverified\": false,\n    \"provisioningProfileContentsInspected\": false\n  },\n  \"ciEvidence\": {\n    \"runId\": 43361320046,\n    \"checkoutCommit\": \"505fc974fd5b55dbb1ab81be3047d71168be61aa\",\n    \"checkoutContentMatchesSource\": true,\n    \"comparisonAheadBy\": 1,\n    \"comparisonBehindBy\": 0,\n    \"comparisonChangedFiles\": 0,\n    \"flutterAnalyze\": \"No issues found\",\n    \"flutterTestsPassed\": 246,\n    \"newForegroundRegressionObserved\": true,\n    \"releaseIdentityTestsPassed\": 23,\n    \"uiCheckerSuitesPassed\": 6,\n    \"androidDebugApkBuilt\": true,\n    \"iosSimulatorBuilt\": true,\n    \"iphoneOSArm64ReleaseCompiled\": true\n  },\n  \"appleUploadObservedByThisInspection\": false,\n  \"appleProcessingVerified\": false,\n  \"testflightDeliveryVerified\": false,\n  \"limits\": [\n    \"Packaged HTML, CSS and JS were compared byte-for-byte with the local candidate and pinned source map; compiled Dart source was not independently reconstructed from the executable.\",\n    \"Cryptographic signature verification and app-store profile type are pipeline-reported; this local archive inspection did not rerun Apple codesign validation.\",\n    \"Apple upload, processing and TestFlight delivery are separate observations and are not established by this package inspection.\"\n  ]\n}\n"
+  },
+  "rootInspection": {
+    "file": "root-independent-ipa-inspection.json",
+    "reportSha256": "a1422e585d2339c550d8ac340f10d68a15abf75fd7ec1005705b814a8200eaf6",
+    "reportJson": "{\n  \"inspectedAt\": \"2026-11-13T04:06:19.491946+00:00\",\n  \"sourceCommit\": \"d4ff81195a4c5983edd7fc06cb340452deea4db6\",\n  \"sourceTree\": \"7a4700c4838d8aaa88512bc534a92f9b12215d1e\",\n  \"ciRun\": 43361320046,\n  \"codemagicBuildId\": \"6af68ad510a05158d8123f9b\",\n  \"ipa\": {\n    \"sha256\": \"cdbf0f6bcc6c798fe233461981cd651b48183aa1b54c68ad4b8431f0efe4ee0d\",\n    \"bytes\": 34895295,\n    \"infoPlist\": {\n      \"CFBundleIdentifier\": \"com.korlix.brain\",\n      \"CFBundleShortVersionString\": \"1.0.2\",\n      \"CFBundleVersion\": \"22\",\n      \"CFBundleSupportedPlatforms\": [\n        \"iPhoneOS\"\n      ],\n      \"MinimumOSVersion\": \"15.0\",\n      \"CFBundleExecutable\": \"Runner\"\n    },\n    \"executableArchitecture\": \"arm64\"\n  },\n  \"packagedAssets\": [\n    {\n      \"member\": \"Payload/Runner.app/Frameworks/App.framework/flutter_assets/assets/web/projection.html\",\n      \"bytes\": 16877,\n      \"sha256\": \"140a2c6fa9fa19ed3f05d8d9964f0da48aaefe3aa8bbe85e1794cce932bc55c7\",\n      \"matchesTestedSource\": true\n    },\n    {\n      \"member\": \"Payload/Runner.app/Frameworks/App.framework/flutter_assets/assets/web/projection.css\",\n      \"bytes\": 51323,\n      \"sha256\": \"e00ef78e57b1e6a10b25681a1c042342643b5bdc4c3414b7774ca6bca82c1477\",\n      \"matchesTestedSource\": true\n    },\n    {\n      \"member\": \"Payload/Runner.app/Frameworks/App.framework/flutter_assets/assets/web/projection.js\",\n      \"bytes\": 46958,\n      \"sha256\": \"11a11d4071a5d3eb3e9568cee1d57a26c191afcf666095c1384503755405af42\",\n      \"matchesTestedSource\": true\n    }\n  ],\n  \"pipelineReportMatches\": true,\n  \"pipelineSignatureVerified\": true,\n  \"localSignatureVerificationPerformed\": false,\n  \"limits\": \"Linux inspection verifies the downloaded ZIP identity, architecture, hashes and source assets; Apple signature validation is the matching pipeline report observation.\"\n}\n"
+  },
+  "uploadObservationRecord": {
+    "file": "upload-observation.json",
+    "reportSha256": "19826ad3b9440e91844a2f40065540bd5818a69b1abe03a294d1b881c18d218f",
+    "reportJson": "{\n  \"observedAt\": \"2026-11-13 04:09:01 UTC\",\n  \"codemagicBuildId\": \"6af68ad510a05158d8123f9b\",\n  \"workflow\": \"korlix-brain-ios-testflight\",\n  \"branch\": \"release/brain-projection-entrance-d4ff811\",\n  \"commit\": \"d4ff81195a4c5983edd7fc06cb340452deea4db6\",\n  \"sourceTree\": \"7a4700c4838d8aaa88512bc534a92f9b12215d1e\",\n  \"ciRun\": 43361320046,\n  \"ciConclusion\": \"success\",\n  \"publishingStatus\": \"uploaded\",\n  \"appleUploadId\": \"f6cdd887-36e5-45bf-ba49-fce73b2326eb\",\n  \"appleUploaderLogTimestamp\": \"2026-11-13 04:06:30.466\",\n  \"transferredBytes\": 34895295,\n  \"uploadMessage\": \"UPLOAD SUCCEEDED with no errors\",\n  \"codemagicObservedStatus\": \"finished\",\n  \"postProcessingAction\": \"What to test notes\",\n  \"postProcessingComplete\": true,\n  \"testflightDeliveryVerified\": false,\n  \"completedObservedAt\": \"2026-11-13T04:12:32.144894+00:00\",\n  \"appleFoundBuildId\": \"f6cdd887-36e5-45bf-ba49-fce73b2326eb\",\n  \"betaLocalizationUpdated\": true,\n  \"betaLocalizationId\": \"a7426d7b-9784-44ed-aff1-d9809f7fe6f7\",\n  \"betaLocalizationLocale\": \"en-US\"\n}\n"
+  }
+}
