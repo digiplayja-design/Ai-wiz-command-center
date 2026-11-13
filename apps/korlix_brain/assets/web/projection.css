@@ -405,4 +405,5 @@ body[data-layout="landscape"][data-console-compact="true"] .talk-microphone{widt
 body[data-layout="landscape"][data-console-compact="true"] .voice-actions{gap:5px}
 body[data-layout="landscape"][data-console-compact="true"] .voice-actions .voice-control{min-width:60px;min-height:44px;font-size:11px;padding:6px 5px;gap:4px}
 body[data-layout="landscape"][data-console-compact="true"] .voice-actions .voice-control svg{width:13px;height:13px}
-body[data-layout="landscape"][data-console-compact="true"] .voice-command-summary p{font-size:9px;grid-template-columns:49px minmax(0,1fr);gap:4px}
+body[data-layout="landscape"][data-console-compact="true"] .voice-command-summary p{font-size:9px;grid-template-columns:minmax(max-content,60px) minmax(0,1fr);gap:4px}
+body[data-layout="landscape"][data-console-compact="true"] .voice-command-summary p>span{white-space:nowrap}
