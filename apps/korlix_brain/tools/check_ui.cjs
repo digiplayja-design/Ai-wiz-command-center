@@ -233,7 +233,9 @@ function stableSavedTargetGeometry(){
     await page.getByRole('button',{name:'Stop conversation',exact:true}).click();
     await page.waitForFunction(()=>document.querySelector('.kb-product').dataset.voiceActive==='false');
     await page.getByRole('radio',{name:/Deep Think/}).check();
-    await page.getByRole('button',{name:'Start conversation',exact:true}).click();
+    assert.equal(await page.locator('#cinema-kb-replay-demo').textContent(),'Start Deep Think','Inline restart identifies the selected mode');
+    assert.equal(await page.locator('#cinema-kb-start-label').textContent(),'Start Deep Think','Persistent restart identifies the selected mode');
+    await page.locator('#cinema-kb-replay-demo').click();
     await page.waitForFunction(()=>document.querySelector('#cinema-kb-voice-phase').textContent==='Rici is listening');
     assert.equal(await page.evaluate(()=>window.testCommands.filter(c=>c.action==='startVoice').at(-1).payload.mode),'deep');
     assert.equal(await page.getByRole('radio',{name:/Live Conversation/}).isDisabled(),true,'Mode is fixed during a conversation');

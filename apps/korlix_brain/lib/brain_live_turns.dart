@@ -40,11 +40,13 @@ class BrainLiveTurns {
   final _responses = <String, String>{};
   final _calls = <String>{}, _savedTurns = <String>{};
   final _completedResponses = <String>{};
-  final _successfulResponses = <String>{};
+  final _successfulResponseEpochs = <String, int>{};
   final _directAcknowledgements = <String>{};
   final _cancelledResponses = <String>{};
   final _pendingAssistantTranscripts = <String, String>{};
   final _reportedAssistantTranscripts = <String>{};
+  final _expiredAssistantTranscripts = <String>{};
+  final _assistantTranscriptTimers = <String, Timer>{};
   final _transcriptionTimers = <String, Timer>{};
   Future<void> _toolQueue = Future.value();
   int _epoch = 0;
@@ -59,7 +61,10 @@ class BrainLiveTurns {
     // An earlier utterance may still supply its original memory transcript,
     // but it must not publish a delayed recognition warning over a new turn.
     _cancelTranscriptionTimers();
-    _pendingAssistantTranscripts.clear();
+    if (active != null) _cancelledResponses.add(active);
+    for (final response in List.of(_pendingAssistantTranscripts.keys)) {
+      _flushAssistantTranscript(response);
+    }
     _turns[id] = _LiveTurn(_epoch);
     if (active != null) {
       unawaited(
@@ -98,9 +103,11 @@ class BrainLiveTurns {
         'text': text,
         'current': turn.epoch == _epoch,
       });
-      if (turn.epoch == _epoch &&
-          onProjection != null &&
-          recognizesProjection?.call(text) == true) {
+      // A late original transcript can still classify a completed reply for
+      // display, but it must never execute a superseded view command.
+      turn.projectionTranscript = onProjection != null &&
+          recognizesProjection?.call(text) == true;
+      if (turn.epoch == _epoch && turn.projectionTranscript) {
         // Reserve before completing ASR: a model tool already waiting for this
         // transcript must share this result, rather than move the camera twice.
         turn.directProjection = true;
@@ -117,30 +124,49 @@ class BrainLiveTurns {
   /// Audio stays immediate. Display/history text waits until the response has
   /// completed and its original ASR distinguishes conversation from a local
   /// command, so a speculative refusal cannot become the saved controller reply.
+  /// A reply completed before the next utterance keeps its original association.
   /// Never infer a missing response ID from whichever response is active now.
   void acceptAssistantTranscript(String? responseId, String text) {
     if (!current || responseId == null || responseId.isEmpty ||
         text.trim().isEmpty ||
-        _reportedAssistantTranscripts.contains(responseId)) {
+        _reportedAssistantTranscripts.contains(responseId) ||
+        _expiredAssistantTranscripts.contains(responseId)) {
       return;
     }
     final turn = _turns[_responses[responseId]];
-    if (turn == null || turn.epoch != _epoch ||
+    if (turn == null ||
+        (turn.epoch != _epoch &&
+            _successfulResponseEpochs[responseId] != turn.epoch) ||
         _cancelledResponses.contains(responseId) ||
-        (turn.directProjection &&
+        (turn.projectionTranscript &&
             !_directAcknowledgements.contains(responseId)) ||
         (_completedResponses.contains(responseId) &&
-            !_successfulResponses.contains(responseId))) {
+            !_successfulResponseEpochs.containsKey(responseId))) {
       return;
     }
     // A turn normally has one reply or a tool continuation. Bound even malformed
-    // provider streams while the existing ASR deadline is still pending.
+    // provider streams. A separate display timer does not retire the original
+    // ASR future, which an older authorized memory tool may still need.
     if (_pendingAssistantTranscripts.length >= 8 &&
         !_pendingAssistantTranscripts.containsKey(responseId)) {
-      return;
+      final oldest = _pendingAssistantTranscripts.keys.first;
+      _expiredAssistantTranscripts.add(oldest);
+      _dropAssistantTranscript(oldest);
     }
     _pendingAssistantTranscripts[responseId] = text;
+    _assistantTranscriptTimers.putIfAbsent(responseId, () => Timer(
+      transcriptionTimeout,
+      () {
+        _expiredAssistantTranscripts.add(responseId);
+        _dropAssistantTranscript(responseId);
+      },
+    ));
     _flushAssistantTranscript(responseId);
+  }
+
+  void _dropAssistantTranscript(String responseId) {
+    _pendingAssistantTranscripts.remove(responseId);
+    _assistantTranscriptTimers.remove(responseId)?.cancel();
   }
 
   void _flushAssistantTranscript(String responseId) {
@@ -148,21 +174,23 @@ class BrainLiveTurns {
     if (text == null) return;
     final turn = _turns[_responses[responseId]];
     final acknowledgement = _directAcknowledgements.contains(responseId);
-    if (!current || turn == null || turn.epoch != _epoch ||
+    if (!current || turn == null ||
+        (turn.epoch != _epoch &&
+            _successfulResponseEpochs[responseId] != turn.epoch) ||
         _cancelledResponses.contains(responseId) ||
-        (turn.directProjection && !acknowledgement) ||
+        (turn.projectionTranscript && !acknowledgement) ||
         (_completedResponses.contains(responseId) &&
-            !_successfulResponses.contains(responseId)) ||
+            !_successfulResponseEpochs.containsKey(responseId)) ||
         (!acknowledgement && turn.transcript.isCompleted &&
             !turn.transcriptAvailable)) {
-      _pendingAssistantTranscripts.remove(responseId);
+      _dropAssistantTranscript(responseId);
       return;
     }
-    if (!_successfulResponses.contains(responseId) ||
+    if (!_successfulResponseEpochs.containsKey(responseId) ||
         (!acknowledgement && !turn.transcript.isCompleted)) {
       return;
     }
-    _pendingAssistantTranscripts.remove(responseId);
+    _dropAssistantTranscript(responseId);
     if (!_reportedAssistantTranscripts.add(responseId)) return;
     emit({'type': 'transcript', 'role': 'rici', 'text': text});
   }
@@ -287,9 +315,9 @@ class BrainLiveTurns {
       // Expiry retires this item as well as its warning. A late ASR completion
       // must not move the view after the user has been asked to repeat it.
       turn.transcript.complete(null);
-      _pendingAssistantTranscripts.removeWhere(
-        (response, _) => _responses[response] == id,
-      );
+      for (final response in List.of(_pendingAssistantTranscripts.keys)) {
+        if (_responses[response] == id) _dropAssistantTranscript(response);
+      }
       if (current && turn.epoch == _epoch) {
         emit({
           'type': 'voiceNotice',
@@ -331,6 +359,7 @@ class BrainLiveTurns {
       _turns[turnId]!.audioCleared = false;
     }
     if (_turns[turnId]!.epoch != _epoch) {
+      _cancelledResponses.add(id);
       unawaited(
         send({'type': 'response.cancel', 'response_id': id})
             .catchError((Object _) {}),
@@ -399,7 +428,9 @@ class BrainLiveTurns {
       return;
     }
     if (response['status'] == 'completed') {
-      _successfulResponses.add(responseId);
+      // Completion observed after new speech cannot turn an interrupted reply
+      // into a completed reply from before that speech.
+      _successfulResponseEpochs[responseId] = _epoch;
     }
     _flushAssistantTranscript(responseId);
     final turnId = _responses[responseId];
@@ -622,6 +653,10 @@ class BrainLiveTurns {
     }
     _waitingResponses.clear();
     _pendingAssistantTranscripts.clear();
+    for (final timer in _assistantTranscriptTimers.values) {
+      timer.cancel();
+    }
+    _assistantTranscriptTimers.clear();
   }
 }
 
@@ -632,6 +667,7 @@ class _LiveTurn {
   DateTime? stoppedAt;
   bool audioReported = false;
   bool transcriptAvailable = false;
+  bool projectionTranscript = false;
   bool audioCleared = false;
   bool directProjection = false;
   bool defaultResponseStarted = false;

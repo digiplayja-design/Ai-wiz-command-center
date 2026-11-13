@@ -99,6 +99,89 @@ void main() {
       expect(replies(h), ['Ready to help.', 'You are welcome.']);
     });
 
+    test('completed ordinary reply keeps its original turn when final text arrives after new speech', () async {
+      final h = controller();
+      addTearDown(h.live.dispose);
+      h.begin('one', 'completed');
+      h.live.accept('one', 'Hello Rici');
+      await h.live.responseDone(finished('completed'));
+      h.begin('two', 'new');
+      h.live.accept('two', command);
+      h.live.acceptAssistantTranscript('completed', 'Hello there.');
+      expect(replies(h), ['Hello there.']);
+      expect(h.projections.single.first, 'two');
+      h.live.acceptAssistantTranscript('completed', 'Hello there.');
+      expect(replies(h), ['Hello there.']);
+    });
+
+    for (final textBeforeNextTurn in [true, false]) {
+      test('completed ordinary reply survives new speech while original ASR is pending '
+          '(text before next turn: $textBeforeNextTurn)', () async {
+        final h = Harness();
+        addTearDown(h.live.dispose);
+        h.begin('one', 'completed');
+        if (textBeforeNextTurn) {
+          h.live.acceptAssistantTranscript('completed', 'First answer');
+        }
+        await h.live.responseDone(finished('completed'));
+        h.begin('two', 'new');
+        h.live.accept('two', 'Second question');
+        if (!textBeforeNextTurn) {
+          h.live.acceptAssistantTranscript('completed', 'First answer');
+        }
+        expect(replies(h), isEmpty);
+        h.live.accept('one', 'First question');
+        expect(replies(h), ['First answer']);
+        h.live.acceptAssistantTranscript('new', 'Second answer');
+        await h.live.responseDone(finished('new'));
+        expect(replies(h), ['First answer', 'Second answer']);
+        expect(h.requests, isEmpty);
+      });
+    }
+
+    test('late original open command suppresses its completed speculation without executing the stale control', () async {
+      final h = controller();
+      addTearDown(h.live.dispose);
+      h.begin('one', 'completed');
+      h.live.acceptAssistantTranscript('completed', refusal);
+      await h.live.responseDone(finished('completed'));
+      h.begin('two', 'new');
+      h.live.accept('two', 'Hello Rici');
+      h.live.accept('one', command);
+      await Future<void>.delayed(Duration.zero);
+      h.live.acceptAssistantTranscript('completed', refusal);
+      expect(replies(h), isEmpty);
+      expect(h.projections, isEmpty, reason: 'Stale ASR is classification only.');
+      expect(h.sent.where((event) => event['type'] == 'response.create'), isEmpty);
+      h.live.acceptAssistantTranscript('new', 'Hello there.');
+      await h.live.responseDone(finished('new'));
+      expect(replies(h), ['Hello there.']);
+    });
+
+    testWidgets('display expiry is bounded independently and preserves the original older memory transcript', (tester) async {
+      final h = Harness(timeout: const Duration(seconds: 1));
+      addTearDown(h.live.dispose);
+      h.begin('one', 'completed');
+      h.live.acceptAssistantTranscript('completed', 'Pending first answer');
+      await h.live.responseDone(finished('completed'));
+      h.begin('two', 'new');
+      h.live.accept('two', 'Hello');
+      await tester.pump(const Duration(milliseconds: 500));
+      h.live.acceptAssistantTranscript('completed', 'Pending first answer');
+      await tester.pump(const Duration(milliseconds: 500));
+      h.live.accept('one', 'Rici remember this: my dog is Joy');
+      h.live.acceptAssistantTranscript('completed', 'Pending first answer');
+      expect(replies(h), isEmpty, reason: 'A duplicate must not extend display retention.');
+      expect(h.events.where((event) => event['type'] == 'voiceNotice'), isEmpty,
+          reason: 'The separate display timer must not publish an ASR warning.');
+      h.live.responseStarted({'id': 'old-tool', 'metadata': {'brain_turn': 'one'}});
+      await h.live.responseDone(done('old-tool'));
+      expect(h.requests.single, ['one', 'Rici remember this: my dog is Joy']);
+      expect(h.saved, hasLength(1));
+      expect(h.sent.where((event) => event['type'] == 'response.create'), isEmpty,
+          reason: 'The old save remains authorized but cannot speak over the new turn.');
+    });
+
     test('late ASR discards a completed speculative refusal and retains only the real controller acknowledgment', () async {
       final h = controller();
       addTearDown(h.live.dispose);
@@ -150,6 +233,8 @@ void main() {
       h.live.accept('one', 'Old question');
       await h.live.responseDone(finished('old'));
       expect(replies(h), isEmpty);
+      expect(h.sent.any((event) => event['type'] == 'response.cancel' &&
+          event['response_id'] == 'old'), isTrue);
       h.live.acceptAssistantTranscript('new', 'Current answer');
       await h.live.responseDone(finished('new'));
       expect(replies(h), ['Current answer']);
@@ -196,6 +281,22 @@ void main() {
       h.live.acceptAssistantTranscript('followup', 'Saved that to your brain.');
       await h.live.responseDone(finished('followup'));
       expect(replies(h), ['Saved that to your brain.']);
+      expect(h.saved, hasLength(1));
+    });
+
+    test('completed memory acknowledgment keeps its original association after new speech', () async {
+      final h = Harness();
+      addTearDown(h.live.dispose);
+      h.begin('one', 'tool');
+      h.live.accept('one', 'Rici remember this: my dog is Joy');
+      await h.live.responseDone(done('tool'));
+      h.live.responseStarted({'id': 'followup', 'metadata': {'brain_turn': 'one'}});
+      await h.live.responseDone(finished('followup'));
+      h.begin('two', 'new');
+      h.live.accept('two', 'Tell me a joke');
+      h.live.acceptAssistantTranscript('followup', 'Saved that to your brain.');
+      expect(replies(h), ['Saved that to your brain.']);
+      expect(h.requests.single, ['one', 'Rici remember this: my dog is Joy']);
       expect(h.saved, hasLength(1));
     });
   });
