@@ -161,6 +161,57 @@ jobs:
           flutter-version: '3.47.9'
           channel: stable
           cache: true
+      - name: Prepare simulator runtime caches
+        timeout-minutes: 13
+        run: |
+          python3 - <<'PY'
+          import json, subprocess
+          from pathlib import Path
+          artifacts = Path('apps/korlix_brain/runtime-screenshots')
+          artifacts.mkdir(parents=True, exist_ok=True)
+          report = {'cacheCompleted': False, 'commands': []}
+          status_file = artifacts / 'simulator-cache-preparation.json'
+          def as_text(value):
+              return value.decode(errors='replace') if isinstance(value, bytes) else (value or '')
+          def run_step(name, command, timeout=30):
+              record = {'name': name, 'command': command, 'timeoutSeconds': timeout,
+                        'exitCode': None, 'timedOut': False,
+                        'stdoutFile': name + '.stdout.log', 'stderrFile': name + '.stderr.log'}
+              stdout, stderr = '', ''
+              print('Running simulator prerequisite:', ' '.join(command), flush=True)
+              try:
+                  result = subprocess.run(command, text=True, stdout=subprocess.PIPE,
+                                          stderr=subprocess.PIPE, timeout=timeout)
+                  record['exitCode'] = result.returncode
+                  stdout, stderr = result.stdout, result.stderr
+              except subprocess.TimeoutExpired as error:
+                  record['timedOut'] = True
+                  stdout, stderr = as_text(error.stdout), as_text(error.stderr)
+              except OSError as error:
+                  record['error'] = str(error)
+                  stderr = str(error)
+              finally:
+                  (artifacts / record['stdoutFile']).write_text(stdout)
+                  (artifacts / record['stderrFile']).write_text(stderr)
+                  report['commands'].append(record)
+                  status_file.write_text(json.dumps(report, indent=2) + '\n')
+                  print(stdout, end='', flush=True)
+                  print(stderr, end='', flush=True)
+                  print('Simulator prerequisite status:', json.dumps(record), flush=True)
+              if record['timedOut'] or record['exitCode'] != 0:
+                  raise SystemExit(f'Simulator prerequisite {name} failed; see captured output and status')
+          run_step('xcode-version', ['xcodebuild', '-version'])
+          run_step('host-architecture', ['uname', '-m'])
+          run_step('host-os', ['sw_vers'])
+          run_step('simctl-runtime-help', ['xcrun', 'simctl', 'help', 'runtime'])
+          # Apple Xcode 26.4 release notes, issue 170836966, document this
+          # completion command. Its use does not diagnose our migration failure.
+          run_step('dyld-shared-cache-update',
+                   ['xcrun', 'simctl', 'runtime', 'dyld_shared_cache', 'update', '--all'],
+                   timeout=600)
+          report['cacheCompleted'] = True
+          status_file.write_text(json.dumps(report, indent=2) + '\n')
+          PY
       - name: Prepare an available iPhone simulator
         run: |
           defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false
