@@ -34,6 +34,12 @@
     </defs>
   </svg>
 
+  <div class="spatial-room-shell" aria-hidden="true">
+    <span class="spatial-ceiling"></span><span class="spatial-ceiling-rib rib-near"></span><span class="spatial-ceiling-rib rib-far"></span>
+    <span class="spatial-sidewall wall-left"></span><span class="spatial-sidewall wall-right"></span>
+    <span class="spatial-floor"></span><span class="spatial-floor-ring"></span><span class="spatial-console-base base-left"></span><span class="spatial-console-base base-right"></span>
+  </div>
+
   <div id="projection-entry-room" class="projection-entry-room" aria-hidden="true">
     <div class="entry-room-depth"><span class="entry-room-crown"></span><span class="entry-room-wall entry-room-wall-left"></span><span class="entry-room-wall entry-room-wall-right"></span><span class="entry-room-floor"></span></div>
   </div>
@@ -81,13 +87,13 @@
             <div class="world-caption" id="world-caption"><span class="caption-line"></span><span id="world-caption-text">Checking property imagery…</span></div>
 
             <div class="camera-controls" role="group" aria-label="Property view controls">
-              <button type="button" data-camera="closer" aria-label="Go closer to the building" title="Go closer"><svg><use href="#icon-plus"/></svg></button>
-              <button type="button" data-camera="farther" aria-label="Move farther away" title="Move farther"><svg><use href="#icon-minus"/></svg></button>
-              <button type="button" data-camera="stopCamera" aria-label="Stop zooming" title="Stop zooming"><svg><use href="#icon-stop"/></svg></button>
+              <button type="button" data-camera="closer" aria-label="Go closer to the building" title="Go closer"><svg><use href="#icon-plus"/></svg><span class="camera-key-label">Closer</span></button>
+              <button type="button" data-camera="farther" aria-label="Move farther away" title="Move farther"><svg><use href="#icon-minus"/></svg><span class="camera-key-label">Farther</span></button>
+              <button type="button" data-camera="stopCamera" aria-label="Stop zooming" title="Stop zooming"><svg><use href="#icon-stop"/></svg><span class="camera-key-label">Stop zoom</span></button>
               <span class="control-divider"></span>
-              <button type="button" data-camera="left" aria-label="Rotate left" title="Rotate left"><svg><use href="#icon-left"/></svg></button>
-              <button type="button" data-camera="right" aria-label="Rotate right" title="Rotate right"><svg><use href="#icon-right"/></svg></button>
-              <button type="button" data-camera="reset" aria-label="Reset view" title="Reset view"><svg><use href="#icon-reset"/></svg></button>
+              <button type="button" data-camera="left" aria-label="Rotate left" title="Rotate left"><svg><use href="#icon-left"/></svg><span class="camera-key-label">Look left</span></button>
+              <button type="button" data-camera="right" aria-label="Rotate right" title="Rotate right"><svg><use href="#icon-right"/></svg><span class="camera-key-label">Look right</span></button>
+              <button type="button" data-camera="reset" aria-label="Reset view" title="Reset view"><svg><use href="#icon-reset"/></svg><span class="camera-key-label">Reset</span></button>
             </div>
 
             <div class="place-banner" id="place-banner" hidden><span class="place-pin"><svg><use href="#icon-pin"/></svg></span><div><span class="eyebrow">SELECTED PLACE</span><strong id="place-label"></strong><span id="place-address"></span><span id="place-match" class="partial-match-warning" hidden>Check address — partial match</span><span id="place-source" class="map-data-credit" translate="no" hidden>Google Maps</span></div><span class="place-confirmed">Confirmed</span></div>
@@ -111,6 +117,19 @@
 
           <div class="scene-footnote"><span><svg><use href="#icon-globe"/></svg><span id="imagery-disclosure">Recorded imagery · not a live camera feed.</span></span><span id="provider-label">PROJECTION / STREET VIEW</span></div>
         </section>
+
+        <aside id="spatial-console" class="spatial-console" aria-label="Projected exploration console" hidden>
+          <div class="spatial-console-crown" aria-hidden="true"><span class="spatial-brain"><svg><use href="#icon-brain"/></svg><i></i><i></i></span><span>RICI / SPATIAL CONSOLE<small>Your world within reach.</small></span><b></b></div>
+          <div class="spatial-console-switch" role="group" aria-label="Projection consoles">
+            <button id="console-explore" type="button" data-console-choice="explore" aria-controls="spatial-explore-pane" aria-pressed="true"><svg aria-hidden="true"><use href="#icon-pin"/></svg><span>Explore</span></button>
+            <button id="console-rici" type="button" data-console-choice="rici" aria-controls="spatial-rici-pane" aria-pressed="false"><svg aria-hidden="true"><use href="#icon-brain"/></svg><span>Rici</span></button>
+          </div>
+          <div id="spatial-console-scroll" class="spatial-console-scroll">
+            <div id="spatial-explore-pane" class="spatial-console-pane"></div>
+            <div id="spatial-rici-pane" class="spatial-console-pane"></div>
+            <div id="spatial-console-notices"></div>
+          </div>
+        </aside>
 
         <aside class="rici-panel" aria-label="Rici exploration assistant">
           <div class="rici-heading"><span class="rici-orb"><svg><use href="#icon-brain"/></svg></span><div><span class="eyebrow">YOUR EXPLORATION COMPANION</span><h2>Rici</h2></div><span class="rici-presence" id="rici-presence">Ready</span></div>

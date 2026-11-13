@@ -34,6 +34,80 @@
   });
   let state = emptyState();
 
+  // Landscape rearranges the same local controls into a nearby console. The
+  // provider frame and native connection never move or reconnect on rotation.
+  const wideRoom = window.matchMedia('(min-width:600px) and (orientation:landscape)');
+  const compactRoom = window.matchMedia('(max-height:600px)');
+  const spatial = {wide:false, compact:false, console:'explore'};
+  const spatialMoves = [
+    ['.workspace-heading',null],
+    ['.destination-panel','spatial-explore-pane'],
+    ['#place-banner','spatial-explore-pane'],
+    ['.view-toolbar','spatial-explore-pane'],
+    ['#world-caption','spatial-explore-pane'],
+    ['.scene-footnote','spatial-explore-pane'],
+    ['#save-details','spatial-explore-pane'],
+    ['.rici-panel','spatial-rici-pane'],
+    ['#voice-command-feedback','spatial-rici-pane'],
+    ['#projection-notice','spatial-console-notices']
+  ].map(([selector,target])=>{
+    const node=document.querySelector(selector),marker=document.createComment('projection layout home');
+    node.parentNode.insertBefore(marker,node);
+    return {node,marker,target};
+  });
+
+  function chooseSpatialConsole(name,{reveal=false}={}) {
+    spatial.console=name==='rici'?'rici':'explore';
+    document.body.dataset.console=spatial.console;
+    document.querySelectorAll('[data-console-choice]').forEach(button=>
+      button.setAttribute('aria-pressed',String(button.dataset.consoleChoice===spatial.console)));
+    if(!spatial.wide||!reveal)return;
+    const scroll=$('spatial-console-scroll'),pane=$('spatial-'+spatial.console+'-pane');
+    if(spatial.compact)scroll.scrollTop=0;
+    else scroll.scrollTop+=pane.getBoundingClientRect().top-scroll.getBoundingClientRect().top;
+  }
+
+  function syncSpatialLayout() {
+    const wide=wideRoom.matches,compact=wide&&compactRoom.matches;
+    const focused=document.activeElement;
+    const selection=focused instanceof HTMLInputElement||focused instanceof HTMLTextAreaElement
+      ? {start:focused.selectionStart,end:focused.selectionEnd}:null;
+    if(wide!==spatial.wide){
+      spatial.wide=wide;
+      for(const move of spatialMoves){
+        if(wide){
+          if(move.target)$(move.target).append(move.node);
+          else document.querySelector('.app-header').insertBefore(move.node,document.querySelector('.entry-header-actions'));
+        }else move.marker.parentNode.insertBefore(move.node,move.marker.nextSibling);
+      }
+    }
+    spatial.compact=compact;
+    document.body.dataset.layout=wide?'landscape':'portrait';
+    document.body.dataset.consoleCompact=String(compact);
+    $('spatial-console').hidden=!wide;
+    if(wide&&focused!==document.body){
+      if($('spatial-rici-pane').contains(focused))spatial.console='rici';
+      else if($('spatial-explore-pane').contains(focused))spatial.console='explore';
+    }
+    chooseSpatialConsole(spatial.console);
+    // The two landscape-only shortcuts disappear on rotation. Move their
+    // existing focus to the page heading, never to a field that opens a keyboard.
+    if(!wide&&focused instanceof HTMLElement&&focused.matches('[data-console-choice]')){
+      $('projection-heading').focus({preventScroll:true});
+    }
+    // Moving an input must retain its draft/caret without opening a keyboard
+    // for voice searches or taking focus from unrelated controls.
+    if(focused instanceof HTMLElement&&focused!==document.body&&focused.isConnected
+      &&document.activeElement!==focused&&focused.getClientRects().length){
+      focused.focus({preventScroll:true});
+      if(selection&&selection.start!==null&&selection.end!==null)focused.setSelectionRange(selection.start,selection.end);
+    }
+    measureVoiceDock();
+  }
+  document.querySelectorAll('[data-console-choice]').forEach(button=>
+    button.addEventListener('click',()=>chooseSpatialConsole(button.dataset.consoleChoice,{reveal:true})));
+  window.addEventListener('resize',syncSpatialLayout);
+
   // The entrance decorates this room; it never owns provider or voice readiness.
   // A fresh native screen nonce is the only start signal. Native snapshots and
   // address/voice updates cannot restart or extend this bounded presentation.
@@ -262,11 +336,13 @@
     if (search.source === 'voice' && !search.active && state.candidates.length
       && search.sequence !== revealedVoiceSearchSequence) {
       revealedVoiceSearchSequence = search.sequence;
+      if(spatial.wide)chooseSpatialConsole('explore',{reveal:true});
       // A spoken search must reveal its confirmation choices without opening
       // the keyboard. The scrollport already reserves the microphone dock.
       requestAnimationFrame(() => {
         if (state.destinationSearch.sequence === search.sequence && state.candidates.length) {
-          document.querySelector('.destination-panel').scrollIntoView({block:'start', behavior:'auto'});
+          const target=spatial.wide?list.firstElementChild:document.querySelector('.destination-panel');
+          target.scrollIntoView({block:spatial.wide?'nearest':'start', behavior:'auto'});
         }
       });
     }
@@ -310,6 +386,7 @@
     if (search.sequence > 0 && search.sequence !== lastSearchSequence) {
       lastSearchSequence = search.sequence;
       $('destination-input').value = search.query;
+      if(spatial.wide&&search.source==='voice')chooseSpatialConsole('explore',{reveal:true});
     }
     const finding = busy.search || search.active;
     $('search-button').disabled = !connected || state.config.checking || !state.config.geocodingAvailable || finding;
@@ -768,5 +845,5 @@
     if (document.hidden) finishEntrance();
   });
   window.addEventListener('pagehide',finishEntrance);
-  finishEntrance(); render(); resizeCanvas(); requestAnimationFrame(animate);
+  syncSpatialLayout(); finishEntrance(); render(); resizeCanvas(); requestAnimationFrame(animate);
 })();

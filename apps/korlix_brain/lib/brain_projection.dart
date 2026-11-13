@@ -1267,16 +1267,134 @@ class BrainProjection extends ChangeNotifier {
   bool recognizesVoiceControl(String transcript) =>
       !_disposed && _parseVoiceControl(transcript) != null;
 
+  /// Follow-up wording belongs to the open Projection conversation. Accept it
+  /// only around a complete street address, preserving the address itself and
+  /// keeping a rejected replacement out of the looser first-place fallback.
+  static ({bool applies, String? address}) _replacementStreetAddress(
+    String original,
+  ) {
+    var command = original;
+    var applies = false;
+    final transition = RegExp(
+      r'^(?:now|next|also)[,.:!?\s]+',
+      caseSensitive: false,
+    );
+    for (var i = 0; i < 3; i++) {
+      final prefix = transition.firstMatch(command);
+      if (prefix == null) break;
+      applies = true;
+      command = _originalCommand(command.substring(prefix.end));
+    }
+    final instead = RegExp(
+      r'[, ]+instead[.!?\s]*$',
+      caseSensitive: false,
+    );
+    if (instead.hasMatch(command)) {
+      applies = true;
+      command = command.replaceFirst(instead, '').trimRight();
+    }
+    // A follow-up must not turn a directions request into a property search.
+    // Unwrapped route verbs continue through the existing directions owner;
+    // unsupported wrappers remain unhandled rather than bypassing that owner.
+    if (RegExp(
+      r'^(?:navigate to|route to|directions to|(?:give|show) me directions to)\b',
+      caseSensitive: false,
+    ).hasMatch(command)) {
+      return (applies: applies, address: null);
+    }
+    String? address;
+    final targeted = RegExp(
+      r'^(?:switch|change)\s+(?:(?:the|this|my)\s+)?(?:address|destination|property|location)\s+to\s+(.+)$',
+      caseSensitive: false,
+    ).firstMatch(command);
+    final switchTo = RegExp(
+      r'^(?:switch|change)\s+to\s+(.+)$',
+      caseSensitive: false,
+    ).firstMatch(command);
+    if (targeted != null) {
+      applies = true;
+      address = targeted.group(1);
+    } else if (switchTo != null &&
+        _standaloneStreetAddress(_cleanDestination(switchTo.group(1)!))) {
+      applies = true;
+      address = switchTo.group(1);
+    } else {
+      final travel = RegExp(
+        r'^(?:go to|take me to|fly to|find(?: the)?(?: address(?: of| for)?)?|search(?: for)?|explore|look up|show(?: me)?)\s+(.+)$',
+        caseSensitive: false,
+      ).firstMatch(command);
+      final subject = travel?.group(1) ?? command;
+      final introduced = RegExp(
+        r'^(?:(?:the|this|a)\s+)?(?:next|new|another|different|second|third|other)\s+(?:street\s+)?address(?:\s+(?:is|of|for))?(?:\s*:\s*|\s+)(.+)$',
+        caseSensitive: false,
+      ).firstMatch(subject);
+      if (introduced != null) {
+        applies = true;
+        address = introduced.group(1);
+      } else if (RegExp(
+        r'^(?:(?:the|this|a)\s+)?(?:next|new|another|different|second|third|other)\s+(?:street\s+)?address\b',
+        caseSensitive: false,
+      ).hasMatch(subject)) {
+        applies = true;
+      } else if (applies) {
+        address = _addressIntroducer.firstMatch(command)?.group(1) ??
+            _destinationCommand(command, awaitingDestination: false) ??
+            command;
+      }
+    }
+    if (!applies) return (applies: false, address: null);
+    if (address == null) return (applies: true, address: null);
+    address = _cleanDestination(address);
+    final streetEnd = RegExp(
+      _streetNameAndType,
+      caseSensitive: false,
+    ).firstMatch(address)?.end ?? address.length;
+    final locality = address.substring(streetEnd);
+    if (!_standaloneStreetAddress(address) ||
+        RegExp(
+          r'\b(?:then|but|instead|actually|cancel|ignore|forget|correction)\b',
+          caseSensitive: false,
+        ).hasMatch(address) ||
+        // Reject a research/media suffix even after city and postal text.
+        // Do not treat View or News as qualifiers: Mountain View and Newport
+        // News are valid locality names, as is Live Oak in the street name.
+        RegExp(
+          r'\b(?:facts?|photos?|pictures?|images?|videos?|details?|information|history|weather|crime(?:\s+rate)?|statistics|population|reviews?)\s*$',
+          caseSensitive: false,
+        ).hasMatch(locality) ||
+        RegExp(
+          r'\s+(?:and|or)\s+(?:\d+[a-z]?\b|'
+          '$_addressNumberWord'
+          r'\b)',
+          caseSensitive: false,
+        ).hasMatch(locality)) {
+      return (applies: true, address: null);
+    }
+    return (applies: true, address: address);
+  }
+
   _ProjectionVoiceControl? _parseVoiceControl(String transcript) {
     final original = _originalCommand(transcript);
     final command = original.toLowerCase();
     final viewCommand = _viewCommand(command);
     if (original.isEmpty ||
         original.length > 2000 ||
+        RegExp(r'^[“”"\x27‘’]').hasMatch(original) ||
         RegExp(r'\b(?:remember|save)\b').hasMatch(command) ||
         RegExp(
-          r'\b(?:do not|don\x27t|don’t|never)\s+(?:open|close|zoom|move|go|show|switch|face|turn|rotate|pan|take|fly|start|stop|keep|continue)\b|[,;—]\s*(?:no|actually|instead)\b',
+          r'\b(?:do not|don\x27t|don’t|never)\s+(?:open|close|zoom|move|go|show|switch|face|turn|rotate|pan|take|fly|start|stop|keep|continue)\b',
         ).hasMatch(command)) {
+      return null;
+    }
+    if (_open) {
+      final replacement = _replacementStreetAddress(original);
+      if (replacement.applies) {
+        return replacement.address == null
+            ? null
+            : _ProjectionVoiceControl('search', replacement.address!);
+      }
+    }
+    if (RegExp(r'[,;—]\s*(?:no|actually|instead)\b').hasMatch(command)) {
       return null;
     }
     if (RegExp(
@@ -1560,7 +1678,9 @@ class BrainProjection extends ChangeNotifier {
     }
     if (arguments != null) {
       return _result(
-        'Please say the Projection action you want, or use its on-screen controls.',
+        action == 'search'
+            ? 'I could not identify the new destination from those words. Say “go to” followed by the full street address, city and postal code. I can search another address here.'
+            : 'Please say the Projection action you want, or use its on-screen controls.',
         ok: false,
       );
     }

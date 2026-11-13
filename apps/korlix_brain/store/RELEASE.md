@@ -1,3 +1,43 @@
+## Repeated destinations and landscape Projection — build 24 candidate
+
+The user confirmed that build 23 can open the first spoken address, then reported
+a refusal on a second destination. Source inspection found no one-search limit:
+an open Projection already accepts a second complete bare street address. It did
+find bounded follow-up phrasing gaps, including “Now…”, “The next address is…” and
+“Switch the address to…”, which can fall through to ordinary conversation. This
+candidate adds replacement-address recognition and explicit repeat-search
+capability instructions. The exact failed device utterance remains unobserved.
+
+Projection gains a landscape command-center layout and projected controls using
+cyan/violet edge lighting, layered console surfaces and depth. The existing
+Executive Bridge and Celestial Dome direction, two-second entrance, real Street
+View, provider attribution and current Rici session remain the reference. Native
+iPhone/iPad and Android settings already allow landscape; no orientation lock or
+new microphone session is required for rotation.
+
+Regression acceptance includes first, second and third spoken destinations in one
+session, replacing an unconfirmed result, explicit spoken confirmation, and
+portrait → landscape → portrait with the selected place, provider frame and
+voice state retained. Desktop browser fixtures and native tests do not establish
+physical microphone or device-rotation acceptance.
+
+Source build floor: 24. Exact-source CI, actual signed IPA identity/assets, Apple
+upload/processing and assignment to the existing internal TestFlight group must
+be verified separately. No backend renderer deployment is needed.
+
+## Verified build 23 baseline
+
+Native source `5d5ca7d5e2b473c55d30e4ff2685df5825d84269` passed CI run
+`43407921493` with 266 Flutter tests, 23 release guards and all six UI checkers.
+The actual signed com.korlix.brain / 1.0.2 (23) IPA is 34,899,999 bytes with
+SHA-256 `e6f5e861af6400ecfe85ab42c9d233d4c98c4c9ed11836c293f1c497cbe8dd11`.
+Upload job `6af6e61705c8b21ba24ef0b4` finished successfully. Delivery job
+`6af6eabe05c8b21ba24ef2a5` verified Apple build
+`117586ba-db5f-42d1-af3c-9ff30b7ebadb` in KORLIX Brain Internal at
+`2026-11-13T10:48:59.400584+00:00`, `IN_BETA_TESTING`, `assigned`,
+`deliveryVerified:true`, preserving the existing tester. The user subsequently
+confirmed the first spoken address worked and reported the follow-up issue above.
+
 ## Live Conversation restart and Projection command repair — build 23 candidate
 
 The reported Stop/restart failure has a confirmed UI cause: the fixed conversation

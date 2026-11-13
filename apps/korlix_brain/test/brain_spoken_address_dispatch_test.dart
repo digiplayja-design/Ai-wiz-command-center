@@ -8,6 +8,7 @@ import 'package:korlix_brain/brain_voice_turns.dart';
 
 const _firstAddress = '20 Resee Street, Unit 4, Reece, NY 10012';
 const _nextAddress = '14360 Jupiter Road, Suite 8, Brooklyn, NY 10012';
+const _thirdAddress = '350 Fifth Avenue, Floor 4, New York, NY 10118';
 const _config = <String, dynamic>{
   'rendererUrl': 'https://api.example.com/brain-projection/earth.html',
   'mapAvailable': true,
@@ -201,6 +202,118 @@ class _SpokenAddressHarness {
 void main() {
   for (final mode in BrainVoiceMode.values) {
     final label = mode == BrainVoiceMode.live ? 'Live' : 'Deep Think';
+    test('$label changes active Street View through first, second and third spoken addresses', () async {
+      final h = _SpokenAddressHarness(mode);
+      addTearDown(h.dispose);
+      await h.speak('first', 'Go to $_firstAddress');
+      await h.speak('confirm-first', 'Yes, that is the place');
+      await h.projection.dispatch('rendererReady', {
+        'status': 'ready',
+        'sequence': h.camera['sequence'],
+        'viewMode': 'street',
+      });
+      expect(h.selected!['userQuery'], _firstAddress);
+      final firstCamera = Map.of(h.camera);
+
+      await h.speak('second', 'Rici, now go to $_nextAddress');
+
+      expect(h.queries, [_firstAddress, _nextAddress]);
+      expect(h.selected, isNull);
+      expect(h.candidates.single['userQuery'], _nextAddress);
+      expect(h.camera, firstCamera, reason: 'Confirm every replacement.');
+      expect(h.repliesFor('second'), hasLength(1));
+      await h.speak('confirm-second', 'Choose the first result');
+      await h.projection.dispatch('rendererReady', {
+        'status': 'ready',
+        'sequence': h.camera['sequence'],
+        'viewMode': 'street',
+      });
+      expect(h.selected!['userQuery'], _nextAddress);
+      final secondCamera = Map.of(h.camera);
+
+      await h.speak(
+        'third',
+        'Can you show me $_thirdAddress instead?',
+        duplicateProjectionTool: true,
+      );
+
+      expect(h.queries, [_firstAddress, _nextAddress, _thirdAddress]);
+      expect(h.selected, isNull);
+      expect(h.camera, secondCamera);
+      expect(h.repliesFor('third'), hasLength(1));
+      await h.speak('confirm-third', 'Yes');
+      expect(h.selected!['userQuery'], _thirdAddress);
+      expect(h.camera['sequence'], firstCamera['sequence'] + 2);
+      expect(h.camera['viewMode'], 'street');
+      expect(h.camera['latitude'], h.selected!['latitude']);
+      expect(h.camera['longitude'], h.selected!['longitude']);
+      expect(h.candidates, isEmpty);
+      expect(h.opens, 1, reason: 'Searches must reuse the open Projection view.');
+      expect(h.voiceStarts, 0, reason: 'Keep the existing voice session.');
+      expect(h.memoryRequests, isEmpty);
+      expect(h.reasoningRequests, isEmpty);
+    });
+
+    test('$label replaces a destination while the previous candidates await confirmation', () async {
+      final h = _SpokenAddressHarness(mode);
+      addTearDown(h.dispose);
+      final camera = Map.of(h.camera);
+      await h.speak('unconfirmed-first', 'Go to $_firstAddress');
+      final firstId = h.candidates.single['id'] as String;
+      await h.speak('unconfirmed-second', 'The next address is $_nextAddress');
+      final secondId = h.candidates.single['id'] as String;
+      await h.speak('unconfirmed-third', 'Switch the address to $_thirdAddress');
+
+      expect(h.queries, [_firstAddress, _nextAddress, _thirdAddress]);
+      expect(h.selected, isNull);
+      expect(h.candidates, hasLength(1));
+      expect(h.candidates.single['userQuery'], _thirdAddress);
+      expect(h.camera, camera);
+      expect(() => h.projection.select(firstId), throwsA(anything));
+      expect(() => h.projection.select(secondId), throwsA(anything));
+      await h.speak('confirm-current', 'Choose the first result');
+      expect(h.selected!['userQuery'], _thirdAddress);
+      expect(h.camera['sequence'], camera['sequence'] + 1);
+      expect(h.camera['viewMode'], 'street');
+      expect(h.opens, 1);
+      expect(h.voiceStarts, 0);
+      expect(h.memoryRequests, isEmpty);
+      expect(h.reasoningRequests, isEmpty);
+    });
+
+    test('$label ignores stale replacement speech and keeps follow-up research conversational', () async {
+      final h = _SpokenAddressHarness(mode);
+      addTearDown(h.dispose);
+      await h.speak('first', 'Go to $_firstAddress');
+      await h.speak('confirm-first', 'Yes');
+      final selected = Map.of(h.selected!);
+      final camera = Map.of(h.camera);
+      h.begin('stale-replacement');
+      h.begin('newer-turn');
+      h.accept('stale-replacement', 'Now go to $_nextAddress');
+      await _flush();
+      expect(h.queries, [_firstAddress]);
+      expect(h.repliesFor('stale-replacement'), isEmpty);
+      h.retire('newer-turn');
+
+      var index = 0;
+      for (final phrase in [
+        'Can you show me photos of $_nextAddress instead?',
+        'Now do not go to $_nextAddress',
+        'Now remember that $_nextAddress is my next visit',
+        'How do I change the address to $_nextAddress?',
+      ]) {
+        expect(h.projection.recognizesVoiceControl(phrase), false, reason: phrase);
+        await h.speak('non-navigation-$index', phrase);
+        index++;
+      }
+      expect(h.queries, [_firstAddress]);
+      expect(h.selected, selected);
+      expect(h.camera, camera);
+      expect(h.opens, 1);
+      expect(h.voiceStarts, 0);
+    });
+
     test('$label directly opens, closes and reopens Projection for the reported phrase', () async {
       final h = _SpokenAddressHarness(mode);
       addTearDown(h.dispose);

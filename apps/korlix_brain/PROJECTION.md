@@ -69,6 +69,13 @@ nonce invalidates earlier callbacks before its own entrance begins.
    lookup, including after another property has already been selected. From
    home, use an explicit search command to open Projection and search together.
    In the open view, **“The address is [full street address]”** also works.
+   Follow-up requests can replace that property without reopening Projection:
+   **“Now show me [full street address]”**, **“The next address is [full street
+   address]”**, **“Switch the address to [full street address]”**, or **“Show me
+   [full street address] instead.”** Each lookup keeps its own explicit result
+   confirmation. A new address can also replace results awaiting confirmation.
+   If a search request is not recognized, Rici asks for another spoken attempt
+   using **“Go to [full street address, city and postal code]”**.
    Numbered street addresses also accept
    **“Show me [full address]”** and **“Show [full address] in 3D.”** These commands
    retain the original street, unit, city and postal code. Research requests and
@@ -91,6 +98,28 @@ nonce invalidates earlier callbacks before its own entrance begins.
    retained as the memory, not map imagery or copied geocoder details.
 7. **Close projection** returns to home. **Stop conversation** stops the native
    conversation while leaving the view open.
+
+## Landscape command center
+
+Rotate the iPhone or iPad to either landscape direction to use the wide
+Projection workspace. The app's native orientation settings already allow
+landscape; the view adapts to the available viewport and safe area. The selected
+property, provider iframe and current conversation stay mounted through rotation.
+Returning to portrait restores the vertical layout without replaying the entrance.
+
+The wide layout places the world surface beside a floating Explore/Rici console
+and a nearby bank of labeled camera controls. On shorter phone screens, the
+Explore/Rici console selectors keep the active form or conversation accessible
+without moving the world out of view. Spoken searches reveal Explore and the
+matching destination candidates. On larger screens the console can show both
+sections. The microphone controls remain in a separate visible rail.
+
+Cyan/violet ceiling ribs, sidewalls, a floor plane and luminous console edges
+extend the approved Executive Bridge / Celestial Dome presentation. Projected
+buttons retain readable labels, focus feedback and touch targets of at least
+44 pixels. The depth treatment belongs to app-owned decoration and controls;
+provider imagery and attribution keep their complete, untransformed rectangle.
+Reduced-motion preferences continue to apply to the entrance and moving accents.
 
 The **Live camera availability** control and spoken live-view requests currently
 return an honest unavailable response. Street View is recorded imagery, not a

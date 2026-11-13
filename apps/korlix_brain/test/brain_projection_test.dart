@@ -23,7 +23,7 @@ const place = <String, dynamic>{
 };
 
 class Fixture {
-  Fixture({ProjectionRequest? request}) {
+  Fixture({ProjectionRequest? request, void Function(String)? onDirections}) {
     projection = BrainProjection(
       backendUrl: 'https://api.example.com',
       request:
@@ -56,6 +56,7 @@ class Fixture {
       onStopVoice: () async {
         stops++;
       },
+      onDirections: onDirections,
       onSave: (text, fromVoice) async {
         saves.add({'text': text, 'fromVoice': fromVoice});
         return true;
@@ -1069,6 +1070,254 @@ void main() {
   });
 
   group('Spoken street address search', () {
+    test('bounded follow-up wording replaces a selected property with the complete original address', () async {
+      const address = '20 Resee Street, Unit 4, Reece, NY 10012';
+      for (final phrase in [
+        'Now go to $address',
+        'Rici, now can you show me $address?',
+        'Also, take me to $address',
+        'The next address is $address',
+        'The second address is $address',
+        'Next address: $address',
+        'Please search another address: $address',
+        'Find the new address: $address',
+        'Take me to a different street address: $address',
+        'Switch the address to $address',
+        'Change destination to $address',
+        'Switch to $address',
+        'Can you show me $address instead?',
+        'Show me $address, instead.',
+        '$address instead',
+      ]) {
+        final queries = <String>[];
+        final f = Fixture(request: (_, path, body) async {
+          if (path.endsWith('/config')) return config;
+          queries.add(body!['query'] as String);
+          return {'candidates': [place]};
+        });
+        addTearDown(f.projection.dispose);
+        await f.select();
+        queries.clear();
+        final camera = Map.of(f.projection.snapshot['camera'] as Map);
+
+        expect(f.projection.recognizesVoiceControl(phrase), true, reason: phrase);
+        final result = await f.projection.voiceTurn('replacement', phrase, {
+          'action': 'search',
+          'value': '999 Model Rewritten Road, Different City',
+        });
+        expect(result?['ok'], true, reason: phrase);
+        expect(queries, [address], reason: phrase);
+        expect(f.projection.snapshot['selectedPlace'], isNull);
+        expect(f.projection.snapshot['camera'], camera,
+            reason: 'A replacement lookup still requires confirmation.');
+        expect((f.projection.snapshot['destinationSearch'] as Map)['query'],
+            address, reason: phrase);
+
+        await f.projection.voiceTurn('confirm', 'Yes, that is the place', null);
+        expect((f.projection.snapshot['selectedPlace'] as Map)['userQuery'],
+            address, reason: phrase);
+        expect((f.projection.snapshot['camera'] as Map)['viewMode'], 'street');
+        expect(f.opens, 1, reason: 'Keep the existing Projection screen.');
+        expect(f.starts, 0);
+        expect(f.stops, 0);
+      }
+    });
+
+    test('follow-up addresses retain spoken house numbers without interpreting multiple destinations', () async {
+      const address =
+          'One hundred and twenty-three Main Drive, Unit 4, Springfield, IL 62701';
+      final queries = <String>[];
+      final f = Fixture(request: (_, path, body) async {
+        if (path.endsWith('/config')) return config;
+        queries.add(body!['query'] as String);
+        return {'candidates': [place]};
+      });
+      addTearDown(f.projection.dispose);
+      await f.select();
+      queries.clear();
+      await f.projection.voiceTurn('spoken-number', 'Now go to $address', null);
+      expect(queries, [address]);
+      await f.projection.voiceTurn('confirm', 'Yes', null);
+      for (final phrase in [
+        'Now go to 123 Main Street and 456 Oak Road',
+        'Now go to 123 Main Street and four hundred Oak Road',
+        'Show me 123 Main Street or twenty-three Oak Road instead',
+      ]) {
+        expect(f.projection.recognizesVoiceControl(phrase), false, reason: phrase);
+        await f.projection.voiceTurn(phrase, phrase, {'action': 'search', 'value': address});
+      }
+      expect(queries, [address]);
+      expect((f.projection.snapshot['selectedPlace'] as Map)['userQuery'], address);
+    });
+
+    test('follow-up searches preserve Live Oak, Mountain View and Newport News place names', () async {
+      const addresses = [
+        '123 Live Oak Road, Mountain View',
+        '123 Main Street, Newport News',
+      ];
+      final queries = <String>[];
+      final f = Fixture(request: (_, path, body) async {
+        if (path.endsWith('/config')) return config;
+        queries.add(body!['query'] as String);
+        return {'candidates': [place]};
+      });
+      addTearDown(f.projection.dispose);
+      f.projection.open();
+      for (final address in addresses) {
+        await f.projection.voiceTurn(address, 'Now go to $address', null);
+        expect((f.projection.snapshot['destinationSearch'] as Map)['query'], address);
+        await f.projection.voiceTurn('confirm-$address', 'Yes', null);
+        expect((f.projection.snapshot['selectedPlace'] as Map)['userQuery'], address);
+      }
+      expect(queries, addresses);
+      expect(f.opens, 1);
+    });
+
+    test('rejected follow-ups never leak into the first-destination or selected-property fallback', () async {
+      const address = '20 Resee Street, Unit 4, Reece, NY 10012';
+      for (final selected in [false, true]) {
+        final queries = <String>[];
+        final f = Fixture(request: (_, path, body) async {
+          if (path.endsWith('/config')) return config;
+          if (path.endsWith('/resolve')) queries.add(body!['query'] as String);
+          return {'candidates': [place]};
+        });
+        addTearDown(f.projection.dispose);
+        if (selected) {
+          await f.select();
+        } else {
+          f.projection.open();
+        }
+        queries.clear();
+        final camera = Map.of(f.projection.snapshot['camera'] as Map);
+        final selectedPlace = f.projection.snapshot['selectedPlace'];
+        for (final phrase in [
+          'Now show me the history of $address',
+          'Also look up quantum mechanics',
+          'The next address is $address needs repairs',
+          'Now do not go to $address',
+          'Now remember that $address is my next visit',
+          'Can you show me photos of $address instead?',
+          'Now show me $address instead of 30 Third Street',
+          'Show me $address, not this address, instead',
+          'Now go to $address and then show me photos',
+          'Now go to another address',
+          'The next address is missing',
+          'Now search $address history',
+          'The next address is $address, actually no',
+          '"Now go to $address" is an example',
+          'How do I change the address to $address?',
+        ]) {
+          expect(f.projection.recognizesVoiceControl(phrase), false,
+              reason: '$phrase (selected: $selected)');
+          await f.projection.voiceTurn(phrase, phrase, {
+            'action': 'search',
+            'value': address,
+          });
+        }
+        expect(queries, isEmpty);
+        expect(f.projection.snapshot['selectedPlace'], selectedPlace);
+        expect(f.projection.snapshot['camera'], camera);
+        expect(f.saves, isEmpty);
+      }
+    });
+
+    test('a later replacement can be confirmed while an older lookup is still pending', () async {
+      final second = Completer<Map<String, dynamic>>();
+      final third = Completer<Map<String, dynamic>>();
+      final queries = <String>[];
+      final f = Fixture(request: (_, path, body) async {
+        if (path.endsWith('/config')) return config;
+        final query = body!['query'] as String;
+        queries.add(query);
+        if (query == 'My destination') return {'candidates': [place]};
+        return query == '20 Second Street' ? second.future : third.future;
+      });
+      addTearDown(f.projection.dispose);
+      await f.select();
+      final firstCamera = Map.of(f.projection.snapshot['camera'] as Map);
+      final pendingSecond = f.projection.voiceTurn(
+        'second', 'Now go to 20 Second Street', null,
+      );
+      await Future<void>.delayed(Duration.zero);
+      final pendingThird = f.projection.voiceTurn(
+        'third', 'The next address is 30 Third Street', null,
+      );
+      await Future<void>.delayed(Duration.zero);
+      third.complete({'candidates': [{...place, 'id': 'third-place'}]});
+      await pendingThird;
+      expect(f.projection.snapshot['selectedPlace'], isNull);
+      expect(f.projection.snapshot['camera'], firstCamera);
+      await f.projection.voiceTurn('confirm-third', 'Choose the first result', null);
+      final confirmedThird = f.projection.snapshot['selectedPlace'];
+      final confirmedCamera = Map.of(f.projection.snapshot['camera'] as Map);
+      second.complete({'candidates': [{...place, 'id': 'second-place'}]});
+      final staleResult = await pendingSecond;
+      expect(staleResult?['ok'], false);
+      expect(queries, ['My destination', '20 Second Street', '30 Third Street']);
+      expect((confirmedThird as Map)['userQuery'], '30 Third Street');
+      expect(f.projection.snapshot['selectedPlace'], confirmedThird);
+      expect(f.projection.snapshot['camera'], confirmedCamera);
+      expect(f.projection.snapshot['candidates'], isEmpty);
+      expect(f.opens, 1);
+      expect(f.starts, 0);
+      expect(f.stops, 0);
+    });
+
+    test('replacement wording cannot turn a directions request into a property search', () async {
+      final queries = <String>[];
+      final routes = <String>[];
+      final f = Fixture(
+        onDirections: routes.add,
+        request: (_, path, body) async {
+          if (path.endsWith('/config')) {
+            return {...config, 'directionsAvailable': true};
+          }
+          queries.add(body!['query'] as String);
+          return {'candidates': [place]};
+        },
+      );
+      addTearDown(f.projection.dispose);
+      await f.select();
+      queries.clear();
+      final camera = Map.of(f.projection.snapshot['camera'] as Map);
+      final selected = f.projection.snapshot['selectedPlace'];
+      for (final phrase in [
+        'Now navigate to 123 Main Street',
+        'Navigate to 123 Main Street instead',
+        'Now route to 123 Main Street',
+        'Also show me directions to 123 Main Street',
+      ]) {
+        expect(f.projection.recognizesVoiceControl(phrase), false, reason: phrase);
+        await f.projection.voiceTurn(phrase, phrase, {
+          'action': 'search',
+          'value': '123 Main Street',
+        });
+      }
+      expect(queries, isEmpty);
+      expect(f.projection.snapshot['selectedPlace'], selected);
+      expect(f.projection.snapshot['camera'], camera);
+      expect(routes, ['123 Main Street instead'],
+          reason: 'Only the existing unwrapped directions flow owns routing.');
+    });
+
+    test('an unclear replacement tool request gives a spoken recovery without searching', () async {
+      final f = Fixture();
+      addTearDown(f.projection.dispose);
+      await f.select();
+      final before = f.requests.length;
+      final result = await f.projection.voiceTurn(
+        'unclear-next',
+        'Now go to another address',
+        {'action': 'search', 'value': 'A model-guessed address'},
+      );
+      expect(result?['ok'], false);
+      expect(result?['answer'], contains('Say “go to”'));
+      expect(result?['answer'], contains('I can search another address here'));
+      expect(f.requests, hasLength(before));
+      expect((f.projection.snapshot['selectedPlace'] as Map)['id'], place['id']);
+    });
+
     test(
       'bounded address introductions replace a property only inside Projection',
       () async {
