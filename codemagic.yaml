@@ -778,3 +778,27 @@ workflows:
       - $CM_BUILD_DIR/apps/korlix_brain/artifacts/BrainVoice-upload-certificate.pem
     # First upload is performed in the dedicated Play record. No automatic
     # publishing, tester invitations, or billing activation is configured here.
+
+  korlix-brain-native-validation:
+    name: KORLIX Brain+Voice — unsigned native validation
+    instance_type: mac_mini_m2
+    max_build_duration: 40
+    working_directory: apps/korlix_brain
+    # Manual validation only. Collect simulator evidence without a release upload.
+    environment:
+      flutter: 3.47.9
+      xcode: 26.6
+      cocoapods: default
+    scripts:
+      - name: Resolve locked native validation dependencies
+        script: |
+          set -euo pipefail
+          flutter pub get --enforce-lockfile
+      - name: Exercise native Brain Projection on the validation Mac
+        script: |
+          set -euo pipefail
+          python3 "$CM_BUILD_DIR/scripts/run_brain_native_projection.py" \
+            --app-dir "$CM_BUILD_DIR/apps/korlix_brain" \
+            --expected-architecture arm64 --maximum-minutes 30
+    artifacts:
+      - $CM_BUILD_DIR/apps/korlix_brain/artifacts/BrainVoice-native-runtime.zip
