@@ -683,7 +683,36 @@ workflows:
       - *brain_prepare_ios_identity
       - *brain_validate_ios
       - *brain_check_transcript_ui
-      - *brain_build_ios
+      - name: Exercise native Brain Projection before IPA creation
+        script: |
+          set -euo pipefail
+          python3 "$CM_BUILD_DIR/scripts/run_brain_native_projection.py" \
+            --app-dir "$CM_BUILD_DIR/apps/korlix_brain" \
+            --expected-architecture arm64 --maximum-minutes 30
+      - <<: *brain_build_ios
+        script: |
+          set -euo pipefail
+          flutter build ios --release --config-only --no-codesign --no-pub --target=lib/main.dart \
+            --build-name="$KORLIX_IOS_VERSION" --build-number="$KORLIX_IOS_BUILD_NUMBER"
+          xcode-project use-profiles --project ios/Runner.xcodeproj \
+            --export-options-plist "$CM_BUILD_DIR/brain-ios-export.plist" \
+            --custom-export-options '{"manageAppVersionAndBuildNumber": false}'
+          flutter build ipa --release --no-pub --target=lib/main.dart \
+            --build-name="$KORLIX_IOS_VERSION" --build-number="$KORLIX_IOS_BUILD_NUMBER" \
+            --export-options-plist="$CM_BUILD_DIR/brain-ios-export.plist"
+          IPA_FILES=(build/ios/ipa/*.ipa)
+          test "${#IPA_FILES[@]}" -eq 1
+          python3 "$CM_BUILD_DIR/scripts/verify_ios_ipa.py" "${IPA_FILES[0]}" \
+            --bundle-id com.korlix.brain --version "$KORLIX_IOS_VERSION" \
+            --build "$KORLIX_IOS_BUILD_NUMBER" --output artifacts/BrainVoice-verification.json
+          cp "${IPA_FILES[0]}" artifacts/BrainVoice.ipa
+          cp store/apple/testflight-notes.txt release_notes_en-US.txt
+    artifacts:
+      - $CM_BUILD_DIR/apps/korlix_brain/artifacts/*.ipa
+      - $CM_BUILD_DIR/apps/korlix_brain/artifacts/*.json
+      - $CM_BUILD_DIR/apps/korlix_brain/artifacts/ui/*.png
+      - /tmp/xcodebuild_logs/*.log
+      - $CM_BUILD_DIR/apps/korlix_brain/artifacts/BrainVoice-native-runtime.zip
     publishing:
       app_store_connect:
         auth: integration
