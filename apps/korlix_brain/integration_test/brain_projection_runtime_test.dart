@@ -44,7 +44,8 @@ const geometry = r'''(() => {
     dockDisplay:getComputedStyle(document.querySelector('.voice-dock')).display,
     input:rect(input),inputFocused:document.activeElement===input,
     draft:input.value,selected:document.getElementById('place-label').textContent,
-    frame:frame?rect(frame):null,
+    frame:frame?rect(frame):null,framePresent:frame instanceof HTMLIFrameElement&&frame.isConnected,
+    providerWindowPresent:!!frame?.contentWindow,
     identity:!window.runtimeIdentity?null:{input:input===window.runtimeIdentity.input,
       frame:frame===window.runtimeIdentity.frame,providerWindow:frame?.contentWindow===window.runtimeIdentity.providerWindow},
     phase:document.body.dataset.voice};
@@ -63,6 +64,7 @@ void main() {
     WebViewController? controller;
     var webCreations = 0, starts = 0, pauses = 0, resumes = 0, stops = 0;
     var voiceEpoch = 0;
+    var projectionDisposed = false;
     Completer<void>? resumeGate;
     void phase(String value) => projection.receiveVoice({
       'type': 'voice', 'phase': value, 'paused': value == 'paused',
@@ -96,7 +98,12 @@ void main() {
       },
       onStopVoice: () async { stops++; ++voiceEpoch; phase('complete'); },
     );
-    addTearDown(projection.dispose);
+    void disposeProjection() {
+      if (projectionDisposed) return;
+      projectionDisposed = true;
+      projection.dispose();
+    }
+    addTearDown(disposeProjection);
     phase('listening');
     projection.open();
     await projection.search('32 Pine Avenue, Example City');
@@ -126,13 +133,20 @@ void main() {
       input.value='An unfinished native address';
       input.setSelectionRange(5,12);
       const frame=document.querySelector('#map-container iframe');
-      window.runtimeIdentity={input,frame,providerWindow:frame?.contentWindow};
+      if (!(frame instanceof HTMLIFrameElement) || !frame.isConnected) {
+        throw new Error('Expected a connected provider iframe before recording its identity');
+      }
+      if (!frame.contentWindow) {
+        throw new Error('Expected a provider browsing context before recording its identity');
+      }
+      window.runtimeIdentity={input,frame,providerWindow:frame.contentWindow};
     ''');
     final observations = <String, Object?>{};
     binding.reportData ??= {};
     binding.reportData!['projectionRuntime'] = observations;
     observations['runtime'] = Platform.isIOS ? 'actual iOS WKWebView' : Platform.operatingSystem;
-    observations['fixtureLimits'] = 'Native view and HTML are real; account/provider/voice responses are fixtures. No physical ASR or live maps.';
+    observations['fixtureLimits'] = 'Native view and HTML are real; account/provider/voice responses are fixtures. Provider frame/window existence, size and identity do not establish loaded imagery. No physical ASR or live maps.';
+    observations['outcome'] = {'scenarioCompleted': false};
 
     Future<void> capture(String name) async {
       final measured = await inspect(web, geometry);
@@ -162,6 +176,13 @@ void main() {
       }
       expect(measured['dockDisplay'], 'none');
       expect(measured['draft'], 'An unfinished native address');
+      expect(measured['framePresent'], isTrue, reason: '$name provider iframe exists');
+      expect(measured['providerWindowPresent'], isTrue, reason: '$name provider browsing context exists');
+      if (['portrait', 'landscape', 'auto-landscape'].contains(name)) {
+        final frameBounds = measured['frame'] as Map;
+        expect(frameBounds['width'] as num, greaterThan(0), reason: '$name provider frame width');
+        expect(frameBounds['height'] as num, greaterThan(0), reason: '$name provider frame height');
+      }
       expect((measured['identity'] as Map).values.every((value) => value == true), isTrue);
       expect(webCreations, 1);
       expect(measured['sameWebViewElement'], isTrue);
@@ -256,10 +277,14 @@ void main() {
     await tester.pump();
     expect(find.text('Returned to conversation'), findsOneWidget);
     expect(stops, 2, reason: 'Back is separate from stopping voice');
-    observations['outcome'] = {'passed': true, 'webViewCreations': webCreations,
-      'starts': starts, 'pauses': pauses, 'resumes': resumes, 'stops': stops};
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox.shrink());
+    disposeProjection();
     await SystemChrome.setPreferredOrientations(const <DeviceOrientation>[]);
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    // The driver exit status and CI conclusion own the overall test result.
+    observations['outcome'] = {'scenarioCompleted': true, 'webViewCreations': webCreations,
+      'starts': starts, 'pauses': pauses, 'resumes': resumes, 'stops': stops};
   });
 }
