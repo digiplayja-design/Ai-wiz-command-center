@@ -366,14 +366,14 @@ body[data-layout="landscape"][data-console-compact="true"] .room-button{font-siz
 body[data-layout="landscape"][data-console-compact="true"] .room-button svg{width:14px;height:14px}
 body[data-layout="landscape"][data-console-compact="true"] .close-button{padding:6px 8px;font-size:10px;gap:6px}
 body[data-layout="landscape"][data-console-compact="true"] .close-button svg{width:15px;height:15px}
-body[data-layout="landscape"][data-console-compact="true"][data-voice] main{height:calc(100% - 52px);padding-top:8px}
+body[data-layout="landscape"][data-console-compact="true"][data-voice] main{height:calc(100% - 52px);padding-top:4px}
 body[data-layout="landscape"][data-console-compact="true"] .workspace-grid{grid-template-columns:minmax(0,1fr) 220px;gap:12px}
 body[data-layout="landscape"][data-console-compact="true"] .scene-stage,body[data-layout="landscape"][data-console-compact="true"][data-renderer="active"] .scene-stage{grid-template-columns:minmax(0,1fr) 124px;gap:4px 8px;padding:6px;border-radius:13px}
 body[data-layout="landscape"][data-console-compact="true"] .scene-topline{min-height:24px;gap:8px}
 body[data-layout="landscape"][data-console-compact="true"] .scene-heading,body[data-layout="landscape"][data-console-compact="true"][data-renderer="active"] .scene-heading{padding-left:30px}
 body[data-layout="landscape"][data-console-compact="true"] .scene-heading h2,body[data-layout="landscape"][data-console-compact="true"][data-renderer="active"] .scene-heading h2{font-size:15px;margin:0;line-height:1.1}
 body[data-layout="landscape"][data-console-compact="true"] .scene-heading .eyebrow{display:none}
-body[data-layout="landscape"][data-console-compact="true"] .map-badge{font-size:8px;padding:4px 5px;max-width:98px}
+body[data-layout="landscape"][data-console-compact="true"] .map-badge{font-size:8px;padding:4px 5px;max-width:none;white-space:nowrap}
 body[data-layout="landscape"][data-console-compact="true"] .entry-scene-accent{width:26px;height:24px}
 body[data-layout="landscape"][data-console-compact="true"] .entry-accent-brain{width:20px;height:20px}
 body[data-layout="landscape"][data-console-compact="true"] .entry-accent-orbit{width:24px;height:10px;top:7px}
