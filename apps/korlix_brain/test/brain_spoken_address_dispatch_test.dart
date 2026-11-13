@@ -21,7 +21,7 @@ Future<void> _flush() => Future<void>.delayed(Duration.zero);
 /// Uses the same controller callbacks and transcript forwarding as the native
 /// workspace. Only provider events and backend replies are in-memory fixtures.
 class _SpokenAddressHarness {
-  _SpokenAddressHarness(this.mode) {
+  _SpokenAddressHarness(this.mode, {this.controllerFirst = false}) {
     projection = BrainProjection(
       backendUrl: 'https://api.example.com',
       request: _request,
@@ -40,6 +40,7 @@ class _SpokenAddressHarness {
     });
     if (mode == BrainVoiceMode.live) {
       live = BrainLiveTurns(
+        controllerFirst: controllerFirst,
         send: (event) async => sent.add(event),
         requestMemory: (_, text) async {
           memoryRequests.add(text);
@@ -73,6 +74,7 @@ class _SpokenAddressHarness {
   }
 
   final BrainVoiceMode mode;
+  final bool controllerFirst;
   late final BrainProjection projection;
   BrainLiveTurns? live;
   BrainVoiceTurns? deep;
@@ -120,7 +122,7 @@ class _SpokenAddressHarness {
     deep?.speechStarted(id);
     live?.speechStopped(id);
     deep?.speechStopped(id);
-    live?.responseStarted({'id': 'auto-$id'});
+    if (!controllerFirst) live?.responseStarted({'id': 'auto-$id'});
   }
 
   void accept(String id, String text) {
@@ -145,7 +147,7 @@ class _SpokenAddressHarness {
     accept(id, text);
     accept(id, text);
     await _flush();
-    if (live != null) {
+    if (live != null && !controllerFirst) {
       final call = {
         'type': 'function_call',
         'status': 'completed',
@@ -200,6 +202,73 @@ class _SpokenAddressHarness {
 }
 
 void main() {
+  test('controller-first Live changes destinations through a real two-turn next-address request', () async {
+    final h = _SpokenAddressHarness(BrainVoiceMode.live, controllerFirst: true);
+    addTearDown(h.dispose);
+    await h.speak('first', 'Open VR and go to $_firstAddress');
+    await h.speak('confirm-first', "That's it");
+    final first = Map.of(h.selected!);
+    final firstCamera = Map.of(h.camera);
+    await h.speak('request-next', 'Can you take me to a different address?');
+    expect(h.queries, [_firstAddress]);
+    expect(h.selected, first);
+    expect(h.camera, firstCamera);
+    expect(h.repliesFor('request-next'), hasLength(1));
+    expect(jsonEncode(h.repliesFor('request-next')), contains('next full street address'));
+    await h.speak('second', _nextAddress);
+    expect(h.queries, [_firstAddress, _nextAddress]);
+    expect(h.selected, isNull);
+    expect(h.camera, firstCamera);
+    await h.speak('confirm-second', 'Choose first one');
+    expect(h.selected!['userQuery'], _nextAddress);
+    await h.speak('third', 'Now go to $_thirdAddress');
+    await h.speak('confirm-third', 'Yes');
+    expect(h.queries, [_firstAddress, _nextAddress, _thirdAddress]);
+    expect(h.selected!['userQuery'], _thirdAddress);
+    expect(h.opens, 1);
+    expect(h.voiceStarts, 0);
+    expect(h.memoryRequests, isEmpty);
+    expect(h.reasoningRequests, isEmpty);
+  });
+
+  test('controller-first Live owns the next address even if an unexpected refusal precedes ASR', () async {
+    final h = _SpokenAddressHarness(BrainVoiceMode.live, controllerFirst: true);
+    addTearDown(h.dispose);
+    await h.speak('first', 'Go to $_firstAddress');
+    await h.speak('confirm-first', 'Yes');
+    final camera = Map.of(h.camera);
+    h.begin('second');
+    h.live!.responseStarted({'id': 'unexpected-refusal'});
+    h.live!.acceptAssistantTranscript('unexpected-refusal',
+        'I cannot show the next address from here.');
+    await h.live!.responseDone({
+      'id': 'unexpected-refusal', 'status': 'completed', 'output': <Object>[],
+    });
+    h.accept('second', 'Now go to $_nextAddress');
+    await _flush();
+    expect(h.queries, [_firstAddress, _nextAddress]);
+    expect(h.selected, isNull);
+    expect(h.camera, camera);
+    expect(h.candidates.single['userQuery'], _nextAddress);
+    expect(h.repliesFor('second'), hasLength(1));
+    expect(jsonEncode(h.projection.snapshot['transcript']), isNot(contains('cannot show')));
+    expect(h.opens, 1);
+    expect(h.voiceStarts, 0);
+  });
+
+  test('controller-first Live applies the exact landscape phrase without a model tool', () async {
+    final h = _SpokenAddressHarness(BrainVoiceMode.live, controllerFirst: true);
+    addTearDown(h.dispose);
+    await h.speak('landscape', 'Show projection mode in landscape format');
+    expect(h.projection.isOpen, true);
+    expect(h.projection.snapshot['layoutPreference'], 'landscape');
+    expect(h.repliesFor('landscape'), hasLength(1));
+    await h.speak('auto-layout', 'Use automatic rotation');
+    expect(h.projection.snapshot['layoutPreference'], 'auto');
+    expect(h.opens, 1);
+    expect(h.voiceStarts, 0);
+  });
+
   for (final mode in BrainVoiceMode.values) {
     final label = mode == BrainVoiceMode.live ? 'Live' : 'Deep Think';
     test('$label changes active Street View through first, second and third spoken addresses', () async {

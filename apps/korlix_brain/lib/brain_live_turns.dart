@@ -4,9 +4,10 @@ import 'dart:convert';
 import 'brain_pronunciation.dart';
 import 'brain_voice_session.dart';
 
-/// Ordinary Realtime replies are never held behind ASR, HTTP or Sol. Explicit
-/// view controls execute from the original, item-bound transcript even when the
-/// model answers without calling a tool. Their acknowledgements use one reply.
+/// Projection-enabled Live sessions schedule replies after item-bound ASR so
+/// a speculative model answer cannot refuse or compete with a local command.
+/// Ordinary conversation still goes directly to the same Realtime model.
+/// Legacy callers can retain provider-owned automatic response scheduling.
 class BrainLiveTurns {
   BrainLiveTurns({
     required this.send,
@@ -17,6 +18,7 @@ class BrainLiveTurns {
     required this.reportTiming,
     this.onProjection,
     this.recognizesProjection,
+    this.controllerFirst = false,
     DateTime Function()? now,
     this.transcriptionTimeout = const Duration(seconds: 15),
   }) : now = now ?? DateTime.now;
@@ -33,6 +35,7 @@ class BrainLiveTurns {
   )?
   onProjection;
   final bool Function(String transcript)? recognizesProjection;
+  final bool controllerFirst;
   final DateTime Function() now;
   final Duration transcriptionTimeout;
   final _turns = <String, _LiveTurn>{};
@@ -52,12 +55,17 @@ class BrainLiveTurns {
   int _epoch = 0;
   bool _disposed = false;
   String? _activeResponse;
+  final _replyQueue = <_LiveReply>[];
+  final _unexpectedResponses = <String>{};
+  _LiveReply? _pendingReply;
+  String? _pendingReplyResponseId;
   bool get current => !_disposed && isCurrent();
 
   void speechStarted(String id) {
     if (!current || id.isEmpty || _turns.containsKey(id)) return;
     final active = _activeResponse;
     ++_epoch;
+    if (controllerFirst) _retireQueuedReplies();
     // An earlier utterance may still supply its original memory transcript,
     // but it must not publish a delayed recognition warning over a new turn.
     _cancelTranscriptionTimers();
@@ -81,7 +89,7 @@ class BrainLiveTurns {
     final turn = _turns.putIfAbsent(id, () => _LiveTurn(_epoch));
     if (turn.stoppedAt != null) return;
     turn.stoppedAt = now();
-    _waitingResponses.add(id);
+    if (!controllerFirst) _waitingResponses.add(id);
     if (turn.epoch == _epoch && !turn.transcript.isCompleted) {
       _transcriptionTimers[id] = Timer(
         transcriptionTimeout,
@@ -95,6 +103,10 @@ class BrainLiveTurns {
     final turn = _turns.putIfAbsent(id, () => _LiveTurn(_epoch));
     _transcriptionTimers.remove(id)?.cancel();
     if (turn.transcript.isCompleted) return;
+    if (controllerFirst && text.trim().isEmpty) {
+      _failTranscription(id);
+      return;
+    }
     if (text.trim().isNotEmpty) {
       turn.transcriptAvailable = true;
       emit({
@@ -111,17 +123,101 @@ class BrainLiveTurns {
         // Reserve before completing ASR: a model tool already waiting for this
         // transcript must share this result, rather than move the camera twice.
         turn.directProjection = true;
+        if (controllerFirst) turn.defaultResponseEnded = true;
         turn.directResult = _runDirectProjection(id, text, turn);
-        _suppressAutomaticResponse(id, turn);
+        if (!controllerFirst) _suppressAutomaticResponse(id, turn);
       }
     }
     turn.transcript.complete(text.trim().isEmpty ? null : text);
+    if (controllerFirst && turn.epoch == _epoch &&
+        turn.transcriptAvailable && !turn.directProjection) {
+      unawaited(_requestConversation(id, turn));
+    }
     for (final response in List.of(_pendingAssistantTranscripts.keys)) {
       if (_responses[response] == id) _flushAssistantTranscript(response);
     }
   }
 
-  /// Audio stays immediate. Display/history text waits until the response has
+  Future<void> _requestConversation(String id, _LiveTurn turn) async {
+    if (!current || turn.epoch != _epoch || turn.conversationRequested) return;
+    turn.conversationRequested = true;
+    try {
+      await _sendReply(id, {
+        'type': 'response.create',
+        'response': {
+          'metadata': {'brain_turn': id},
+          'tool_choice': 'auto',
+        },
+      });
+    } catch (_) {
+      if (current && turn.epoch == _epoch) {
+        emit({
+          'type': 'voiceNotice',
+          'message': 'The reply could not start. Please repeat your request.',
+        });
+      }
+    }
+  }
+
+  Future<void> _sendReply(String turnId, Map<String, dynamic> event) {
+    if (!controllerFirst) return send(event);
+    final turn = _turns[turnId];
+    if (!current || turn == null || turn.epoch != _epoch) {
+      return Future.value();
+    }
+    final reply = _LiveReply(turnId, turn.epoch, event);
+    _replyQueue.add(reply);
+    unawaited(_pumpReplies());
+    return reply.sent.future;
+  }
+
+  void _retireQueuedReplies() {
+    for (final reply in _replyQueue) {
+      if (!reply.sent.isCompleted) reply.sent.complete();
+    }
+    _replyQueue.clear();
+  }
+
+  Future<void> _pumpReplies() async {
+    if (!current || _pendingReply != null || _unexpectedResponses.isNotEmpty) {
+      return;
+    }
+    while (_replyQueue.isNotEmpty) {
+      final reply = _replyQueue.removeAt(0);
+      if (reply.epoch != _epoch) {
+        if (!reply.sent.isCompleted) reply.sent.complete();
+        continue;
+      }
+      // Reserve before sending. A new utterance may arrive before the provider
+      // creates this response; its successor must wait for cancellation/done.
+      _pendingReply = reply;
+      try {
+        await send(reply.event);
+        if (!reply.sent.isCompleted) reply.sent.complete();
+      } catch (error, stack) {
+        if (identical(_pendingReply, reply)) {
+          _pendingReply = null;
+          _pendingReplyResponseId = null;
+        }
+        if (!reply.sent.isCompleted) reply.sent.completeError(error, stack);
+        unawaited(_pumpReplies());
+      }
+      return;
+    }
+  }
+
+  void _rejectUnexpectedResponse(String id) {
+    if (!_unexpectedResponses.add(id)) return;
+    _cancelledResponses.add(id);
+    unawaited(send({'type': 'response.cancel', 'response_id': id})
+        .catchError((Object _) {}));
+    if (_activeResponse == null) {
+      unawaited(send({'type': 'output_audio_buffer.clear'})
+          .catchError((Object _) {}));
+    }
+  }
+
+  /// Requested audio streams normally. Display/history text waits until the response has
   /// completed and its original ASR distinguishes conversation from a local
   /// command, so a speculative refusal cannot become the saved controller reply.
   /// A reply completed before the next utterance keeps its original association.
@@ -268,7 +364,7 @@ class BrainLiveTurns {
       turn.directAcknowledged = true;
       // This is speech from a controller result, not a fabricated model call.
       // Do not add a function_call_output unless the provider sent that call ID.
-      await send({
+      await _sendReply(id, {
         'type': 'response.create',
         'response': {
           'conversation': 'none',
@@ -319,16 +415,24 @@ class BrainLiveTurns {
         if (_responses[response] == id) _dropAssistantTranscript(response);
       }
       if (current && turn.epoch == _epoch) {
+        final message = timedOut
+            ? 'Speech recognition did not return any words. Please repeat the view command; you can keep talking to Rici.'
+            : 'I could not recognize that speech. Please repeat the view command or keep talking to Rici.';
         emit({
           'type': 'voiceNotice',
           'code': timedOut ? 'transcription_timeout' : 'transcription_failed',
-          'message': timedOut
-              ? 'Speech recognition did not return any words. Please repeat the view command; you can keep talking to Rici.'
-              : 'I could not recognize that speech. Please repeat the view command or keep talking to Rici.',
+          'message': message,
         });
+        if (controllerFirst) {
+          turn.directProjection = true;
+          turn.defaultResponseEnded = true;
+          turn.directAnswer = {'ok': false, 'handled': true, 'answer': message};
+          unawaited(_acknowledgeDirect(id, turn));
+        }
       }
     }
-    // Direct audio conversation can continue even when display ASR fails.
+    // Legacy automatic audio can continue when display ASR fails. The
+    // controller-first path instead speaks a fixed repeat request once.
   }
 
   void _cancelTranscriptionTimers() {
@@ -341,11 +445,28 @@ class BrainLiveTurns {
   void responseStarted(Map response) {
     if (!current) return;
     final id = response['id']?.toString();
-    if (id == null || _responses.containsKey(id)) return;
+    if (id == null || id.isEmpty || _responses.containsKey(id) ||
+        _completedResponses.contains(id)) return;
     final metadata = response['metadata'];
     final continuation = metadata is Map
         ? metadata['brain_turn']?.toString()
         : null;
+    if (controllerFirst) {
+      final pending = _pendingReply;
+      final requested = pending?.event['response'];
+      final requestedMetadata = requested is Map
+          ? requested['metadata'] as Map?
+          : null;
+      if (continuation == null || pending == null ||
+          continuation != pending.turnId ||
+          _pendingReplyResponseId != null ||
+          (metadata is Map ? metadata['brain_projection_direct'] : null) !=
+              requestedMetadata?['brain_projection_direct']) {
+        _rejectUnexpectedResponse(id);
+        return;
+      }
+      _pendingReplyResponseId = id;
+    }
     final turnId =
         continuation ??
         (_waitingResponses.isEmpty ? null : _waitingResponses.removeAt(0));
@@ -422,6 +543,14 @@ class BrainLiveTurns {
   Future<void> responseDone(Map response) async {
     final responseId = response['id']?.toString();
     if (_activeResponse == responseId) _activeResponse = null;
+    if (controllerFirst && responseId != null) {
+      _unexpectedResponses.remove(responseId);
+      if (_pendingReplyResponseId == responseId) {
+        _pendingReply = null;
+        _pendingReplyResponseId = null;
+      }
+      unawaited(_pumpReplies());
+    }
     if (!current ||
         responseId == null ||
         !_completedResponses.add(responseId)) {
@@ -612,7 +741,7 @@ class BrainLiveTurns {
       // Reserve the continuation before sending. A late ASR completion must
       // await and cancel this real reply even before response.created arrives.
       turn.defaultResponseEnded = false;
-      await send({
+      await _sendReply(turnId, {
         'type': 'response.create',
         'response': {
           'metadata': {'brain_turn': turnId},
@@ -647,6 +776,10 @@ class BrainLiveTurns {
 
   void dispose() {
     _disposed = true;
+    _retireQueuedReplies();
+    _pendingReply = null;
+    _pendingReplyResponseId = null;
+    _unexpectedResponses.clear();
     _cancelTranscriptionTimers();
     for (final turn in _turns.values) {
       if (!turn.transcript.isCompleted) turn.transcript.complete(null);
@@ -673,9 +806,18 @@ class _LiveTurn {
   bool defaultResponseStarted = false;
   bool defaultResponseEnded = false;
   bool directAcknowledged = false;
+  bool conversationRequested = false;
   bool ackStarting = false;
   int pendingToolOutputs = 0;
   Future<Map<String, dynamic>>? directResult;
   Map<String, dynamic>? directAnswer;
   Future<void> suppression = Future.value();
+}
+
+class _LiveReply {
+  _LiveReply(this.turnId, this.epoch, this.event);
+  final String turnId;
+  final int epoch;
+  final Map<String, dynamic> event;
+  final sent = Completer<void>();
 }

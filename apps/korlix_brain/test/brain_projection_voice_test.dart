@@ -59,6 +59,18 @@ Future<void> _flush() => Future<void>.delayed(Duration.zero);
 
 void main() {
   group('projection session negotiation', () {
+    test('default Deep, legacy Live and Projection Live keep their intended reply ownership', () {
+      bool automatic(BrainVoiceSessionGate gate) {
+        final session = gate.configuration['session'] as Map;
+        final input = (session['audio'] as Map)['input'] as Map;
+        return (input['turn_detection'] as Map)['create_response'] as bool;
+      }
+      expect(automatic(BrainVoiceSessionGate()), false);
+      expect(automatic(BrainVoiceSessionGate(mode: BrainVoiceMode.live)), true);
+      expect(automatic(BrainVoiceSessionGate(
+          mode: BrainVoiceMode.live, projectionEnabled: true)), false);
+    });
+
     test('legacy Live retains one tool and its original partial update', () {
       final gate = BrainVoiceSessionGate(mode: BrainVoiceMode.live);
       gate.observe({'type': 'session.created', 'session': _serverSession()});
@@ -97,6 +109,8 @@ void main() {
           startsWith('${server['instructions']}\n\n'),
         );
         expect(update.containsKey('model'), isFalse);
+        expect(((update['audio'] as Map)['input'] as Map)['turn_detection'],
+            containsPair('create_response', false));
         expect(
           gate.observe(_ack({...server, ...update})),
           BrainSessionAction.ready,
@@ -241,7 +255,7 @@ void main() {
                 'transcription': {'model': 'gpt-transcribe'},
                 'turn_detection': {
                   'type': 'semantic_vad',
-                  'create_response': false,
+                  'create_response': 'false',
                 },
               },
             },
@@ -363,6 +377,22 @@ void main() {
           gate.observe(_ack({..._serverSession(), 'instructions': ''})),
           BrainSessionAction.reject,
         );
+      },
+    );
+
+    test(
+      'Projection Live cannot unmute with automatic model responses enabled',
+      () {
+        final gate = BrainVoiceSessionGate(
+          mode: BrainVoiceMode.live,
+          projectionEnabled: true,
+        )..observe({'type': 'session.created', 'session': _serverSession()});
+        final update = jsonDecode(jsonEncode(gate.configuration['session'])) as Map;
+        (((update['audio'] as Map)['input'] as Map)['turn_detection'] as Map)
+            ['create_response'] = true;
+        expect(gate.observe(_ack({..._serverSession(), ...update})),
+            BrainSessionAction.reject);
+        expect(gate.rejectionCode, 'projection_automatic_response');
       },
     );
 

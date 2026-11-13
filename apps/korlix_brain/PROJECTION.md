@@ -20,6 +20,11 @@ view do not start a new voice session or end the current one.
 Live Conversation or Deep Think is listening. The native controller validates the
 original transcript and acknowledges its actual result. A canceled speculative
 Live reply is excluded from the visible transcript and saved conversation context.
+Projection-enabled Live sessions disable automatic provider responses and
+schedule each reply after its item-bound transcript reaches the local controller.
+Recognized controls execute first and speak the returned result. Ordinary chat
+uses the same Realtime model after that recognition step; it can incur the speech
+transcription delay. Deep Think keeps its existing reasoning path.
 After Stop, the home conversation dock keeps **Start Live Conversation** (or
 **Start Deep Think** for that selected mode) available across screens. Projection
 keeps its own **Talk to Rici** restart control. Restart always requires a user tap.
@@ -74,6 +79,10 @@ nonce invalidates earlier callbacks before its own entrance begins.
    address]”**, **“Switch the address to [full street address]”**, or **“Show me
    [full street address] instead.”** Each lookup keeps its own explicit result
    confirmation. A new address can also replace results awaiting confirmation.
+   **“Can you take me to a different address?”** begins a two-step transition:
+   the controller asks for the next full address, retires old pending candidates,
+   and keeps the current property selected while asking for that next address.
+   The subsequent lookup follows the normal candidate-confirmation flow.
    If a search request is not recognized, Rici asks for another spoken attempt
    using **“Go to [full street address, city and postal code]”**.
    Numbered street addresses also accept
@@ -96,16 +105,25 @@ nonce invalidates earlier callbacks before its own entrance begins.
    repository. Typed notes receive a native review dialog; a clear spoken save
    request supplies confirmation. Only the user's query/note and place ID are
    retained as the memory, not map imagery or copied geocoder details.
-7. **Close projection** returns to home. **Stop conversation** stops the native
-   conversation while leaving the view open.
+7. Native **Back** returns to the existing conversation. Native **Stop** stops
+   the conversation while leaving Projection open. **Talk**, **Pause**,
+   **Resume** and **Stop** keep their positions in the native rail; each action's
+   enabled state follows the real session. The rail remains outside the WebView
+   during page loading, errors, scrolling and software-keyboard display.
 
 ## Landscape command center
 
-Rotate the iPhone or iPad to either landscape direction to use the wide
-Projection workspace. The app's native orientation settings already allow
-landscape; the view adapts to the available viewport and safe area. The selected
-property, provider iframe and current conversation stay mounted through rotation.
-Returning to portrait restores the vertical layout without replaying the entrance.
+Select **Auto** for normal device rotation, or say **“Show projection mode in
+landscape format.”** The native screen requests both landscape orientations and
+the visible **Landscape** button requests the same format. While Projection is
+open, **“Switch to portrait format”** requests portrait and **“Use automatic
+rotation”** restores the automatic policy. When the platform window remains
+portrait, the native presentation rotates its existing child as a landscape
+surface. This supports constrained windows without changing the app's iPad
+multitasking settings. The native host supplies the actual available WebView
+bounds to the bundled page. The selected property, provider iframe, typed drafts
+and current conversation stay mounted. Closing Projection restores the operating
+system's normal orientation policy.
 
 The wide layout places the world surface beside a floating Explore/Rici console
 and a nearby bank of labeled camera controls. On shorter phone screens, the
@@ -273,6 +291,15 @@ phase, **You said** text, **View control** and result for any failed command.
   branch. It runs Flutter analysis/tests, builds an Android debug APK, builds an
   iOS simulator app and compiles an unsigned iPhone binary. It does not publish
   to either store or deploy the backend.
+- The `ios-runtime` job launches an iPhone simulator and exercises the real
+  WKWebView together with native controls, the measured viewport bridge,
+  software keyboard and explicit landscape presentation. Runtime screenshots
+  and logs are kept separately from the desktop browser fixtures.
+- Backgrounding releases voice and dictation capture while preserving the
+  paused conversation for an explicit Resume. Native welcome audio detaches
+  its callbacks from a retiring Flutter engine. Lifecycle regression tests
+  cover delayed starts and ownership across replaced workspaces. These checks
+  do not identify the reported native crash without its Apple crash log.
 
 Before release, validate a configured map on physical iPhone/Android devices,
 including WebGL memory use, microphone continuity, native Back, backgrounding,

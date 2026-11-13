@@ -1,15 +1,14 @@
-KORLIX Brain+Voice 1.0.2 — Landscape Projection and repeated addresses
+KORLIX Brain+Voice 1.0.2 — Native Projection controls and voice routing
 
-This candidate improves follow-up spoken destination searches and gives Command Center and Discovery Theater a wide landscape layout with luminous, projected controls. It retains Street View, the immersive entrance and the visible conversation restart button.
+This build adds persistent native Back, Talk, Pause, Resume and Stop controls around Projection, plus Auto and Landscape controls. Rici handles recognized view commands before speaking their results. Requests for another address can be given in one sentence or as a two-step conversation.
 
-On a physical iPhone or iPad:
-1. Start Live Conversation, wait for Listening, and say “Rici, open projection mode.” Say “Search 10 Downing Street, London SW1A 2AA.” Review the address and confirm with “Yes, that’s it” or “Choose the first result.” The lookup must begin without typing.
-2. Keep that same conversation and Projection open. Say “Now show me 350 Fifth Avenue, New York, NY 10118.” Confirm the matching result. Then say “The next address is 1600 Pennsylvania Avenue NW, Washington, DC 20500” and confirm. The second and third properties must replace the previous destination without closing Projection, restarting voice or typing.
-3. While candidate results are waiting, say “Switch the address to 10 Downing Street, London SW1A 2AA.” Only the new results should be offered. Research, quoted instructions and requests to remember an address must not change the selected property.
-4. Rotate from portrait to landscape and back with a confirmed property visible and Rici listening. The wide scene, floating console buttons, address search and voice controls should be usable. The property, conversation and provider frame must remain intact; rotation must not replay the entrance or start another voice session. Check both landscape directions and Command Center / Discovery Theater.
-5. In landscape, test Zoom in, Keep zooming in, Stop zooming, Street View / Earth, the address candidate buttons, Pause / Resume, Stop and Talk to Rici. Stop conversation and Close projection must remain separate. Try a second address with the keyboard as well as voice.
-6. Check Skip entrance and Reduce Motion. Provider imagery and attribution must remain clear. Stop and restart Live Conversation twice, including after closing Projection; Start Live Conversation must stay available. Repeat the spoken-address sequence in Deep Think.
+On an iPhone or iPad:
+1. Start Live Conversation and wait for Listening. Say “Show projection mode in landscape format.” Projection should open in landscape format with the native controls visible. Back returns to the existing conversation; Stop leaves Projection open with Talk available.
+2. Say “Search 10 Downing Street, London SW1A 2AA” and confirm the matching result. Say “Can you take me to a different address?” Then give “350 Fifth Avenue, New York, NY 10118” and confirm. Give a third full address in the same conversation. Each confirmed result should replace the property without restarting voice or typing.
+3. Tap Auto and rotate both directions. Test Landscape, Pause, Resume, Stop and Talk. Open the address keyboard and check that Back and Stop remain reachable. The selected property and drafts should survive layout changes.
+4. Background the app while listening, then return. The microphone should be paused until you tap Resume. Swipe up to close, then reopen. If TestFlight still reports a crash, submit its crash feedback so the exact native stack can be inspected.
+5. Repeat the destination sequence in Deep Think. Check Street View/Earth and continuous zoom independently of Pause/Stop conversation.
 
-For a failure, report installed version/build, device, orientation, voice status, exact You said text, and View control/result. A spoken acknowledgement alone does not prove the view changed. These checks establish physical-device behavior separately from automated tests.
+For a failed command, include the installed build, device, voice state, exact “You said” text, and displayed result. A spoken acknowledgement alone does not establish that the property changed. Native simulator coverage and physical microphone/closing behavior are separate checks.
 
-Street View is recorded imagery. Coverage and facade visibility vary. This candidate is for the existing internal TestFlight group.
+Street View uses recorded imagery; coverage and facade visibility vary. This build is for the existing internal TestFlight group.

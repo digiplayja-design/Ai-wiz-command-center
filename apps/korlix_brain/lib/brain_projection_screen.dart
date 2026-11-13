@@ -9,6 +9,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'brain_api.dart';
 import 'brain_projection.dart';
 import 'brain_projection_navigation.dart';
+import 'brain_projection_presentation.dart';
 
 /// The remote Earth iframe gets no account bridge. Only this bundled document
 /// receives the unpredictable per-view nonce, which is never posted to frames.
@@ -78,24 +79,44 @@ class BrainProjectionBridge {
 }
 
 class BrainProjectionScreen extends StatefulWidget {
-  const BrainProjectionScreen({super.key, required this.projection});
+  const BrainProjectionScreen({
+    super.key,
+    required this.projection,
+    this.onWebViewCreated,
+  });
   final BrainProjection projection;
+  @visibleForTesting
+  final ValueChanged<WebViewController>? onWebViewCreated;
 
   @override
   State<BrainProjectionScreen> createState() => _BrainProjectionScreenState();
 }
 
-class _BrainProjectionScreenState extends State<BrainProjectionScreen> {
+class _BrainProjectionScreenState extends State<BrainProjectionScreen>
+    with WidgetsBindingObserver {
   late final WebViewController _web;
   late final BrainProjectionBridge _bridge;
   late final ProjectionProviderLinkLauncher _providerLinks;
+  late final BrainProjectionOrientation _orientation;
   bool _ready = false;
+  bool _appActive = true;
+  bool _viewportSendScheduled = false;
+  Map<String, dynamic> _viewport = {};
+  String _voiceAction = '';
+  int _voiceActionEpoch = 0;
   String? _error;
   String? _bundledDocumentUrl;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _appActive = WidgetsBinding.instance.lifecycleState == null ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+    _orientation = BrainProjectionOrientation();
+    unawaited(_orientation.update(
+      projectionLayoutPreference(widget.projection.snapshot['layoutPreference']),
+    ));
     final random = Random.secure();
     _bridge = BrainProjectionBridge(
       base64Url.encode(List.generate(32, (_) => random.nextInt(256))),
@@ -134,7 +155,7 @@ class _BrainProjectionScreenState extends State<BrainProjectionScreen> {
               url,
               expectedUrl: _bundledDocumentUrl,
             )) {
-              _ready = false;
+              if (mounted) setState(() => _ready = false);
             }
           },
           onPageFinished: (url) {
@@ -146,14 +167,8 @@ class _BrainProjectionScreenState extends State<BrainProjectionScreen> {
               return;
             }
             _bundledDocumentUrl ??= url;
-            _ready = true;
-            unawaited(
-              _web
-                  .runJavaScript(
-                    'window.KorlixProjectionConnect?.(${jsonEncode({'nonce': _bridge.nonce, 'snapshot': widget.projection.snapshot})});',
-                  )
-                  .catchError((Object _) {}),
-            );
+            setState(() => _ready = true);
+            unawaited(_connect());
           },
           onWebResourceError: (error) {
             if (mounted && error.isForMainFrame == true) {
@@ -165,6 +180,66 @@ class _BrainProjectionScreenState extends State<BrainProjectionScreen> {
         ),
       )
       ..loadFlutterAsset('assets/web/projection.html');
+    widget.onWebViewCreated?.call(_web);
+  }
+
+  Map<String, dynamic> get _presentation => {
+    'nativeControls': true,
+    'viewport': _viewport,
+  };
+
+  Future<void> _connect() async {
+    if (!mounted || !_ready || !_appActive) return;
+    try {
+      final connection = jsonEncode({
+        'nonce': _bridge.nonce,
+        'snapshot': widget.projection.snapshot,
+        'presentation': _presentation,
+      });
+      await _web.runJavaScript(
+        'if (typeof window.KorlixProjectionConnect !== "function") '
+        '{ throw new Error("Projection did not initialize"); } '
+        'window.KorlixProjectionConnect($connection);',
+      );
+    } catch (_) {
+      if (mounted && _appActive) {
+        setState(() => _error =
+            'The projection view could not load. Your conversation controls are still available.');
+      }
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appActive = state == AppLifecycleState.resumed;
+    if (_appActive && mounted) {
+      // The same document/nonce survives app switching. Refresh native state,
+      // never restart the microphone or recreate the provider frame.
+      unawaited(_connect());
+    }
+  }
+
+  void _recordViewport(BoxConstraints constraints, Size window, String preference) {
+    if (!constraints.maxWidth.isFinite || !constraints.maxHeight.isFinite) {
+      return;
+    }
+    final next = projectionNativeViewport(
+      window: window,
+      viewport: Size(constraints.maxWidth, constraints.maxHeight),
+      preference: preference,
+    );
+    if (_viewport['width'] == next['width'] &&
+        _viewport['height'] == next['height'] &&
+        _viewport['landscape'] == next['landscape']) return;
+    _viewport = next;
+    if (_viewportSendScheduled) return;
+    _viewportSendScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _viewportSendScheduled = false;
+      if (mounted) {
+        unawaited(_send({'type': 'presentation', 'presentation': _presentation}));
+      }
+    });
   }
 
   Future<void> _openProviderLink(String url) async {
@@ -177,7 +252,11 @@ class _BrainProjectionScreenState extends State<BrainProjectionScreen> {
   }
 
   void _changed() {
-    if (mounted && _ready) {
+    if (mounted) {
+      setState(() {});
+      unawaited(_orientation.update(
+        projectionLayoutPreference(widget.projection.snapshot['layoutPreference']),
+      ));
       unawaited(
         _send({'type': 'snapshot', 'state': widget.projection.snapshot}),
       );
@@ -185,7 +264,7 @@ class _BrainProjectionScreenState extends State<BrainProjectionScreen> {
   }
 
   Future<void> _send(Map<String, dynamic> message) async {
-    if (!mounted || !_ready) return;
+    if (!mounted || !_ready || !_appActive) return;
     try {
       await _web.runJavaScript(
         'window.KorlixProjectionReceive?.(${jsonEncode(message)});',
@@ -196,7 +275,7 @@ class _BrainProjectionScreenState extends State<BrainProjectionScreen> {
   }
 
   Future<void> _message(String raw) async {
-    if (!mounted || !_ready || !widget.projection.isOpen) return;
+    if (!mounted || !_ready || !_appActive || !widget.projection.isOpen) return;
     final message = _bridge.accept(raw);
     if (message == null) return;
     final id = message['id'] as String;
@@ -240,41 +319,101 @@ class _BrainProjectionScreenState extends State<BrainProjectionScreen> {
     }
   }
 
+  Future<void> _nativeVoiceAction(String action) async {
+    if (!mounted || _voiceAction == 'stop') return;
+    final epoch = ++_voiceActionEpoch;
+    setState(() => _voiceAction = action);
+    try {
+      await widget.projection.dispatch('${action}Voice', {});
+    } catch (error) {
+      if (mounted && epoch == _voiceActionEpoch) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(
+          error is BrainApiException ? error.message
+              : 'The conversation action could not finish. Please try again.',
+        )));
+      }
+    } finally {
+      if (mounted && epoch == _voiceActionEpoch) {
+        setState(() => _voiceAction = '');
+      }
+    }
+  }
+
+  Future<void> _nativeLayout(String preference) async {
+    try {
+      await widget.projection.dispatch('layout', {'preference': preference});
+    } on BrainApiException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message)),
+        );
+      }
+    }
+  }
+
+  Future<void> _retry() async {
+    setState(() { _error = null; _ready = false; });
+    try {
+      await _web.loadFlutterAsset('assets/web/projection.html');
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'The projection view could not load. Please try again.');
+      }
+    }
+  }
+
   @override
   void dispose() {
     _ready = false;
+    ++_voiceActionEpoch;
+    WidgetsBinding.instance.removeObserver(this);
+    unawaited(_orientation.restore());
     _providerLinks.dispose();
     widget.projection.removeListener(_changed);
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xff0b0815),
-    body: SafeArea(
-      child: _error == null
-          ? WebViewWidget(controller: _web)
-          : Padding(
-              padding: const EdgeInsets.all(24),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(_error!),
-                    const SizedBox(height: 16),
-                    FilledButton(
-                      onPressed: widget.projection.close,
-                      child: const Text('Close projection'),
-                    ),
-                    TextButton(
-                      onPressed: () =>
-                          widget.projection.dispatch('stopVoice', {}),
-                      child: const Text('Stop conversation'),
-                    ),
-                  ],
-                ),
+  Widget build(BuildContext context) {
+    final snapshot = widget.projection.snapshot;
+    final preference = projectionLayoutPreference(snapshot['layoutPreference']);
+    final window = MediaQuery.sizeOf(context);
+    return Scaffold(
+      backgroundColor: const Color(0xff0b0815),
+      body: SafeArea(
+        child: BrainProjectionPresentation(
+          voice: Map<String, dynamic>.from(snapshot['voice'] as Map),
+          layoutPreference: preference,
+          voiceAction: _voiceAction,
+          onClose: widget.projection.close,
+          onVoiceAction: (action) => unawaited(_nativeVoiceAction(action)),
+          onLayout: (layout) => unawaited(_nativeLayout(layout)),
+          child: LayoutBuilder(builder: (context, constraints) {
+            _recordViewport(constraints, window, preference);
+            return Stack(fit: StackFit.expand, children: [
+              WebViewWidget(
+                key: const ValueKey('brain-projection-webview'),
+                controller: _web,
               ),
-            ),
-    ),
-  );
+              if (!_ready && _error == null)
+                const IgnorePointer(child: Center(child: CircularProgressIndicator())),
+              if (_error != null)
+                ColoredBox(
+                  color: const Color(0xff0b0815),
+                  child: Center(child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Text(_error!),
+                      const SizedBox(height: 12),
+                      FilledButton(onPressed: () => unawaited(_retry()),
+                          child: const Text('Retry projection')),
+                    ]),
+                  )),
+                ),
+            ]);
+          }),
+        ),
+      ),
+    );
+  }
 }

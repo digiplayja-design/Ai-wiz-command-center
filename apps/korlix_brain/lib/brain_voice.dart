@@ -43,6 +43,7 @@ class BrainVoice {
   int? _usageAccount;
   Timer? _deadline, _disconnect;
   int _generation = 0;
+  Object? _pendingBegin;
   bool _active = false, _ready = false, _paused = false, _activating = false;
   BrainVoiceMode _mode = BrainVoiceMode.live;
   final _history = BrainVoiceHistory();
@@ -82,6 +83,23 @@ class BrainVoice {
   }
 
   Future<void> _begin({
+    required BrainVoiceMode mode,
+    required bool restoring,
+  }) async {
+    final pendingBegin = Object();
+    _pendingBegin = pendingBegin;
+    // A background Pause can arrive before _connect marks capture active.
+    // Give that pending request a resumable account/mode before the first await.
+    _history.begin(api.auth.revision, fresh: !restoring);
+    _mode = mode;
+    try {
+      await _beginSession(mode: mode, restoring: restoring);
+    } finally {
+      if (identical(_pendingBegin, pendingBegin)) _pendingBegin = null;
+    }
+  }
+
+  Future<void> _beginSession({
     required BrainVoiceMode mode,
     required bool restoring,
   }) async {
@@ -125,10 +143,8 @@ class BrainVoice {
       }
       _closingUsages.remove(entry);
     }
-    _history.begin(api.auth.revision, fresh: !restoring);
     final context = restoring ? _history.context : <Map<String, String>>[];
     _paused = false;
-    _mode = mode;
     final task = _connect(mode: mode, restoring: restoring, context: context);
     _connectionTask = task;
     try {
@@ -593,6 +609,7 @@ class BrainVoice {
 
       if (mode.isLive) {
         _live = BrainLiveTurns(
+          controllerFirst: onProjection != null,
           onProjection: onProjection,
           recognizesProjection: recognizesProjection,
           isCurrent: current,
@@ -664,7 +681,8 @@ class BrainVoice {
     String message = 'Paused · Microphone off. Tap Resume when ready.',
     String reason = 'user_paused',
   }) async {
-    if (!_active && !_paused) return;
+    if (!_active && !_paused && _pendingBegin == null) return;
+    _pendingBegin = null;
     _paused = true;
     _state('pausing', 'Pausing conversation…');
     final pending = _connectionTask;
@@ -688,6 +706,7 @@ class BrainVoice {
     bool announce = true,
     String reason = 'user_ended',
   }) async {
+    _pendingBegin = null;
     _paused = false;
     _history.clear();
     await _shutdown(message: message, announce: announce, reason: reason);

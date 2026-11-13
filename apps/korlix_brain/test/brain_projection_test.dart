@@ -78,6 +78,56 @@ class Fixture {
 
 void main() {
   group('Projection ownership', () {
+    test('layout requests preserve the controller, selected property and voice', () async {
+      final f = Fixture();
+      addTearDown(f.projection.dispose);
+      expect(f.projection.snapshot['layoutPreference'], 'auto');
+      await f.select();
+      final selected = f.projection.snapshot['selectedPlace'];
+      final camera = Map.of(f.projection.snapshot['camera'] as Map);
+      for (final preference in ['landscape', 'portrait', 'auto']) {
+        await f.projection.dispatch('layout', {'preference': preference});
+        expect(f.projection.snapshot['layoutPreference'], preference);
+        expect(f.projection.snapshot['selectedPlace'], selected);
+        expect(f.projection.snapshot['camera'], camera);
+      }
+      await expectLater(f.projection.dispatch('layout', {'preference': 'inverted'}),
+          throwsA(anything));
+      expect(f.projection.snapshot['layoutPreference'], 'auto');
+      expect(f.opens, 1);
+      expect(f.starts, 0);
+      expect(f.stops, 0);
+    });
+
+    test('the spoken landscape request opens Projection and selects native layout once', () async {
+      final f = Fixture();
+      addTearDown(f.projection.dispose);
+      const phrase = 'Show projection mode in landscape format';
+      expect(f.projection.recognizesVoiceControl(phrase), true);
+      await f.projection.voiceTurn('landscape', phrase, null);
+      await f.projection.voiceTurn('landscape', phrase, null);
+      expect(f.projection.isOpen, true);
+      expect(f.projection.snapshot['layoutPreference'], 'landscape');
+      await f.projection.voiceTurn('portrait', 'Switch to portrait', null);
+      expect(f.projection.snapshot['layoutPreference'], 'portrait');
+      await f.projection.voiceTurn('auto', 'Use automatic rotation', null);
+      expect(f.projection.snapshot['layoutPreference'], 'auto');
+      expect(f.opens, 1);
+      expect(f.starts, 0);
+      expect(f.stops, 0);
+      for (final rejected in [
+        'Do not show projection mode in landscape format',
+        'How do I show projection mode in landscape format?',
+        '"Show projection mode in landscape format" is an example',
+      ]) {
+        expect(f.projection.recognizesVoiceControl(rejected), false);
+        await f.projection.voiceTurn(rejected, rejected, {
+          'action': 'layout', 'value': 'landscape',
+        });
+      }
+      expect(f.projection.snapshot['layoutPreference'], 'auto');
+    });
+
     test('open, room changes and close never start or stop voice', () async {
       final f = Fixture();
       addTearDown(f.projection.dispose);
@@ -1252,7 +1302,6 @@ void main() {
           'Now show me $address instead of 30 Third Street',
           'Show me $address, not this address, instead',
           'Now go to $address and then show me photos',
-          'Now go to another address',
           'The next address is missing',
           'Now search $address history',
           'The next address is $address, actually no',
@@ -1352,7 +1401,7 @@ void main() {
           reason: 'Only the existing unwrapped directions flow owns routing.');
     });
 
-    test('an unclear replacement tool request gives a spoken recovery without searching', () async {
+    test('requesting the next destination asks for the address without a model guess', () async {
       final f = Fixture();
       addTearDown(f.projection.dispose);
       await f.select();
@@ -1362,11 +1411,56 @@ void main() {
         'Now go to another address',
         {'action': 'search', 'value': 'A model-guessed address'},
       );
-      expect(result?['ok'], false);
-      expect(result?['answer'], contains('Say “go to”'));
-      expect(result?['answer'], contains('I can search another address here'));
+      expect(result?['ok'], true);
+      expect(result?['answer'], contains('Say the next full street address'));
       expect(f.requests, hasLength(before));
       expect((f.projection.snapshot['selectedPlace'] as Map)['id'], place['id']);
+    });
+
+    test('a two-turn replacement keeps the first place until the next lookup and confirmation', () async {
+      final f = Fixture();
+      addTearDown(f.projection.dispose);
+      await f.select();
+      final selected = f.projection.snapshot['selectedPlace'];
+      final camera = Map.of(f.projection.snapshot['camera'] as Map);
+      const destination = 'Golden Gate Bridge, San Francisco';
+      expect(f.projection.recognizesVoiceControl(destination), false);
+      const request = 'Can you take me to a different address?';
+      expect(f.projection.recognizesVoiceControl(request), true);
+      final result = await f.projection.voiceTurn('request-next', request, null);
+      expect(result?['answer'], contains('next full street address'));
+      expect(f.projection.snapshot['selectedPlace'], selected);
+      expect(f.projection.snapshot['camera'], camera);
+      expect(f.projection.recognizesVoiceControl(destination), true,
+          reason: 'The controller is now awaiting the next destination.');
+      await f.projection.voiceTurn('next', destination, null);
+      expect(f.projection.snapshot['selectedPlace'], isNull);
+      expect(f.projection.snapshot['camera'], camera);
+      expect((f.projection.snapshot['candidates'] as List).single['userQuery'],
+          destination);
+      await f.projection.voiceTurn('confirm-next', 'Choose first one', null);
+      expect((f.projection.snapshot['selectedPlace'] as Map)['userQuery'], destination);
+      expect(f.opens, 1);
+      expect(f.starts, 0);
+      expect(f.stops, 0);
+    });
+
+    test('asking for another destination retires old candidates and late lookups', () async {
+      final pending = Completer<Map<String, dynamic>>();
+      final f = Fixture(request: (_, path, _) async => path.endsWith('/config')
+          ? config : pending.future);
+      addTearDown(f.projection.dispose);
+      f.projection.open();
+      final old = f.projection.search('20 Old Street');
+      await Future<void>.delayed(Duration.zero);
+      await f.projection.voiceTurn('request-next', 'Show me another address', null);
+      pending.complete({'candidates': [place]});
+      expect((await old)['ok'], false);
+      expect(f.projection.snapshot['candidates'], isEmpty);
+      expect(f.projection.snapshot['selectedPlace'], isNull);
+      expect(f.projection.snapshot['notice'], contains('next full street address'));
+      await f.projection.voiceTurn('stale-confirmation', 'Yes', null);
+      expect(f.projection.snapshot['selectedPlace'], isNull);
     });
 
     test(

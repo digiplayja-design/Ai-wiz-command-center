@@ -14,6 +14,21 @@ void main() {
   late List<Map<String, dynamic>> events;
   var allowed = true;
 
+  int lastNativeToken() =>
+      (calls.lastWhere((call) => call.method == 'play').arguments as Map)['token'] as int;
+
+  Future<void> ended(int nativeToken) async {
+    final done = Completer<void>();
+    messenger.handlePlatformMessage(
+      channel.name,
+      const StandardMethodCodec().encodeMethodCall(
+        MethodCall('ended', {'token': nativeToken, 'reason': 'completed'}),
+      ),
+      (_) => done.complete(),
+    );
+    await done.future;
+  }
+
   setUp(() {
     allowed = true;
     calls = [];
@@ -112,29 +127,53 @@ void main() {
 
   test('old completion events cannot stop a newer Replay', () async {
     await welcome.play(1, automatic: true);
+    final firstNativeToken = lastNativeToken();
     await welcome.stop();
     await welcome.play(2, automatic: false);
-    Future<void> ended(int token) async {
-      final done = Completer<void>();
-      messenger.handlePlatformMessage(
-        channel.name,
-        const StandardMethodCodec().encodeMethodCall(
-          MethodCall('ended', {'token': token, 'reason': 'completed'}),
-        ),
-        (_) => done.complete(),
-      );
-      await done.future;
-    }
-
-    await ended(1);
+    final secondNativeToken = lastNativeToken();
+    await ended(firstNativeToken);
     expect(events, isEmpty);
-    await ended(2);
+    await ended(secondNativeToken);
     expect(events.single, {
       'type': 'welcomeEnded',
       'token': 2,
       'reason': 'completed',
     });
   });
+
+  for (final replacementFirst in [false, true]) {
+    test('workspace replacement retains its handler and playback token ($replacementFirst)', () async {
+      await welcome.play(1, automatic: true);
+      final firstNativeToken = lastNativeToken();
+      final release = Completer<void>();
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        calls.add(call);
+        if (call.method == 'stop') await release.future;
+        return call.method == 'play' ? {'started': true} : null;
+      });
+      final replacementEvents = <Map<String, dynamic>>[];
+      BrainWelcome replacement() => BrainWelcome(
+        nativePlayback: true, channel: channel,
+        canPlay: () => true, onEvent: replacementEvents.add,
+      );
+      final next = replacementFirst ? replacement() : null;
+      final disposing = welcome.dispose();
+      final current = next ?? replacement();
+      await current.play(1, automatic: true);
+      final nextNativeToken = lastNativeToken();
+      expect(nextNativeToken, isNot(firstNativeToken));
+      expect((calls.singleWhere((call) => call.method == 'stop').arguments as Map)['token'],
+          firstNativeToken);
+      release.complete();
+      await disposing;
+      await ended(firstNativeToken);
+      expect(replacementEvents, isEmpty);
+      await ended(nextNativeToken);
+      expect(replacementEvents.single['token'], 1);
+      expect(events, isEmpty);
+      await current.dispose();
+    });
+  }
 
   test('no native playback while capture or an overlay owns audio', () async {
     allowed = false;

@@ -24,6 +24,7 @@
   let lastSearchSequence = 0, revealedVoiceSearchSequence = 0;
   let entranceNonce = '', entranceEpoch = 0, entranceRunning = false;
   let entranceTimers = [];
+  let nativePresentation = {nativeControls:false, viewport:null};
 
   const emptyState = () => ({
     open:true, foreground:true, room:'command', loading:false, selectedPlace:null, candidates:[], answer:null,
@@ -68,7 +69,9 @@
   }
 
   function syncSpatialLayout() {
-    const wide=wideRoom.matches,compact=wide&&compactRoom.matches;
+    const viewport=nativePresentation.viewport;
+    const wide=viewport ? viewport.landscape : wideRoom.matches;
+    const compact=wide&&(viewport ? viewport.height<=600 : compactRoom.matches);
     const focused=document.activeElement;
     const selection=focused instanceof HTMLInputElement||focused instanceof HTMLTextAreaElement
       ? {start:focused.selectionStart,end:focused.selectionEnd}:null;
@@ -107,6 +110,20 @@
   document.querySelectorAll('[data-console-choice]').forEach(button=>
     button.addEventListener('click',()=>chooseSpatialConsole(button.dataset.consoleChoice,{reveal:true})));
   window.addEventListener('resize',syncSpatialLayout);
+
+  function updatePresentation(raw) {
+    if(!isObject(raw))return;
+    const viewport=isObject(raw.viewport)&&finite(raw.viewport.width,1,20000)
+      &&finite(raw.viewport.height,1,20000)&&typeof raw.viewport.landscape==='boolean'
+      ? {width:raw.viewport.width,height:raw.viewport.height,landscape:raw.viewport.landscape}:null;
+    nativePresentation={nativeControls:raw.nativeControls===true,viewport};
+    document.body.dataset.nativeControls=String(nativePresentation.nativeControls);
+    for(const name of ['width','height']) {
+      if(viewport)document.documentElement.style.setProperty('--native-viewport-'+name,viewport[name]+'px');
+      else document.documentElement.style.removeProperty('--native-viewport-'+name);
+    }
+    syncSpatialLayout();
+  }
 
   // The entrance decorates this room; it never owns provider or voice readiness.
   // A fresh native screen nonce is the only start signal. Native snapshots and
@@ -621,6 +638,7 @@
       requests.clear(); disposeFrame();
     }
     nonce = nextNonce; connected = true;
+    updatePresentation(connection.presentation);
     state = normalize(connection.snapshot); localNotice = ''; localNoticeKind = '';
     syncTranscripts(connection.snapshot);
     syncVoiceGuards(); render();
@@ -629,6 +647,11 @@
 
   window.KorlixProjectionReceive = message => {
     if (!connected || !isObject(message)) return;
+    if(message.type==='presentation') {
+      updatePresentation(message.presentation);
+      resizeCanvas();
+      return;
+    }
     if (message.type === 'snapshot') {
       const previousId = state.selectedPlace?.id, previousVoice = state.voice;
       state = normalize(message.state);

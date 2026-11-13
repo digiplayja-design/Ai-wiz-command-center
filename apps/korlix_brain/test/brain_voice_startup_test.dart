@@ -27,6 +27,43 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
+  test('background Pause is a no-op for an idle conversation', () async {
+    await h.voice.pause(reason: 'app_backgrounded');
+    expect(h.voice.active, isFalse);
+    expect(h.voice.paused, isFalse);
+    expect(h.calls, isEmpty);
+    expect(h.sessionRequests, 0);
+  });
+
+  test('background Pause cancels a start before native capture is allocated', () async {
+    final starting = h.voice.start();
+    await h.voice.pause(reason: 'app_backgrounded');
+    await starting;
+    expect(h.voice.active, isFalse);
+    expect(h.voice.paused, isTrue);
+    expect(h.sessionRequests, 0);
+    expect(h.calls.where((call) => call.method == 'getUserMedia'), isEmpty);
+
+    await Future<void>.delayed(Duration.zero);
+    expect(h.sessionRequests, 0, reason: 'Foreground presentation must not auto-start capture.');
+    await h.voice.resume();
+    expect(h.voice.active, isTrue);
+    expect(h.sessionRequests, 1);
+  });
+
+  test('background Pause cannot revive a start already canceled by Stop', () async {
+    final starting = h.voice.start();
+    final stopping = h.voice.stop();
+    await h.voice.pause(reason: 'app_backgrounded');
+    await Future.wait([starting, stopping]);
+    expect(h.voice.active, isFalse);
+    expect(h.voice.paused, isFalse);
+    expect(h.sessionRequests, 0);
+    await h.voice.resume();
+    expect(h.voice.paused, isFalse);
+    expect(h.sessionRequests, 0);
+  });
+
   test(
     'post-200 server contract failure closes and meters the allocated call',
     () async {

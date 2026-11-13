@@ -46,6 +46,7 @@ class BrainProjection extends ChangeNotifier {
   bool _foreground = true;
   String _rendererStatus = 'loading';
   String _room = 'command';
+  String _layoutPreference = 'auto';
   String _notice = 'Say “Rici, project virtual reality” to explore together.';
   int _generation = 0;
   int _configGeneration = 0;
@@ -98,6 +99,7 @@ class BrainProjection extends ChangeNotifier {
     'open': _open,
     'foreground': _foreground,
     'room': _room,
+    'layoutPreference': _layoutPreference,
     'loading': _loading,
     'selectedPlace': _place,
     'candidates': _candidates,
@@ -280,6 +282,8 @@ class BrainProjection extends ChangeNotifier {
         'search' => 'Find destination',
         'select' => 'Confirm destination',
         'room' => 'Change room',
+        'layout' => 'Change layout',
+        'requestAddress' => 'Next destination',
         'camera' => switch (control!.value) {
           'streetView' => 'Street View',
           'earthView' => 'Overhead view',
@@ -842,6 +846,8 @@ class BrainProjection extends ChangeNotifier {
       case 'close':
         close();
         return null;
+      case 'layout':
+        return _setLayoutPreference(payload['preference']);
       case 'room':
         final room = payload['room'];
         if (room != 'command' && room != 'discovery') {
@@ -1270,6 +1276,64 @@ class BrainProjection extends ChangeNotifier {
     return address;
   }
 
+  Map<String, dynamic> _setLayoutPreference(Object? preference) {
+    if (preference != 'auto' &&
+        preference != 'landscape' &&
+        preference != 'portrait') {
+      throw const BrainApiException('Choose landscape, portrait or automatic rotation.');
+    }
+    _layoutPreference = preference as String;
+    _notice = preference == 'auto'
+        ? 'Projection will follow your device rotation. Your conversation can continue.'
+        : '${preference == 'landscape' ? 'Landscape' : 'Portrait'} format is selected for Projection. Your conversation can continue.';
+    _changed();
+    return _result(_notice);
+  }
+
+  Map<String, dynamic> _requestNextDestination() {
+    // Asking for another destination is a real controller transition even
+    // before the user supplies its address. Retain the confirmed property,
+    // retire old candidates/lookups, and accept the next spoken destination.
+    ++_generation;
+    _loading = false;
+    _destinationSearch = {..._destinationSearch, 'active': false};
+    _candidates = [];
+    _awaitingDestination = true;
+    _stopCameraIfMoving();
+    _notice = 'Yes. Say the next full street address, city and postal code. I will look it up here and ask you to confirm it.';
+    _changed();
+    return _result(_notice);
+  }
+
+  static bool _requestsNextDestination(String original) {
+    final command = _originalCommand(original.replaceFirst(
+      RegExp(r'^(?:now|also)[,.:!?\s]+', caseSensitive: false),
+      '',
+    ));
+    return RegExp(
+      r'^(?:(?:go to|take me to|fly to|show(?: me)?|find|search(?: for)?|look up|explore|open)\s+(?:(?:the|a|an)\s+)?(?:next|new|another|different|second|third|other)\s+(?:street\s+)?(?:address|destination|property|place)|(?:switch|change)\s+(?:(?:the|this|my|current)\s+)?(?:address|destination|property|place)(?:\s+to\s+(?:(?:the|a|an)\s+)?(?:next|new|another|different|second|third|other)(?:\s+(?:address|destination|property|place))?)?|(?:(?:the|a)\s+)?(?:next|new|another|different|second|third|other)\s+(?:street\s+)?address)(?:\s+please)?[.!?\s]*$',
+      caseSensitive: false,
+    ).hasMatch(command);
+  }
+
+  String? _spokenLayout(String command) {
+    final explicit = RegExp(
+      r'^(?:show|open|start|enter|set|switch|change)(?:\s+me)?\s+(?:(?:the|my)\s+)?(?:projection(?:\s+mode)?|vr|virtual reality|command center|discovery theat(?:er|re))\s+(?:in|to)\s+(landscape|portrait)(?:\s+(?:format|mode|layout|orientation))?[.!?\s]*$',
+      caseSensitive: false,
+    ).firstMatch(command);
+    if (explicit != null) return explicit.group(1)!.toLowerCase();
+    if (!_open) return null;
+    final relative = RegExp(
+      r'^(?:(?:switch|change)(?:\s+the\s+(?:layout|orientation|format))?\s+to|use|set\s+(?:the\s+)?(?:layout|orientation|format)\s+to)\s+(landscape|portrait)(?:\s+(?:format|mode|layout|orientation))?[.!?\s]*$',
+      caseSensitive: false,
+    ).firstMatch(command);
+    if (relative != null) return relative.group(1)!.toLowerCase();
+    return RegExp(
+      r'^(?:use|enable|restore|switch to)\s+(?:automatic|auto)\s+(?:device\s+)?(?:rotation|orientation|layout)[.!?\s]*$',
+      caseSensitive: false,
+    ).hasMatch(command) ? 'auto' : null;
+  }
+
   /// Live mode classifies the original transcript before the model starts a
   /// speculative reply. The same parser executes it, so recognition cannot
   /// authorize a broader action than the original words permit.
@@ -1394,6 +1458,11 @@ class BrainProjection extends ChangeNotifier {
           r'\b(?:do not|don\x27t|don’t|never)\s+(?:open|close|zoom|move|go|show|switch|face|turn|rotate|pan|take|fly|start|stop|keep|continue)\b',
         ).hasMatch(command)) {
       return null;
+    }
+    final layout = _spokenLayout(viewCommand);
+    if (layout != null) return _ProjectionVoiceControl('layout', layout);
+    if (_requestsNextDestination(original)) {
+      return const _ProjectionVoiceControl('requestAddress');
     }
     if (_open) {
       final replacement = _replacementStreetAddress(original);
@@ -1641,6 +1710,12 @@ class BrainProjection extends ChangeNotifier {
         case 'search':
           open(room: control.room);
           return search(control.value, fromVoice: true);
+        case 'requestAddress':
+          open(room: control.room);
+          return _requestNextDestination();
+        case 'layout':
+          open(room: control.room);
+          return _setLayoutPreference(control.value);
         case 'select':
           return select(control.value);
         case 'camera':

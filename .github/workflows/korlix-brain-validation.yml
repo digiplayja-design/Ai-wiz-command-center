@@ -149,3 +149,51 @@ jobs:
           assert 'arm64' in subprocess.check_output(['lipo', '-archs', str(binary)], text=True).split()
           print('Verified com.korlix.brain iPhoneOS arm64 release compilation. Signing is handled in Codemagic.')
           PY
+  ios-runtime:
+    runs-on: macos-26
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.9'
+          channel: stable
+          cache: true
+      - name: Prepare an available iPhone simulator
+        run: |
+          defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false
+          python3 - <<'PY'
+          import json, os, subprocess
+          data = json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', 'available', '-j']))
+          candidates = [(runtime, device) for runtime, devices in data['devices'].items()
+                        if '.iOS-' in runtime for device in devices
+                        if device.get('isAvailable') and device['name'].startswith('iPhone')]
+          if not candidates:
+              raise SystemExit('No available iPhone simulator runtime')
+          runtime, device = sorted(candidates, key=lambda item: (item[0], item[1]['name']))[-1]
+          if device['state'] != 'Booted':
+              subprocess.run(['xcrun', 'simctl', 'boot', device['udid']], check=True)
+          subprocess.run(['xcrun', 'simctl', 'bootstatus', device['udid'], '-b'], check=True)
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write('BRAIN_SIMULATOR_ID=' + device['udid'] + '\n')
+          print('Native runtime target:', device['name'], runtime, device['udid'])
+          PY
+      - name: Exercise native Projection controls and WKWebView together
+        working-directory: apps/korlix_brain
+        run: |
+          set -euo pipefail
+          flutter pub get --enforce-lockfile
+          mkdir -p runtime-screenshots
+          flutter drive --no-pub --device-id "$BRAIN_SIMULATOR_ID" \
+            --driver=test_driver/brain_projection_driver.dart \
+            --target=integration_test/brain_projection_runtime_test.dart \
+            2>&1 | tee runtime-screenshots/native-runtime.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: korlix-brain-native-runtime
+          path: apps/korlix_brain/runtime-screenshots
+          if-no-files-found: warn
+          retention-days: 14

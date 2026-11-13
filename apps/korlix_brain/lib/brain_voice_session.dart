@@ -32,6 +32,7 @@ class BrainVoiceSessionGate {
     'open',
     'close',
     'room',
+    'layout',
     'search',
     'camera',
     'ask',
@@ -44,7 +45,7 @@ class BrainVoiceSessionGate {
   static const projectionTool = <String, dynamic>{
     'type': 'function',
     'name': 'control_projection',
-    'description': 'Open or close Projection Mode from Home during an active conversation, look up a spoken address or named landmark, move its camera, ask about the selected place, or prepare directions when explicitly requested. Camera values include closer, farther, left, right, reset, zoomInContinuous, zoomOutContinuous, stopCamera, streetView and earthView. Use directions for route to, navigate to, or directions to an address. The app checks the original user transcript before acting.',
+    'description': 'Open or close Projection Mode from Home during an active conversation, repeatedly look up spoken addresses or named landmarks, request the next destination, change its layout, move its camera, ask about the selected place, or prepare directions when explicitly requested. Layout values are landscape, portrait and auto. Camera values include closer, farther, left, right, reset, zoomInContinuous, zoomOutContinuous, stopCamera, streetView and earthView. Use directions for route to, navigate to, or directions to an address. The app checks the original user transcript before acting.',
     'parameters': {
       'type': 'object',
       'properties': {
@@ -57,7 +58,7 @@ class BrainVoiceSessionGate {
   };
   static const projectionInstructions =
       '# Projection capability for this client\n'
-      'This client adds control_projection alongside remember_in_brain. Earlier references to having only the memory tool do not include this optional capability. Projection Mode is a view inside KORLIX. You can open it from Home while this conversation is active, even when Projection is closed. For an explicit request such as "Rici, can you open projection mode?", "open VR" or "enter projection", use action open with an empty value. For "close projection" or "exit VR", use action close with an empty value. Do not tell the user you cannot open this app view or redirect a supported request to onscreen controls unless the tool reports a failure. Confirm that the view opened or closed only after the controller result confirms it. Use control_projection only for the user\'s explicit projection, map, place, camera or room request, or a question about the selected place. Use an empty value when no value is needed. Spoken addresses and named landmarks can be searched without typing: use action search with the whole original destination, including unit, city and postal code. Projection has no one-address limit. While it remains open, use action search again for each explicit new destination, including after a property was selected or while another result awaits confirmation. Requests such as "now go to [full address]", "the next address is [full address]" and "show me [full address] instead" replace the destination search; do not say you cannot search another address or ask the user to restart Projection. Keep the current conversation active, require confirmation of each new result, and report success only after the controller confirms it. If the new address is missing or unclear, ask the user to say its full street address, city and postal code rather than directing them to type it. When the user confirms a displayed place or chooses a displayed result, use action search with their original confirmation as value, for example "yes, that is the place" or "choose the first result". The app validates the original user transcript. For show street view, show the front of the property or face the building, use action camera with value streetView. For show overhead or show the 3D map, use action camera with value earthView. Street View is recorded imagery and may be unavailable near a property; do not call it live or promise an exact front-door view. For zoom in or move closer, use action camera with value closer; for zoom out, use farther. For keep zooming in or keep zooming out, use zoomInContinuous or zoomOutContinuous. For stop zooming or stop moving the view, use stopCamera. These controls affect only the map camera, not the voice session. Zooming can continue within the available camera range; do not promise infinite zoom or imagery detail that is not available. For an explicit route to, navigate to, or directions to a destination, use action directions with that destination. This opens a route review screen; the user starts navigation with a tap. Do not claim navigation has started. For an explicit request to remember or save this place, address, building or location, use action savePlace. All ordinary memory commands still use remember_in_brain. Relay the returned answer and its scope/source limits accurately. Never describe map imagery as live video or invent a location, camera feed, date, population, mayor, crime statistic or building record. If a tool fails or has no verified data, say so. Do not start or stop the voice session when opening or closing Projection Mode.';
+      'This client adds control_projection alongside remember_in_brain. Earlier references to having only the memory tool do not include this optional capability. Projection Mode is a view inside KORLIX. You can open it from Home while this conversation is active, even when Projection is closed. For an explicit request such as "Rici, can you open projection mode?", "open VR" or "enter projection", use action open with an empty value. For "close projection" or "exit VR", use action close with an empty value. Do not tell the user you cannot open this app view or redirect a supported request to onscreen controls unless the tool reports a failure. Confirm that the view opened or closed only after the controller result confirms it. Use control_projection only for the user\'s explicit projection, map, place, camera or room request, or a question about the selected place. Use an empty value when no value is needed. Spoken addresses and named landmarks can be searched without typing: use action search with the whole original destination, including unit, city and postal code. Projection has no one-address limit. While it remains open, use action search again for each explicit new destination, including after a property was selected or while another result awaits confirmation. Requests such as "now go to [full address]", "the next address is [full address]" and "show me [full address] instead" replace the destination search; do not say you cannot search another address or ask the user to restart Projection. Keep the current conversation active, require confirmation of each new result, and report success only after the controller confirms it. If the new address is missing or unclear, ask the user to say its full street address, city and postal code rather than directing them to type it. When the user confirms a displayed place or chooses a displayed result, use action search with their original confirmation as value, for example "yes, that is the place" or "choose the first result". The app validates the original user transcript. For show street view, show the front of the property or face the building, use action camera with value streetView. For show overhead or show the 3D map, use action camera with value earthView. Street View is recorded imagery and may be unavailable near a property; do not call it live or promise an exact front-door view. For zoom in or move closer, use action camera with value closer; for zoom out, use farther. For keep zooming in or keep zooming out, use zoomInContinuous or zoomOutContinuous. For stop zooming or stop moving the view, use stopCamera. These controls affect only the map camera, not the voice session. Zooming can continue within the available camera range; do not promise infinite zoom or imagery detail that is not available. For an explicit route to, navigate to, or directions to a destination, use action directions with that destination. This opens a route review screen; the user starts navigation with a tap. Do not claim navigation has started. For an explicit request to remember or save this place, address, building or location, use action savePlace. All ordinary memory commands still use remember_in_brain. Relay the returned answer and its scope/source limits accurately. Never describe map imagery as live video or invent a location, camera feed, date, population, mayor, crime statistic or building record. If a tool fails or has no verified data, say so. Do not start or stop the voice session when opening or closing Projection Mode. The client schedules each Live reply only after its original transcript has reached the local controller. Locally recognized commands are spoken from the controller result; ordinary conversation still uses this Realtime session. If a user explicitly asks to change to another address without giving one, use search with an empty value so the controller can ask for the next full address. Never reuse the previous destination as the next one. For "Show projection mode in landscape format", use layout with value landscape. Use layout portrait for portrait format and layout auto for automatic device rotation. A returned layout preference is a request to the native screen, not proof that the operating system has rotated. The controller owns the current selected place and candidate confirmation; do not infer current screen state from an earlier conversational reply.';
 
   Map<String, dynamic> get configuration => mode.isLive
       ? {
@@ -86,7 +87,10 @@ class BrainVoiceSessionGate {
                 'turn_detection': {
                   'type': 'semantic_vad',
                   'eagerness': 'high',
-                  'create_response': true,
+                  // Projection commands are authorized from the original
+                  // item-bound transcript before any model reply is requested.
+                  // Ordinary Live chat still uses this Realtime model.
+                  'create_response': !projectionEnabled,
                   'interrupt_response': true,
                 },
               },
@@ -163,7 +167,9 @@ class BrainVoiceSessionGate {
     }
     if (vad is! Map ||
         (vad['type'] != 'semantic_vad' && vad['type'] != 'server_vad') ||
-        vad['create_response'] != mode.isLive) {
+        vad['create_response'] is! bool ||
+        ((!mode.isLive || !projectionEnabled) &&
+            vad['create_response'] != mode.isLive)) {
       return _reject('vad_mismatch');
     }
     if (transcription is! Map || transcription['model'] != 'gpt-transcribe') {
@@ -185,6 +191,9 @@ class BrainVoiceSessionGate {
     }
     if (_hasTools(tools, const {'remember_in_brain', 'control_projection'}) &&
         session['instructions'] == _instructions) {
+      if (vad['create_response'] != false) {
+        return _reject('projection_automatic_response');
+      }
       _projectionAcknowledged = true;
       return BrainSessionAction.ready;
     }

@@ -1,3 +1,41 @@
+## Native Projection controls and voice routing — build 25 candidate
+
+The user reports that build 24 still remains at the first address, can speak a
+refusal for the next destination, loses Pause/Stop/Resume/Back, does not change
+format when the phone is tilted, and produces a TestFlight crash notice after
+swipe-close. Desktop layout fixtures did not establish the native behavior.
+
+Projection-enabled Live sessions now wait for the original item-bound transcript
+before scheduling a response. The native controller handles navigation and its
+confirmation first; the same Realtime model handles ordinary conversation after
+that recognition step. This removes the automatic-reply race at the cost of
+waiting for speech transcription. Explicit requests for another address without
+the address begin a controller-owned follow-up state. Existing confirmation and
+latest-search ordering apply to every destination.
+
+Projection has a persistent native Back/Talk/Pause/Resume/Stop rail outside its
+WebView, plus Auto and Landscape controls. The exact spoken request “Show
+projection mode in landscape format” changes the native layout preference and
+requests orientation. A fixed native wrapper supplies landscape presentation
+when the operating system does not rotate the window. Native viewport bounds
+drive the web layout; rotation retains the controller, provider and drafts.
+
+Backgrounding releases capture before termination and preserves a paused
+conversation. Dictation serializes singleton ownership, including delayed
+permission/start callbacks. Native welcome audio unregisters its callbacks at
+engine detachment. These repair concrete lifecycle gaps; the user's reported
+native crash still requires the submitted Apple crash log for attribution.
+
+Release acceptance requires the Flutter controller/session/lifecycle tests,
+both desktop browser platforms, and the new iPhone simulator integration with
+real WKWebView, native control taps, keyboard and orientation behavior. The
+signed IPA, actual build identity, Apple upload/processing and internal group
+assignment must be checked independently. Physical microphone interpretation
+and swipe-close confirmation remain distinct from simulator coverage.
+
+Source build floor: 25. Backend renderer and subscription configuration are
+unchanged by this repair.
+
 ## Repeated destinations and landscape Projection — build 24 candidate
 
 The user confirmed that build 23 can open the first spoken address, then reported
