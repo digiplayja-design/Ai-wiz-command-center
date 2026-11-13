@@ -1,4 +1,40 @@
-## Spoken street-address search repair — build 21 candidate
+## Immersive Projection entrance — build 22 candidate
+
+Adds the approved two-second Awaken → Enter → Arrive presentation to Command
+Center and Discovery Theater. The real provider, original address search,
+confirmation and Rici conversation continue immediately while the surrounding
+room animates. Provider imagery and its attribution retain their complete,
+untransformed rectangle. The separate synthetic mockup image is not shipped.
+
+The entrance is once per native screen nonce. Skip, Close, backgrounding and
+motion-preference changes finish it safely; ordinary snapshots, voice events,
+new addresses and room changes do not replay it. Reduced motion uses a brief
+240 ms fade. A native foreground snapshot makes app-background cancellation
+explicit without changing the voice or address-search lifecycle.
+
+Source build floor: 22. Exact-source CI, signed package identity, Apple upload,
+processing and existing-group delivery must be verified independently before
+claiming availability. Physical iPhone/iPad entrance, Reduce Motion, provider
+attribution and microphone-to-search acceptance remain required after delivery.
+No backend renderer deployment is needed.
+
+## Verified build 21 baseline — spoken street-address search
+
+Source `c7817628b9825eef0ee81487a098ac3fde954003` passed all four CI jobs,
+245 Flutter tests, responsive UI checks and iOS/Android build checks in run
+`43324793588`. Signed version 1.0.2 (21) was independently inspected with
+Projection HTML/JS/CSS matching the tested source. Upload job
+`6af6466c10a05158d8122e55` finished successfully. Guarded delivery job
+`6af64cd810a05158d8123028` finished successfully from operations commit
+`bef3e6946b905c2b1841586829df6db94b2ea378`. Apple read-back at
+`2026-11-12T23:34:47.094120Z` confirmed build
+`6ce93e8f-16a6-47be-beff-805f5ab40fe7` in KORLIX Brain Internal with
+`IN_BETA_TESTING`, `assigned`, `deliveryVerified:true`, and the existing tester
+membership preserved. That delivery does not establish physical-device
+acceptance of the new entrance. The original spoken-address candidate notes
+follow as historical context.
+
+### Spoken street-address search repair — build 21 source notes
 
 The user confirmed that Street View works in delivered version 1.0.2 (20), but
 reported that Rici cannot start an address search automatically. Source review

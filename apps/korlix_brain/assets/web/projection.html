@@ -11,6 +11,7 @@
 <body data-room="command" data-map="illustration" data-voice="complete">
   <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <defs>
+      <linearGradient id="projection-entry-spectrum" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#80e6f2"/><stop offset=".5" stop-color="#ac91f3"/><stop offset="1" stop-color="#ead5ff"/></linearGradient>
       <symbol id="icon-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
       <symbol id="icon-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 11-8 11S4 16 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></symbol>
       <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
@@ -33,6 +34,10 @@
     </defs>
   </svg>
 
+  <div id="projection-entry-room" class="projection-entry-room" aria-hidden="true">
+    <div class="entry-room-depth"><span class="entry-room-crown"></span><span class="entry-room-wall entry-room-wall-left"></span><span class="entry-room-wall entry-room-wall-right"></span><span class="entry-room-floor"></span></div>
+  </div>
+
   <div class="projection-shell">
     <header class="app-header">
       <div class="brand" aria-label="KORLIX Brain and Voice">
@@ -40,12 +45,12 @@
         <div><strong>KORLIX</strong><span>BRAIN+VOICE</span></div>
       </div>
       <div class="header-session"><span class="status-dot"></span><span id="connection-label">Connecting to your workspace</span></div>
-      <button id="close-projection" class="close-button" type="button" aria-label="Close projection and return to KORLIX"><span>Close projection</span><svg><use href="#icon-close"/></svg></button>
+      <div class="entry-header-actions"><span class="entry-skip-slot"><button id="projection-entry-skip" class="projection-entry-skip" type="button" aria-label="Skip entrance animation" hidden>Skip</button></span><button id="close-projection" class="close-button" type="button" aria-label="Close projection and return to KORLIX"><span>Close projection</span><svg><use href="#icon-close"/></svg></button></div>
     </header>
 
     <main>
       <div class="workspace-heading">
-        <div class="workspace-name"><span class="eyebrow">RICI SPATIAL WORKSPACE</span><h1>Projection</h1></div>
+        <div class="workspace-name"><span class="eyebrow">RICI SPATIAL WORKSPACE</span><h1 id="projection-heading" tabindex="-1">Projection</h1></div>
         <div class="room-switch" role="group" aria-label="Projection room">
           <button id="room-command" class="room-button" type="button" data-room-choice="command" aria-pressed="true"><svg><use href="#icon-command"/></svg><span>Command Center</span></button>
           <button id="room-discovery" class="room-button" type="button" data-room-choice="discovery" aria-pressed="false"><svg><use href="#icon-theater"/></svg><span>Discovery Theater</span></button>
@@ -56,12 +61,19 @@
       <div class="workspace-grid">
         <section class="scene-column" aria-label="Projected world">
           <div class="scene-stage" id="scene-stage">
+            <span class="entry-scene-corner entry-corner-top-left" aria-hidden="true"></span><span class="entry-scene-corner entry-corner-top-right" aria-hidden="true"></span><span class="entry-scene-corner entry-corner-bottom-left" aria-hidden="true"></span><span class="entry-scene-corner entry-corner-bottom-right" aria-hidden="true"></span><span class="entry-scene-rail entry-rail-left" aria-hidden="true"></span><span class="entry-scene-rail entry-rail-right" aria-hidden="true"></span>
             <canvas id="world-canvas" aria-hidden="true"></canvas>
             <div id="map-container" class="map-container" hidden></div>
             <div class="room-architecture" aria-hidden="true"><div class="architecture-ring ring-one"></div><div class="architecture-ring ring-two"></div><div class="architecture-floor"></div><div class="architecture-edge edge-left"></div><div class="architecture-edge edge-right"></div></div>
 
+            <div id="projection-entry-illustration" class="projection-entry-illustration" aria-hidden="true">
+              <div class="entry-brain"><span class="entry-brain-halo"></span><span class="entry-brain-orbit"></span><span class="entry-brain-orbit entry-brain-orbit-violet"></span><svg class="entry-brain-mark"><use href="#icon-brain"/></svg></div>
+              <div class="entry-portals"><span class="entry-portal"></span><span class="entry-portal"></span><span class="entry-portal"></span><span class="entry-portal"></span><span class="entry-portal"></span></div>
+              <svg class="entry-rays" viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M0 17 42 48M100 17 58 48M0 85 42 55M100 85 58 55M0 45 40 51M100 45 60 51"/></svg>
+            </div>
+
             <div class="scene-topline">
-              <div class="scene-heading"><span class="eyebrow" id="room-overline">COMMAND CENTER / 01</span><h2 id="scene-title">A new perspective.</h2><p id="scene-subtitle">Choose a place. Let Rici guide you.</p></div>
+              <div class="scene-heading"><span class="entry-scene-accent" aria-hidden="true"><span class="entry-accent-orbit"></span><svg class="entry-accent-brain"><use href="#icon-brain"/></svg></span><span class="eyebrow" id="room-overline">COMMAND CENTER / 01</span><h2 id="scene-title">A new perspective.</h2><p id="scene-subtitle">Choose a place. Let Rici guide you.</p></div>
               <span id="map-badge" class="map-badge"><span></span>Illustrative globe</span>
             </div>
 

@@ -108,3 +108,93 @@ body[data-voice="paused"] .voice-wave i{background:#bba1cc;animation:none}
 .voice-command-feedback[data-status="failed"],.voice-command-feedback[data-status="interrupted"]{border-color:#bd656b70}
 .voice-command-feedback[data-status="failed"] p,.voice-command-feedback[data-status="interrupted"] p{color:var(--danger)}
 @media(max-width:560px){.view-toolbar{gap:8px}.view-switch{width:100%}.view-switch button{flex:1}.view-toolbar p{font-size:10px}.voice-command-feedback>div{grid-template-columns:70px minmax(0,1fr)}.scene-footnote{gap:12px;flex-wrap:wrap}}
+
+/* Projection entrance: only ornamental siblings move. The real renderer,
+   conversation dock, controls and their ancestors retain their own geometry. */
+body{isolation:isolate}
+.projection-shell{position:relative;z-index:1}
+.projection-entry-room{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;opacity:0;--entry-rest-opacity:.2;background:radial-gradient(ellipse at 2% 40%,#66d9f345,transparent 43%),radial-gradient(ellipse at 98% 30%,#a47cf24d,transparent 46%),radial-gradient(ellipse at 50% 100%,#7166c72e,transparent 55%)}
+.projection-entry-room *,.projection-entry-illustration *{pointer-events:none}
+.entry-room-depth{position:absolute;inset:0}
+.entry-room-crown{position:absolute;left:-13%;right:-13%;top:5%;height:78%;border:1px solid #9f99db38;border-top-color:#a0eff3b3;border-radius:50%;box-shadow:0 -12px 45px #5fd9ed0f}
+.entry-room-wall{position:absolute;top:18%;bottom:20%;width:18%;border:1px solid #9bdde052;border-top:0;border-bottom:0}
+.entry-room-wall-left{left:1.5%;background:linear-gradient(90deg,#80e6f219,transparent);transform:skewY(14deg);border-right-color:#ad91ed21}
+.entry-room-wall-right{right:1.5%;background:linear-gradient(270deg,#ac91f322,transparent);transform:skewY(-14deg);border-left-color:#ad91ed21}
+.entry-room-floor{position:absolute;left:-8%;right:-8%;bottom:10%;height:25%;border:1px solid #a693d550;border-bottom-color:#80e6f299;border-radius:50%;background:radial-gradient(ellipse at 50% 100%,#80e6f20b,transparent 64%)}
+
+/* A permanent header slot keeps Close in the same place when Skip appears. */
+.entry-header-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.entry-header-actions .close-button{margin-left:0;min-height:44px}
+.entry-skip-slot{display:flex;align-items:center;justify-content:center;flex:0 0 54px;width:54px;min-height:44px}
+.projection-entry-skip{display:flex;align-items:center;justify-content:center;width:100%;min-height:44px;padding:8px;border:1px solid #80e6f245;border-radius:6px;background:#80e6f20a;color:#b9f1f5;font-size:11px;letter-spacing:.02em}
+.projection-entry-skip:hover{background:#80e6f218;border-color:#a3e8ee80}
+
+/* The large brain and five portal frames belong exclusively to the app's
+   illustrative scene. A configured provider hides them immediately, including
+   while that provider is still loading. No fixture imagery is used. */
+.projection-entry-illustration{display:none;position:absolute;inset:0;z-index:3;overflow:hidden;pointer-events:none;background:radial-gradient(ellipse at 50% 55%,#24153829,transparent 58%)}
+.entry-brain{position:absolute;left:50%;top:55%;width:clamp(150px,22vw,235px);aspect-ratio:1;display:grid;place-items:center;opacity:0;transform:translate(-50%,-50%);isolation:isolate}
+.entry-brain-halo{position:absolute;inset:3%;border-radius:50%;background:radial-gradient(ellipse at 42% 32%,#a57ce04f,#609ab91c 52%,transparent 72%);box-shadow:0 0 42px #9875de12,inset 0 0 22px #a07fe524}
+.entry-brain-mark{position:relative;z-index:1;width:66%;height:66%;stroke:url(#projection-entry-spectrum);stroke-width:.7;filter:drop-shadow(0 0 5px #80e6f288) drop-shadow(0 0 12px #ac91f344)}
+.entry-brain-orbit{position:absolute;left:-22%;top:31%;width:144%;height:38%;border:1px solid #91ecf3c2;border-radius:50%;transform:rotate(-13deg);box-shadow:0 0 13px #80e6f22b,inset 0 0 8px #80e6f20d}
+.entry-brain-orbit:after{content:"";position:absolute;left:8%;top:10%;width:5px;height:5px;border-radius:50%;background:#c2f8ff;box-shadow:0 0 12px #80e6f2}
+.entry-brain-orbit-violet{left:-12%;top:24%;width:124%;height:52%;border-color:#b393f2a1;transform:rotate(22deg);box-shadow:0 0 12px #ac91f32b}
+.entry-brain-orbit-violet:after{left:auto;right:10%;top:auto;bottom:7%;background:#d5baff;box-shadow:0 0 10px #ac91f3}
+.entry-portals{position:absolute;inset:20% 8% 13%}
+.entry-portal{position:absolute;inset:0;border:1px solid #9debf5b0;border-radius:35%;opacity:0;transform:scale(var(--entry-portal-start));background:linear-gradient(110deg,#80e6f204,#ac91f304);box-shadow:0 0 14px #80e6f220,inset 0 0 15px #ac91f30d}
+.entry-portal:nth-child(1){--entry-portal-start:.18;--entry-portal-end:1.15;--entry-portal-strength:.94}
+.entry-portal:nth-child(2){--entry-portal-start:.29;--entry-portal-end:1.45;--entry-portal-strength:.82}
+.entry-portal:nth-child(3){--entry-portal-start:.42;--entry-portal-end:1.8;--entry-portal-strength:.7}
+.entry-portal:nth-child(4){--entry-portal-start:.57;--entry-portal-end:2.15;--entry-portal-strength:.58}
+.entry-portal:nth-child(5){--entry-portal-start:.72;--entry-portal-end:2.6;--entry-portal-strength:.46}
+.entry-portal:nth-child(2n){border-color:#b99bf5bf;box-shadow:0 0 15px #ac91f325,inset 0 0 14px #80e6f20a}
+.entry-rays{position:absolute;inset:0;width:100%;height:100%;stroke:#9edcf0;stroke-width:.22;opacity:0}
+body[data-entry-active="true"][data-entry-motion="full"]:not([data-renderer="active"]) .projection-entry-illustration{display:block}
+body[data-renderer="active"] #projection-entry-illustration,body[data-entry-motion="reduced"] #projection-entry-illustration{display:none!important}
+
+/* The active view gets a small brain/orbit accent above its surface and crisp
+   exterior trim. The accent clips its glow to its own box. Corners and rails
+   deliberately have no blur or shadow that could spill into provider pixels. */
+.scene-heading,body[data-renderer="active"] .scene-heading{position:relative;padding-left:46px}
+.entry-scene-accent{position:absolute;left:0;top:50%;width:40px;height:40px;display:grid;place-items:center;transform:translateY(-50%);overflow:hidden;contain:paint;pointer-events:none;opacity:0;--entry-rest-opacity:.52;border-radius:50%;background:radial-gradient(ellipse,#b28be51a,transparent 72%)}
+.entry-accent-brain{position:relative;width:29px;height:29px;stroke:url(#projection-entry-spectrum);stroke-width:.85;filter:drop-shadow(0 0 4px #80e6f270)}
+.entry-accent-orbit{position:absolute;left:1px;top:13px;width:38px;height:15px;border:1px solid #80e6f282;border-radius:50%;transform:rotate(-15deg)}
+.entry-scene-corner,.entry-scene-rail{position:absolute;z-index:6;pointer-events:none;opacity:0;overflow:hidden;contain:paint}
+.entry-scene-corner{width:24px;height:24px;border-style:solid;border-color:#a8eaf0;border-width:0;--entry-rest-opacity:.35}
+.entry-corner-top-left{left:2px;top:2px;border-top-width:1px;border-left-width:1px;border-top-left-radius:10px}
+.entry-corner-top-right{right:2px;top:2px;border-top-width:1px;border-right-width:1px;border-top-right-radius:10px;border-color:#c3a8f5}
+.entry-corner-bottom-left{left:2px;bottom:2px;border-bottom-width:1px;border-left-width:1px;border-bottom-left-radius:10px;border-color:#c3a8f5}
+.entry-corner-bottom-right{right:2px;bottom:2px;border-bottom-width:1px;border-right-width:1px;border-bottom-right-radius:10px}
+.entry-scene-rail{top:25px;bottom:25px;width:1px;--entry-rest-opacity:.24;background:linear-gradient(transparent,#80e6f2b3 30%,#ac91f3b3 70%,transparent)}
+.entry-rail-left{left:2px}.entry-rail-right{right:2px}
+body[data-entry-active="true"] .scene-stage{border-color:#9abfe578;box-shadow:0 0 0 1px #80e6f211,0 0 34px #9473dc24,0 14px 65px #0005}
+body[data-entry-active="true"][data-entry-state="enter"] .scene-stage{border-color:#b2bcf0a1;box-shadow:0 0 0 1px #80e6f220,0 0 42px #9473dc30,0 14px 65px #0005}
+
+/* One bounded timeline. JS owns start, phase, cancellation and completion;
+   there are no animationend dependencies or perpetual decorative loops. */
+body[data-entry-active="true"][data-entry-motion="full"] .projection-entry-room{animation:projection-entry-room 2000ms ease both}
+body[data-entry-active="true"][data-entry-motion="full"] .entry-room-depth{animation:projection-entry-depth 2000ms cubic-bezier(.2,.65,.3,1) both}
+body[data-entry-active="true"][data-entry-motion="full"] .entry-brain{animation:projection-entry-awaken 2000ms ease both}
+body[data-entry-active="true"][data-entry-motion="full"] .entry-portal{animation:projection-entry-portal 2000ms cubic-bezier(.2,.65,.3,1) both}
+body[data-entry-active="true"][data-entry-motion="full"] .entry-rays{animation:projection-entry-rays 2000ms ease both}
+body[data-entry-active="true"][data-entry-motion="full"] .entry-scene-accent,body[data-entry-active="true"][data-entry-motion="full"] .entry-scene-corner,body[data-entry-active="true"][data-entry-motion="full"] .entry-scene-rail{animation:projection-entry-chrome 2000ms ease both}
+body[data-entry-active="true"][data-entry-motion="full"] .entry-accent-brain{animation:projection-entry-accent 2000ms ease both}
+body[data-entry-active="true"][data-entry-motion="full"]:not([data-renderer="active"]) #world-canvas{animation:projection-entry-world 2000ms ease both}
+body[data-entry-state="complete"] .projection-entry-room,body[data-entry-state="complete"] .entry-scene-accent,body[data-entry-state="complete"] .entry-scene-corner,body[data-entry-state="complete"] .entry-scene-rail{opacity:var(--entry-rest-opacity)}
+@keyframes projection-entry-room{0%{opacity:0}20%{opacity:.76}55%{opacity:.9}100%{opacity:var(--entry-rest-opacity)}}
+@keyframes projection-entry-depth{0%{transform:scale(.86)}30%{transform:scale(.94)}100%{transform:scale(1)}}
+@keyframes projection-entry-awaken{0%{opacity:0;transform:translate(-50%,-50%) scale(.86)}9%{opacity:1;transform:translate(-50%,-50%) scale(1)}25%{opacity:1;transform:translate(-50%,-50%) scale(1.035)}39%,100%{opacity:0;transform:translate(-50%,-50%) scale(.72)}}
+@keyframes projection-entry-portal{0%,17%{opacity:0;transform:scale(var(--entry-portal-start));border-radius:35%}35%{opacity:var(--entry-portal-strength)}70%{opacity:var(--entry-portal-strength);border-radius:22%}100%{opacity:0;transform:scale(var(--entry-portal-end));border-radius:15%}}
+@keyframes projection-entry-rays{0%,20%{opacity:0}38%,60%{opacity:.35}100%{opacity:0}}
+@keyframes projection-entry-chrome{0%{opacity:.12}20%{opacity:.85}50%,70%{opacity:1}100%{opacity:var(--entry-rest-opacity)}}
+@keyframes projection-entry-accent{0%{transform:scale(.84)}24%{transform:scale(1.08)}60%{transform:scale(.95)}100%{transform:scale(1)}}
+@keyframes projection-entry-world{0%,28%{opacity:.18}75%{opacity:.65}100%{opacity:1}}
+
+/* This narrowly overrides the older blanket reduced-motion animation rule.
+   Only opacity changes for 240 ms; scene/provider geometry never moves. */
+body[data-entry-active="true"][data-entry-motion="reduced"] .projection-entry-room,body[data-entry-active="true"][data-entry-motion="reduced"] .entry-scene-accent,body[data-entry-active="true"][data-entry-motion="reduced"] .entry-scene-corner,body[data-entry-active="true"][data-entry-motion="reduced"] .entry-scene-rail{animation:projection-entry-reduced 240ms ease-out both!important}
+@keyframes projection-entry-reduced{0%{opacity:0}45%{opacity:.42}100%{opacity:var(--entry-rest-opacity)}}
+
+@media(max-width:790px){.entry-header-actions{margin-left:auto}.entry-room-wall{width:13%}}
+@media(max-width:560px){.entry-skip-slot{flex-basis:50px;width:50px}.projection-entry-skip{font-size:10px}.scene-heading,body[data-renderer="active"] .scene-heading{padding-left:43px}.entry-scene-accent{width:37px;height:38px}.entry-accent-brain{width:27px;height:27px}.entry-accent-orbit{width:35px;height:14px;top:12px}.entry-brain{width:165px;top:56%}.entry-portals{inset:25% 5% 17%}.entry-room-crown{left:-38%;right:-38%;top:8%;height:68%}.entry-room-floor{left:-24%;right:-24%;bottom:17%;height:22%}}
+@media(max-width:350px){.entry-header-actions{gap:6px}.entry-skip-slot{flex-basis:46px;width:46px}.projection-entry-skip{font-size:9px;padding:7px}.scene-heading,body[data-renderer="active"] .scene-heading{padding-left:39px}.entry-scene-accent{width:34px;height:36px}.entry-accent-brain{width:25px;height:25px}.entry-accent-orbit{width:32px;height:13px;top:12px}.entry-brain{width:150px}}

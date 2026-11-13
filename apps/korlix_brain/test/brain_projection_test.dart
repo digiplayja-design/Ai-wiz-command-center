@@ -101,6 +101,84 @@ void main() {
       expect(f.closes, 0);
     });
 
+    test(
+      'foreground changes preserve voice and an in-flight address search',
+      () async {
+        final pending = Completer<Map<String, dynamic>>();
+        final lookupStarted = Completer<void>();
+        var resolveCalls = 0;
+        final f = Fixture(
+          request: (method, path, body) async {
+            if (path.endsWith('/config')) return config;
+            resolveCalls++;
+            lookupStarted.complete();
+            return pending.future;
+          },
+        );
+        addTearDown(f.projection.dispose);
+        f.projection.open();
+        f.projection.receiveVoice({
+          'type': 'voice',
+          'phase': 'listening',
+          'message': 'Rici is listening',
+        });
+        final lookup = f.projection.search(
+          '21 Oak Street, Example City',
+          fromVoice: true,
+        );
+        await lookupStarted.future;
+        final before = f.projection.snapshot;
+        expect(before['foreground'], true);
+        final foregroundChanges = <bool>[];
+        f.projection.addListener(() {
+          foregroundChanges.add(f.projection.snapshot['foreground'] as bool);
+        });
+
+        for (final active in [false, false, true, true]) {
+          f.projection.receiveVoice({'type': 'appLifecycle', 'active': active});
+          final current = f.projection.snapshot;
+          expect(current['foreground'], active);
+          for (final key in ['voice', 'destinationSearch', 'loading', 'camera']) {
+            expect(current[key], before[key], reason: key);
+          }
+        }
+        expect(foregroundChanges, [false, true]);
+        expect(resolveCalls, 1);
+        expect(f.projection.isOpen, true);
+        expect(f.opens, 1);
+        expect(f.closes, 0);
+        expect(f.starts, 0);
+        expect(f.stops, 0);
+
+        pending.complete({
+          'candidates': [place],
+        });
+        expect((await lookup)['ok'], true);
+        expect(f.projection.snapshot['candidates'], hasLength(1));
+        expect(
+          (f.projection.snapshot['destinationSearch'] as Map)['active'],
+          false,
+        );
+        expect(f.projection.snapshot['voice'], before['voice']);
+
+        // Backgrounding still stops continuous camera motion without stopping
+        // the shared conversation or creating another lifecycle notification.
+        f.projection.select('place-test');
+        await f.projection.dispatch('rendererReady', {});
+        f.projection.camera('zoomInContinuous');
+        foregroundChanges.clear();
+        f.projection.receiveVoice({'type': 'appLifecycle', 'active': false});
+        f.projection.receiveVoice({'type': 'appLifecycle', 'active': false});
+        expect(foregroundChanges, [false]);
+        expect(
+          (f.projection.snapshot['camera'] as Map)['operation'],
+          'stopCamera',
+        );
+        expect(f.projection.snapshot['voice'], before['voice']);
+        expect(f.stops, 0);
+      },
+    );
+
     test('renderer must be the exact first-party HTTPS document', () {
       final f = Fixture();
       addTearDown(f.projection.dispose);

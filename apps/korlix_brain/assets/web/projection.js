@@ -12,6 +12,7 @@
   const isLocalLiveQuestion = question => /\b(live|real[ -]?time)\b.*\b(view|camera|feed|video|imagery)\b/i.test(question);
   const phases = new Set(['complete', 'connecting', 'listening', 'thinking', 'speaking', 'pausing', 'paused', 'stopping', 'error']);
   const terminalVoicePhases = new Set(['complete','error']);
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const requests = new Map();
   const transcripts = [];
   const busy = {search:false, select:false, ask:false, save:false, directions:false, close:false};
@@ -21,15 +22,64 @@
   let rendererTimer = null, canvasInvalidated = true;
   let localNotice = '', localNoticeKind = '', lastSavedPlace = '', pendingQuestionLocal = false;
   let lastSearchSequence = 0, revealedVoiceSearchSequence = 0;
+  let entranceNonce = '', entranceEpoch = 0, entranceRunning = false;
+  let entranceTimers = [];
 
   const emptyState = () => ({
-    open:true, room:'command', loading:false, selectedPlace:null, candidates:[], answer:null,
+    open:true, foreground:true, room:'command', loading:false, selectedPlace:null, candidates:[], answer:null,
     notice:'', camera:{sequence:0, operation:'reset', viewMode:'street'}, lastVoiceCommand:null,
     destinationSearch:{sequence:0, query:'', active:false, source:'typed'},
     config:{rendererUrl:null, mapAvailable:false, geocodingAvailable:false, directionsAvailable:false, answersAvailable:false, checking:false, checkFailed:false, answerCredits:0, answerCostLabel:''},
     voice:{active:false, paused:false, phase:'complete', message:''}
   });
   let state = emptyState();
+
+  // The entrance decorates this room; it never owns provider or voice readiness.
+  // A fresh native screen nonce is the only start signal. Native snapshots and
+  // address/voice updates cannot restart or extend this bounded presentation.
+  function finishEntrance() {
+    entranceEpoch++;
+    entranceTimers.forEach(timer => clearTimeout(timer)); entranceTimers = [];
+    entranceRunning = false;
+    document.body.dataset.entryActive = 'false';
+    document.body.dataset.entryState = 'complete';
+    const skip = $('projection-entry-skip');
+    // A temporary Skip control must not strand keyboard focus when it leaves.
+    // Inputs, voice controls and all other focus targets are never changed.
+    if (document.activeElement === skip && state.open && state.foreground && !document.hidden) {
+      $('projection-heading').focus({preventScroll:true});
+    }
+    skip.hidden = true;
+  }
+
+  function startEntrance(openingNonce) {
+    if (entranceNonce === openingNonce) return;
+    finishEntrance(); entranceNonce = openingNonce;
+    if (!state.open || !state.foreground || document.hidden) return;
+    const epoch = entranceEpoch;
+    const reduced = reducedMotion.matches;
+    // Commit the finished decorative styles before a renewed nonce starts.
+    // This restarts CSS timelines even for a rapid close/reopen in one frame.
+    void $('projection-heading').offsetHeight;
+    entranceRunning = true;
+    document.body.dataset.entryMotion = reduced ? 'reduced' : 'full';
+    document.body.dataset.entryState = reduced ? 'arrive' : 'awaken';
+    document.body.dataset.entryActive = 'true';
+    $('projection-entry-skip').hidden = reduced;
+    const schedule = (delay, action) => {
+      entranceTimers.push(setTimeout(() => {
+        if (epoch !== entranceEpoch || !entranceRunning) return;
+        action();
+      }, delay));
+    };
+    if (!reduced) {
+      schedule(500, () => { document.body.dataset.entryState = 'enter'; });
+      schedule(1500, () => { document.body.dataset.entryState = 'arrive'; });
+    }
+    // CSS animations can be suppressed by accessibility settings or interrupted
+    // by WebView disposal. Cleanup deliberately does not await animationend.
+    schedule(reduced ? 240 : 2000, finishEntrance);
+  }
 
   function safeUrl(value) {
     try {
@@ -68,6 +118,7 @@
     const base = emptyState();
     if (!isObject(raw)) return base;
     base.open = raw.open !== false;
+    base.foreground = raw.foreground !== false;
     base.room = raw.room === 'discovery' ? 'discovery' : 'command';
     base.loading = raw.loading === true;
     base.selectedPlace = placeValue(raw.selectedPlace);
@@ -474,6 +525,7 @@
   });
 
   function render() {
+    if (entranceRunning && (!state.open || !state.foreground)) finishEntrance();
     $('connection-label').textContent = connected ? 'Your KORLIX workspace' : 'Preview · open inside KORLIX';
     $('close-projection').disabled = busy.close;
     renderRoom(); renderPlace(); renderCandidates(); renderAnswer(); renderSearch(); renderVoice(); renderVoiceCommand(); renderNotice(); syncRenderer();
@@ -481,7 +533,9 @@
 
   window.KorlixProjectionConnect = connection => {
     if (!isObject(connection) || !clip(connection.nonce,512)) return;
-    if (nonce && nonce !== connection.nonce) {
+    const nextNonce = clip(connection.nonce,512);
+    if (nonce && nonce !== nextNonce) {
+      finishEntrance();
       voiceEpoch++; voiceAction = '';
       searchEpoch++; busy.search = false;
       lastSearchSequence = 0; revealedVoiceSearchSequence = 0;
@@ -489,10 +543,11 @@
       requests.forEach(request => { clearTimeout(request.timer); request.reject(new Error('The projection connection was renewed. Please try again.')); });
       requests.clear(); disposeFrame();
     }
-    nonce = clip(connection.nonce,512); connected = true;
+    nonce = nextNonce; connected = true;
     state = normalize(connection.snapshot); localNotice = ''; localNoticeKind = '';
     syncTranscripts(connection.snapshot);
     syncVoiceGuards(); render();
+    startEntrance(nonce);
   };
 
   window.KorlixProjectionReceive = message => {
@@ -535,10 +590,15 @@
 
   $('close-projection').addEventListener('click',async () => {
     if (busy.close) return;
+    finishEntrance();
     busy.close = true; $('close-projection').disabled = true;
     try { await send('close'); }
     catch (error) { fail(error); }
     finally { busy.close = false; $('close-projection').disabled = false; }
+  });
+
+  $('projection-entry-skip').addEventListener('click',() => {
+    finishEntrance();
   });
 
   $('search-form').addEventListener('submit',async event => {
@@ -628,7 +688,6 @@
   // as geocoded locations, satellite imagery, street view, or a live feed.
   const canvas = $('world-canvas');
   const ctx = canvas.getContext('2d');
-  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   let canvasWidth = 0, canvasHeight = 0, lastDraw = 0;
   const stars = Array.from({length:95},(_,i) => ({x:((i * 197 + 19) % 997) / 997,y:((i * 131 + 89) % 991) / 991,r:i % 5 === 0 ? 1 : .55}));
   const lands = [
@@ -699,7 +758,15 @@
   }
   new ResizeObserver(resizeCanvas).observe($('scene-stage'));
   new ResizeObserver(measureVoiceDock).observe(document.querySelector('.voice-dock'));
-  reducedMotion.addEventListener('change',() => { canvasInvalidated=true; });
-  document.addEventListener('visibilitychange',() => { canvasInvalidated=true; });
-  render(); resizeCanvas(); requestAnimationFrame(animate);
+  reducedMotion.addEventListener('change',() => {
+    canvasInvalidated=true;
+    if (entranceRunning) finishEntrance();
+    document.body.dataset.entryMotion = reducedMotion.matches ? 'reduced' : 'full';
+  });
+  document.addEventListener('visibilitychange',() => {
+    canvasInvalidated=true;
+    if (document.hidden) finishEntrance();
+  });
+  window.addEventListener('pagehide',finishEntrance);
+  finishEntrance(); render(); resizeCanvas(); requestAnimationFrame(animate);
 })();

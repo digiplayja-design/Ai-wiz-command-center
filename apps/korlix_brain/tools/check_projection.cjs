@@ -5,8 +5,8 @@ const {chromium} = require(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const app = path.resolve(__dirname,'..');
 const screenDirectory = process.env.PROJECTION_SCREENSHOTS;
 
-async function fixture(page) {
-  await page.addInitScript(() => {
+async function fixture(page,{connect=true}={}) {
+  await page.addInitScript(({connect}) => {
     // Playwright also evaluates init scripts in child frames. Only the bundled
     // top-level shell receives the native workspace fixture and session nonce.
     if(window !== window.top)return;
@@ -24,7 +24,7 @@ async function fixture(page) {
     window.testHoldStop = false;
     window.testGeocodingProvider = 'Test geocoder';
     window.projectionState = {
-      open:true,room:'command',loading:false,selectedPlace:null,candidates:[],answer:null,notice:'',
+      open:true,foreground:true,room:'command',loading:false,selectedPlace:null,candidates:[],answer:null,notice:'',
       camera:{sequence:0,operation:'reset',viewMode:'street'},
       config:{rendererUrl:null,mapAvailable:false,geocodingAvailable:true,directionsAvailable:true,answersAvailable:true,answerCredits:4,answerCostLabel:'4 credits per successful sourced lookup.'},
       voice:{active:false,paused:false,phase:'complete',message:'Ready when you are'}
@@ -88,15 +88,278 @@ async function fixture(page) {
       }
     }};
     document.addEventListener('DOMContentLoaded',()=>{
-      window.KorlixProjectionConnect({nonce:'test-session-nonce-123456789',snapshot:window.projectionState});
+      if(connect)window.KorlixProjectionConnect({nonce:'test-session-nonce-123456789',snapshot:window.projectionState});
     });
-  });
+  },{connect});
   await page.goto('file://' + path.join(app,'assets/web/projection.html'));
-  await page.waitForFunction(()=>document.querySelector('#connection-label').textContent==='Your KORLIX workspace');
+  if(connect)await page.waitForFunction(()=>document.querySelector('#connection-label').textContent==='Your KORLIX workspace');
 }
 
 async function settleLayout(page) {
   await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+}
+
+async function routeProjectionRenderer(page) {
+  await page.route('https://projection.test/brain-projection/earth.html',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:`<!doctype html><html><head><meta charset="utf-8"><style>
+    html,body{height:100%;margin:0;overflow:hidden;background:#142135;color:white;font:11px/1.5 system-ui}
+    body{background:linear-gradient(140deg,#1b3245,#0c1729)}
+    .provider-label{position:absolute;top:8px;left:8px;padding:6px;background:#031019}
+    .provider-controls{position:absolute;top:8px;right:8px;display:flex;gap:4px}
+    .provider-controls button{color:white;background:#273d50;border:1px solid #7191a3;padding:5px}
+    #provider-attribution{position:absolute;left:0;right:0;bottom:0;padding:8px;background:#030b13;overflow-wrap:anywhere}a{color:#b3e1ff}
+    </style></head><body><span class="provider-label">Provider surface fixture</span><div class="provider-controls"><button>Map control</button></div><div id="provider-attribution">Google Maps · Synthetic imagery supplied by Example City Survey Office; Example Regional Mapping Group; Example Geospatial Imagery Cooperative; Example Municipal Cartography Archive. Attribution fixture only; no real imagery is requested. <a id="provider-terms" href="https://provider-links.test/terms" target="_blank">Provider link fixture</a></div><script>
+    window.received=[];window.addEventListener('message',e=>window.received.push(e.data));
+    window.emitTransport=()=>parent.postMessage({type:'korlix-projection-transport-ready'},'*');
+    window.emitStatus=(status,extra={})=>{document.body.dataset.phase=status;const camera=window.received.at(-1)?.camera;parent.postMessage({type:'korlix-projection-status',status,...(camera?{sequence:camera.sequence,viewMode:camera.viewMode}:{}),...extra},'*');};
+    window.emitCreditHeight=height=>parent.postMessage({type:'korlix-projection-credits',height},'*');
+    window.emitStatus('loading');
+    </script></body></html>`}));
+}
+
+async function connectEntry(page,nonce,patch={}) {
+  await page.evaluate(({nonce,patch})=>{
+    Object.assign(window.projectionState,patch);
+    window.KorlixProjectionConnect({nonce,snapshot:window.projectionState});
+  },{nonce,patch});
+}
+
+async function assertEntryState(page,phase,active,motion='full') {
+  assert.deepEqual(await page.evaluate(()=>({
+    phase:document.body.dataset.entryState,active:document.body.dataset.entryActive,
+    motion:document.body.dataset.entryMotion,skip:!document.getElementById('projection-entry-skip').hidden
+  })),{phase,active:String(active),motion,skip:active&&motion==='full'});
+}
+
+async function entryControlPoint(page,selector) {
+  const point=await page.locator(selector).evaluate(element=>{
+    const box=element.getBoundingClientRect(),x=box.x+box.width/2,y=box.y+box.height/2;
+    const hit=document.elementFromPoint(x,y);
+    return {x,y,visible:box.width>0&&box.height>0&&box.top>=0&&box.bottom<=innerHeight,
+      hittable:hit===element||element.contains(hit),disabled:element.disabled===true};
+  });
+  assert.ok(point.visible&&point.hittable&&!point.disabled,'Entrance leaves control usable: '+selector+' '+JSON.stringify(point));
+  return {x:point.x,y:point.y};
+}
+
+async function assertEntryLifecycle(browser,errors) {
+  const page=await browser.newPage({viewport:{width:390,height:844},reducedMotion:'no-preference'});
+  page.on('pageerror',error=>errors.push(error.message));
+  // Only lifecycle assertions use a controlled clock. Visual evidence below
+  // uses real time because CSS animation timelines are independent of this clock.
+  await page.clock.install({time:new Date('2026-11-13T00:00:00Z')});
+  await fixture(page,{connect:false});
+  await page.clock.pauseAt(new Date('2026-11-13T00:01:00Z'));
+  assert.equal(await page.locator('body').getAttribute('data-entry-active'),'false','No entrance before the native bridge connects');
+  assert.equal(await page.locator('#projection-entry-skip').isVisible(),false);
+  await connectEntry(page,'');
+  assert.equal(await page.locator('body').getAttribute('data-entry-active'),'false','An invalid connection cannot start the entrance');
+  await connectEntry(page,'entry-first-session');
+  let elapsed=0;
+  const advanceTo=async target=>{await page.clock.runFor(target-elapsed);elapsed=target;};
+  await assertEntryState(page,'awaken',true);
+  assert.equal(await page.evaluate(()=>window.projectionCommands.length),0,'Entrance does not start voice or issue camera commands');
+  await advanceTo(32);
+  await entryControlPoint(page,'#close-projection');
+  const start=await entryControlPoint(page,'#talk-button');
+  await page.mouse.click(start.x,start.y);
+  assert.equal(await page.evaluate(()=>window.projectionCommands.at(-1).action),'startVoice','Voice starts before arrival');
+  await advanceTo(33);
+  await entryControlPoint(page,'#stop-button');
+
+  const query='21 Oak Street, Apt 4B, Example City';
+  await page.evaluate(query=>{
+    const state=window.projectionState;
+    state.destinationSearch={sequence:1,query,active:true,source:'voice'};
+    window.sendSnapshot();
+  },query);
+  assert.equal(await page.locator('#destination-input').inputValue(),query);
+  assert.equal(await page.locator('#search-button span').textContent(),'Finding…');
+  assert.equal(await page.evaluate(()=>window.projectionCommands.some(command=>command.action==='search')),false,'Entrance does not duplicate the native voice search');
+  await page.evaluate(query=>{
+    const state=window.projectionState;
+    state.destinationSearch.active=false;
+    state.candidates=[{id:'entry-place',label:'Spoken entrance match',address:query,userQuery:query,latitude:40.71,longitude:-74,provider:'Test'}];
+    window.sendSnapshot();
+  },query);
+  await advanceTo(65);
+  assert.notEqual(await page.evaluate(()=>document.activeElement?.id),'destination-input','Voice results do not open the keyboard');
+  const candidate=await entryControlPoint(page,'.candidate-button');
+  assert.equal(await page.evaluate(()=>window.projectionCommands.some(command=>command.action==='select')),false,'Destination still requires confirmation');
+  await page.mouse.click(candidate.x,candidate.y);
+  await advanceTo(66);
+  assert.equal(await page.locator('#place-label').textContent(),'Spoken entrance match');
+  await page.evaluate(()=>{
+    window.projectionState.destinationSearch={sequence:2,query:'32 Pine Avenue, Example City',active:true,source:'voice'};
+    window.sendSnapshot();
+  });
+  assert.equal(await page.locator('#destination-input').inputValue(),'32 Pine Avenue, Example City','Next address arrives without replaying the entrance');
+  const stop=await entryControlPoint(page,'#stop-button');
+  await page.mouse.click(stop.x,stop.y);
+  assert.equal(await page.evaluate(()=>window.projectionCommands.at(-1).action),'stopVoice','Stop dispatches during Awaken');
+  await advanceTo(67);
+  await assertEntryState(page,'awaken',true);
+  await advanceTo(499);
+  await assertEntryState(page,'awaken',true);
+  await advanceTo(500);
+  await assertEntryState(page,'enter',true);
+  await connectEntry(page,'entry-first-session');
+  await page.evaluate(()=>{
+    window.projectionState.room='discovery';window.sendSnapshot();
+    window.KorlixProjectionReceive({type:'voice',active:false,phase:'complete',message:'Microphone off'});
+    window.KorlixProjectionReceive({type:'transcript',role:'user',text:'A continuing conversation'});
+  });
+  await page.locator('#destination-input').focus();
+  await advanceTo(1499);
+  await assertEntryState(page,'enter',true);
+  await advanceTo(1500);
+  await assertEntryState(page,'arrive',true);
+  await advanceTo(2000);
+  await assertEntryState(page,'complete',false);
+  assert.equal(await page.evaluate(()=>document.activeElement?.id),'destination-input','Automatic arrival preserves input focus');
+  await connectEntry(page,'entry-first-session');
+  await assertEntryState(page,'complete',false);
+
+  await page.evaluate(()=>document.querySelector('.projection-shell').scrollTop=0);
+  await connectEntry(page,'entry-close-session');
+  await page.clock.runFor(600);
+  const close=await entryControlPoint(page,'#close-projection');
+  await page.mouse.click(close.x,close.y);
+  await assertEntryState(page,'complete',false);
+  assert.equal(await page.evaluate(()=>window.projectionCommands.at(-1).action),'close','Close does not await arrival or its reply');
+  assert.equal(await page.evaluate(()=>window.projectionCommands.filter(command=>command.action==='stopVoice').length),1,'Closing never stops the shared conversation');
+  await page.clock.runFor(200);
+  await connectEntry(page,'entry-reopened-session');
+  await page.clock.runFor(700);
+  await assertEntryState(page,'enter',true);
+  await page.clock.runFor(500);
+  await assertEntryState(page,'enter',true,'full');
+  await page.clock.runFor(300);
+  await assertEntryState(page,'arrive',true);
+  await page.clock.runFor(500);
+  await assertEntryState(page,'complete',false);
+
+  await connectEntry(page,'entry-typed-search',{
+    selectedPlace:null,candidates:[],destinationSearch:{sequence:0,query:'',active:false,source:'typed'}
+  });
+  await page.locator('#destination-input').fill('10 Downing Street, London');
+  await page.locator('#search-form').evaluate(form=>form.scrollIntoView({block:'center'}));
+  await page.clock.runFor(32);
+  const searchButton=await entryControlPoint(page,'#search-button');
+  await page.mouse.click(searchButton.x,searchButton.y);
+  assert.equal(await page.evaluate(()=>window.projectionCommands.filter(command=>command.action==='search').at(-1)?.payload.query),'10 Downing Street, London','Typed search dispatches during the entrance');
+  await page.clock.runFor(1);
+  assert.equal(await page.locator('.candidate-button').count(),2);
+  await assertEntryState(page,'awaken',true);
+
+  for(const reason of ['foreground','closed','visibility','pagehide']) {
+    const nonce='entry-cancel-'+reason;
+    await connectEntry(page,nonce,{foreground:true,open:true});
+    await page.evaluate(reason=>{
+      if(reason==='foreground'||reason==='closed') {
+        window.projectionState[reason==='foreground'?'foreground':'open']=false;window.sendSnapshot();
+      } else if(reason==='visibility') {
+        Object.defineProperty(document,'hidden',{configurable:true,value:true});
+        document.dispatchEvent(new Event('visibilitychange'));
+      } else window.dispatchEvent(new Event('pagehide'));
+    },reason);
+    await assertEntryState(page,'complete',false);
+    await page.evaluate(()=>{delete document.hidden;document.dispatchEvent(new Event('visibilitychange'));});
+    await connectEntry(page,nonce,{foreground:true,open:true});
+    await page.clock.runFor(2100);
+    await assertEntryState(page,'complete',false);
+  }
+  await connectEntry(page,'entry-keyboard-completion');
+  await page.locator('#projection-entry-skip').focus();
+  await page.clock.runFor(2000);
+  await assertEntryState(page,'complete',false);
+  assert.equal(await page.evaluate(()=>document.activeElement?.id),'projection-heading','Natural completion does not leave keyboard focus on hidden Skip');
+  await connectEntry(page,'entry-skip-session');
+  await page.locator('#projection-entry-skip').focus();
+  const skip=await entryControlPoint(page,'#projection-entry-skip');
+  await page.mouse.click(skip.x,skip.y);
+  await assertEntryState(page,'complete',false);
+  assert.equal(await page.evaluate(()=>document.activeElement?.id),'projection-heading','Skip returns its own focus to the Projection heading');
+
+  await connectEntry(page,'entry-preference-change');
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await page.clock.runFor(32);
+  await assertEntryState(page,'complete',false,'reduced');
+  await connectEntry(page,'entry-reduced-session');
+  await assertEntryState(page,'arrive',true,'reduced');
+  assert.equal(await page.locator('#projection-entry-illustration').evaluate(element=>getComputedStyle(element).display),'none','Reduced motion has no portal geometry');
+  const reducedProperties=await page.evaluate(()=>document.getAnimations().filter(animation=>{
+    const target=animation.effect?.target;
+    return target instanceof Element&&target.closest('#projection-entry-room,#projection-entry-illustration,.entry-scene-accent,.entry-scene-corner,.entry-scene-rail');
+  }).flatMap(animation=>animation.effect.getKeyframes().flatMap(frame=>Object.keys(frame).filter(key=>!['offset','computedOffset','easing','composite'].includes(key)))));
+  assert.ok(reducedProperties.every(property=>property==='opacity'),'Reduced entrance effects only change opacity: '+JSON.stringify(reducedProperties));
+  await page.locator('#destination-input').focus();
+  await page.clock.runFor(239);
+  await assertEntryState(page,'arrive',true,'reduced');
+  await page.clock.runFor(1);
+  await assertEntryState(page,'complete',false,'reduced');
+  assert.equal(await page.evaluate(()=>document.activeElement?.id),'destination-input');
+  await connectEntry(page,'entry-return-to-full');
+  await page.emulateMedia({reducedMotion:'no-preference'});
+  await page.clock.runFor(32);
+  await assertEntryState(page,'complete',false);
+  await connectEntry(page,'entry-return-to-full');
+  await assertEntryState(page,'complete',false);
+  await page.close();
+}
+
+async function assertEntryVisualStages(browser,errors,width,height) {
+  const page=await browser.newPage({viewport:{width,height},reducedMotion:'no-preference'});
+  page.on('pageerror',error=>errors.push(error.message));
+  await fixture(page,{connect:false});
+  assert.equal(await page.locator('#projection-entry-illustration .entry-portal').count(),5,'The entrance retains five decorative portals');
+  for(const selector of ['#projection-entry-room','#projection-entry-illustration']) {
+    assert.equal(await page.locator(selector).getAttribute('aria-hidden'),'true','Entrance artwork is decorative');
+  }
+  const startedAt=await page.evaluate(()=>performance.now());
+  await connectEntry(page,'entry-visual-'+width);
+  const captures=[];
+  for(const phase of ['awaken','enter','arrive']) {
+    await page.waitForFunction(phase=>document.body.dataset.entryState===phase,phase,{timeout:3000,polling:10});
+    const before=await page.evaluate(()=>({phase:document.body.dataset.entryState,at:performance.now()}));
+    if(screenDirectory) {
+      fs.mkdirSync(screenDirectory,{recursive:true});
+      await page.screenshot({path:path.join(screenDirectory,`projection-entrance-${phase}-${width}.png`),animations:'allow'});
+    }
+    const after=await page.evaluate(()=>({phase:document.body.dataset.entryState,at:performance.now()}));
+    captures.push({phase,before,after});
+    assert.equal(before.phase,phase);
+    assert.equal(after.phase,phase,'The real-time '+phase+' capture completed within that stage at '+width);
+  }
+  await page.waitForFunction(()=>document.body.dataset.entryState==='complete',{},{timeout:3000,polling:10});
+  if(screenDirectory)fs.writeFileSync(path.join(screenDirectory,`projection-entrance-timing-${width}.json`),JSON.stringify({clock:'real',startedAt,captures},null,2));
+  await assertEntryState(page,'complete',false);
+
+  await routeProjectionRenderer(page);
+  await connectEntry(page,'entry-provider-'+width,{
+    selectedPlace:{id:'entry-provider',label:'Entrance provider fixture',address:'Synthetic attribution test',latitude:40.71,longitude:-74,provider:'Test'},
+    camera:{sequence:1,operation:'flyTo',viewMode:'street',latitude:40.71,longitude:-74,height:650,heading:0,pitch:-45},
+    config:{rendererUrl:'https://projection.test/brain-projection/earth.html',mapAvailable:true,geocodingAvailable:true,directionsAvailable:true,answersAvailable:true},
+    voice:{active:true,phase:'listening',message:'Rici is listening'}
+  });
+  await page.locator('#map-container iframe').waitFor();
+  const renderer=await (await page.locator('#map-container iframe').elementHandle()).contentFrame();
+  await renderer.waitForFunction(()=>typeof window.emitTransport==='function');
+  await settleRendererLayout(page,renderer,'entry-loading-'+width);
+  await alignRendererInViewport(page);
+  assert.equal(await page.locator('body').getAttribute('data-entry-active'),'true','Provider loads during the full entrance at '+width);
+  assert.equal(await page.locator('#projection-entry-illustration').evaluate(element=>getComputedStyle(element).display),'none','Loading provider immediately hides the illustrative portal overlay');
+  await assertClearRendererSurface(page,'entry-loading-'+width,{activeVoice:true});
+  await renderer.evaluate(()=>window.emitTransport());
+  await renderer.waitForFunction(()=>window.received.length===1);
+  assert.equal(await renderer.evaluate(()=>window.received[0].camera.operation),'flyTo','Camera reaches the provider before arrival');
+  assert.equal(await page.locator('body').getAttribute('data-entry-active'),'true');
+  await renderer.evaluate(()=>window.emitStatus('ready'));
+  await page.waitForFunction(()=>document.body.dataset.map==='ready');
+  await assertClearRendererSurface(page,'entry-ready-'+width,{activeVoice:true});
+  assert.equal(await page.evaluate(()=>window.projectionCommands.some(command=>['startVoice','resumeVoice','stopVoice','camera'].includes(command.action))),false,'Entrance preserves the active voice session and native camera intent');
+  await page.waitForFunction(()=>document.body.dataset.entryState==='complete',{},{timeout:3000,polling:10});
+  await assertClearRendererSurface(page,'entry-finished-'+width,{activeVoice:true,capture:true});
+  await page.close();
 }
 
 async function assertSpokenAddressFeedback(browser, errors, width, height) {
@@ -226,17 +489,27 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
     const frame=document.querySelector('#map-container iframe'),stage=document.getElementById('scene-stage');
     const shell=document.querySelector('.projection-shell'),dock=document.querySelector('.voice-dock'),stop=document.getElementById('stop-button');
     const rect=frame.getBoundingClientRect(),button=stop.getBoundingClientRect();
-    const selectors=['.scene-topline','.scene-heading','.map-badge','.world-caption','.camera-controls','.place-banner','.room-architecture','.scene-crosshair','#world-canvas','.voice-dock','.view-toolbar','.voice-command-feedback','.voice-command-summary'];
+    const selectors=['.scene-topline','.scene-heading','.map-badge','.world-caption','.camera-controls','.place-banner','.room-architecture','.scene-crosshair','#world-canvas','.voice-dock','.view-toolbar','.voice-command-feedback','.voice-command-summary','#projection-entry-illustration','.entry-scene-accent','.entry-scene-corner','.entry-scene-rail','#projection-entry-skip'];
     const points=[[rect.left+2,rect.top+2],[rect.right-2,rect.top+2],[rect.left+2,rect.bottom-2],[rect.right-2,rect.bottom-2],[rect.left+rect.width/2,rect.top+rect.height/2]];
     return {frame:rect.toJSON(),shell:shell.getBoundingClientRect().toJSON(),dock:dock.getBoundingClientRect().toJSON(),stop:button.toJSON(),
       width:innerWidth,height:innerHeight,phase:document.body.dataset.map,renderer:document.body.dataset.renderer,
       before:getComputedStyle(stage,'::before').content,after:getComputedStyle(stage,'::after').content,
       dockShadow:getComputedStyle(dock).boxShadow,
       riciShadow:getComputedStyle(document.querySelector('.rici-panel')).boxShadow,
-      overlays:Object.fromEntries(selectors.map(selector=>{
-        const element=document.querySelector(selector),style=getComputedStyle(element),box=element.getBoundingClientRect();
-        return [selector,{visible:style.display!=='none'&&style.visibility!=='hidden'&&box.width>0&&box.height>0,rect:box.toJSON()}];
-      })),
+      overlays:Object.fromEntries(selectors.flatMap(selector=>Array.from(document.querySelectorAll(selector),(element,index)=>{
+        const style=getComputedStyle(element),box=element.getBoundingClientRect();
+        return [selector+'['+index+']',{visible:style.display!=='none'&&style.visibility!=='hidden'&&box.width>0&&box.height>0,rect:box.toJSON()}];
+      }))),
+      providerAncestors:Array.from((function*(){for(let element=frame;element;element=element.parentElement)yield element;})(),element=>{
+        const style=getComputedStyle(element);
+        return {tag:element.id||element.className||element.tagName,transform:style.transform,filter:style.filter,perspective:style.perspective,
+          opacity:Number(style.opacity),translate:style.translate,scale:style.scale,rotate:style.rotate};
+      }),
+      entranceBackground:(()=>{
+        const room=document.getElementById('projection-entry-room'),style=getComputedStyle(room);
+        return {sibling:room.parentElement===shell.parentElement,hiddenFromAccessibility:room.getAttribute('aria-hidden')==='true',
+          pointerEvents:style.pointerEvents,zIndex:Number(style.zIndex),shellZIndex:Number(getComputedStyle(shell).zIndex)};
+      })(),
       hits:points.map(([x,y])=>{const hit=document.elementFromPoint(x,y);return {x,y,frame:hit===frame,hit:hit?.id||hit?.className||hit?.tagName};}),
       scrollTop:shell.scrollTop,windowScroll:scrollY,
       stopHittable:document.elementFromPoint(button.x+button.width/2,button.y+button.height/2)?.closest('#stop-button')===stop};
@@ -251,6 +524,17 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
     assert.equal(geometry.after,'none','App vignette cannot cover the iframe at '+label);
     assert.equal(geometry.dockShadow,'none','Voice dock decoration cannot shade the provider surface at '+label);
     assert.equal(geometry.riciShadow,'none','Rici panel decoration cannot shade the provider surface at '+label);
+    for(const ancestor of geometry.providerAncestors) {
+      assert.equal(ancestor.transform,'none','Entrance does not transform provider ancestor '+ancestor.tag+' at '+label);
+      assert.equal(ancestor.filter,'none','Entrance does not filter provider ancestor '+ancestor.tag+' at '+label);
+      assert.equal(ancestor.perspective,'none','Entrance does not add provider perspective at '+label);
+      assert.equal(ancestor.opacity,1,'Entrance does not fade the provider at '+label);
+      for(const property of ['translate','scale','rotate'])assert.equal(ancestor[property],'none','Entrance does not '+property+' provider ancestor '+ancestor.tag+' at '+label);
+    }
+    assert.ok(geometry.entranceBackground.sibling&&geometry.entranceBackground.hiddenFromAccessibility,'Entrance background is a decorative sibling at '+label);
+    assert.equal(geometry.entranceBackground.pointerEvents,'none');
+    assert.ok(Number.isFinite(geometry.entranceBackground.zIndex)&&Number.isFinite(geometry.entranceBackground.shellZIndex)
+      &&geometry.entranceBackground.zIndex<geometry.entranceBackground.shellZIndex,'Entrance background is painted behind the workspace at '+label);
     const frame=geometry.frame;
     for(const [selector,overlay] of Object.entries(geometry.overlays)) {
       if(!overlay.visible)continue;
@@ -278,6 +562,8 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
   const browser = await chromium.launch({headless:true,executablePath:process.env.BROWSER_EXECUTABLE_PATH||undefined,args:['--no-sandbox','--disable-dev-shm-usage']});
   const errors=[];
   try {
+    await assertEntryLifecycle(browser,errors);
+    for(const [width,height] of [[390,844],[768,1024]])await assertEntryVisualStages(browser,errors,width,height);
     for(const [width,height] of [[320,850],[390,844],[768,1024],[1024,768],[1440,1000]]) {
       const page = await browser.newPage({viewport:{width,height},reducedMotion:'reduce'});
       page.on('pageerror',error=>errors.push(error.message));
@@ -544,20 +830,7 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
     page.on('pageerror',error=>errors.push(error.message));
     await page.context().route('https://provider-links.test/terms',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:'<!doctype html><html><head><meta charset="utf-8"></head><body><h1>Provider link fixture</h1><form action="/accepted" method="get"><button type="submit">Continue fixture</button></form></body></html>'}));
     await page.context().route('https://provider-links.test/accepted**',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:'<!doctype html><html><body><h1>Separate provider page accepted</h1></body></html>'}));
-    await page.route('https://projection.test/brain-projection/earth.html',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:`<!doctype html><html><head><meta charset="utf-8"><style>
-      html,body{height:100%;margin:0;overflow:hidden;background:#142135;color:white;font:11px/1.5 system-ui}
-      body{background:linear-gradient(140deg,#1b3245,#0c1729)}
-      .provider-label{position:absolute;top:8px;left:8px;padding:6px;background:#031019}
-      .provider-controls{position:absolute;top:8px;right:8px;display:flex;gap:4px}
-      .provider-controls button{color:white;background:#273d50;border:1px solid #7191a3;padding:5px}
-      #provider-attribution{position:absolute;left:0;right:0;bottom:0;padding:8px;background:#030b13;overflow-wrap:anywhere}a{color:#b3e1ff}
-      </style></head><body><span class="provider-label">Provider surface fixture</span><div class="provider-controls"><button>Map control</button></div><div id="provider-attribution">Google Maps · Synthetic imagery supplied by Example City Survey Office; Example Regional Mapping Group; Example Geospatial Imagery Cooperative; Example Municipal Cartography Archive. Attribution fixture only; no real imagery is requested. <a id="provider-terms" href="https://provider-links.test/terms" target="_blank">Provider link fixture</a></div><script>
-      window.received=[];window.addEventListener('message',e=>window.received.push(e.data));
-      window.emitTransport=()=>parent.postMessage({type:'korlix-projection-transport-ready'},'*');
-      window.emitStatus=(status,extra={})=>{document.body.dataset.phase=status;const camera=window.received.at(-1)?.camera;parent.postMessage({type:'korlix-projection-status',status,...(camera?{sequence:camera.sequence,viewMode:camera.viewMode}:{}),...extra},'*');};
-      window.emitCreditHeight=height=>parent.postMessage({type:'korlix-projection-credits',height},'*');
-      window.emitStatus('loading');
-      </script></body></html>`}));
+    await routeProjectionRenderer(page);
     await fixture(page);
     await page.evaluate(()=>{
       window.projectionState.selectedPlace={id:'renderer-fixture',label:'Camera fixture',address:'Not a real location claim',latitude:40.71,longitude:-74,provider:'Test'};
@@ -757,6 +1030,6 @@ async function assertClearRendererSurface(page,label,{activeVoice=false,capture=
     }
     await page.close();
     assert.deepEqual(errors,[],'No uncaught browser errors');
-    console.log('Projection UI passed: five viewport sizes, both rooms, explicit place confirmation, reviewed userQuery directions with account entitlement, Google address attribution without a map, source safety, cost disclosure, save failure/success, visible idle/error microphone entry without auto-start, compact last-heard/action feedback, separate 44px Pause/Resume/Stop controls, explicit resume, cancellation of pending resume, stale reply protection, close/stop separation, renderer origin isolation, unobstructed provider surfaces while loading/ready and paused, separate provider popups, dock clearance with scroll preservation, and no credential transfer.');
+    console.log('Projection UI passed: bounded one-shot full/reduced entrances, immediate voice and typed/spoken search, rapid close/reopen and lifecycle cleanup, real-time 390/768 stage evidence, clear loading/ready provider surfaces during full motion, five viewport sizes, both rooms, explicit place confirmation, reviewed userQuery directions with account entitlement, Google address attribution without a map, source safety, cost disclosure, save failure/success, visible idle/error microphone entry without auto-start, compact last-heard/action feedback, separate 44px Pause/Resume/Stop controls, explicit resume, cancellation of pending resume, stale reply protection, close/stop separation, renderer origin isolation, unobstructed provider surfaces while loading/ready and paused, separate provider popups, dock clearance with scroll preservation, and no credential transfer.');
   } finally { await browser.close(); }
 })().catch(error=>{console.error(error);process.exitCode=1;});

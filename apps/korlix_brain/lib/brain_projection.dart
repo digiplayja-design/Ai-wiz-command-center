@@ -96,6 +96,7 @@ class BrainProjection extends ChangeNotifier {
   bool get isOpen => _open;
   Map<String, dynamic> get snapshot => {
     'open': _open,
+    'foreground': _foreground,
     'room': _room,
     'loading': _loading,
     'selectedPlace': _place,
@@ -216,11 +217,13 @@ class BrainProjection extends ChangeNotifier {
       }
       _changed();
     } else if (event['type'] == 'appLifecycle') {
-      _foreground = event['active'] == true;
+      final foreground = event['active'] == true;
+      if (_foreground == foreground) return;
+      _foreground = foreground;
       if (!_foreground) {
         _stopCameraIfMoving();
-        _changed();
       }
+      _changed();
     } else if (event['type'] == 'voiceNotice' && event['message'] is String) {
       final message = _boundedText(event['message'], 1000);
       _notice = message;

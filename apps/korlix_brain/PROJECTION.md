@@ -16,6 +16,38 @@ A small **Project virtual reality** shortcut opens the new view. A spoken
 Conversation or Deep Think session. Opening, switching rooms and closing the
 view do not start a new voice session or end the current one.
 
+## Immersive entrance
+
+Each newly opened native Projection screen plays a two-second decorative
+entrance: **Awaken** (0–500 ms), **Enter** (500–1,500 ms), then **Arrive**
+(1,500–2,000 ms). The hollow brain, cyan/violet orbits, five portal layers and
+room lighting carry the approved motion concept into the real workspace.
+The standalone mockup's synthetic property and simulated voice controls are
+not bundled in the app. The current property, loading/error state and actual
+Rici conversation remain authoritative.
+
+The entrance starts once per native screen nonce, after the normal bridge and
+renderer setup. Search, destination confirmation, camera controls and voice
+dispatch remain immediately available. Voice updates, room changes, subsequent
+addresses and repeated same-nonce connection messages do not replay it.
+**Skip entrance** and **Close projection** take effect immediately. The
+temporary Skip control returns keyboard focus to the Projection heading when
+needed; automatic arrival never moves focus away from other controls or an
+address being typed.
+
+The scene's large illustrative portal is hidden as soon as the remote renderer
+is active, including while imagery is loading. Active property views retain
+their complete untransformed rectangle; moving accents stay in surrounding
+room decoration and app-owned trim. The fixed microphone dock and provider
+attribution stay outside the animated layer. Arrival means the room entrance
+has finished, not that imagery or a live feed is available.
+
+Reduced motion uses a 240 ms opacity-only treatment. Timed cleanup is independent
+of CSS animation events. Close, a native `foreground:false` snapshot, page
+visibility loss, page disposal or a motion-preference change completes the
+effect and clears its timers. Foreground return does not replay it. A fresh
+nonce invalidates earlier callbacks before its own entrance begins.
+
 ## Supported flow
 
 1. Open Projection using the home shortcut or an explicit voice command, such as
