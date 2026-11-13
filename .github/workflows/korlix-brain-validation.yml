@@ -150,7 +150,7 @@ jobs:
           print('Verified com.korlix.brain iPhoneOS arm64 release compilation. Signing is handled in Codemagic.')
           PY
   ios-runtime:
-    runs-on: macos-26
+    runs-on: macos-26-intel
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -165,7 +165,7 @@ jobs:
         timeout-minutes: 13
         run: |
           python3 - <<'PY'
-          import json, subprocess
+          import json, os, subprocess
           from pathlib import Path
           artifacts = Path('apps/korlix_brain/runtime-screenshots')
           artifacts.mkdir(parents=True, exist_ok=True)
@@ -202,6 +202,15 @@ jobs:
                   raise SystemExit(f'Simulator prerequisite {name} failed; see captured output and status')
           run_step('xcode-version', ['xcodebuild', '-version'])
           run_step('host-architecture', ['uname', '-m'])
+          host_architecture = (artifacts / 'host-architecture.stdout.log').read_text().strip()
+          host = {'architecture': host_architecture, 'requiredArchitecture': 'x86_64',
+                  'runnerEnvironment': {name: os.environ.get(name) for name in
+                      ['RUNNER_ARCH', 'RUNNER_OS', 'RUNNER_ENVIRONMENT', 'ImageOS', 'ImageVersion']}}
+          (artifacts / 'simulator-host.json').write_text(json.dumps(host, indent=2) + '\n')
+          report['host'] = host
+          status_file.write_text(json.dumps(report, indent=2) + '\n')
+          if host_architecture != 'x86_64':
+              raise SystemExit('Intel fallback requires an observed x86_64 host; refusing simulator setup')
           run_step('host-os', ['sw_vers'])
           run_step('simctl-runtime-help', ['xcrun', 'simctl', 'help', 'runtime'])
           # Apple Xcode 26.4 release notes, issue 170836966, document this
@@ -226,7 +235,9 @@ jobs:
           data = json.loads(simctl('list', '-j'))
           (artifacts / 'simulator-inventory.json').write_text(json.dumps(data, indent=2) + '\n')
           runtimes = {r['identifier']: r for r in data['runtimes']
-                      if r.get('isAvailable') and '.iOS-' in r['identifier']}
+                      if r.get('isAvailable') and '.iOS-' in r['identifier']
+                      and isinstance(r.get('supportedArchitectures'), list)
+                      and 'x86_64' in r['supportedArchitectures']}
           types = {t['identifier']: t for t in data['devicetypes']
                    if t['name'].startswith('iPhone')}
           # Use only runtime/type pairs present in the available device inventory.
@@ -235,7 +246,7 @@ jobs:
                         for device in devices if device.get('isAvailable') and
                         device.get('deviceTypeIdentifier') in types}
           if not candidates:
-              raise SystemExit('No listed available iPhone runtime/device-type pair')
+              raise SystemExit('No listed available iPhone runtime/device-type pair supporting x86_64')
           candidates = sorted(candidates, reverse=True, key=lambda pair: (
               tuple(int(n) for n in re.findall(r'\d+', runtimes[pair[0]]['version'])),
               types[pair[1]]['name']))
@@ -245,6 +256,9 @@ jobs:
           for number, (runtime, device_type) in enumerate([primary, replacement], 1):
               attempt = {'attempt': number, 'runtime': runtime,
                          'runtimeVersion': runtimes[runtime]['version'],
+                         'runtimeBuildVersion': runtimes[runtime]['buildversion'],
+                         'runtimeSupportedArchitectures': runtimes[runtime]['supportedArchitectures'],
+                         'requiredArchitecture': 'x86_64',
                          'deviceType': device_type, 'model': types[device_type]['name'],
                          'ready': False}
               udid = None
