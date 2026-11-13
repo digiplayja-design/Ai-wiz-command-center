@@ -21,3 +21,27 @@ workflows:
           "$CM_BUILD_DIR/.copybox-apple-status-tools/bin/python" scripts/read_copybox_apple_status.py
     artifacts:
       - artifacts/copybox-apple-status.json
+
+  korlix-copybox-reviewer-acceptance:
+    name: KORLIX COPY Box — bounded reviewer API acceptance
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    # Manual only. Uses the existing saved dedicated review account in memory.
+    # One synthetic rewrite, followed by sign-out of only its fresh session.
+    # No secret, account profile, or generated text is logged or exported.
+    scripts:
+      - name: Verify scope, request limits, secret filtering, and cleanup
+        script: |
+          set -euo pipefail
+          python3 -B -m unittest discover -s scripts/tests -p 'test_read_copybox_apple_status.py' -v
+          python3 -B -m unittest discover -s scripts/tests -p 'test_check_copybox_reviewer_acceptance.py' -v
+      - name: Exercise the saved COPY Box reviewer account once
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.copybox-reviewer-acceptance-tools"
+          "$CM_BUILD_DIR/.copybox-reviewer-acceptance-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+          "$CM_BUILD_DIR/.copybox-reviewer-acceptance-tools/bin/python" scripts/check_copybox_reviewer_acceptance.py --run-once
+    artifacts:
+      - artifacts/copybox-reviewer-acceptance.json
