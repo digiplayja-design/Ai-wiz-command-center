@@ -914,3 +914,21 @@ workflows:
             --assign --output artifacts/brain-landscape-testflight-assignment.json
     artifacts:
       - artifacts/brain-landscape-testflight-assignment.json
+
+  korlix-brain-build24-crash-diagnostics:
+    name: KORLIX Brain+Voice — Build 24 crash diagnostics
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    # Manual and read-only. Pinned app and observed build 24; GET requests only.
+    # No upload, tester change, feedback deletion, review or public release.
+    scripts:
+      - name: Read submitted crash feedback for build 24
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.brain-crash-diagnostic-tools"
+          "$CM_BUILD_DIR/.brain-crash-diagnostic-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+          "$CM_BUILD_DIR/.brain-crash-diagnostic-tools/bin/python" scripts/read_brain_build24_crashes.py
+    artifacts:
+      - artifacts/brain-build24-crashes/**
