@@ -16,11 +16,12 @@ const bridge = section('  // The bundled view never receives an access token.', 
 const controls = section('  function stopVoice(){', "  root.querySelectorAll('[data-go]')");
 
 function harness() {
-  const nodes = new Map(), calls = [];
-  const document = {activeElement: null}, selectedMode = {value: 'live'};
+  const nodes = new Map(), calls = [], listeners = new Map();
+  const document = {activeElement: null, body: {}, documentElement: {},
+    addEventListener(type, handler) { listeners.set(type, handler); }}, selectedMode = {value: 'live'};
   const get = id => {
     if (!nodes.has(id)) nodes.set(id, {textContent: '', disabled: false, dataset: {},
-      focus() { document.activeElement = this; }});
+      focus() { document.activeElement = this; listeners.get('focusin')?.({type: 'focusin', target: this}); }});
     return nodes.get(id);
   };
   const context = vm.createContext({
@@ -39,7 +40,8 @@ function harness() {
     return message;
   };
   const reply = (message, data, error) => context.window.KorlixBrainReceive({type: 'reply', id: message.id, data, error});
-  return {...context.voice, emit, pending, reply, get, calls, root: context.root, document, selectedMode};
+  const intent = (type, extra = {}) => listeners.get(type)?.({type, ...extra});
+  return {...context.voice, emit, pending, reply, get, calls, root: context.root, document, selectedMode, intent};
 }
 const flush = () => new Promise(resolve => setImmediate(resolve));
 const status = (h, expected) => {
@@ -121,6 +123,7 @@ const status = (h, expected) => {
   const startsBeforeStop = h.calls.filter(call => call.action === 'startVoice').length;
   h.document.activeElement = h.get('kb-stop-voice');
   h.stopVoice();
+  h.document.activeElement = h.document.body; // Browser blur after Stop disables.
   h.emit('complete', 'Microphone off');
   h.reply(h.pending('stopVoice'), null);
   await flush();
@@ -144,5 +147,24 @@ const status = (h, expected) => {
   await flush();
   assert.equal(h.get('kb-start-voice').hidden, true);
   assert.equal(h.get('kb-active-voice-controls').hidden, false);
+
+  for (const navigation of ['focusin', 'pointerdown', 'keydown']) {
+    const f = harness();
+    f.startVoice(); f.emit('listening', 'Rici is listening');
+    f.reply(f.pending('startVoice'), {active: true});
+    await flush();
+    f.document.activeElement = f.get('kb-stop-voice');
+    f.stopVoice();
+    f.document.activeElement = f.document.body;
+    if (navigation === 'focusin') f.get('kb-return-voice').focus();
+    else f.intent(navigation, navigation === 'keydown' ? {key: 'Tab'} : {target: f.document.body});
+    const chosenFocus = f.document.activeElement;
+    f.emit('complete', 'Microphone off');
+    f.reply(f.pending('stopVoice'), null);
+    await flush();
+    assert.equal(f.document.activeElement, chosenFocus,
+      `Completing Stop must respect the user's intervening ${navigation}`);
+    assert.equal(f.get('kb-start-voice').disabled, false);
+  }
   console.log('Brain voice status regressions passed (shipped JS; no hardware simulation).');
 })().catch(error => {console.error(error); process.exitCode = 1;});

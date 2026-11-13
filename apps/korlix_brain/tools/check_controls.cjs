@@ -389,6 +389,24 @@ async function restartable(page, width, label = 'Start Live Conversation') {
       assert.equal(await page.evaluate(() => window.controlsFixture.calls.filter(c => c.action === 'startVoice').length), startsBefore + 2,
         'Keyboard restart uses the same single native start action');
 
+      // Shutdown may finish after the user has deliberately focused another
+      // control. Keep the restart available without taking that focus back.
+      await page.evaluate(() => window.controlsFixture.hold.stopVoice = true);
+      await page.locator('#cinema-kb-stop-voice').click();
+      await page.locator('#cinema-kb-return-voice').click();
+      assert.equal(await page.evaluate(() => document.activeElement.id), 'cinema-kb-return-voice');
+      await page.evaluate(() => {
+        window.controlsFixture.emit('complete', {paused: false});
+        window.controlsFixture.finish('stopVoice', {active: false, paused: false});
+        window.controlsFixture.hold.stopVoice = false;
+      });
+      await state(page, false, false);
+      await restartable(page, width);
+      assert.equal(await page.evaluate(() => document.activeElement.id), 'cinema-kb-return-voice',
+        'Stop completion never steals focus from another control the user selected');
+      await page.locator('#cinema-kb-start-voice').click();
+      await listening(page);
+
       // Home and other screens must keep an obvious restart without requiring
       // users to rediscover Talk after the fixed active controls disappear.
       await page.locator('section[data-screen="talk"] [data-go="home"]').click();

@@ -804,6 +804,7 @@
   let memorySource='Typed entry',trainingSource='Typed instructions';
   let voiceActive=false, voicePaused=false, voicePausing=false, voiceStopping=false, voiceStarting=false, lastUserTranscript='', ready=false, writing=false;
   let voicePhase='complete';
+  let voiceRestartFocus=null;
   let requestNumber=0, voiceRequestEpoch=0;
   const requests=new Map();
   const transcriptMessages=new Map(), savedMessages=new Map(), transcriptBusy=new Set();
@@ -832,6 +833,21 @@
     get('kb-active-voice-controls').hidden=idle;
     root.dataset.voiceIdle=String(idle);
   }
+  function voiceFocusIntent(event){
+    if(!voiceRestartFocus)return;
+    if(event.type==='keydown'){
+      if(event.key==='Tab'||event.key==='Escape')voiceRestartFocus=null;
+      return;
+    }
+    // Disabling Stop may blur it to the document while native shutdown is
+    // pending. That browser fallback is different from the user choosing a
+    // new control, clicking elsewhere, or leaving with the keyboard.
+    if(event.type==='focusin'&&(event.target===document.body||event.target===document.documentElement))return;
+    if(event.target!==voiceRestartFocus&&!voiceRestartFocus.contains?.(event.target))voiceRestartFocus=null;
+  }
+  document.addEventListener('focusin',voiceFocusIntent);
+  document.addEventListener('pointerdown',voiceFocusIntent,true);
+  document.addEventListener('keydown',voiceFocusIntent,true);
   window.KorlixBrainReceive=message=>{
     if(message.type==='reply'){
       const request=requests.get(message.id);if(!request)return;
@@ -839,6 +855,7 @@
       message.error?request.reject(new Error(message.error)):request.resolve(message.data);
     }else if(message.type==='voice'){
       const focused=document.activeElement;
+      if(['kb-stop-voice','kb-pause-voice','kb-resume-voice'].some(id=>get(id)===focused))voiceRestartFocus=focused;
       if(message.phase!=='complete')stopWelcome();
       if(['complete','error','paused'].includes(message.phase)){voiceStarting=false;voicePausing=false;}
       if(['complete','error'].includes(message.phase))voiceStopping=false;
@@ -866,8 +883,11 @@
       root.dataset.voiceControls='true';
       root.dataset.voiceActive=String(voiceActive);root.dataset.voicePaused=String(voicePaused);
       syncVoiceRestart();
-      if(root.dataset.voiceIdle==='true'&&['kb-stop-voice','kb-pause-voice','kb-resume-voice'].some(id=>get(id)===focused))
-        get('kb-start-voice').focus({preventScroll:true});
+      if(root.dataset.voiceIdle==='true'){
+        const restore=voiceRestartFocus&&(focused===voiceRestartFocus||focused===document.body||focused===document.documentElement);
+        voiceRestartFocus=null;
+        if(restore)get('kb-start-voice').focus({preventScroll:true});
+      }
       refreshMusic();welcomeUi();
     }else if(message.type==='transcript'&&message.text){
       transcriptMessages.set(message.id||'unavailable-'+Date.now(),message);
