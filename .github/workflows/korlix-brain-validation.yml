@@ -165,20 +165,83 @@ jobs:
         run: |
           defaults write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false
           python3 - <<'PY'
-          import json, os, subprocess
-          data = json.loads(subprocess.check_output(['xcrun', 'simctl', 'list', 'devices', 'available', '-j']))
-          candidates = [(runtime, device) for runtime, devices in data['devices'].items()
-                        if '.iOS-' in runtime for device in devices
-                        if device.get('isAvailable') and device['name'].startswith('iPhone')]
+          import json, os, re, subprocess, uuid
+          from pathlib import Path
+          artifacts = Path('apps/korlix_brain/runtime-screenshots')
+          artifacts.mkdir(parents=True, exist_ok=True)
+          def simctl(*args, timeout=60):
+              return subprocess.check_output(['xcrun', 'simctl', *args], text=True,
+                                             stderr=subprocess.STDOUT, timeout=timeout)
+          data = json.loads(simctl('list', '-j'))
+          (artifacts / 'simulator-inventory.json').write_text(json.dumps(data, indent=2) + '\n')
+          runtimes = {r['identifier']: r for r in data['runtimes']
+                      if r.get('isAvailable') and '.iOS-' in r['identifier']}
+          types = {t['identifier']: t for t in data['devicetypes']
+                   if t['name'].startswith('iPhone')}
+          # Use only runtime/type pairs present in the available device inventory.
+          candidates = {(runtime, device['deviceTypeIdentifier'])
+                        for runtime, devices in data['devices'].items() if runtime in runtimes
+                        for device in devices if device.get('isAvailable') and
+                        device.get('deviceTypeIdentifier') in types}
           if not candidates:
-              raise SystemExit('No available iPhone simulator runtime')
-          runtime, device = sorted(candidates, key=lambda item: (item[0], item[1]['name']))[-1]
-          if device['state'] != 'Booted':
-              subprocess.run(['xcrun', 'simctl', 'boot', device['udid']], check=True)
-          subprocess.run(['xcrun', 'simctl', 'bootstatus', device['udid'], '-b'], check=True)
-          with open(os.environ['GITHUB_ENV'], 'a') as output:
-              output.write('BRAIN_SIMULATOR_ID=' + device['udid'] + '\n')
-          print('Native runtime target:', device['name'], runtime, device['udid'])
+              raise SystemExit('No listed available iPhone runtime/device-type pair')
+          candidates = sorted(candidates, reverse=True, key=lambda pair: (
+              tuple(int(n) for n in re.findall(r'\d+', runtimes[pair[0]]['version'])),
+              types[pair[1]]['name']))
+          primary = candidates[0]
+          replacement = next((pair for pair in candidates if pair[0] != primary[0]), primary)
+          attempts = []
+          for number, (runtime, device_type) in enumerate([primary, replacement], 1):
+              attempt = {'attempt': number, 'runtime': runtime,
+                         'runtimeVersion': runtimes[runtime]['version'],
+                         'deviceType': device_type, 'model': types[device_type]['name'],
+                         'ready': False}
+              udid = None
+              try:
+                  name = f"Brain Projection {os.environ['GITHUB_RUN_ID']} attempt {number}"
+                  udid = simctl('create', name, device_type, runtime).strip()
+                  uuid.UUID(udid)
+                  attempt['udid'] = udid
+                  print('Preparing fresh native runtime target:', json.dumps(attempt), flush=True)
+                  simctl('boot', udid)
+                  boot = subprocess.run(['xcrun', 'simctl', 'bootstatus', udid, '-b'],
+                      text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=240)
+                  (artifacts / f'simulator-boot-attempt-{number}.log').write_text(boot.stdout)
+                  print(boot.stdout, flush=True)
+                  attempt['bootstatusExitCode'] = boot.returncode
+                  # CoreSimulator can return exit 0 after terminal Data Migration Failed.
+                  if boot.returncode or re.search(r'\b(?:failed|failure)\b', boot.stdout, re.I):
+                      raise RuntimeError('Simulator bootstatus reported failure; refusing to run native tests')
+                  devices = json.loads(simctl('list', 'devices', '-j'))['devices']
+                  state = next((device.get('state') for group in devices.values()
+                                for device in group if device['udid'] == udid), None)
+                  attempt['observedState'] = state
+                  if state != 'Booted':
+                      raise RuntimeError(f'Simulator readiness ended in state {state!r}')
+                  attempt['ready'] = True
+                  with open(os.environ['GITHUB_ENV'], 'a') as output:
+                      output.write('BRAIN_SIMULATOR_ID=' + udid + '\n')
+                  print('Native runtime target ready:', json.dumps(attempt), flush=True)
+                  break
+              except (subprocess.SubprocessError, ValueError, RuntimeError) as error:
+                  attempt['error'] = str(error)
+                  captured = getattr(error, 'output', None)
+                  if captured:
+                      if isinstance(captured, bytes):
+                          captured = captured.decode(errors='replace')
+                      (artifacts / f'simulator-boot-attempt-{number}.log').write_text(captured)
+                  print('Native simulator preparation failed:', json.dumps(attempt), flush=True)
+              finally:
+                  attempts.append(attempt)
+                  (artifacts / 'simulator-preparation.json').write_text(json.dumps(attempts, indent=2) + '\n')
+              if udid:
+                  for operation in ['shutdown', 'delete']:
+                      try:
+                          simctl(operation, udid, timeout=30)
+                      except subprocess.SubprocessError as error:
+                          print(f'Cleanup of created simulator {udid}: {error}', flush=True)
+          if not attempts[-1]['ready']:
+              raise SystemExit('Native simulator readiness failed on both bounded fresh-device attempts')
           PY
       - name: Exercise native Projection controls and WKWebView together
         working-directory: apps/korlix_brain
@@ -186,7 +249,7 @@ jobs:
           set -euo pipefail
           flutter pub get --enforce-lockfile
           mkdir -p runtime-screenshots
-          flutter drive --no-pub --device-id "$BRAIN_SIMULATOR_ID" \
+          flutter drive --verbose --no-pub --device-id "$BRAIN_SIMULATOR_ID" \
             --driver=test_driver/brain_projection_driver.dart \
             --target=integration_test/brain_projection_runtime_test.dart \
             2>&1 | tee runtime-screenshots/native-runtime.log

@@ -15,7 +15,9 @@ class _Probe extends StatefulWidget {
 
 class _ProbeState extends State<_Probe> {
   @override
-  Widget build(BuildContext context) => const ColoredBox(color: Colors.black);
+  Widget build(BuildContext context) => const SizedBox.expand(
+    child: ColoredBox(color: Colors.black),
+  );
 }
 
 void main() {
