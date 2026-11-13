@@ -1,0 +1,547 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-11-13T12:19:01.267561+00:00",
+  "sourceUpload": {
+    "codemagicBuildId": "6af6fb7b05c8b21ba24ef97d",
+    "workflow": "korlix-brain-ios-testflight",
+    "commit": "4eb5d53e9331b78abf6abe1b8e885fe4d65e7d62",
+    "bundleId": "com.korlix.brain",
+    "version": "1.0.2",
+    "buildNumber": "24"
+  },
+  "sourceTree": "797790cc6bfc9d6f8319d9357cae5c511f59c0fa",
+  "publishingStatus": "uploaded",
+  "appleUploadId": "0435ec43-7c84-4beb-bb6c-76c253be9c6b",
+  "appleBuildId": "0435ec43-7c84-4beb-bb6c-76c253be9c6b",
+  "appleBuildIdBasis": "separately_observed_in_completed_codemagic_app_store_connect_post_processing",
+  "ipa": {
+    "sha256": "8adb5fedb895b0f25523d010303ce595359b233bdb6fdfbe0a2b995fa4eb7b60",
+    "bytes": 34910507,
+    "infoPlist": {
+      "CFBundleIdentifier": "com.korlix.brain",
+      "CFBundleShortVersionString": "1.0.2",
+      "CFBundleVersion": "24",
+      "CFBundleSupportedPlatforms": [
+        "iPhoneOS"
+      ],
+      "MinimumOSVersion": "15.0",
+      "CFBundleExecutable": "Runner",
+      "UIDeviceFamily": [
+        1,
+        2
+      ],
+      "UISupportedInterfaceOrientations": [
+        "UIInterfaceOrientationPortrait",
+        "UIInterfaceOrientationLandscapeLeft",
+        "UIInterfaceOrientationLandscapeRight"
+      ],
+      "UISupportedInterfaceOrientations~ipad": [
+        "UIInterfaceOrientationPortrait",
+        "UIInterfaceOrientationPortraitUpsideDown",
+        "UIInterfaceOrientationLandscapeLeft",
+        "UIInterfaceOrientationLandscapeRight"
+      ]
+    },
+    "executableArchitecture": "arm64"
+  },
+  "pipelineVerificationReport": {
+    "file": "BrainVoice-verification.json",
+    "sha256": "e594a58ab6e77ce0eb33310b4ef65156c50e0914e8b7008e8100470fd358e151",
+    "report": {
+      "CFBundleIdentifier": "com.korlix.brain",
+      "CFBundleShortVersionString": "1.0.2",
+      "CFBundleVersion": "24",
+      "bytes": 34910507,
+      "sha256": "8adb5fedb895b0f25523d010303ce595359b233bdb6fdfbe0a2b995fa4eb7b60",
+      "profile_type": "app_store",
+      "signature_verified": true,
+      "production_push_required": false
+    }
+  },
+  "sourceCi": {
+    "file": "landscape-ci-evidence-43420869507.json",
+    "sha256": "bac17cfed4c6f6736322faaf1411835d7c5d4fc6f1dc7bd443cd4bf70cd8eb59",
+    "report": {
+      "checkedAt": "2026-11-13T12:05:32Z",
+      "repository": "digiplayja-design/Ai-wiz-command-center",
+      "sourceCommit": "4eb5d53e9331b78abf6abe1b8e885fe4d65e7d62",
+      "sourceTree": "797790cc6bfc9d6f8319d9357cae5c511f59c0fa",
+      "ciRun": 43420869507,
+      "ciUrl": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43420869507",
+      "ciStatus": "completed",
+      "ciConclusion": "success",
+      "checkoutCommit": "74bdda3fe6d625cecacfa5a936928d206817da7f",
+      "checkoutVerifiedInAllFiveJobLogs": true,
+      "comparison": {
+        "aheadBy": 1,
+        "behindBy": 0,
+        "changedFiles": 0,
+        "contentMatchesSource": true
+      },
+      "jobs": [
+        {
+          "id": 131870228091,
+          "name": "release-identity",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 131870228394,
+          "name": "ios",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 131870228460,
+          "name": "android",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 131870228473,
+          "name": "projection-ui (macos-26, 1.62.1, korlix-brain-projection-screenshots-macos)",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "id": 131870228852,
+          "name": "projection-ui (ubuntu-24.04, 1.56.1, korlix-brain-projection-screenshots)",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ],
+      "flutterAnalyze": "No issues found",
+      "flutterTestsPassed": 280,
+      "releaseIdentityTestsPassed": 23,
+      "browserCheckerSuites": 6,
+      "browserCheckerExecutions": 12,
+      "browserPlatforms": [
+        {
+          "os": "ubuntu-24.04",
+          "playwright": "1.56.1",
+          "conclusion": "success"
+        },
+        {
+          "os": "macos-26",
+          "playwright": "1.62.1",
+          "conclusion": "success"
+        }
+      ],
+      "androidDebugApkBuilt": true,
+      "iosSimulatorBuilt": true,
+      "iphoneOSArm64ReleaseCompiled": true,
+      "artifacts": [
+        {
+          "id": 14034955089,
+          "name": "korlix-brain-projection-screenshots",
+          "bytes": 28155683,
+          "sha256": "282f11025eaf7b8bc4bca374fbd5b8a704f2e56491eb26587f525b3de77942c9",
+          "headSha": "4eb5d53e9331b78abf6abe1b8e885fe4d65e7d62"
+        },
+        {
+          "id": 14034206916,
+          "name": "korlix-brain-projection-screenshots-macos",
+          "bytes": 28276670,
+          "sha256": "7994eb27c6cc75ae8a3984361ef43f806fec63ce9174ec27955a105f99f5c452",
+          "headSha": "4eb5d53e9331b78abf6abe1b8e885fe4d65e7d62"
+        },
+        {
+          "id": 14034027884,
+          "name": "korlix-brain-voice-android-debug",
+          "bytes": 105108317,
+          "sha256": "67f24f1d47f1fed53bfc54a715c7d781abbdea9089f6bd3a75c81d68fcb5203d",
+          "headSha": "4eb5d53e9331b78abf6abe1b8e885fe4d65e7d62"
+        },
+        {
+          "id": 14033697644,
+          "name": "korlix-brain-voice-ios-simulator",
+          "bytes": 77420260,
+          "sha256": "a1c3ba94ba80015ed901f1b20c64d33a4478b2095516a10353e849055f7c41fd",
+          "headSha": "4eb5d53e9331b78abf6abe1b8e885fe4d65e7d62"
+        }
+      ],
+      "buildEvidence": [
+        "2026-11-13T11:56:20Z: +280: All tests passed!",
+        "2026-11-13T12:01:44Z: Built build/app/outputs/flutter-apk/app-debug.apk",
+        "2026-11-13T12:01:23Z: Built build/ios/iphonesimulator/Runner.app",
+        "2026-11-13T12:05:03Z: Built build/ios/iphoneos/Runner.app (42.8MB)",
+        "2026-11-13T12:05:06Z: Verified com.korlix.brain iPhoneOS arm64 release compilation."
+      ],
+      "allJobsSuccessful": true,
+      "physicalDeviceAcceptance": "pending",
+      "signedIpaAndAppleDelivery": "not established by these CI jobs"
+    }
+  },
+  "rootIpaInspection": {
+    "file": "landscape-ipa-inspection-24.json",
+    "sha256": "7af60a2ffb5e060df29b4b741fb1f000122a5011ecc4ebb1b11a3c72276a62ff",
+    "report": {
+      "inspectedAt": "2026-11-13T12:10:45.804897+00:00",
+      "sourceCommit": "4eb5d53e9331b78abf6abe1b8e885fe4d65e7d62",
+      "sourceTree": "797790cc6bfc9d6f8319d9357cae5c511f59c0fa",
+      "ciRun": 43420869507,
+      "codemagicBuildId": "6af6fb7b05c8b21ba24ef97d",
+      "ipa": {
+        "sha256": "8adb5fedb895b0f25523d010303ce595359b233bdb6fdfbe0a2b995fa4eb7b60",
+        "bytes": 34910507,
+        "infoPlist": {
+          "CFBundleIdentifier": "com.korlix.brain",
+          "CFBundleShortVersionString": "1.0.2",
+          "CFBundleVersion": "24",
+          "CFBundleSupportedPlatforms": [
+            "iPhoneOS"
+          ],
+          "MinimumOSVersion": "15.0",
+          "CFBundleExecutable": "Runner",
+          "UIDeviceFamily": [
+            1,
+            2
+          ],
+          "UISupportedInterfaceOrientations": [
+            "UIInterfaceOrientationPortrait",
+            "UIInterfaceOrientationLandscapeLeft",
+            "UIInterfaceOrientationLandscapeRight"
+          ],
+          "UISupportedInterfaceOrientations~ipad": [
+            "UIInterfaceOrientationPortrait",
+            "UIInterfaceOrientationPortraitUpsideDown",
+            "UIInterfaceOrientationLandscapeLeft",
+            "UIInterfaceOrientationLandscapeRight"
+          ]
+        },
+        "executableArchitecture": "arm64"
+      },
+      "packagedAssets": [
+        {
+          "member": "Payload/Runner.app/Frameworks/App.framework/flutter_assets/assets/web/index.html",
+          "bytes": 368874,
+          "sha256": "51b982f1760051152d4486ace426fa3c418be450d9564efe119a7f76a48d4c8c",
+          "sourceGitBlob": "3683a5451d66dc6c8e26d38c0bd0773802596d5f",
+          "matchesTestedSource": true
+        },
+        {
+          "member": "Payload/Runner.app/Frameworks/App.framework/flutter_assets/assets/web/app.js",
+          "bytes": 70828,
+          "sha256": "c418dbac8f308cb7774d6fbcb47000600e48c3f2f18fd97d4d804bb2f5a9ec72",
+          "sourceGitBlob": "90b7380988c7264b8364fc201aee7e8ff5d5b8cf",
+          "matchesTestedSource": true
+        },
+        {
+          "member": "Payload/Runner.app/Frameworks/App.framework/flutter_assets/assets/web/app.css",
+          "bytes": 460492,
+          "sha256": "ec1e1dc5517f9e56389847486e3dbb1822e188656a7c058a8072e9968ac643cf",
+          "sourceGitBlob": "316271b84cedf9337324eaecbad4b3f92f981a80",
+          "matchesTestedSource": true
+        },
+        {
+          "member": "Payload/Runner.app/Frameworks/App.framework/flutter_assets/assets/web/projection.html",
+          "bytes": 18860,
+          "sha256": "615151f33016c445405c97129facced63e52b3b1d71346d0d286e8641ba3bde6",
+          "sourceGitBlob": "19e6a36f9aeec80d5868123d447491038d42c014",
+          "matchesTestedSource": true
+        },
+        {
+          "member": "Payload/Runner.app/Frameworks/App.framework/flutter_assets/assets/web/projection.css",
+          "bytes": 78113,
+          "sha256": "c8d73c2f0bd2d0de69f77297f46a15580fdd0cf553f51ab46063766abb711ac1",
+          "sourceGitBlob": "8b3ef3618f83e3b7a7f21782399a9bfc91e80501",
+          "matchesTestedSource": true
+        },
+        {
+          "member": "Payload/Runner.app/Frameworks/App.framework/flutter_assets/assets/web/projection.js",
+          "bytes": 51108,
+          "sha256": "daeb1ace42e4f3634daf69627ceb6edd8356be0ba50f571656425f34cc3954ba",
+          "sourceGitBlob": "a1fbed03348ff3cd86c4298af42272eaedeca25f",
+          "matchesTestedSource": true
+        }
+      ],
+      "pipelineReportMatches": true,
+      "pipelineReportSha256": "e594a58ab6e77ce0eb33310b4ef65156c50e0914e8b7008e8100470fd358e151",
+      "pipelineSignatureVerified": true,
+      "localSignatureVerificationPerformed": false,
+      "limits": "Linux inspection verifies ZIP identity, architecture, hashes and source assets; Apple signature verification is the matching pipeline report observation."
+    }
+  },
+  "independentIpaInspection": {
+    "file": "voice-independent-ipa-inspection.json",
+    "sha256": "423c802ec78ac9555236300cd4cc9fdd8e1ab2380150467c28b0744f6fd3f6d1",
+    "report": {
+      "inspection": "PASS",
+      "checkedAt": "2026-11-13T12:11:48.915762+00:00",
+      "inspector": "verify_voice independent byte inspection",
+      "sourceCommit": "4eb5d53e9331b78abf6abe1b8e885fe4d65e7d62",
+      "sourceTree": "797790cc6bfc9d6f8319d9357cae5c511f59c0fa",
+      "codemagicBuildId": "6af6fb7b05c8b21ba24ef97d",
+      "ciRun": 43420869507,
+      "ipaPath": "/workspace/scratch/90da59a2f44c/landscape-signed-6af6fb7b/BrainVoice.ipa",
+      "ipaBytes": 34910507,
+      "ipaSha256": "8adb5fedb895b0f25523d010303ce595359b233bdb6fdfbe0a2b995fa4eb7b60",
+      "zipIntegrity": {
+        "crcVerified": true,
+        "duplicateMembers": false,
+        "memberCount": 241
+      },
+      "mainInfoPlist": "Payload/Runner.app/Info.plist",
+      "identity": {
+        "CFBundleIdentifier": "com.korlix.brain",
+        "CFBundleShortVersionString": "1.0.2",
+        "CFBundleVersion": "24",
+        "CFBundleExecutable": "Runner",
+        "CFBundleSupportedPlatforms": [
+          "iPhoneOS"
+        ],
+        "DTPlatformName": "iphoneos",
+        "MinimumOSVersion": "15.0",
+        "UIDeviceFamily": [
+          1,
+          2
+        ],
+        "UISupportedInterfaceOrientations": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ],
+        "UISupportedInterfaceOrientations~ipad": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationPortraitUpsideDown",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ]
+      },
+      "binaries": [
+        {
+          "path": "Payload/Runner.app/Runner",
+          "bytes": 3088432,
+          "sha256": "db70ac18e8973ba4529c8c5da5ea3d7a9749decdcb07408b0eef72a75b7c9e0c",
+          "slices": [
+            {
+              "offset": 0,
+              "bytes": 3088432,
+              "cpuType": 16777228,
+              "cpuSubtype": 0,
+              "architecture": "arm64",
+              "fileType": 2,
+              "loadCommands": 80,
+              "iosBuildPlatform": 2,
+              "codeSignatureStructure": {
+                "offsetInSlice": 3045440,
+                "bytes": 42992,
+                "superblobVerified": true,
+                "slots": [
+                  {
+                    "slot": 0,
+                    "magic": "0xfade0c02",
+                    "bytes": 24148
+                  },
+                  {
+                    "slot": 2,
+                    "magic": "0xfade0c01",
+                    "bytes": 176
+                  },
+                  {
+                    "slot": 5,
+                    "magic": "0xfade7171",
+                    "bytes": 432
+                  },
+                  {
+                    "slot": 7,
+                    "magic": "0xfade7172",
+                    "bytes": 170
+                  },
+                  {
+                    "slot": 65536,
+                    "magic": "0xfade0b01",
+                    "bytes": 4786
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "path": "Payload/Runner.app/Frameworks/App.framework/App",
+          "bytes": 7349760,
+          "sha256": "425544f8ed8023e524651138cd5e48b2be2ab8641af4106c74dfb63fc562f8e4",
+          "slices": [
+            {
+              "offset": 16384,
+              "bytes": 7333376,
+              "cpuType": 16777228,
+              "cpuSubtype": 0,
+              "architecture": "arm64",
+              "fileType": 6,
+              "loadCommands": 13,
+              "iosBuildPlatform": 2,
+              "codeSignatureStructure": {
+                "offsetInSlice": 7258192,
+                "bytes": 75184,
+                "superblobVerified": true,
+                "slots": [
+                  {
+                    "slot": 0,
+                    "magic": "0xfade0c02",
+                    "bytes": 56954
+                  },
+                  {
+                    "slot": 2,
+                    "magic": "0xfade0c01",
+                    "bytes": 184
+                  },
+                  {
+                    "slot": 65536,
+                    "magic": "0xfade0b01",
+                    "bytes": 4786
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "resourceSeals": [
+        {
+          "path": "Payload/Runner.app/_CodeSignature/CodeResources",
+          "sha256": "f83e7fd0b46b8509243015803d53312403f0f6a3b69b53b17d0dcfe2f9814bfc",
+          "sha256FileSealsVerified": 143
+        },
+        {
+          "path": "Payload/Runner.app/Frameworks/App.framework/_CodeSignature/CodeResources",
+          "sha256": "d786b7f0d9ad31dec7db4a6dad9d41ec7b843e030b538b3c3e25b0b5cb076d55",
+          "sha256FileSealsVerified": 18
+        }
+      ],
+      "embeddedProvision": {
+        "path": "Payload/Runner.app/embedded.mobileprovision",
+        "bytes": 12173,
+        "sha256": "a1a89b7d1ff677a3a571016cd63e853aa166a06b37055d72e485a5b4c439b6bd",
+        "derContainerPresent": true
+      },
+      "packagedAssets": [
+        {
+          "sourcePath": "apps/korlix_brain/assets/web/index.html",
+          "ipaMember": "Payload/Runner.app/Frameworks/App.framework/flutter_assets/assets/web/index.html",
+          "bytes": 368874,
+          "sha256": "51b982f1760051152d4486ace426fa3c418be450d9564efe119a7f76a48d4c8c",
+          "gitBlobSha": "3683a5451d66dc6c8e26d38c0bd0773802596d5f",
+          "matchesFrozenSourceBytes": true
+        },
+        {
+          "sourcePath": "apps/korlix_brain/assets/web/app.js",
+          "ipaMember": "Payload/Runner.app/Frameworks/App.framework/flutter_assets/assets/web/app.js",
+          "bytes": 70828,
+          "sha256": "c418dbac8f308cb7774d6fbcb47000600e48c3f2f18fd97d4d804bb2f5a9ec72",
+          "gitBlobSha": "90b7380988c7264b8364fc201aee7e8ff5d5b8cf",
+          "matchesFrozenSourceBytes": true
+        },
+        {
+          "sourcePath": "apps/korlix_brain/assets/web/app.css",
+          "ipaMember": "Payload/Runner.app/Frameworks/App.framework/flutter_assets/assets/web/app.css",
+          "bytes": 460492,
+          "sha256": "ec1e1dc5517f9e56389847486e3dbb1822e188656a7c058a8072e9968ac643cf",
+          "gitBlobSha": "316271b84cedf9337324eaecbad4b3f92f981a80",
+          "matchesFrozenSourceBytes": true
+        },
+        {
+          "sourcePath": "apps/korlix_brain/assets/web/projection.html",
+          "ipaMember": "Payload/Runner.app/Frameworks/App.framework/flutter_assets/assets/web/projection.html",
+          "bytes": 18860,
+          "sha256": "615151f33016c445405c97129facced63e52b3b1d71346d0d286e8641ba3bde6",
+          "gitBlobSha": "19e6a36f9aeec80d5868123d447491038d42c014",
+          "matchesFrozenSourceBytes": true
+        },
+        {
+          "sourcePath": "apps/korlix_brain/assets/web/projection.css",
+          "ipaMember": "Payload/Runner.app/Frameworks/App.framework/flutter_assets/assets/web/projection.css",
+          "bytes": 78113,
+          "sha256": "c8d73c2f0bd2d0de69f77297f46a15580fdd0cf553f51ab46063766abb711ac1",
+          "gitBlobSha": "8b3ef3618f83e3b7a7f21782399a9bfc91e80501",
+          "matchesFrozenSourceBytes": true
+        },
+        {
+          "sourcePath": "apps/korlix_brain/assets/web/projection.js",
+          "ipaMember": "Payload/Runner.app/Frameworks/App.framework/flutter_assets/assets/web/projection.js",
+          "bytes": 51108,
+          "sha256": "daeb1ace42e4f3634daf69627ceb6edd8356be0ba50f571656425f34cc3954ba",
+          "gitBlobSha": "a1fbed03348ff3cd86c4298af42272eaedeca25f",
+          "matchesFrozenSourceBytes": true
+        }
+      ],
+      "nativeReviewedSources": [
+        {
+          "sourcePath": "apps/korlix_brain/lib/brain_projection.dart",
+          "gitBlobSha": "52bf2111f7c4175577c1ce95594f8f987b95d212",
+          "matchesReviewedSource": true
+        },
+        {
+          "sourcePath": "apps/korlix_brain/lib/brain_voice_session.dart",
+          "gitBlobSha": "0e4d0371d4e84e0ff6149329a7e9f981aa66cd5b",
+          "matchesReviewedSource": true
+        },
+        {
+          "sourcePath": "apps/korlix_brain/test/brain_projection_test.dart",
+          "gitBlobSha": "78f87d520adcfd35c3916f18c246acdfc0ca9c6b",
+          "matchesReviewedSource": true
+        },
+        {
+          "sourcePath": "apps/korlix_brain/test/brain_spoken_address_dispatch_test.dart",
+          "gitBlobSha": "da5186f5c4db12285c37f47096de98dc46c6e4d4",
+          "matchesReviewedSource": true
+        }
+      ],
+      "pipelineReport": {
+        "path": "/workspace/scratch/90da59a2f44c/landscape-signed-6af6fb7b/artifacts/BrainVoice-verification.json",
+        "sha256": "e594a58ab6e77ce0eb33310b4ef65156c50e0914e8b7008e8100470fd358e151",
+        "identitySizeAndChecksumMatch": true,
+        "reportedSignatureVerified": true,
+        "reportedProfileType": "app_store"
+      },
+      "limits": [
+        "Linux inspection checks signature structure and resource hash seals; it does not cryptographically validate Apple code signing. Signature validity and App Store profile type are matching macOS pipeline assertions.",
+        "Compiled Dart source provenance relies on the observed pinned Codemagic checkout and CI; this report does not recover Dart source from the AOT binary.",
+        "This inspection establishes package identity and asset correspondence, not Apple processing, TestFlight delivery, installation, or physical-device voice/rotation behavior."
+      ]
+    }
+  },
+  "uploadObservation": {
+    "file": "landscape-upload-observations-24.json",
+    "sha256": "deafda8beacd10c0318e9b6e4bd9470ec5825f82bb4ffb4e6fd6d4063bbaf436",
+    "report": {
+      "observedAt": "2026-11-13T12:11:50.059901+00:00",
+      "codemagicBuildId": "6af6fb7b05c8b21ba24ef97d",
+      "codemagicBuildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6af6fb7b05c8b21ba24ef97d",
+      "workflow": "korlix-brain-ios-testflight",
+      "sourceCommit": "4eb5d53e9331b78abf6abe1b8e885fe4d65e7d62",
+      "sourceTree": "797790cc6bfc9d6f8319d9357cae5c511f59c0fa",
+      "publishingStatus": "uploaded",
+      "uploadReceiptObservedAt": "2026-11-13T12:10:51.207Z",
+      "appleUploadId": "0435ec43-7c84-4beb-bb6c-76c253be9c6b",
+      "uploadedBytes": 34910507,
+      "bundleId": "com.korlix.brain",
+      "version": "1.0.2",
+      "buildNumber": "24",
+      "appleBuildId": "0435ec43-7c84-4beb-bb6c-76c253be9c6b",
+      "appleProcessingState": "build_record_available",
+      "testflightDeliveryVerified": false,
+      "source": "Codemagic visible Publishing log: UPLOAD SUCCEEDED with no errors; distinct post-processing build identity pending",
+      "appleBuildObservedAt": "2026-11-13T12:17:55.557976+00:00",
+      "codemagicStatus": "finished",
+      "postProcessingStatus": "completed",
+      "testflightNotesUpdated": true,
+      "betaBuildLocalizationId": "ceee9c62-f715-4579-b5e7-bb3058a1fd46",
+      "appleBuildObservation": "Separately observed in completed App Store Connect distribution log: Found uploaded build on App Store Connect 0435ec43-7c84-4beb-bb6c-76c253be9c6b; beta build localization update succeeded"
+    }
+  },
+  "appleProcessing": {
+    "state": "build_record_available",
+    "processingStateVerified": false,
+    "internalEligibilityVerified": false,
+    "note": "The build resource was observed during successful post-processing; fresh VALID/unexpired/internal-eligibility checks are still required."
+  },
+  "testflightDelivery": {
+    "status": "pending_fresh_internal_assignment_and_readback",
+    "verified": false
+  },
+  "sourceAttestedByApple": false,
+  "note": "Final source CI, signed IPA identity/assets, successful Apple upload and the separate Apple build resource observation are reviewed. The receipt and build IDs happen to match but were observed independently. Apple processing eligibility and internal TestFlight delivery remain subject to fresh readback. Source identity is established by the pinned build and artifact chain, not attested by Apple.",
+  "appleBuildObservedAt": "2026-11-13T12:17:55.557976+00:00"
+}

@@ -880,3 +880,37 @@ workflows:
             --assign --output artifacts/brain-live-restart-testflight-assignment.json
     artifacts:
       - artifacts/brain-live-restart-testflight-assignment.json
+
+  korlix-brain-testflight-assign-landscape-24:
+    name: KORLIX Brain+Voice — Landscape command center internal TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    # Manual only. Exact independently inspected native build: 24; source floor: 24.
+    # Native source: 4eb5d53e9331b78abf6abe1b8e885fe4d65e7d62
+    # Native tree: 797790cc6bfc9d6f8319d9357cae5c511f59c0fa
+    # CI 43420869507 passed on Linux/macOS; signed job 6af6fb7b05c8b21ba24ef97d uploaded build 24.
+    # Codemagic finished; Apple build 0435ec43-7c84-4beb-bb6c-76c253be9c6b was separately observed.
+    # The fixed reviewed record is complete; eligibility and internal delivery need fresh readback.
+    # Fixed source, upload and independently inspected IPA pins are required.
+    # The fresh Apple build must match the separately observed build resource ID.
+    # No latest-build fallback, environment override or substitution of builds 17–23.
+    # Preflight must fail before release tools or managed credentials are initialized.
+    # The only allowed write adds the exact fresh-validated build to the existing group.
+    # No tester invitation, upload, compliance change, review or public release.
+    scripts:
+      - name: Validate exact internal delivery guards
+        script: |
+          set -euo pipefail
+          python3 -B -m unittest discover -s scripts/tests -p 'test_brain_landscape_testflight_assignment.py' -v
+          python3 -B -c 'import runpy; runpy.run_path("scripts/assign_brain_landscape_testflight_build.py")["require_verified_source_upload"]()'
+      - name: Assign verified build to existing internal testers
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.brain-landscape-testflight-tools"
+          "$CM_BUILD_DIR/.brain-landscape-testflight-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+          "$CM_BUILD_DIR/.brain-landscape-testflight-tools/bin/python" scripts/assign_brain_landscape_testflight_build.py \
+            --assign --output artifacts/brain-landscape-testflight-assignment.json
+    artifacts:
+      - artifacts/brain-landscape-testflight-assignment.json
