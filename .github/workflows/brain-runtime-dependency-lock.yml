@@ -1,0 +1,28 @@
+name: Resolve Brain native integration test dependencies
+on:
+  push:
+    branches: [ops/brain-runtime-dependency-lock-20261113]
+permissions:
+  contents: read
+jobs:
+  resolve:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.9'
+          channel: stable
+          cache: true
+      - name: Resolve the SDK integration test dependency
+        working-directory: apps/korlix_brain
+        run: flutter pub get
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: brain-runtime-integration-lock
+          path: apps/korlix_brain/pubspec.lock
+          if-no-files-found: error
+          retention-days: 14

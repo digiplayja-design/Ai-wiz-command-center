@@ -26,6 +26,8 @@ dependencies:
   in_app_purchase_android: 0.5.1
   in_app_purchase_storekit: 0.4.10+1
 dev_dependencies:
+  integration_test:
+    sdk: flutter
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
