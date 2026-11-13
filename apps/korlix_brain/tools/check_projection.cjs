@@ -672,6 +672,10 @@ async function assertLandscapeWorkspace(browser,errors) {
   await page.locator('#map-container iframe').waitFor();
   const renderer=await (await page.locator('#map-container iframe').elementHandle()).contentFrame();
   await renderer.waitForFunction(()=>typeof window.emitTransport==='function');
+  // Search confirmation can scroll the portrait shell below the provider.
+  // Bring its document into view before animation-frame-based handshake checks.
+  await settleRendererLayout(page,renderer,'landscape-provider-loading');
+  await alignRendererInViewport(page);
   await renderer.evaluate(()=>window.emitTransport());
   await renderer.waitForFunction(()=>window.received.length>0);
   await renderer.evaluate(()=>window.emitStatus('ready'));

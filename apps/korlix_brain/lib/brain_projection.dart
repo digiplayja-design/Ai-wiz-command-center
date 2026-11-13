@@ -1258,6 +1258,15 @@ class BrainProjection extends ChangeNotifier {
     ).hasMatch(remainder)) {
       return null;
     }
+    // A research suffix can follow the city, unit or postal code as well as
+    // the street. Keep View and News available as locality names, matching
+    // the bounded follow-up search checks below.
+    if (RegExp(
+      r'\b(?:facts?|photos?|pictures?|images?|videos?|details?|information|history|weather|crime(?:\s+rate)?|statistics|population|reviews?)\s*$',
+      caseSensitive: false,
+    ).hasMatch(remainder)) {
+      return null;
+    }
     return address;
   }
 

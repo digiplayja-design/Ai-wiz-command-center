@@ -736,8 +736,10 @@ void main() {
         addTearDown(f.projection.dispose);
         const addresses = [
           '123 Live Oak Road, Live Oak, FL 32060',
+          '123 Live Oak Road, Mountain View',
           '10 New Street, New York, NY 10004',
           '45 History Lane, Apt 2B, London SW1A 2AA',
+          '123 Main Street, Newport News',
           '123 Main Street, Newport News, VA 23601',
           '123 Main Street Newport News VA 23601',
         ];
@@ -781,6 +783,55 @@ void main() {
         }
         expect(f.requests.where((path) => path.endsWith('/resolve')), isEmpty);
         expect(f.projection.snapshot['selectedPlace'], isNull);
+      },
+    );
+
+    test(
+      'research after address locality cannot open or replace a destination',
+      () async {
+        for (final state in ['closed', 'awaiting', 'candidates', 'selected']) {
+          final f = Fixture();
+          addTearDown(f.projection.dispose);
+          if (state == 'selected') {
+            await f.select();
+          } else if (state != 'closed') {
+            f.projection.open();
+            if (state == 'candidates') {
+              await f.projection.search('My destination');
+            }
+          }
+          final wasOpen = f.projection.isOpen;
+          final lookups = f.requests
+              .where((path) => path.endsWith('/resolve'))
+              .length;
+          final before = f.projection.snapshot;
+          final camera = Map.of(before['camera'] as Map);
+          final selectedPlace = before['selectedPlace'];
+          final candidates = List.of(before['candidates'] as List);
+          const phrases = [
+            'Show me 10 Downing Street, London history',
+            'Rici, can you show me 10 Downing Street, London SW1A 2AA history?',
+            'Show me 20 Resee Street, Unit 4, Reece, NY 10012 history please',
+            'Show me 10 Downing Street, London photos',
+          ];
+          for (final phrase in phrases) {
+            expect(f.projection.recognizesVoiceControl(phrase), false,
+                reason: '$phrase ($state)');
+            await f.projection.voiceTurn(phrase, phrase, {
+              'action': 'search',
+              'value': '10 Downing Street',
+            });
+          }
+          expect(f.requests.where((path) => path.endsWith('/resolve')),
+              hasLength(lookups), reason: state);
+          expect(f.projection.isOpen, wasOpen, reason: state);
+          expect(f.projection.snapshot['selectedPlace'], selectedPlace,
+              reason: state);
+          expect(f.projection.snapshot['candidates'], candidates, reason: state);
+          expect(f.projection.snapshot['camera'], camera, reason: state);
+          expect(f.starts, 0);
+          expect(f.stops, 0);
+        }
       },
     );
 
