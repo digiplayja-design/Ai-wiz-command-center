@@ -25,6 +25,7 @@
   let entranceNonce = '', entranceEpoch = 0, entranceRunning = false;
   let entranceTimers = [];
   let nativePresentation = {nativeControls:false, viewport:null};
+  let nativeFocusRevealFrame = 0;
 
   const emptyState = () => ({
     open:true, foreground:true, room:'command', loading:false, selectedPlace:null, candidates:[], answer:null,
@@ -106,10 +107,30 @@
       if(selection&&selection.start!==null&&selection.end!==null)focused.setSelectionRange(selection.start,selection.end);
     }
     measureVoiceDock();
+    revealNativeFocusedEditable();
   }
   document.querySelectorAll('[data-console-choice]').forEach(button=>
     button.addEventListener('click',()=>chooseSpatialConsole(button.dataset.consoleChoice,{reveal:true})));
   window.addEventListener('resize',syncSpatialLayout);
+
+  function revealNativeFocusedEditable() {
+    cancelAnimationFrame(nativeFocusRevealFrame);
+    nativeFocusRevealFrame=0;
+    if(!nativePresentation.nativeControls||!nativePresentation.viewport)return;
+    // WKWebView can retain its old innerHeight while the native keyboard and
+    // persistent rail shorten the measured scrollport. Reveal only the field
+    // already being edited after those bounds/DOM moves have been committed.
+    nativeFocusRevealFrame=requestAnimationFrame(()=>{
+      nativeFocusRevealFrame=0;
+      if(!nativePresentation.nativeControls||!nativePresentation.viewport||!state.open||!state.foreground)return;
+      const focused=document.activeElement;
+      if((focused instanceof HTMLInputElement||focused instanceof HTMLTextAreaElement)
+        &&focused.isConnected&&focused.getClientRects().length) {
+        focused.scrollIntoView({block:'nearest',inline:'nearest',behavior:'auto'});
+      }
+    });
+  }
+  document.addEventListener('focusin',revealNativeFocusedEditable);
 
   function updatePresentation(raw) {
     if(!isObject(raw))return;

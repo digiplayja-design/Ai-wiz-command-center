@@ -412,7 +412,9 @@ body[data-layout="landscape"][data-console-compact="true"] .voice-command-summar
    Use the measured platform-view bounds rather than an old WKWebView viewport
    during rotation or keyboard transitions. The provider document is retained. */
 body[data-native-controls="true"]{position:relative;width:var(--native-viewport-width,100vw);height:var(--native-viewport-height,100vh);min-height:0;overflow:hidden}
-body[data-native-controls="true"] .voice-dock,body[data-native-controls="true"] #close-projection{display:none}
+/* Native actions must stay exclusive even when a layout/voice rule declares
+   its own display mode. This applies only while the host supplies its rail. */
+body[data-native-controls="true"] .voice-dock,body[data-native-controls="true"] #close-projection{display:none!important}
 body[data-native-controls="true"][data-voice] .projection-shell{position:absolute;inset:0}
 body[data-native-controls="true"] .spatial-room-shell,body[data-native-controls="true"] .projection-entry-room{position:absolute}
 body[data-native-controls="true"][data-layout="landscape"] .projection-shell{overflow-y:auto}

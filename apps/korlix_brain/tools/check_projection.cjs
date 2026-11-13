@@ -811,10 +811,98 @@ async function assertLandscapeWorkspace(browser,errors) {
   await page.close();
 }
 
+async function assertNativeHostPresentation(browser,errors) {
+  const page=await browser.newPage({viewport:{width:375,height:533},reducedMotion:'reduce'});
+  page.on('pageerror',error=>errors.push(error.message));
+  await routeProjectionRenderer(page);
+  await fixture(page);
+  await page.waitForFunction(()=>document.body.dataset.entryActive==='false');
+  await page.evaluate(()=>{
+    window.projectionState.config.rendererUrl='https://projection.test/brain-projection/earth.html';
+    window.projectionState.config.mapAvailable=true;
+    window.projectionState.selectedPlace={id:'native-fixture',label:'Native fixture property',address:'32 Pine Avenue, Example City',latitude:40.71,longitude:-74,provider:'fixture'};
+    window.sendSnapshot();
+  });
+  await page.waitForFunction(()=>document.querySelector('#map-container iframe')?.contentWindow);
+  await page.evaluate(()=>{
+    const frame=document.querySelector('#map-container iframe');
+    window.nativeIdentity={input:document.getElementById('destination-input'),frame,providerWindow:frame.contentWindow};
+  });
+  const present=async (viewport,nativeControls=true)=>{
+    await page.evaluate(presentation=>window.KorlixProjectionReceive({type:'presentation',presentation}),{nativeControls,viewport});
+    await settleLayout(page);
+  };
+  // The native control rail owns these actions in every voice phase. Exercise
+  // the shipped bridge, including layout changes whose WebView inner size lags.
+  for(const viewport of [{width:375,height:533,landscape:false},{width:667,height:265,landscape:true},{width:1024,height:648,landscape:true}]) {
+    await present(viewport);
+    for(const room of ['command','discovery'])for(const phase of ['complete','connecting','listening','thinking','speaking','pausing','paused','stopping','error']) {
+      await page.evaluate(({room,phase})=>{
+        window.projectionState.room=room;
+        window.projectionState.voice={phase,active:!['complete','paused','error'].includes(phase),paused:phase==='paused',message:phase};
+        window.sendSnapshot();
+      },{room,phase});
+      const visible=await page.evaluate(()=>({
+        dock:getComputedStyle(document.querySelector('.voice-dock')).display,
+        close:getComputedStyle(document.getElementById('close-projection')).display,
+      }));
+      assert.deepEqual(visible,{dock:'none',close:'none'},'Native controls stay exclusive at '+JSON.stringify({viewport,room,phase}));
+    }
+  }
+  await present(null,false);
+  assert.notEqual(await page.locator('.voice-dock').evaluate(node=>getComputedStyle(node).display),'none','Standalone web voice controls remain available');
+  assert.notEqual(await page.locator('#close-projection').evaluate(node=>getComputedStyle(node).display),'none','Standalone web Close remains available');
+
+  await present({width:375,height:533,landscape:false});
+  await page.evaluate(()=>{
+    window.projectionState.room='command';
+    window.projectionState.voice={phase:'listening',active:true,paused:false,message:'Rici is listening'};
+    window.sendSnapshot();
+    const input=document.getElementById('destination-input');
+    input.value='An unfinished native address';
+    input.scrollIntoView({block:'center'});
+    input.focus({preventScroll:true});
+    input.setSelectionRange(5,12);
+  });
+  await settleLayout(page);
+  const scrollBefore=await page.locator('.projection-shell').evaluate(node=>node.scrollTop);
+  // Actual M2 evidence: WKWebView innerHeight remained 533 while the native
+  // keyboard reduced the measured platform-view height to 205.125. This is a
+  // browser regression for that bridge geometry, not a native keyboard claim.
+  await present({width:375,height:205.125,landscape:false});
+  const keyboard=await page.evaluate(()=>{
+    const input=document.getElementById('destination-input'),frame=document.querySelector('#map-container iframe');
+    const rect=input.getBoundingClientRect(),shell=document.querySelector('.projection-shell');
+    return {input:rect.toJSON(),shell:shell.getBoundingClientRect().toJSON(),body:document.body.getBoundingClientRect().toJSON(),
+      focused:document.activeElement===input,draft:input.value,caret:[input.selectionStart,input.selectionEnd],
+      innerHeight,scrollTop:shell.scrollTop,hittable:document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2)===input,
+      identity:input===window.nativeIdentity.input&&frame===window.nativeIdentity.frame&&frame.contentWindow===window.nativeIdentity.providerWindow};
+  });
+  assert.equal(keyboard.innerHeight,533,'Regression retains the stale WKWebView-sized browser window');
+  assert.ok(keyboard.focused&&keyboard.identity,'Native resize retains the focused input and provider browsing context');
+  assert.equal(keyboard.draft,'An unfinished native address');
+  assert.deepEqual(keyboard.caret,[5,12]);
+  assert.ok(keyboard.input.top>=keyboard.shell.top&&keyboard.input.bottom<=keyboard.shell.bottom+.5
+    &&keyboard.input.bottom<=keyboard.body.bottom+.5&&keyboard.hittable,'Focused address stays above native controls after keyboard shrink: '+JSON.stringify(keyboard));
+  assert.ok(keyboard.scrollTop>scrollBefore,'The native portrait scrollport reveals the existing focused field');
+  if(screenDirectory) {
+    fs.mkdirSync(screenDirectory,{recursive:true});
+    await page.screenshot({path:path.join(screenDirectory,'projection-native-host-keyboard-browser.png')});
+    fs.writeFileSync(path.join(screenDirectory,'projection-native-host-keyboard-browser.json'),JSON.stringify(keyboard,null,2));
+  }
+  await page.evaluate(()=>document.getElementById('destination-input').blur());
+  const unfocusedScroll=await page.locator('.projection-shell').evaluate(node=>node.scrollTop);
+  await present({width:375,height:220,landscape:false});
+  assert.equal(await page.locator('.projection-shell').evaluate(node=>node.scrollTop),unfocusedScroll,'Native viewport updates do not scroll or focus an unrelated control');
+  assert.equal(await page.evaluate(()=>document.activeElement===document.getElementById('destination-input')),false,'Viewport updates cannot open the address keyboard');
+  await page.close();
+}
+
 (async()=>{
   const browser = await chromium.launch({headless:true,executablePath:process.env.BROWSER_EXECUTABLE_PATH||undefined,args:['--no-sandbox','--disable-dev-shm-usage']});
   const errors=[];
   try {
+    await assertNativeHostPresentation(browser,errors);
     await assertEntryLifecycle(browser,errors);
     for(const [width,height] of [[390,844],[768,1024],[844,390],[1366,1024]])await assertEntryVisualStages(browser,errors,width,height);
     await assertLandscapeWorkspace(browser,errors);
@@ -1288,6 +1376,6 @@ async function assertLandscapeWorkspace(browser,errors) {
     }
     await page.close();
     assert.deepEqual(errors,[],'No uncaught browser errors');
-    console.log('Projection UI passed: bounded one-shot full/reduced entrances, immediate voice and typed/spoken search, rapid close/reopen and lifecycle cleanup, real-time portrait/landscape stage evidence, clear loading/ready provider surfaces during full motion, six compact/tablet landscape sizes, both projected room consoles, 44px labeled camera keys, viewport fit with intact provider attribution, rotation preserving provider document/drafts/caret/destination/voice without native actions, compact spoken-result reveal, five original viewport sizes, explicit place confirmation, reviewed userQuery directions with account entitlement, Google address attribution without a map, source safety, cost disclosure, save failure/success, visible idle/error microphone entry without auto-start, compact last-heard/action feedback, separate 44px Pause/Resume/Stop controls, explicit resume, cancellation of pending resume, stale reply protection, close/stop separation, renderer origin isolation, unobstructed provider surfaces while loading/ready and paused, separate provider popups, dock clearance with scroll preservation, and no credential transfer.');
+    console.log('Projection UI passed: exclusive native controls across layouts/rooms/voice phases, native measured-viewport shrink retaining a visible focused draft and provider context, bounded one-shot full/reduced entrances, immediate voice and typed/spoken search, rapid close/reopen and lifecycle cleanup, real-time portrait/landscape stage evidence, clear loading/ready provider surfaces during full motion, six compact/tablet landscape sizes, both projected room consoles, 44px labeled camera keys, viewport fit with intact provider attribution, rotation preserving provider document/drafts/caret/destination/voice without native actions, compact spoken-result reveal, five original viewport sizes, explicit place confirmation, reviewed userQuery directions with account entitlement, Google address attribution without a map, source safety, cost disclosure, save failure/success, visible idle/error microphone entry without auto-start, compact last-heard/action feedback, separate 44px Pause/Resume/Stop controls, explicit resume, cancellation of pending resume, stale reply protection, close/stop separation, renderer origin isolation, unobstructed provider surfaces while loading/ready and paused, separate provider popups, dock clearance with scroll preservation, and no credential transfer.');
   } finally { await browser.close(); }
 })().catch(error=>{console.error(error);process.exitCode=1;});

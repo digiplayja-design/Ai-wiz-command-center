@@ -39,10 +39,15 @@ const geometry = r'''(() => {
   const input=document.getElementById('destination-input');
   const frame=document.querySelector('#map-container iframe');
   const rect=node=>{const r=node.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height};};
+  const inputRect=input.getBoundingClientRect();
   return {layout:document.body.dataset.layout,nativeControls:document.body.dataset.nativeControls,
+    entryActive:document.body.dataset.entryActive,
+    readyState:document.readyState,captureFrame:window.runtimeCapture?.frame||0,
     window:[innerWidth,innerHeight],body:rect(document.body),shell:rect(document.querySelector('.projection-shell')),
     dockDisplay:getComputedStyle(document.querySelector('.voice-dock')).display,
+    closeDisplay:getComputedStyle(document.getElementById('close-projection')).display,
     input:rect(input),inputFocused:document.activeElement===input,
+    inputHit:document.elementFromPoint(inputRect.x+inputRect.width/2,inputRect.y+inputRect.height/2)===input,
     draft:input.value,selected:document.getElementById('place-label').textContent,
     frame:frame?rect(frame):null,framePresent:frame instanceof HTMLIFrameElement&&frame.isConnected,
     providerWindowPresent:!!frame?.contentWindow,
@@ -51,8 +56,23 @@ const geometry = r'''(() => {
     phase:document.body.dataset.voice};
 })()''';
 
+Object? roundedGeometry(Object? value) {
+  if (value is num) return (value * 4).round();
+  if (value is List) return value.map(roundedGeometry).toList();
+  if (value is Map) {
+    return value.map((key, item) => MapEntry(key, roundedGeometry(item)));
+  }
+  return value;
+}
+
+Rect measuredRect(Map value) => Rect.fromLTWH(
+    (value['x'] as num).toDouble(), (value['y'] as num).toDouble(),
+    (value['width'] as num).toDouble(), (value['height'] as num).toDouble());
+
 void main() {
-  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized();
+  final binding = IntegrationTestWidgetsFlutterBinding.ensureInitialized()
+    // Native view and keyboard updates must render between explicit test pumps.
+    ..framePolicy = LiveTestWidgetsFlutterBindingFramePolicy.fullyLive;
 
   testWidgets('actual native Projection keeps controls, state and WKWebView through layout changes',
       (tester) async {
@@ -146,24 +166,22 @@ void main() {
     binding.reportData!['projectionRuntime'] = observations;
     observations['runtime'] = Platform.isIOS ? 'actual iOS WKWebView' : Platform.operatingSystem;
     observations['fixtureLimits'] = 'Native view and HTML are real; account/provider/voice responses are fixtures. Provider frame/window existence, size and identity do not establish loaded imagery. No physical ASR or live maps.';
+    observations['captureLimits'] = 'Captures wait for advancing WebKit animation frames and stable native/DOM geometry. The iOS integration screenshot draws the UIKit window hierarchy; this does not independently prove WebKit compositor freshness or capture an out-of-process keyboard. PNGs require visual review.';
     observations['outcome'] = {'scenarioCompleted': false};
 
-    Future<void> capture(String name) async {
+    Future<Map<String, dynamic>> measureCapture(String name) async {
       final measured = await inspect(web, geometry);
       final controls = <String, Object?>{};
       final window = tester.view.physicalSize / tester.view.devicePixelRatio;
       final keyboard = tester.view.viewInsets.bottom / tester.view.devicePixelRatio;
       for (final action in ['back', 'pause', 'resume', 'stop']) {
         final rect = tester.getRect(control(action));
-        expect(rect.width, greaterThanOrEqualTo(44), reason: '$name/$action width');
-        expect(rect.height, greaterThanOrEqualTo(44), reason: '$name/$action height');
-        expect(rect.left, greaterThanOrEqualTo(0));
-        expect(rect.top, greaterThanOrEqualTo(0));
-        expect(rect.right, lessThanOrEqualTo(window.width + 1));
-        expect(rect.bottom, lessThanOrEqualTo(window.height - keyboard + 1));
         controls[action] = {'x': rect.left, 'y': rect.top, 'width': rect.width, 'height': rect.height,
           'enabled': tester.widget<OutlinedButton>(control(action)).onPressed != null};
       }
+      final webBounds = tester.getRect(find.byKey(const ValueKey('brain-projection-webview')));
+      measured['nativeWebView'] = {'x': webBounds.left, 'y': webBounds.top,
+        'width': webBounds.width, 'height': webBounds.height};
       measured['nativeControlsGeometry'] = controls;
       measured['nativeWindow'] = [window.width, window.height];
       measured['keyboardInset'] = keyboard;
@@ -174,7 +192,88 @@ void main() {
         measured['sameUiKitViewElement'] = identical(platformElement,
             tester.element(find.byType(UiKitView)));
       }
+      // Retain the last actual measurements even when stabilization or a later
+      // invariant fails; failure artifacts must show the offending geometry.
+      observations[name] = measured;
+      return measured;
+    }
+
+    var captureToken = 0;
+    Future<Map<String, dynamic>> stableCapture(String name) async {
+      final token = ++captureToken;
+      await web.runJavaScript('''(() => {
+        const capture={token:$token,frame:0,active:true};
+        window.runtimeCapture=capture;
+        const tick=()=>{
+          if(window.runtimeCapture!==capture||!capture.active)return;
+          capture.frame++;
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      })();''');
+      Map<String, dynamic>? latest;
+      String? previous;
+      var previousFrame = -1, stableSamples = 0;
+      try {
+        await until(tester, () async {
+          final measured = await measureCapture(name);
+          latest = measured;
+          final body = measuredRect(measured['body'] as Map);
+          final nativeWebView = measuredRect(measured['nativeWebView'] as Map);
+          final viewportMatches = (body.width - nativeWebView.width).abs() <= 1 &&
+              (body.height - nativeWebView.height).abs() <= 1;
+          final frame = measured['captureFrame'] as int;
+          final signature = jsonEncode(roundedGeometry({
+            for (final key in ['layout', 'nativeControls', 'entryActive', 'body', 'shell', 'input', 'frame',
+              'inputFocused', 'inputHit', 'dockDisplay', 'closeDisplay', 'phase',
+              'nativeControlsGeometry', 'nativeWebView', 'nativeWindow', 'keyboardInset'])
+              key: measured[key],
+          }));
+          final rendered = frame >= 2 && frame > previousFrame && measured['entryActive'] == 'false' &&
+              measured['readyState'] == 'complete' && viewportMatches;
+          stableSamples = rendered ? (signature == previous ? stableSamples + 1 : 1) : 0;
+          previous = signature;
+          previousFrame = frame;
+          measured['captureSynchronization'] = {'webAnimationFrames': frame,
+            'stableSamples': stableSamples, 'viewportMatches': viewportMatches};
+          return stableSamples >= 3;
+        }, '$name stable native/WebKit presentation');
+        return latest!;
+      } finally {
+        await web.runJavaScript('if(window.runtimeCapture?.token===$token)window.runtimeCapture.active=false;');
+      }
+    }
+
+    Future<void> capture(String name) async {
+      final measured = await stableCapture(name);
+      final window = measured['nativeWindow'] as List;
+      final keyboard = measured['keyboardInset'] as num;
+      for (final entry in (measured['nativeControlsGeometry'] as Map).entries) {
+        final rect = measuredRect(entry.value as Map);
+        expect(rect.width, greaterThanOrEqualTo(44), reason: '$name/${entry.key} width');
+        expect(rect.height, greaterThanOrEqualTo(44), reason: '$name/${entry.key} height');
+        expect(rect.left, greaterThanOrEqualTo(0));
+        expect(rect.top, greaterThanOrEqualTo(0));
+        expect(rect.right, lessThanOrEqualTo((window[0] as num) + 1));
+        expect(rect.bottom, lessThanOrEqualTo((window[1] as num) - keyboard + 1));
+      }
       expect(measured['dockDisplay'], 'none');
+      expect(measured['closeDisplay'], 'none');
+      if (name == 'keyboard') {
+        expect(keyboard, greaterThan(0), reason: 'Real software keyboard inset');
+        expect(measured['inputFocused'], isTrue);
+        final input = measuredRect(measured['input'] as Map);
+        expect(input.width, greaterThan(0));
+        expect(input.height, greaterThan(0));
+        for (final parent in ['body', 'shell']) {
+          final bounds = measuredRect(measured[parent] as Map);
+          expect(input.left, greaterThanOrEqualTo(bounds.left - 1), reason: 'Focused input inside $parent');
+          expect(input.top, greaterThanOrEqualTo(bounds.top - 1), reason: 'Focused input inside $parent');
+          expect(input.right, lessThanOrEqualTo(bounds.right + 1), reason: 'Focused input inside $parent');
+          expect(input.bottom, lessThanOrEqualTo(bounds.bottom + 1), reason: 'Focused input inside $parent');
+        }
+        expect(measured['inputHit'], isTrue, reason: 'Focused input is not covered by another element');
+      }
       expect(measured['draft'], 'An unfinished native address');
       expect(measured['framePresent'], isTrue, reason: '$name provider iframe exists');
       expect(measured['providerWindowPresent'], isTrue, reason: '$name provider browsing context exists');
@@ -187,7 +286,6 @@ void main() {
       expect(webCreations, 1);
       expect(measured['sameWebViewElement'], isTrue);
       if (platformElement != null) expect(measured['sameUiKitViewElement'], isTrue);
-      observations[name] = measured;
       await binding.takeScreenshot('projection-native-$name');
     }
 
@@ -221,7 +319,7 @@ void main() {
     await projection.voiceTurn('runtime-landscape-1', 'Show projection mode in landscape format', null);
     await until(tester, () async => (await inspect(web, geometry))['layout'] == 'landscape',
         'Spoken landscape format through the native controller');
-    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump();
     expect(projection.snapshot['selectedPlace'], selectedBefore);
     expect(projection.snapshot['camera'], cameraBefore);
     expect(starts, 0);
