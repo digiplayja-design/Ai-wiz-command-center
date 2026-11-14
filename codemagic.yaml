@@ -112,3 +112,54 @@ workflows:
     artifacts:
       - artifacts/copybox-apple-age-completion.json
       - artifacts/copybox-reviewer-acceptance.json
+
+  korlix-copybox-select-apple-build:
+    name: KORLIX COPY Box — select verified uploaded iOS build
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    environment:
+      vars:
+        # Set from the successful signed upload report before starting this workflow.
+        COPYBOX_EXPECTED_BUILD_NUMBER: "2"
+    # Manual only. No reviewer generation, upload, publishing or review submission.
+    # One exact version/build relationship PATCH at most; readback is mandatory.
+    scripts:
+      - name: Check build identity, selection guards, and idempotence
+        script: |
+          set -euo pipefail
+          python3 -B -m unittest discover -s scripts/tests -p 'test_select_copybox_apple_build.py' -v
+      - name: Select the confirmed uploaded build using the existing Apple integration
+        script: |
+          set -euo pipefail
+          : "${COPYBOX_EXPECTED_BUILD_NUMBER:?Set the confirmed uploaded CopyBox build number}"
+          python3 -m venv "$CM_BUILD_DIR/.copybox-apple-build-tools"
+          "$CM_BUILD_DIR/.copybox-apple-build-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+          "$CM_BUILD_DIR/.copybox-apple-build-tools/bin/python" scripts/select_copybox_apple_build.py \
+            --select-reviewed-build --build-number "$COPYBOX_EXPECTED_BUILD_NUMBER"
+    artifacts:
+      - artifacts/copybox-apple-build-selection.json
+
+
+  korlix-copybox-sync-apple-metadata:
+    name: KORLIX COPY Box — synchronize reviewed Apple description and notes
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    # Manual only. Exact pinned description and review notes from app commit e25b4b57.
+    # No contact/demo fields, build selection, reviewer calls or review submission.
+    scripts:
+      - name: Verify source hashes, field limits, scoped writes, and private-data exclusion
+        script: |
+          set -euo pipefail
+          python3 -B -m unittest discover -s scripts/tests -p 'test_sync_copybox_apple_metadata.py' -v
+      - name: Synchronize only the reviewed description and App Review notes
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.copybox-apple-metadata-tools"
+          "$CM_BUILD_DIR/.copybox-apple-metadata-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+          "$CM_BUILD_DIR/.copybox-apple-metadata-tools/bin/python" scripts/sync_copybox_apple_metadata.py --apply-reviewed-metadata
+    artifacts:
+      - artifacts/copybox-apple-metadata-sync.json
