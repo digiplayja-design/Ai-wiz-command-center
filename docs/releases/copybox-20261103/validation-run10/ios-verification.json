@@ -1,0 +1,328 @@
+{
+  "schema_version": 1,
+  "verified_at_utc": "2026-11-04T14:20:35.327421+00:00",
+  "source_commit": "d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4",
+  "workflow_run": {
+    "id": 41844773126,
+    "number": 10,
+    "url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41844773126",
+    "status": "completed",
+    "conclusion": "success",
+    "source_and_run_metadata_independently_verified": true
+  },
+  "artifact": {
+    "github_artifact_name": "korlix-copybox-ios-simulator",
+    "filename": "KorlixCopyBox-Simulator.zip",
+    "bytes": 57854081,
+    "sha256": "fd46b705f63f0926aa3b14574fd714b93efdef0204deda4e9c1c2c1de24c9228",
+    "format": "ZIP containing a Flutter debug iOS Simulator application",
+    "zip_entries_checked": 126,
+    "zip_crc_passed": true,
+    "zip_crc_failed_entry": null
+  },
+  "compiled_bundle": {
+    "CFBundleIdentifier": "com.korlixdeveloper.copybox",
+    "CFBundleDisplayName": "KORLIX COPY Box",
+    "CFBundleExecutable": "Runner",
+    "CFBundleShortVersionString": "1.0.0",
+    "CFBundleVersion": "1",
+    "MinimumOSVersion": "15.0",
+    "CFBundleSupportedPlatforms": [
+      "iPhoneSimulator"
+    ],
+    "DTPlatformName": "iphonesimulator",
+    "DTPlatformVersion": "26.5",
+    "DTSDKName": "iphonesimulator26.5",
+    "DTXcode": "2660",
+    "UIDeviceFamily": [
+      1,
+      2
+    ]
+  },
+  "application_executable_architectures": [
+    "arm64",
+    "x86_64"
+  ],
+  "native_binaries": [
+    {
+      "path": "Runner",
+      "slices": [
+        {
+          "architecture": "x86_64",
+          "cpu_type": 16777223,
+          "cpu_subtype": 3,
+          "mach_o_file_type": 2,
+          "build_versions": [
+            {
+              "command": "LC_BUILD_VERSION",
+              "platform_id": 7,
+              "platform": "iOS Simulator",
+              "minimum_os": "15.0.0",
+              "sdk": "26.5.0"
+            }
+          ]
+        },
+        {
+          "architecture": "arm64",
+          "cpu_type": 16777228,
+          "cpu_subtype": 0,
+          "mach_o_file_type": 2,
+          "build_versions": [
+            {
+              "command": "LC_BUILD_VERSION",
+              "platform_id": 7,
+              "platform": "iOS Simulator",
+              "minimum_os": "15.0.0",
+              "sdk": "26.5.0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "__preview.dylib",
+      "slices": [
+        {
+          "architecture": "x86_64",
+          "cpu_type": 16777223,
+          "cpu_subtype": 3,
+          "mach_o_file_type": 6,
+          "build_versions": [
+            {
+              "command": "LC_BUILD_VERSION",
+              "platform_id": 7,
+              "platform": "iOS Simulator",
+              "minimum_os": "15.0.0",
+              "sdk": "26.5.0"
+            }
+          ]
+        },
+        {
+          "architecture": "arm64",
+          "cpu_type": 16777228,
+          "cpu_subtype": 0,
+          "mach_o_file_type": 6,
+          "build_versions": [
+            {
+              "command": "LC_BUILD_VERSION",
+              "platform_id": 7,
+              "platform": "iOS Simulator",
+              "minimum_os": "15.0.0",
+              "sdk": "26.5.0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "Runner.debug.dylib",
+      "slices": [
+        {
+          "architecture": "x86_64",
+          "cpu_type": 16777223,
+          "cpu_subtype": 3,
+          "mach_o_file_type": 6,
+          "build_versions": [
+            {
+              "command": "LC_BUILD_VERSION",
+              "platform_id": 7,
+              "platform": "iOS Simulator",
+              "minimum_os": "15.0.0",
+              "sdk": "26.5.0"
+            }
+          ]
+        },
+        {
+          "architecture": "arm64",
+          "cpu_type": 16777228,
+          "cpu_subtype": 0,
+          "mach_o_file_type": 6,
+          "build_versions": [
+            {
+              "command": "LC_BUILD_VERSION",
+              "platform_id": 7,
+              "platform": "iOS Simulator",
+              "minimum_os": "15.0.0",
+              "sdk": "26.5.0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "Frameworks/objective_c.framework/objective_c",
+      "slices": [
+        {
+          "architecture": "x86_64",
+          "cpu_type": 16777223,
+          "cpu_subtype": 3,
+          "mach_o_file_type": 6,
+          "build_versions": [
+            {
+              "command": "LC_BUILD_VERSION",
+              "platform_id": 7,
+              "platform": "iOS Simulator",
+              "minimum_os": "15.0.0",
+              "sdk": "26.5.0"
+            }
+          ]
+        },
+        {
+          "architecture": "arm64",
+          "cpu_type": 16777228,
+          "cpu_subtype": 0,
+          "mach_o_file_type": 6,
+          "build_versions": [
+            {
+              "command": "LC_BUILD_VERSION",
+              "platform_id": 7,
+              "platform": "iOS Simulator",
+              "minimum_os": "15.0.0",
+              "sdk": "26.5.0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "Frameworks/Flutter.framework/Flutter",
+      "slices": [
+        {
+          "architecture": "x86_64",
+          "cpu_type": 16777223,
+          "cpu_subtype": 3,
+          "mach_o_file_type": 6,
+          "build_versions": [
+            {
+              "command": "LC_BUILD_VERSION",
+              "platform_id": 7,
+              "platform": "iOS Simulator",
+              "minimum_os": "15.0.0",
+              "sdk": "26.2.0"
+            }
+          ]
+        },
+        {
+          "architecture": "arm64",
+          "cpu_type": 16777228,
+          "cpu_subtype": 0,
+          "mach_o_file_type": 6,
+          "build_versions": [
+            {
+              "command": "LC_BUILD_VERSION",
+              "platform_id": 7,
+              "platform": "iOS Simulator",
+              "minimum_os": "15.0.0",
+              "sdk": "26.2.0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "path": "Frameworks/App.framework/App",
+      "slices": [
+        {
+          "architecture": "x86_64",
+          "cpu_type": 16777223,
+          "cpu_subtype": 3,
+          "mach_o_file_type": 6,
+          "build_versions": [
+            {
+              "command": "LC_BUILD_VERSION",
+              "platform_id": 7,
+              "platform": "iOS Simulator",
+              "minimum_os": "15.0.0",
+              "sdk": "26.5.0"
+            }
+          ]
+        },
+        {
+          "architecture": "arm64",
+          "cpu_type": 16777228,
+          "cpu_subtype": 0,
+          "mach_o_file_type": 6,
+          "build_versions": [
+            {
+              "command": "LC_BUILD_VERSION",
+              "platform_id": 7,
+              "platform": "iOS Simulator",
+              "minimum_os": "15.0.0",
+              "sdk": "26.5.0"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "purpose_strings": {
+    "NSLocalNetworkUsageDescription": "Allow Flutter tools on your computer to connect and debug your application. This prompt will not appear on release builds."
+  },
+  "purpose_string_explanation": "The sole purpose string is Flutter debug tooling local-network access. There are no camera, microphone, photo-library, or location purpose strings.",
+  "legacy_dependency_scan": {
+    "searched_binary_references": [
+      "DKImagePickerController",
+      "DKPhotoGallery",
+      "DKCamera",
+      "CLLocationManager",
+      "requestWhenInUseAuthorization",
+      "requestAlwaysAuthorization"
+    ],
+    "matched_binary_references": [],
+    "searched_resource_names": [
+      "DKImagePicker",
+      "DKPhotoGallery",
+      "DKCamera",
+      "SwiftyGif",
+      "TOCropViewController",
+      "SDWebImage"
+    ],
+    "matched_resource_paths": []
+  },
+  "privacy_manifests": [
+    "Frameworks/Flutter.framework/PrivacyInfo.xcprivacy",
+    "PrivacyInfo.xcprivacy",
+    "file_picker_darwin_file_picker_darwin.bundle/PrivacyInfo.xcprivacy",
+    "flutter_secure_storage_darwin_flutter_secure_storage_darwin.bundle/PrivacyInfo.xcprivacy",
+    "package_info_plus_package_info_plus.bundle/PrivacyInfo.xcprivacy",
+    "share_plus_share_plus.bundle/PrivacyInfo.xcprivacy",
+    "shared_preferences_foundation_shared_preferences_foundation.bundle/PrivacyInfo.xcprivacy",
+    "url_launcher_ios_url_launcher_ios.bundle/PrivacyInfo.xcprivacy"
+  ],
+  "application_privacy_manifest": {
+    "NSPrivacyTracking": false,
+    "NSPrivacyTrackingDomains": [],
+    "NSPrivacyAccessedAPITypes": [
+      {
+        "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+        "NSPrivacyAccessedAPITypeReasons": [
+          "CA92.1"
+        ]
+      }
+    ]
+  },
+  "retained_native_report": {
+    "github_artifact_name": "korlix-copybox-ios-native-dependencies",
+    "filename": "copybox-ios-native-dependencies.json",
+    "sha256": "06d6e0b52c9cc436251f234bb522d55a45170d256bca5afec41dbf4e6f493245",
+    "independent_comparisons": {
+      "bundle_identifier": true,
+      "version": true,
+      "build": true,
+      "platforms": true,
+      "protected_access_purpose_strings": true,
+      "mach_o_binary_count": true,
+      "legacy_references": true,
+      "privacy_manifest_paths": true,
+      "validation_errors_empty": true
+    },
+    "validation_errors": []
+  },
+  "embedded_mobileprovision_present": false,
+  "limitations": [
+    "This is an iPhoneSimulator debug build, not an iPhoneOS device IPA; it cannot be installed on a physical iPhone/iPad or submitted to TestFlight/App Store.",
+    "This inspection verifies archive integrity, compiled metadata, Mach-O architectures, and the named legacy dependencies. It does not establish runtime or physical-device acceptance.",
+    "No simulator launch, real-account sign-in, AI, clipboard, file sharing/import, App Store signing, provisioning, upload, or review was performed by this inspection."
+  ],
+  "validation_errors": []
+}

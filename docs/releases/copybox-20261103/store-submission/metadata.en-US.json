@@ -1,0 +1,1370 @@
+{
+  "status": "ios_uploaded_android_play_draft_public_submission_pending",
+  "prepared_date": "2026-11-03",
+  "date_timezone": "America/Los_Angeles",
+  "locale": "en-US",
+  "identity": {
+    "display_name": "KORLIX COPY Box",
+    "android_package": "com.korlixdeveloper.copybox",
+    "apple_bundle_id": "com.korlixdeveloper.copybox",
+    "version": "1.0.0",
+    "store_app_ids": {
+      "apple_app_store_connect": "6830765098",
+      "google_play": "4974456296219116192"
+    },
+    "apple_sku_suggestion": "korlix-copy-box-ios"
+  },
+  "google_play": {
+    "title": "KORLIX COPY Box",
+    "short_description": "Organize notes, replies and reusable text in a focused writing workspace",
+    "full_description_file": "description.txt",
+    "category": "PRODUCTIVITY",
+    "support_email": "support@korlixdeveloper.com",
+    "website": "https://www.korlixdeveloper.com/support.html",
+    "privacy_policy_url": "https://www.korlixdeveloper.com/privacy-policy.html",
+    "account_deletion_url": "https://www.korlixdeveloper.com/delete-account.html",
+    "access": "some_functionality_restricted",
+    "app_access_instructions_file": "google-app-access.txt",
+    "release_notes_file": "release-notes.txt",
+    "app_access_instruction_name": "KORLIX account for AI refinement",
+    "additional_access_instructions_file": "google-app-access-short.txt",
+    "console_setup_status": "app_created_free_listing_saved_verified_bundle_accepted_internal_draft_no_rollout",
+    "developer_account_id": "4772708594176030332",
+    "organization_account_confirmed": "KORLIX",
+    "pre_creation_exact_package_search_result": "No results found",
+    "create_app_form": {
+      "staged_fields_only": false,
+      "title": "KORLIX COPY Box",
+      "package_name": "com.korlixdeveloper.copybox",
+      "default_language": "English (United States)",
+      "locale": "en-US",
+      "application_type": "App",
+      "package_availability_check_result": "Package name available",
+      "free_or_paid": "Free",
+      "developer_program_policies_checked": true,
+      "us_export_declaration_checked": true,
+      "create_app_submitted": true
+    },
+    "copybox_record_created": true,
+    "play_upload_certificate_established": false,
+    "play_release_version_code": 1,
+    "app_id": "4974456296219116192",
+    "dashboard_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4974456296219116192/app-dashboard",
+    "fresh_dashboard_creation_verified": true,
+    "automatic_protection": {
+      "displayed_enabled": true,
+      "changed_by_assistant": false
+    },
+    "country_availability_console_status": "saved_and_verified_on_fresh_page_no_review_or_release_submitted",
+    "free_download_price_verification": {
+      "observed_text": "Your app is Free",
+      "save_changes_disabled": true,
+      "fresh_page_verified": true
+    },
+    "country_availability": {
+      "targeted_count": 178,
+      "includes_rest_of_world": true,
+      "all_rows_selected": true,
+      "save_accepted": true,
+      "fresh_page_verified": true,
+      "observed_targeting_label": "Targeted (178)",
+      "production_status": "Inactive",
+      "submitted_for_review": false,
+      "release_submitted": false,
+      "url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4974456296219116192/tracks/production?tab=countryAvailability",
+      "initial_save_confirmation": "The save confirmation referred to Publishing overview for review.",
+      "later_test_and_release_overview_message": "You have no unpublished changes",
+      "publishing_status_evidence_limit": "These observations establish saved country targeting, not a pending review queue. Subsequent listing work is tracked separately."
+    },
+    "dedicated_android_upload_key_ready": true,
+    "dedicated_android_upload_key_certificate_sha256": "4E:92:04:B6:04:11:F4:F5:72:30:51:6E:E3:CD:E8:8D:27:B9:8A:72:FF:3E:72:97:4A:44:94:31:10:B9:3F:A7",
+    "codemagic_signing_reference": "KORLIX_COPYBOX_ANDROID_UPLOAD_KEY",
+    "protected_independent_backup_verified": true,
+    "app_signing": {
+      "managed_by": "Google Play",
+      "key_status": "In use",
+      "displayed_install_base": "0.0%",
+      "digital_asset_links_package_name": "com.korlixdeveloper.copybox",
+      "certificate_sha256": "C5:B8:82:D1:29:C8:46:A9:D6:36:06:75:11:B3:5D:AB:52:1B:DD:3C:9D:D0:0C:57:82:BC:4E:C3:25:07:C8:0A",
+      "certificate_role": "app signing, distinct from the dedicated upload key",
+      "separate_enrollment_or_acceptance_prompt_observed": false,
+      "signing_settings_changed": false,
+      "dedicated_upload_key_registration_verified": false,
+      "bundle_upload_verified": true,
+      "dedicated_upload_key_registration_evidence": "Explicit upload-certificate registration UI was not rechecked after the accepted bundle upload."
+    },
+    "app_content_console_state": {
+      "app_access": {
+        "restricted_access_flow_inspected": true,
+        "full_access_including_premium_attestation_required": true,
+        "working_reviewer_credentials_supplied": false,
+        "declaration_saved": false,
+        "observed_page_path": "/app-content/testing-credentials?source=dashboard",
+        "historical_empty_form_inspection": {
+          "empty_add_details_cancelled": true,
+          "restricted_selection_discarded": true,
+          "declaration_saved": false,
+          "scope": "Earlier inspection before the user supplied the dedicated reviewer identifier."
+        },
+        "observed_form_label": "Sign in details",
+        "dedicated_account_identifier_supplied_by_user": true,
+        "identifier_value_recorded_in_repository": false,
+        "reviewer_record_saved": false,
+        "current_ai_allowance_verified": true,
+        "current_shared_device_capacity_verified": true,
+        "existing_shared_reviewer_account_confirmed_read_only": true,
+        "email_verified_read_only": true,
+        "ultra_entitlement_verified_read_only": true,
+        "account_enabled_status_check_complete": true,
+        "current_copybox_login_verified": false,
+        "end_to_end_copybox_login_ai_test_completed": false,
+        "account_enabled": true,
+        "account_enabled_verified_read_only": true,
+        "effective_ultra_entitlement_verified_read_only": true,
+        "account_verification_evidence_basis": "Scoped read-only connected-account checks and exact deployed backend source bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb; no mutating profile RPC or API invoked.",
+        "historical_prepared_unsaved_form": {
+          "restricted_access_selected_in_unsaved_form": true,
+          "instruction_name_prepared": true,
+          "reviewer_identifier_prepared_in_form": true,
+          "prepared_short_instructions_characters": 390,
+          "prepared_short_instructions_match_repository_file": true,
+          "password_supplied": false,
+          "password_field_blank": true,
+          "full_access_including_premium_attestation_checked": false,
+          "add_attempted": true,
+          "add_save_succeeded": false,
+          "observed_save_error": "Your changes couldn’t be saved",
+          "validation_at_full_access_checkbox": true,
+          "unsaved_form_preserved": true,
+          "scope": "Earlier prepared unsaved form, separate from the later freshly loaded server page."
+        },
+        "fresh_server_state": {
+          "yes_selected": false,
+          "no_selected": false,
+          "reviewer_record_present": false,
+          "save_disabled": true,
+          "verified_on_fresh_page": true
+        },
+        "server_restricted_access_answer": null,
+        "password_saved_in_google": false,
+        "stale_prepared_form_separate_from_saved_state": true
+      },
+      "ads": {
+        "selection": "No, my app does not contain ads",
+        "contains_ads": false,
+        "save_confirmed": true,
+        "save_confirmation": "Change saved. Send for review in Publishing overview.",
+        "dashboard_task_completed": true,
+        "dashboard_completed_progress_at_observation": "1/11",
+        "review_submitted": false,
+        "overview_completion_verified": true,
+        "edited_date": "2026-11-04"
+      },
+      "financial_features": {
+        "selection": "My app doesn't provide any financial features",
+        "documentation_required": false,
+        "form_save_accepted": true,
+        "save_and_save_as_draft_disabled_after_save": true,
+        "overview_completion_verified": true,
+        "review_submitted": false,
+        "edited_date": "2026-11-04"
+      },
+      "health_apps": {
+        "selection": "My app does not have any health features",
+        "regional_requirements": "none",
+        "form_save_accepted": true,
+        "save_confirmation": "Change saved. Send for review in Publishing overview.",
+        "overview_completion_verified": true,
+        "edited_date": "2026-11-04",
+        "review_submitted": false
+      },
+      "actioned_overview": {
+        "count": 3,
+        "declarations": [
+          "Health apps",
+          "Financial features",
+          "Ads"
+        ],
+        "all_edited_date": "2026-11-04",
+        "observed_on_actioned_tab": true,
+        "review_submitted": false,
+        "snapshot_is_historical": true,
+        "scope": "Earlier three-declaration snapshot; later Advertising ID and Government answers are recorded separately without asserting a fresh overview count."
+      },
+      "data_safety_draft": {
+        "observed_page_path": "/app-content/data-privacy-security",
+        "last_step_reached": 4,
+        "collects_or_shares_required_data_types": true,
+        "combined_collection_sharing_question_answer": "Yes",
+        "account_creation_methods": [
+          "Username and password"
+        ],
+        "account_deletion_url": "https://www.korlixdeveloper.com/delete-account.html",
+        "encryption_in_transit_answer": "Yes",
+        "optional_data_only_deletion_answer": "Yes",
+        "data_type_step_reached": true,
+        "data_usage_step_reached": true,
+        "preview_step_reached": false,
+        "draft_saved": true,
+        "save_confirmation": "Your changes have been saved",
+        "final_declaration_completed": false,
+        "submitted_for_review": false,
+        "published": false,
+        "remaining_operational_questions_unchanged": false,
+        "observed_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4974456296219116192/app-content/data-privacy-security?source=dashboard",
+        "data_only_deletion_url": "https://www.korlixdeveloper.com/delete-account.html",
+        "account_deletion_url_saved": true,
+        "data_only_deletion_url_saved": true,
+        "selected_data_types": [
+          "Email address",
+          "User IDs",
+          "Other info",
+          "App interactions",
+          "Other user-generated content",
+          "Device or other IDs"
+        ],
+        "selected_data_type_count": 6,
+        "data_type_selection_saved": true,
+        "data_usage_details_completed_count": 5,
+        "data_usage_details_required_count": 6,
+        "per_type_usage_answers_saved": true,
+        "latest_save_draft_succeeded": true,
+        "remaining_questions_scope": "Five of six usage rows remain saved. Other user-generated content is Not started and Next is disabled. Resolve production credential association and the user sharing/disclosure decision before completing UGC and final preview; no Google mutation occurred in this follow-up.",
+        "analytics_purpose_required_for": [
+          "User IDs",
+          "Device or other IDs",
+          "App interactions"
+        ],
+        "historical_step2_snapshot": {
+          "last_step_reached": 2,
+          "encryption_in_transit_answer": null,
+          "optional_data_only_deletion_answer": null,
+          "data_type_step_reached": false,
+          "data_usage_step_reached": false,
+          "preview_step_reached": false,
+          "draft_saved": true,
+          "save_confirmation": "Your changes have been saved",
+          "scope": "Earlier bounded Step 2 draft before the later saved six-type/Step 4 update."
+        },
+        "provider_sharing_audit": {
+          "status": "standard_provider_roles_resolved_observed_console_sharing_enabled_production_association_unverified",
+          "service_provider_exception_supported_for": [
+            "Supabase",
+            "Render",
+            "Resend",
+            "OpenAI API default processing"
+          ],
+          "explicit_os_share_export_user_initiated_exception_supported": true,
+          "additional_dpa_signing_required_by_this_audit": false,
+          "zero_data_retention_proof_required": false,
+          "collected_yes_shared_no_supported_for": [
+            "Email address",
+            "User IDs",
+            "Other info",
+            "App interactions",
+            "Device or other IDs"
+          ],
+          "non_ephemeral_for_all_six_selected_types": true,
+          "optional_collection_relative_to_guest_writing_for_all_six": true,
+          "ugc_sharing_classification_confirmed": false,
+          "openai_api_input_output_model_improvement_opt_in_observed": true,
+          "openai_api_input_output_model_improvement_opt_in_value": "Enabled for all projects",
+          "documented_default_opt_in_state": "Disabled is the documented provider default. The approved account console was instead observed as Enabled for all projects; neither the default nor this console observation proves the production credential association.",
+          "remaining_provider_question": "Verify whether the production API credential is associated with the observed organization/project, and obtain the user decision on retaining enabled model-improvement sharing with matching disclosures or disabling it with possible complimentary-token eligibility impact. Do not finalize UGC Shared No from the default service-provider exception.",
+          "payload_scope": {
+            "native_client_sends_tier_profile_persona_fields": false,
+            "server_adds_existing_coarse_tier_persona_context": true,
+            "openai_payload_includes_prompt_and_coarse_context": true,
+            "structured_account_email_device_age_policy_event_fields_forwarded_to_openai": false,
+            "other_info_exemption_scope": "Native age/policy/parent declarations; not a claim that the API receives only raw text."
+          },
+          "official_sources": [
+            "https://support.google.com/googleplay/android-developer/answer/10787469?hl=en",
+            "https://supabase.com/legal/customer-resources/data-processing-addendum",
+            "https://render.com/dpa",
+            "https://resend.com/legal/dpa",
+            "https://resend.com/security/gdpr",
+            "https://openai.com/policies/data-processing-addendum/",
+            "https://openai.com/policies/services-agreement/",
+            "https://help.openai.com/en/articles/10306912-sharing-feedback-evaluation-and-fine-tuning-data-and-api-inputs-and-outputs-with-openai"
+          ],
+          "openai_observation_scope": "Approved account console only. Production API credential association with the observed organization/project has not been inspected or matched; the relation to the backend remains indirect.",
+          "openai_default_processing_exception_scope": "Applies to default service-provider processing; it does not settle the separate optional model-improvement sharing classification.",
+          "openai_console_observation": {
+            "approved_saved_account_sign_in_succeeded": true,
+            "organization_label": "Personal",
+            "only_one_organization_exposed": true,
+            "active_project_label": "Default project",
+            "only_one_active_project_exposed": true,
+            "inputs_and_outputs_sharing": "Enabled for all projects",
+            "complimentary_daily_tokens_enrolled": true,
+            "model_feedback_sharing": "Disabled",
+            "evaluation_and_fine_tuning_sharing": "Disabled",
+            "fresh_navigation_verified": true,
+            "settings_changed": false,
+            "production_api_credential_inspected": false,
+            "production_credential_org_project_association_verified": false,
+            "credential_values_accessed": false,
+            "raw_account_identifiers_recorded": false,
+            "setting_change_authorized": false
+          }
+        },
+        "historical_step4_zero_usage_snapshot": {
+          "last_step_reached": 4,
+          "selected_data_type_count": 6,
+          "data_usage_details_completed_count": 0,
+          "per_type_usage_answers_saved": false,
+          "draft_saved": true,
+          "scope": "Earlier saved type selection before the provider audit and five supported usage rows were completed."
+        },
+        "saved_usage_details_by_data_type": {
+          "Email address": {
+            "collected": true,
+            "shared": false,
+            "sharing_basis": "Service-provider exception supported by the provider audit",
+            "processed_ephemerally": false,
+            "collection_optional": true,
+            "purposes": [
+              "App functionality",
+              "Account management",
+              "Fraud prevention, security, and compliance"
+            ],
+            "usage_status": "Completed",
+            "saved_in_outer_draft": true
+          },
+          "User IDs": {
+            "collected": true,
+            "shared": false,
+            "sharing_basis": "Service-provider exception supported by the provider audit",
+            "processed_ephemerally": false,
+            "collection_optional": true,
+            "purposes": [
+              "App functionality",
+              "Account management",
+              "Fraud prevention, security, and compliance",
+              "Analytics"
+            ],
+            "usage_status": "Completed",
+            "saved_in_outer_draft": true
+          },
+          "Other info": {
+            "collected": true,
+            "shared": false,
+            "sharing_basis": "Service-provider exception supported by the provider audit",
+            "processed_ephemerally": false,
+            "collection_optional": true,
+            "purposes": [
+              "App functionality",
+              "Account management",
+              "Fraud prevention, security, and compliance"
+            ],
+            "usage_status": "Completed",
+            "saved_in_outer_draft": true
+          },
+          "App interactions": {
+            "collected": true,
+            "shared": false,
+            "sharing_basis": "Service-provider exception supported by the provider audit",
+            "processed_ephemerally": false,
+            "collection_optional": true,
+            "purposes": [
+              "App functionality",
+              "Analytics",
+              "Fraud prevention, security, and compliance"
+            ],
+            "usage_status": "Completed",
+            "saved_in_outer_draft": true
+          },
+          "Device or other IDs": {
+            "collected": true,
+            "shared": false,
+            "sharing_basis": "Service-provider exception supported by the provider audit",
+            "processed_ephemerally": false,
+            "collection_optional": true,
+            "purposes": [
+              "App functionality",
+              "Account management",
+              "Fraud prevention, security, and compliance",
+              "Analytics"
+            ],
+            "usage_status": "Completed",
+            "saved_in_outer_draft": true
+          }
+        },
+        "other_user_generated_content_usage": {
+          "status": "Not started",
+          "usage_answers_entered": false,
+          "sharing_classification_confirmed": false,
+          "pending_fact": "The approved account console has input/output sharing Enabled for all projects, but its association with the production API credential is unverified. A user decision on the sharing setting and consistent public disclosures is pending; no UGC usage answers have been entered."
+        },
+        "all_per_type_usage_answers_saved": false,
+        "per_type_usage_answers_saved_scope": "Five completed supported rows only; Other user-generated content usage remains wholly unanswered.",
+        "observed_section_progress": {
+          "Personal info": "3/3",
+          "App interactions": "Completed",
+          "Other user-generated content": "Not started",
+          "Device or other IDs": "1/1"
+        },
+        "next_enabled": false
+      },
+      "advertising_id": {
+        "uses_advertising_id": false,
+        "selection": "No",
+        "save_confirmed": true,
+        "save_confirmation": "Change saved",
+        "evidence_basis": "Reviewed source and manifest of the independently verified signed AAB",
+        "review_submitted": false
+      },
+      "remaining_declarations": [
+        "Finish Google Sign in details with working reviewer access and truthful full-access confirmation; its fresh server page still has neither Yes nor No selected and no saved reviewer record. Apple credential fields are populated and saved, but end-to-end COPY Box login/AI testing is outstanding.",
+        "Complete Other user-generated content usage after verifying production API credential association and resolving the user sharing/disclosure decision. The approved account console shows input/output sharing Enabled for all projects; the untouched UGC row and final declaration remain incomplete.",
+        "Complete target audience after Sign in details and any remaining applicable declarations. IARC agreement acceptance and the 27-question capability questionnaire are complete, with generated ratings and fresh Completed readback; this did not submit the app for review or release."
+      ],
+      "government_apps": {
+        "is_government_app": false,
+        "selection": "No",
+        "save_confirmed": true,
+        "fresh_readback_verified": true,
+        "review_submitted": false
+      },
+      "target_audience": {
+        "completed": false,
+        "saved": false,
+        "blocked_by": "Google Sign in details is incomplete"
+      },
+      "content_rating_iarc": {
+        "first_screen_prepared": true,
+        "public_support_contact_prepared": true,
+        "category_prepared": "All Other App Types",
+        "agreement_checked": true,
+        "agreement_acceptance_approval_pending": false,
+        "progressed_beyond_step1": true,
+        "questionnaire_completed": true,
+        "rating_generated": true,
+        "submitted": true,
+        "historical_preapproval_first_screen": {
+          "agreement_checked": false,
+          "next_attempted_once": true,
+          "validation_error": "Terms must be accepted",
+          "progressed_beyond_step1": false,
+          "scope": "Earlier first-screen validation before the user approved IARC agreement acceptance."
+        },
+        "agreement_accepted": true,
+        "agreement_user_approval_received": true,
+        "public_support_contact_saved": true,
+        "category_saved": "All Other App Types",
+        "questionnaire_question_count": 27,
+        "source_backed_capability_questions_reviewed": true,
+        "frequency_questions_present": false,
+        "questionnaire_save_submitted": true,
+        "completion_status": "Completed",
+        "fresh_result_readback_verified": true,
+        "submitted_at_console_display": "Nov 4, 2026, 3:17 PM",
+        "submitted_at_timezone_inferred": false,
+        "certificate_id_display": "-",
+        "certificate_id": null,
+        "ratings": [
+          {
+            "territory": "Brazil",
+            "authority": "ClassInd",
+            "rating": "14+"
+          },
+          {
+            "territory": "North America",
+            "authority": "ESRB",
+            "rating": "Teen"
+          },
+          {
+            "territory": "Europe",
+            "authority": "PEGI",
+            "rating": "Parental Guidance"
+          },
+          {
+            "territory": "Germany",
+            "authority": "USK",
+            "rating": "12+"
+          },
+          {
+            "territory": "Rest of world",
+            "authority": "IARC",
+            "rating": "12+"
+          },
+          {
+            "territory": "Russia",
+            "rating": "12+"
+          },
+          {
+            "territory": "South Korea",
+            "rating": "12+"
+          }
+        ],
+        "result_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4974456296219116192/app-content/content-rating-overview?source=dashboard&applied=true",
+        "app_review_submitted": false,
+        "release_submitted": false,
+        "capability_answers": {
+          "packaged_ratings_relevant_content": false,
+          "native_user_to_user_interaction": false,
+          "online_downloaded_or_ai_generated_content": true,
+          "violence": {
+            "can_contain": true,
+            "primary_purpose": false,
+            "visual": false,
+            "text_or_spoken": true
+          },
+          "sexual_content_or_nudity_excluding_natural_scientific": {
+            "can_contain": true,
+            "primary_purpose": false,
+            "visual": false,
+            "text_or_spoken": true
+          },
+          "offensive_language": {
+            "can_contain": true,
+            "app_focus": false,
+            "minor_profanity": true,
+            "moderate_or_significantly_offensive": true,
+            "discriminatory_language": true,
+            "sexual_expletives": true
+          },
+          "drugs": {
+            "can_contain": true,
+            "app_focus": false,
+            "visual": false,
+            "text_or_spoken": true
+          },
+          "age_restricted_promotion_or_sales_focus": false,
+          "precise_location_sharing": false,
+          "digital_goods_purchases": false,
+          "cash_gift_crypto_or_nft_rewards": false,
+          "web_browser_or_search_engine": false,
+          "primarily_news_or_educational": false
+        },
+        "capability_answer_basis": "Source-backed capabilities of arbitrary text transformation/quotation and plain-text output, with no mature-topic focus; all 27 questions reviewed before final Save. No frequency question was presented."
+      }
+    },
+    "main_store_listing_console_state": {
+      "locale": "en-US",
+      "title": "KORLIX COPY Box",
+      "short_description": "Organize notes, replies and reusable text in a focused writing workspace",
+      "short_description_characters": 72,
+      "full_description_characters": 2685,
+      "full_description_matches_prepared_trimmed_file": true,
+      "listing_text_entered": true,
+      "save_confirmed": true,
+      "save_confirmation": "Default store listing updated",
+      "observed_status": "Ready to send for review",
+      "status_verified_on_overview_and_reopened_edit": true,
+      "icon_uploaded": true,
+      "icon_count": 1,
+      "icon_dimensions": [
+        512,
+        512
+      ],
+      "feature_graphic_uploaded": true,
+      "feature_graphic_count": 1,
+      "feature_graphic_dimensions": [
+        1024,
+        500
+      ],
+      "screenshots_uploaded_count": 4,
+      "screenshot_dimensions": [
+        1080,
+        1920
+      ],
+      "screenshot_order": [
+        "01 workspace",
+        "02 templates",
+        "03 focus editor",
+        "04 dark workspace"
+      ],
+      "prepared_asset_hashes_checked": true,
+      "uploaded_assets_modified": false,
+      "ai_asset_label_saved": true,
+      "ai_labeled_assets": [
+        "feature-graphic.png"
+      ],
+      "unlabeled_assets": [
+        "icon",
+        "four actual Flutter screenshots"
+      ],
+      "category": "Productivity",
+      "category_saved": true,
+      "support_email": "support@korlixdeveloper.com",
+      "support_url": "https://www.korlixdeveloper.com/support.html",
+      "public_phone_blank": true,
+      "public_contact_saved": true,
+      "privacy_policy_url": "https://www.korlixdeveloper.com/privacy-policy.html",
+      "privacy_policy_url_saved": true,
+      "overview_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4974456296219116192/store-listings",
+      "pending_final_confirmation": [],
+      "review_submitted": false,
+      "release_submitted": false,
+      "scope": "Ready to send for review describes the saved main store listing only; required app-content and release gates remain incomplete."
+    },
+    "internal_testing_draft": {
+      "track_id": "4699672053930799570",
+      "release_id": "1",
+      "release_name": "1.0.0 (1) - initial internal test",
+      "release_notes_locale": "en-US",
+      "prepared_release_notes_entered": true,
+      "save_as_draft_confirmed": true,
+      "save_confirmation": "Changes saved. You can now preview your release before publishing it.",
+      "binary_uploaded": true,
+      "binary_processing_verified": true,
+      "review_submitted": false,
+      "rollout_submitted": false,
+      "tester_invitations_sent": false,
+      "uploaded_aab_bytes": 55864103,
+      "uploaded_aab_sha256": "cc9e3b467fe3b4409db2ce93cc9ebc961cddd09333174bc9a82227c87f9bebaa",
+      "processed_bundle_label": "App bundle 1 (1.0.0)",
+      "version_name": "1.0.0",
+      "version_code": 1,
+      "min_api_display": "24+",
+      "target_sdk": 36,
+      "screen_layouts_count": 4,
+      "abis_count": 3,
+      "required_features_count": 1,
+      "retrace_mapping_attached": true,
+      "native_debug_symbols_attached": true,
+      "observed_enhancement_label": "Enhanced",
+      "preview_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4974456296219116192/tracks/4699672053930799570/releases/1/review",
+      "preview_warning_count": 1,
+      "preview_warning": "No testers specified; the release is not available to any users.",
+      "preview_errors_displayed": false,
+      "download_size_estimate": "11 MB",
+      "download_time_estimate": "6s",
+      "save_and_publish_available": true,
+      "save_and_publish_clicked": false,
+      "testers_selected": false,
+      "track_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4974456296219116192/tracks/internal-testing?releaseType=defaultReleases",
+      "track_status": "Inactive",
+      "release_status": "Draft",
+      "final_track_readback_verified": true,
+      "setup_steps_completed": 1,
+      "setup_steps_total": 3,
+      "completed_step": "Create a new release",
+      "countries_count": 178,
+      "supported_android_devices": 19573,
+      "bundle_explorer_artifact_id": "4860247929005203987",
+      "upload_certificate_registration_ui_rechecked": false
+    },
+    "play_upload_certificate_evidence_status": "explicit_registration_ui_not_rechecked_after_accepted_bundle_upload",
+    "play_upload_completed": true
+  },
+  "apple_app_store": {
+    "name": "KORLIX COPY Box",
+    "subtitle": "Save, organize, refine & reuse",
+    "promotional_text": "Keep useful words close with colored boxes, reusable templates, version recovery and optional AI refinement. Write locally, then copy or share when you are ready.",
+    "keywords": "notes,snippets,templates,drafts,writing,organizer,productivity,replies,editor,workspace",
+    "description_file": "description.txt",
+    "primary_category": "PRODUCTIVITY",
+    "secondary_category_suggestion": "UTILITIES",
+    "support_url": "https://www.korlixdeveloper.com/support.html",
+    "marketing_url": null,
+    "privacy_policy_url": "https://www.korlixdeveloper.com/privacy-policy.html",
+    "copyright": "2026 Korlix INC",
+    "review_notes_file": "apple-review-notes.txt",
+    "review_sign_in_required_for_optional_ai": true,
+    "review_contact_email": "support@korlixdeveloper.com",
+    "review_contact_name": null,
+    "review_contact_phone": null,
+    "reviewer_credentials": "Enter only in the private console fields; never in this package.",
+    "first_version_whats_new_field": false,
+    "release_option": "manual_after_approval",
+    "release_option_saved": true,
+    "private_console_review_section_status": "contact_notes_and_reviewer_credential_fields_saved_end_to_end_copybox_login_ai_test_pending",
+    "app_store_build_selection_saved": true,
+    "selected_build_uuid": "ddd61c5d-982c-404c-9aaa-d280bd0495be",
+    "subtitle_saved": true,
+    "primary_category_saved": true,
+    "secondary_category_console_value": null,
+    "privacy_policy_url_saved": true,
+    "privacy_declaration_status": "published_with_corrected_analytics_purposes_fresh_page_verified",
+    "privacy_saved_detail_summary": {
+      "published_details_by_data_type": {
+        "Email Address": {
+          "purposes": [
+            "App Functionality"
+          ],
+          "linked_to_user": true,
+          "used_for_tracking": false
+        },
+        "Customer Support": {
+          "purposes": [
+            "App Functionality"
+          ],
+          "linked_to_user": true,
+          "used_for_tracking": false
+        },
+        "Other User Content": {
+          "purposes": [
+            "App Functionality"
+          ],
+          "linked_to_user": true,
+          "used_for_tracking": false
+        },
+        "User ID": {
+          "purposes": [
+            "App Functionality",
+            "Analytics"
+          ],
+          "linked_to_user": true,
+          "used_for_tracking": false
+        },
+        "Device ID": {
+          "purposes": [
+            "App Functionality",
+            "Analytics"
+          ],
+          "linked_to_user": true,
+          "used_for_tracking": false
+        },
+        "Product Interaction": {
+          "purposes": [
+            "App Functionality",
+            "Analytics"
+          ],
+          "linked_to_user": true,
+          "used_for_tracking": false
+        },
+        "Other Data Types": {
+          "purposes": [
+            "App Functionality"
+          ],
+          "linked_to_user": true,
+          "used_for_tracking": false
+        }
+      },
+      "analytics_data_types": [
+        "User ID",
+        "Device ID",
+        "Product Interaction"
+      ],
+      "analytics_row_count": 3,
+      "all_seven_types_linked": true,
+      "tracking_used": false,
+      "fresh_published_page_verified": true
+    },
+    "age_questionnaire_status": "inspected_cancelled_without_save_ai_content_frequency_unresolved",
+    "content_rights_status": "Saved: Yes, this app has the necessary rights to its third-party content. Selected after the user explicitly confirmed necessary rights; Done and main Save completed and the saved value was verified.",
+    "private_console_contact_and_notes_saved": true,
+    "private_console_review_section_complete": false,
+    "private_console_review_verification": {
+      "reload_save_disabled": true,
+      "first_and_last_names_persisted": true,
+      "notes_character_count": 2606,
+      "phone_and_email_exact_value_comparison_available": false,
+      "phone_and_email_readback_limit": "The observation layer redacts these fields; Save succeeded, but exact-value readback comparison was unavailable.",
+      "actual_phone_recorded_in_repository": false
+    },
+    "paid_apps_agreement_status": "Active",
+    "paid_apps_agreement_displayed_term": {
+      "start": "2026-11-04",
+      "end": "2027-06-22"
+    },
+    "download_price": {
+      "kind": "Free",
+      "usd_price": "0.00",
+      "zero_local_currency_prices": true,
+      "country_count": 175,
+      "saved_verified": true
+    },
+    "country_availability": {
+      "country_region_count": 175,
+      "all_rows_status": "Available on App Release",
+      "future_countries_included": true,
+      "saved_verified": true
+    },
+    "manual_release_reconfirmed_after_pricing": true,
+    "private_console_reviewer_access": {
+      "dedicated_account_identifier_supplied_by_user": true,
+      "identifier_value_recorded_in_repository": false,
+      "apple_user_name_entered": true,
+      "apple_user_name_save_accepted": true,
+      "apple_save_disabled_after_save": true,
+      "password_supplied": true,
+      "password_field_blank": false,
+      "current_ai_allowance_verified": true,
+      "current_shared_device_capacity_verified": true,
+      "apple_user_name_fresh_reload_persistence_verified": true,
+      "apple_user_name_reload_evidence_status": "After the user reported Saved, a fresh canonical version page shows User name and Password populated, Save disabled, and sign-in-required checked. This presence check did not read, print, capture, or store the password value. End-to-end COPY Box login/AI testing remains outstanding.",
+      "apple_user_name_fresh_reload_populated": true,
+      "apple_user_name_exact_readback_available": true,
+      "existing_shared_reviewer_account_confirmed_read_only": true,
+      "email_verified_read_only": true,
+      "ultra_entitlement_verified_read_only": true,
+      "account_capacity_evidence_status": "Existing enabled shared KORLIX reviewer account, verified email, effective Ultra entitlement, and available AI/device capacity confirmed by scoped read-only account checks interpreted with exact live backend source; no account values or raw counts recorded.",
+      "account_enabled_status_check_complete": true,
+      "current_copybox_login_verified": false,
+      "end_to_end_copybox_login_ai_test_completed": false,
+      "apple_user_name_exact_visual_readback_verified": true,
+      "apple_user_name_accessibility_observation_redacted": true,
+      "account_enabled": true,
+      "account_enabled_verified_read_only": true,
+      "effective_ultra_entitlement_verified_read_only": true,
+      "account_verification_evidence_basis": "Scoped read-only connected-account checks and exact deployed backend source bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb; no mutating profile RPC or API invoked.",
+      "historical_identifier_only_save": {
+        "user_name_saved": true,
+        "password_field_blank": true,
+        "scope": "Earlier observation before the user completed the password field and reported Saved."
+      },
+      "password_field_populated": true,
+      "password_population_verified_after_fresh_reload": true,
+      "reviewer_credential_fields_saved": true,
+      "user_reported_saved": true,
+      "password_value_read": false,
+      "password_value_printed": false,
+      "password_value_captured": false,
+      "password_value_recorded_in_repository": false,
+      "complete_working_credentials_verified": false,
+      "credential_fields_supplied_and_saved": true
+    },
+    "analytics_purpose_correction": {
+      "status": "published_all_three_purpose_corrections_and_fresh_page_verified",
+      "required_data_types": [
+        "User ID",
+        "Device ID",
+        "Product Interaction"
+      ],
+      "required_purposes_for_each": [
+        "App Functionality",
+        "Analytics"
+      ],
+      "linked_to_user_remains": true,
+      "used_for_tracking_remains": false,
+      "evidence_backend_commit": "bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb",
+      "evidence_source_paths": [
+        "backend/server.js",
+        "backend/onboarding/measurement.mjs"
+      ],
+      "live_database_schema_and_function_metadata_confirmed": true,
+      "customer_event_rows_accessed": false,
+      "wizard_final_action_label": "Publish",
+      "published": true,
+      "publication_user_approval_received": true,
+      "publication_approval_pending": false,
+      "final_publish_confirmation_clicked": true,
+      "tracking_change_required": false,
+      "evidence_summary": "COPY Box sign-up/sign-in events record a hashed installation identifier, platform, event time, authentication event/error category and account identifier after successful sign-in for authentication/onboarding/AI-conversion analytics.",
+      "source_functions": {
+        "client_copybox_auth": [
+          "deviceHeaders",
+          "headers",
+          "_ensureDevice"
+        ],
+        "backend_server": [
+          "createOnboardingMeasurement",
+          "observeAuth"
+        ],
+        "backend_measurement": [
+          "installationContext",
+          "record",
+          "observeAuth",
+          "write",
+          "summary"
+        ]
+      },
+      "metadata_evidence": {
+        "event_table": "public.korlix_onboarding_events",
+        "summary_function": "korlix_onboarding_summary",
+        "scope": "Table/column and function-definition metadata only; no customer event rows or mutating RPC invoked."
+      },
+      "analytics_scope_limit": "This evidence supports the three identifier/interaction categories; it does not establish analytics use of email, age band, prompt/report text, advertising, tracking, guest editing or app-open telemetry.",
+      "historical_preapproval_state": {
+        "local_wizard_edit": {
+          "data_type": "User ID",
+          "analytics_checkbox_checked": true,
+          "scope": "Local unsaved wizard state only"
+        },
+        "server_draft_saved": false,
+        "published": false,
+        "scope": "Earlier state before explicit user approval and completed publication."
+      },
+      "published_data_types": [
+        "User ID",
+        "Device ID",
+        "Product Interaction"
+      ],
+      "published_purposes_for_each": [
+        "App Functionality",
+        "Analytics"
+      ],
+      "final_wizard_linked_to_user_verified": true,
+      "final_wizard_tracking_no_verified": true,
+      "fresh_published_page_verified": true,
+      "fresh_analytics_row_count": 3,
+      "fresh_all_seven_types_linked": true,
+      "fresh_data_not_linked_section_present": false,
+      "fresh_tracking_section_present": false,
+      "published_by": "Ricardo Bailey",
+      "publication_confirmation": "Published a few seconds ago by Ricardo Bailey",
+      "user_id_intermediate_linkage_correction": {
+        "initial_publish_new_purpose_linkage_mixed": true,
+        "detected_in_privacy_preview": true,
+        "explicit_linked_to_user_yes_selected": true,
+        "republished": true,
+        "final_fully_linked_state_verified": true,
+        "current_mixed_linkage": false,
+        "scope": "Resolved intermediate User ID state, not the current published declaration."
+      },
+      "new_purpose_linkage_explicitly_set_before_publish_for": [
+        "Device ID",
+        "Product Interaction"
+      ]
+    },
+    "content_rights_form_state": {
+      "modal_opened": true,
+      "yes_selected": true,
+      "no_selected": false,
+      "done_clicked": true,
+      "main_save_completed": true,
+      "answer_submitted": true,
+      "save_confirmation": "Saved",
+      "observed_saved_value": "Yes, this app has the necessary rights to its third-party content.",
+      "saved_value_verified": true,
+      "user_confirmed_necessary_rights": true
+    },
+    "historical_initial_privacy_summary": {
+      "purpose": "App Functionality",
+      "linked_to_user": true,
+      "used_for_tracking": false,
+      "scope": "Superseded initial uniform-purpose publication; the current per-type map below records the completed correction."
+    },
+    "content_rights_completed": true
+  },
+  "testflight": {
+    "what_to_test_file": "testflight-what-to-test.txt",
+    "feedback_email": "support@korlixdeveloper.com",
+    "uploaded_version": "1.0.0",
+    "uploaded_build": "1",
+    "apple_build_uuid": "ddd61c5d-982c-404c-9aaa-d280bd0495be",
+    "observed_status": "Ready to Submit",
+    "testing_groups_configured": false,
+    "tester_invitations_sent": false,
+    "what_to_test_saved": true,
+    "binary_state": "Validated"
+  },
+  "not_configured_by_this_package": {
+    "trial": null,
+    "standalone_purchase_products": null,
+    "release_schedule": null,
+    "google_play_privacy_attestations": null,
+    "review_account": "Apple credential fields are populated and saved after fresh reload; no password value read, captured, or recorded. Existing account, verified email, effective Ultra entitlement and available AI/device capacity confirmed read-only. End-to-end COPY Box login/AI testing and Google reviewer setup remain incomplete; the fresh Google server page has no selected Yes/No answer or reviewer record.",
+    "apple_store_age_rating": null
+  },
+  "evidence_files": {
+    "privacy": "privacy-evidence.md",
+    "public_page_additions": "public-page-additions.md",
+    "assets": "screenshot-plan.md",
+    "asset_manifest": "../store-assets/manifest.json",
+    "release_status": "../release-status.json",
+    "android_artifact_verification": "../android-artifact-verification.json"
+  },
+  "field_lengths": {
+    "name": {
+      "characters": 15,
+      "utf8_bytes": 15,
+      "limit": 30,
+      "limit_unit": "characters"
+    },
+    "apple_subtitle": {
+      "characters": 30,
+      "utf8_bytes": 30,
+      "limit": 30,
+      "limit_unit": "characters"
+    },
+    "google_short_description": {
+      "characters": 72,
+      "utf8_bytes": 72,
+      "limit": 80,
+      "limit_unit": "characters"
+    },
+    "apple_promotional_text": {
+      "characters": 162,
+      "utf8_bytes": 162,
+      "limit": 170,
+      "limit_unit": "characters"
+    },
+    "apple_keywords": {
+      "characters": 87,
+      "utf8_bytes": 87,
+      "limit": 100,
+      "limit_unit": "bytes"
+    },
+    "description.txt": {
+      "characters": 3053,
+      "utf8_bytes": 3053
+    },
+    "apple-review-notes.txt": {
+      "characters": 3050,
+      "utf8_bytes": 3050
+    },
+    "google-app-access.txt": {
+      "characters": 1777,
+      "utf8_bytes": 1777
+    },
+    "testflight-what-to-test.txt": {
+      "characters": 2399,
+      "utf8_bytes": 2401
+    },
+    "release-notes.txt": {
+      "characters": 314,
+      "utf8_bytes": 314
+    },
+    "google-app-access-short.txt": {
+      "characters": 479,
+      "utf8_bytes": 479
+    }
+  },
+  "handoff_provenance": {
+    "app_source_commit": "d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4",
+    "validation_run_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41844773126",
+    "asset_manifest": "../store-assets/manifest.json",
+    "store_submission_completed": false,
+    "physical_device_acceptance_completed": false,
+    "live_account_acceptance_completed": false,
+    "validation_status": "passed",
+    "validation_test_counts": {
+      "shared": 59,
+      "app": 81,
+      "total": 140
+    },
+    "analyzers": "no_issues",
+    "test_builds_completed": [
+      "android_debug_apk",
+      "ios_simulator_app",
+      "web_preview"
+    ],
+    "store_assets": {
+      "status": "generated_packaged_and_visually_reviewed",
+      "capture_source_commit": "d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4",
+      "screenshot_count": 16,
+      "screenshot_format": "RGB PNG",
+      "screenshot_dimensions": {
+        "google_play_phone": [
+          1080,
+          1920
+        ],
+        "apple_iphone_large_dynamic_island": [
+          1260,
+          2736
+        ],
+        "apple_ipad_13_inch": [
+          2064,
+          2752
+        ],
+        "apple_iphone_medium_dynamic_island": [
+          1206,
+          2622
+        ]
+      },
+      "capture_source_scope": "Original twelve screenshots; additional capture runs are recorded separately.",
+      "additional_capture_runs": [
+        {
+          "capture_source_commit": "339e41f055882a24e35cd43ea39b273c1ff960a4",
+          "capture_run_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41872257288",
+          "profile": "apple-iphone-medium",
+          "directory": "app-store/iphone-medium",
+          "screenshot_count": 4,
+          "logical_viewport": [
+            402,
+            874
+          ],
+          "render_scale": 3,
+          "dimensions": [
+            1206,
+            2622
+          ],
+          "status": "packaged_and_visually_reviewed"
+        }
+      ],
+      "store_upload_status": {
+        "apple_iphone_large": "four_uploaded_and_visible",
+        "apple_iphone_medium": "four_uploaded_and_visible",
+        "apple_ipad_13_inch": "four_uploaded_and_visible",
+        "google_play": "icon_feature_graphic_four_phone_screenshots_and_listing_fields_saved_ready_to_send_for_review"
+      }
+    },
+    "signed_ios_candidate_completed": true,
+    "signed_android_candidate_completed": true,
+    "ios_upload_completed": true,
+    "signed_ios_source_commit": "4dd07806ff471263b1fb82d593f300cfe9693a4d",
+    "codemagic_build_id": "6aeb61e5004ce28f20edd5ba",
+    "release_status_file": "../release-status.json",
+    "signed_android_artifact_verification_completed": true,
+    "signed_android_source_commit": "2c6544dba9afe2117181afabdc78a856ef4f249d",
+    "android_play_upload_completed": true,
+    "android_play_internal_draft_saved": true,
+    "android_play_rollout_submitted": false
+  },
+  "checkpoint_date": "2026-11-04",
+  "approved_store_setup": {
+    "user_response": "Approve setup",
+    "free_download_both_stores": true,
+    "all_supported_countries": true,
+    "note": "Free download and all supported country availability are saved and verified in both stores; Apple availability begins on App Release and Google production remains Inactive. No review or release has been submitted.",
+    "saved_price_and_availability_verified_in_both_stores": true
+  },
+  "android_candidate": {
+    "build_id": "6aeb7ea6004ce28f20ede0b2",
+    "build_index": 2,
+    "url": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6aeb7ea6004ce28f20ede0b2",
+    "workflow": "korlix-copybox-android-candidate",
+    "branch": "feature/korlix-copy-box-20261103",
+    "source_commit": "2c6544dba9afe2117181afabdc78a856ef4f249d",
+    "instance_type": "mac_mini_m2",
+    "observed_worker": "Mac mini M2",
+    "status": "finished_successfully",
+    "ssh_enabled": false,
+    "vnc_enabled": false,
+    "automatic_google_play_publishing": false,
+    "successful_build_verified": true,
+    "actual_aab_verification_completed": true,
+    "started_at_utc_display": "2026-11-04 18:56 UTC",
+    "started_at_console_display": "Nov 4, 2026 13:56 EST",
+    "validation": {
+      "evidence_source": "Codemagic validation log",
+      "shared_analyzer_result": "No issues",
+      "shared_analyzer_duration_seconds": 5.9,
+      "app_analyzer_result": "No issues",
+      "app_analyzer_duration_seconds": 7.5,
+      "shared_tests_passed": 59,
+      "app_tests_passed": 81,
+      "total_tests_passed": 140,
+      "all_tests_passed": true
+    },
+    "observed_console_status": "FINISHED",
+    "duration": "7m 16s",
+    "duration_seconds": 436,
+    "packaging_duration": "4m 29s",
+    "publishing_duration": "6s",
+    "cleanup_duration": "<1s",
+    "ci_native_scan": {
+      "validation_errors": [],
+      "apk_zip_layout_checked": false,
+      "additional_checks_required": [
+        "bundletool packaging configuration",
+        "generated APK ZIP layout"
+      ],
+      "additional_checks_subsequently_completed": true,
+      "additional_checks_evidence": "android-artifact-verification.json; separate downloaded-AAB and generated-APK static verification"
+    },
+    "artifacts": [
+      {
+        "name": "KorlixCopyBox.aab",
+        "codemagic_displayed_size": "53.28 MB",
+        "downloaded": true,
+        "downloaded_nonempty": true,
+        "downloaded_bytes": 55864103,
+        "sha256": "cc9e3b467fe3b4409db2ce93cc9ebc961cddd09333174bc9a82227c87f9bebaa"
+      },
+      {
+        "name": "Ai-wiz-command-center_2_artifacts.zip",
+        "codemagic_displayed_bytes": 793
+      }
+    ],
+    "artifact_verification_report": "../android-artifact-verification.json",
+    "artifact_verification_status": "passed_with_documented_jarsigner_warnings"
+  },
+  "android_artifact_verification": {
+    "report_file": "../android-artifact-verification.json",
+    "report_bytes": 14655,
+    "report_sha256": "9ea3e9c54fc6a95ea0799b7618c43050061e3e4e87dda9d46fa953b12d87249b",
+    "status": "passed_with_documented_jarsigner_warnings",
+    "verified_at_utc": "2026-11-04T19:10:02.025979+00:00",
+    "actual_downloaded_aab_checked": true,
+    "bundletool_validate_passed": true,
+    "upload_certificate_matches": true,
+    "signed_payload_entries": 406,
+    "unsigned_payload_entries": 0,
+    "all_payload_sha256_digests_match": true,
+    "manifest": {
+      "package": "com.korlixdeveloper.copybox",
+      "version_name": "1.0.0",
+      "version_code": 1,
+      "compile_sdk": 36,
+      "min_sdk": 24,
+      "target_sdk": 36,
+      "debuggable_declared": null,
+      "debuggable_effective": false,
+      "allow_backup": false,
+      "uses_cleartext_traffic": false,
+      "extract_native_libs": false,
+      "permissions": [
+        "android.permission.INTERNET",
+        "com.korlixdeveloper.copybox.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+      ],
+      "native_library_alignment": "PAGE_ALIGNMENT_16K",
+      "uncompress_native_libraries": true,
+      "defined_permissions": [
+        {
+          "name": "com.korlixdeveloper.copybox.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION",
+          "protection_level": "0x00000002"
+        }
+      ],
+      "validation_errors": []
+    },
+    "aab_native_library_count": 12,
+    "aab_native_validation_errors": [],
+    "generated_universal_apk": {
+      "bytes": 57115896,
+      "sha256": "d4ccf6591dcdc0008e0f4c34316c9d9062b45c26d49ae9dad337924f2b571bab",
+      "signature_verified": true,
+      "v2_verified": true,
+      "v3_verified": true,
+      "upload_certificate_matches": true,
+      "native_library_count": 12,
+      "all_native_elf_loads_16k_aligned": true,
+      "all_native_libraries_uncompressed": true,
+      "all_native_zip_offsets_mod_16384_zero": true
+    },
+    "documented_jarsigner_warning_codes": [
+      "SELF_SIGNED_UPLOAD_CERTIFICATE",
+      "NO_JAR_SIGNATURE_TIMESTAMP",
+      "POSIX_ATTRIBUTES_NOT_SIGNED",
+      "JAR_STREAMING_MANIFEST_ORDER"
+    ],
+    "validation_errors": [],
+    "limits": {
+      "physical_device_runtime_tested": false,
+      "android_16k_page_runtime_tested": false,
+      "installation_tested": false,
+      "google_play_upload_or_acceptance_established_by_this_report": false,
+      "google_play_delivered_apk_checked": false,
+      "source_tests_repeated_locally": false,
+      "generated_apk_signer_role": "Dedicated upload certificate; Google Play delivered APKs use the separately managed app-signing certificate."
+    }
+  },
+  "backend_rewrite_routing": {
+    "status": "reviewed_fix_deployed_live_health_verified_copybox_acceptance_pending",
+    "observed_issue": "COPY Box rewrite requests containing certain keywords could be routed to web search instead of the requested text rewrite.",
+    "baseline_keyword_cases_reproduced": 3,
+    "request_markers": {
+      "source": "korlix_copybox",
+      "purpose": "copy_box_rewrite"
+    },
+    "native_client_markers_verified_at_source": "2c6544dba9afe2117181afabdc78a856ef4f249d",
+    "candidate_commit": "91496adc4eec8ba5523dd4c2c27813e84e5670d5",
+    "exact_parent_live_commit": "bf830fd98fd2e1846fed8b00e5ad73b69cbad6cb",
+    "pull_request_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/pull/45",
+    "pull_request_state": "closed",
+    "draft": false,
+    "merged": true,
+    "merge_commit": "901ca58c95ba7a16abf56e20361f7f021924df3e",
+    "merge_tree_matches_reviewed_candidate": true,
+    "reviewed_candidate_to_merge_changed_files": [],
+    "changed_files": [
+      "backend/server.js",
+      "backend/test/copybox_rewrite_routing.test.mjs"
+    ],
+    "behavior_scope": "Exact COPY Box marker pair suppresses search and file routing; ordinary chat, Resume Studio, and requests with only partial markers retain prior routing in the focused tests.",
+    "validation": {
+      "focused_route_and_existing_resume_tests_passed": 9,
+      "failed": 0,
+      "new_copybox_checks_including_subtests": 7,
+      "existing_resume_studio_tests": 2,
+      "syntax_check_passed": true,
+      "diff_check_passed": true,
+      "remote_blobs_match_tested_bytes": true,
+      "app_binary_rebuilt": false,
+      "app_runtime_tested": false,
+      "device_tested": false
+    },
+    "render_service_id": "srv-d8csvkkp3tds73emfikg",
+    "configured_branch": "release/signup-plan-intent-20261021",
+    "automatic_deployments_enabled": false,
+    "configured_branch_matched_merge_immediately_before_trigger": true,
+    "existing_render_connector_read_only_access_verified": true,
+    "deployment": {
+      "exact_requested_commit": "901ca58c95ba7a16abf56e20361f7f021924df3e",
+      "trigger_attempted": true,
+      "trigger_accepted": true,
+      "automatic_approval_review_rejected": false,
+      "tool_reported_is_error": false,
+      "specific_production_deployment_approval_pending": false,
+      "deployment_created": true,
+      "production_mutation_executed": true,
+      "bypass_attempted": false,
+      "browser_authentication_retried": false,
+      "latest_live_commit": "901ca58c95ba7a16abf56e20361f7f021924df3e",
+      "latest_live_deploy_id": "dep-dbls9fajnfac73dbjbg0",
+      "specific_production_deployment_user_approval_received": true,
+      "deployment_id": "dep-dbls9fajnfac73dbjbg0",
+      "created_at_utc": "2026-11-04T23:50:21.918367Z",
+      "status": "live",
+      "finished_at_utc": "2026-11-04T23:51:07.079135Z",
+      "live_state_verified_read_only_after_deployment": true,
+      "render_build_event_succeeded": true,
+      "render_deploy_event_succeeded": true,
+      "previous_rejected_attempts": {
+        "count": 2,
+        "most_recent_user_reply": "Continue",
+        "most_recent_rejection_reason": "Automatic approval review judged that wording insufficiently explicit to authorize this exact shared production deployment after the earlier rejection.",
+        "neither_attempt_created_a_deployment": true,
+        "superseded_by_later_explicit_approval": true
+      },
+      "health_verification": {
+        "verified": true,
+        "method": "GET",
+        "url": "https://chee-chai-chee-backend.onrender.com/api/health",
+        "authenticated": false,
+        "request_method": "Direct Python HTTP request",
+        "http_status": 200,
+        "content_type_is_json": true,
+        "response_status": "Korlix AI backend is healthy",
+        "scope": "Deployment liveness only; no actual COPY Box device, login, or AI acceptance test."
+      },
+      "runtime_observation": {
+        "read_only": true,
+        "log_time_display": "23:54:19",
+        "discover_news_refresh_fallback_observed": true,
+        "fallback_reason": "provider_or_storage",
+        "error_class": "Error",
+        "previous_edition_retained": true,
+        "startup_or_deploy_failure_observed": false,
+        "scope": "Limited runtime-log inspection; this is not a claim that the runtime is error-free."
+      }
+    },
+    "remaining_scope": "Complete actual COPY Box login/AI and device acceptance. The exact reviewed backend is deployed and its unauthenticated health endpoint responds successfully; those checks do not establish product-runtime acceptance or a new signed binary.",
+    "configured_root_directory": "backend"
+  },
+  "model_improvement_release_revision_20261114": {
+    "status": "PREPARED_NOT_PUBLISHED_OR_SUBMITTED",
+    "user_choice": "B",
+    "decision_resolved": true,
+    "evidence_file": "training-disclosure-update-20261114.json",
+    "consent_notice_version": "copybox.third-party-ai-consent.v4.model-training",
+    "current_production_project_setting_verified": false,
+    "existing_console_observations_are_historical": true,
+    "proposed_apple_other_user_content_purposes": [
+      "App Functionality",
+      "Other Purposes"
+    ],
+    "proposed_google_ugc_collected": true,
+    "proposed_google_ugc_shared": true,
+    "proposed_google_ugc_collection_purposes": [
+      "App functionality",
+      "Analytics",
+      "Fraud prevention, security, and compliance"
+    ],
+    "proposed_google_ugc_sharing_purposes": [
+      "App functionality",
+      "Analytics"
+    ],
+    "google_model_improvement_analytics_mapping_is_inference": true,
+    "saved_console_fields_modified_by_this_preparation": false,
+    "apple_review_risk": {
+      "status": "MATERIAL_REVIEW_RISK_NOT_OBSERVED_REJECTION",
+      "interpretationIsInference": true,
+      "description": "Apple may interpret requiring model-training permission for AI access using paid KORLIX allowances as conditioning paid functionality on an additional data use. Local writing remains available after declining, but AI access does not. Explicit consent does not guarantee approval.",
+      "guidelines": [
+        "5.1.1(ii)",
+        "5.1.1(iii)",
+        "5.1.1(iv)",
+        "5.1.2(i)"
+      ],
+      "source": "https://developer.apple.com/app-store/review/guidelines/",
+      "approvedPathRetained": "B",
+      "separatePrivateAiRouteEstablished": false
+    }
+  }
+}

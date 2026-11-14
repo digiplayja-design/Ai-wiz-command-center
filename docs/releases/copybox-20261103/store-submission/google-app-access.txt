@@ -1,0 +1,9 @@
+Some functionality is restricted: optional AI refinement requires a KORLIX account. Local writing, copying, templates, search, organization, backup/import and trash recovery work without signing in.
+
+Use the dedicated reviewer email and password entered in the private app-access credential fields. Open Settings > Connect KORLIX and sign in. The account workspace is separate from the guest workspace. Add nonsensitive sample text to a box after signing in, select Refine, and choose Polish or another writing action.
+
+Before sending the AI request, the app shows Allow AI and model training? The notice names OpenAI, explains full box text and editing instructions are sent, permits OpenAI to use them and generated responses for model training/improvement, and explains retained KORLIX account AI history even if the original is kept. Choose Allow AI and training to proceed, or Use local only to decline and keep local writing. Earlier processing-only permission is not reused. Settings > Revoke AI consent requires permission again for this account on this device before future requests without erasing earlier history or undoing prior training use. Review the proposed output before applying it or saving it as a new box. Report this output opens the report form.
+
+Settings includes Request KORLIX account deletion, account-deletion information, privacy, terms, support and the app version. The deletion request concerns the shared KORLIX account; it does not instantly erase the account or remotely clear local boxes.
+
+The app has no COPY Box checkout or purchase flow. The supplied review account must have sufficient AI allowance and an available device slot. Use the supplied account rather than creating a new one during review. Support: support@korlixdeveloper.com.

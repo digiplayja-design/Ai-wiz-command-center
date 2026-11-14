@@ -1,0 +1,110 @@
+{
+  "source_commit": "d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4",
+  "workflow_run": 41844773126,
+  "workflow_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/41844773126",
+  "status": "completed",
+  "conclusion": "success",
+  "jobs": [
+    {
+      "id": 126625553816,
+      "name": "android-and-web",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126625554532,
+      "name": "ios-simulator",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "checks": {
+    "shared_account_analyzer": "No issues found",
+    "shared_account_tests": 59,
+    "copybox_analyzer": "No issues found",
+    "copybox_tests": 81,
+    "total_tests": 140,
+    "android_debug_apk": "built",
+    "ios_simulator_app": "built",
+    "web_release_preview": "built"
+  },
+  "log_evidence": [
+    "2026-11-04T14:10:51.0368496Z No issues found! (ran in 7.6s)",
+    "2026-11-04T14:11:03.9178090Z 00:02 +59: All tests passed!",
+    "2026-11-04T14:11:17.6042062Z No issues found! (ran in 11.0s)",
+    "2026-11-04T14:11:40.9808417Z 00:09 +81: All tests passed!",
+    "2026-11-04T14:12:20.9541413Z \u2713 Built build/web",
+    "2026-11-04T14:17:11.0537071Z \u2713 Built build/app/outputs/flutter-apk/app-debug.apk",
+    "2026-11-04T14:13:18.3548040Z \u2713 Built build/ios/iphonesimulator/Runner.app"
+  ],
+  "artifacts": [
+    {
+      "id": 13331975974,
+      "name": "korlix-copybox-android-metadata",
+      "size_in_bytes": 2375,
+      "digest": "sha256:2002a4f7c6b1b93d0a2d1ca9c32eeba4e1fb01c779c6f654643f1ce92ef5e503",
+      "source_commit": "d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4"
+    },
+    {
+      "id": 13331865436,
+      "name": "korlix-copybox-ios-resolved-lockfile",
+      "size_in_bytes": 5831,
+      "digest": "sha256:e72053f6abd8f026cab1b692e737fdb7a00908e08af61201a16a7a871f90d7a7",
+      "source_commit": "d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4"
+    },
+    {
+      "id": 13331776274,
+      "name": "korlix-copybox-previews",
+      "size_in_bytes": 2964813,
+      "digest": "sha256:2cd91eb43a249878e13872f41f82db3b96363957a36f9e2d8c4803e8fe9ff8ab",
+      "source_commit": "d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4"
+    },
+    {
+      "id": 13331616470,
+      "name": "korlix-copybox-resolved-lockfile",
+      "size_in_bytes": 5831,
+      "digest": "sha256:bb1804da1a4c8dfb134419d43a9031e7466530e31e13d40b828fc229015724c3",
+      "source_commit": "d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4"
+    },
+    {
+      "id": 13331280967,
+      "name": "korlix-copybox-ios-simulator",
+      "size_in_bytes": 57404709,
+      "digest": "sha256:4745823289afa5ed9bb278fdbe794595cdb892fbaa6e5bbd34a3082646b0c1ae",
+      "source_commit": "d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4"
+    },
+    {
+      "id": 13331280946,
+      "name": "korlix-copybox-ios-native-dependencies",
+      "size_in_bytes": 556,
+      "digest": "sha256:c1bded560ccb3f0c584d2f217794d768eb978a3da140738468cfc85135746117",
+      "source_commit": "d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4"
+    },
+    {
+      "id": 13331216570,
+      "name": "korlix-copybox-android-debug",
+      "size_in_bytes": 84674520,
+      "digest": "sha256:3560e5be163d3ca4f5a82750789abbf5b32362de7f245b53266c4923ade1fd0b",
+      "source_commit": "d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4"
+    },
+    {
+      "id": 13331186750,
+      "name": "korlix-auth-core-resolved-lockfile",
+      "size_in_bytes": 4425,
+      "digest": "sha256:684685d8e1e19baf1abcb3c79208cf7d43244cf2fe807834bacaa13d60a219e3",
+      "source_commit": "d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4"
+    },
+    {
+      "id": 13331126724,
+      "name": "korlix-copybox-web",
+      "size_in_bytes": 16348766,
+      "digest": "sha256:b81115adc7e8d1ae64fd490aacf9227137f383d0018205bdc671202146672d3e",
+      "source_commit": "d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4"
+    }
+  ],
+  "limitations": [
+    "Debug Android APK and iOS simulator app; no signed store AAB/IPA.",
+    "Controlled automated tests and widget screenshots do not establish physical-device or live-account acceptance.",
+    "No store upload, TestFlight distribution, submission, or approval has occurred."
+  ]
+}

@@ -1,0 +1,132 @@
+{
+  "artifact": "app-debug.apk",
+  "artifact_type": "APK",
+  "libraries": [
+    {
+      "library": "lib/arm64-v8a/libVkLayer_khronos_validation.so",
+      "elf_class": 64,
+      "load_segment_alignments": [
+        65536,
+        65536,
+        65536
+      ],
+      "elf_load_16k_aligned": true,
+      "zip_compressed": false,
+      "zip_data_offset_mod_16k": 0
+    },
+    {
+      "library": "lib/arm64-v8a/libdartjni.so",
+      "elf_class": 64,
+      "load_segment_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "elf_load_16k_aligned": true,
+      "zip_compressed": false,
+      "zip_data_offset_mod_16k": 0
+    },
+    {
+      "library": "lib/arm64-v8a/libdatastore_shared_counter.so",
+      "elf_class": 64,
+      "load_segment_alignments": [
+        16384,
+        16384,
+        16384,
+        16384
+      ],
+      "elf_load_16k_aligned": true,
+      "zip_compressed": false,
+      "zip_data_offset_mod_16k": 0
+    },
+    {
+      "library": "lib/arm64-v8a/libflutter.so",
+      "elf_class": 64,
+      "load_segment_alignments": [
+        65536,
+        65536,
+        65536
+      ],
+      "elf_load_16k_aligned": true,
+      "zip_compressed": false,
+      "zip_data_offset_mod_16k": 0
+    },
+    {
+      "library": "lib/armeabi-v7a/libdartjni.so",
+      "elf_class": 32,
+      "load_segment_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "elf_load_16k_aligned": true,
+      "zip_compressed": false,
+      "zip_data_offset_mod_16k": 0
+    },
+    {
+      "library": "lib/armeabi-v7a/libdatastore_shared_counter.so",
+      "elf_class": 32,
+      "load_segment_alignments": [
+        16384,
+        16384,
+        16384,
+        16384
+      ],
+      "elf_load_16k_aligned": true,
+      "zip_compressed": false,
+      "zip_data_offset_mod_16k": 0
+    },
+    {
+      "library": "lib/armeabi-v7a/libflutter.so",
+      "elf_class": 32,
+      "load_segment_alignments": [
+        65536,
+        65536,
+        65536
+      ],
+      "elf_load_16k_aligned": true,
+      "zip_compressed": false,
+      "zip_data_offset_mod_16k": 0
+    },
+    {
+      "library": "lib/x86_64/libdartjni.so",
+      "elf_class": 64,
+      "load_segment_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "elf_load_16k_aligned": true,
+      "zip_compressed": false,
+      "zip_data_offset_mod_16k": 0
+    },
+    {
+      "library": "lib/x86_64/libdatastore_shared_counter.so",
+      "elf_class": 64,
+      "load_segment_alignments": [
+        16384,
+        16384,
+        16384,
+        16384
+      ],
+      "elf_load_16k_aligned": true,
+      "zip_compressed": false,
+      "zip_data_offset_mod_16k": 0
+    },
+    {
+      "library": "lib/x86_64/libflutter.so",
+      "elf_class": 64,
+      "load_segment_alignments": [
+        65536,
+        65536,
+        65536
+      ],
+      "elf_load_16k_aligned": true,
+      "zip_compressed": false,
+      "zip_data_offset_mod_16k": 0
+    }
+  ],
+  "apk_zip_layout_checked": true,
+  "additional_check": "Run on a 16KB-page Android device; this check does not verify runtime behavior or signing.",
+  "validation_errors": []
+}

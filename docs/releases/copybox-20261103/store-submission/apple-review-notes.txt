@@ -1,0 +1,18 @@
+KORLIX COPY Box is a standalone writing and reusable-text app. Its bundle ID is com.korlixdeveloper.copybox. It uses the existing KORLIX account service for optional AI tools. The app opens directly into the local writing workspace without requiring sign-in.
+
+LOCAL FEATURES
+1. Enter text into two of the starter boxes and select Save All. Copy an individual box or use Copy All Boxes. Close and reopen the app to check persistence.
+2. Edit a box's title and folder directly, and use its star button to mark it as a favorite. Open Box options to change its color, duplicate it, or open the focus editor. Search and favorites filter the workspace; Copy All Boxes still copies all active nonempty boxes in workspace order.
+3. Open Templates and select Use template. In the added box, open Box options > Fill template fields to enter the fields and copy the completed preview without replacing the reusable original.
+4. Open Backup to export a JSON backup or text. Importing presents a preview and adds boxes without overwriting existing ones. Open trash to restore a deleted box. Empty trash requires confirmation.
+
+OPTIONAL ACCOUNT AND AI FEATURES
+Use the dedicated reviewer email and password supplied in the secure App Review sign-in fields. Open Settings, select Connect KORLIX, and sign in. The account workspace is separate from the guest workspace, so add sample text after signing in.
+
+Select a box's Refine action, then choose Polish or another writing action. Read the Allow AI and model training? notice and select Allow AI and training to test AI. The renewed notice explains that the box's full text and editing instructions go to OpenAI, that OpenAI may use them and generated responses to train and improve its models, and that KORLIX retains the request/result in account AI history even if you keep the original. Earlier processing-only consent is not reused. Use local only declines the request and leaves local editing available. Settings > Revoke AI consent requires permission again for this account on this device before future requests; it does not erase prior history or undo earlier training use. An AI draft can be reviewed, copied, kept as a separate box, or applied after review. Report this output opens an in-app report form. Please use nonsensitive test text.
+
+Settings contains the Privacy Policy, Terms of Use, support, version/build number, and Request KORLIX account deletion. The deletion confirmation explains that the request concerns the shared account across KORLIX apps; local COPY Box data remains on the device until cleared. The request is acknowledged for processing, not described as instant deletion. Account deletion information also opens the public deletion page.
+
+This build contains no in-app checkout or new COPY Box subscription product. Optional AI uses existing account allowances. Saved boxes do not automatically synchronize between devices; backup/import provides transfer. The app supports iPhone and iPad, light/dark appearance, and device text scaling.
+
+Support: support@korlixdeveloper.com

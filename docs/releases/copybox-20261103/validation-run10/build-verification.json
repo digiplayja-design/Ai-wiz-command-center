@@ -1,0 +1,20 @@
+[
+  {
+    "file": "KORLIX_COPY_Box_1.0.0_Android_test.apk",
+    "size_bytes": 165962239,
+    "sha256": "2ffa308e8152e7e491fa4375d5c316500e894781fb8dc2cf0cc5a674b6d4f9d3",
+    "artifact_id": 13331216570,
+    "source_commit": "d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4",
+    "workflow_run": 41844773126,
+    "artifact_type": "Debug-signed Android test APK; not a Play release AAB"
+  },
+  {
+    "file": "KORLIX_COPY_Box_1.0.0_iOS_Simulator.zip",
+    "size_bytes": 57854081,
+    "sha256": "fd46b705f63f0926aa3b14574fd714b93efdef0204deda4e9c1c2c1de24c9228",
+    "artifact_id": 13331280967,
+    "source_commit": "d611bc6a1b5c8b6d7e3805725c6d7c5fe617f7e4",
+    "workflow_run": 41844773126,
+    "artifact_type": "iOS simulator Runner.app ZIP; not an iPhone IPA or TestFlight build"
+  }
+]

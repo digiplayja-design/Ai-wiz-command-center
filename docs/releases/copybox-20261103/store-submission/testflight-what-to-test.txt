@@ -1,0 +1,14 @@
+KORLIX COPY Box 1.0.0 — device acceptance
+
+Use sample writing and export a JSON backup before removing or replacing a test installation.
+
+1. Open the app offline. Type in several boxes, add a box, leave the app and return, then restart. Confirm text and workspace order remain correct. Try Save All, per-box Copy and Copy All Boxes, including while search or favorites is active.
+2. Try the focus editor with the keyboard open and a larger system text size. Save a change, reopen version history and restore an earlier replacement.
+3. Add a template, fill its fields and copy the preview. Confirm the reusable source remains intact.
+4. Use the device file picker and sharing sheet for JSON backup and text export. Preview and import a backup. Delete a box, use Undo, restore from trash and check the permanent-delete confirmation.
+5. Switch light, dark and device appearance. On iPad, rotate and open the keyboard; check navigation, scrolling, dialogs and share-sheet positioning.
+6. Sign in with an authorized test KORLIX account. Confirm guest and account workspaces stay separate, then test sign-out and a second account. Password reset uses the shared KORLIX account.
+7. With nonsensitive text you can share for model training, choose Refine > Polish and read Allow AI and model training? Confirm the notice names OpenAI, full text/instructions, generated responses, model training and retained KORLIX account history. Choose Use local only; verify no AI request occurs and local editing remains available. On another attempt choose Allow AI and training, review the result and keep the original. Repeat with Save as new box or Apply draft and check recovery through history. In Settings choose Revoke AI consent, then confirm this account on this device is asked again before its next AI request. If upgrading an installation with earlier processing-only permission, confirm the new training notice is required before AI use.
+8. Check the AI report form. Submit a report only as part of an authorized support test. Use a disposable test account if verifying an account-deletion request, because it affects the shared KORLIX account.
+
+Send problems to support@korlixdeveloper.com with the device, OS version, app version/build, steps, expected result and actual result. Redact private writing and credentials from screenshots. Record device acceptance separately from the automated test results.
