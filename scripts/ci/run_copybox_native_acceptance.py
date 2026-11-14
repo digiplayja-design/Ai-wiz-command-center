@@ -123,6 +123,10 @@ def boot_android(report):
         report["failureStage"] = "ANDROID_AVD_DISCOVERY"
         raise RuntimeError("The emulator cannot discover the newly created AVD")
     report["androidAvdDiscovered"] = True
+    # Finish ADB's host-key initialization before the emulator imports that key.
+    # Starting both on a fresh runner can race and leave the guest unauthorized.
+    command([android_tool("adb"), "start-server"], env=android_env)
+    report["adbServerStartedBeforeEmulator"] = True
     emulator_log = (OUT / "emulator.log").open("w", encoding="utf-8")
     process = subprocess.Popen([android_tool("emulator"), "-avd", avd_name,
                                 "-port", "5554", "-no-window", "-no-audio",
