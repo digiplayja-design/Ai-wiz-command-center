@@ -26,15 +26,15 @@ OUT = APP / "artifacts/native-acceptance"
 TEST = "integration_test/native_guest_acceptance_test.dart"
 
 
-def command(args, *, timeout=180, capture=False, output=None, input_text=None):
+def command(args, *, timeout=180, capture=False, output=None, input_text=None, env=None):
     if output is not None:
         with output.open("w", encoding="utf-8") as log:
             result = subprocess.run(args, cwd=APP, text=True, input=input_text,
                                     stdout=log, stderr=subprocess.STDOUT,
-                                    timeout=timeout, check=False)
+                                    timeout=timeout, check=False, env=env)
     else:
         result = subprocess.run(args, cwd=APP, text=True, input=input_text,
-                                capture_output=capture, timeout=timeout, check=False)
+                                capture_output=capture, timeout=timeout, check=False, env=env)
     if result.returncode:
         raise RuntimeError("A native acceptance command failed: " + args[0])
     return result.stdout.strip() if capture else None
@@ -107,14 +107,28 @@ def android_tool(name):
 
 def boot_android(report):
     avd_name = "copybox_native_" + str(os.getpid())
+    # Use one explicit location for both tools; their inherited default AVD
+    # directories can differ. Keep large device images outside test artifacts.
+    avd_home = ROOT / "native-acceptance-device" / "avd"
+    avd_home.mkdir(parents=True, exist_ok=True)
+    android_env = {**os.environ, "ANDROID_AVD_HOME": str(avd_home)}
     command([android_tool("avdmanager"), "create", "avd", "--name", avd_name,
              "--package", "system-images;android-36;google_apis_playstore;x86_64",
-             "--device", "pixel_6a"], input_text="no\n")
+             "--device", "pixel_6a", "--path", str(avd_home / (avd_name + ".avd"))],
+            input_text="no\n", env=android_env)
+    available = command([android_tool("emulator"), "-list-avds"],
+                        capture=True, env=android_env)
+    (OUT / "emulator-avd-list.txt").write_text(available + "\n")
+    if avd_name not in available.splitlines():
+        report["failureStage"] = "ANDROID_AVD_DISCOVERY"
+        raise RuntimeError("The emulator cannot discover the newly created AVD")
+    report["androidAvdDiscovered"] = True
     emulator_log = (OUT / "emulator.log").open("w", encoding="utf-8")
     process = subprocess.Popen([android_tool("emulator"), "-avd", avd_name,
                                 "-port", "5554", "-no-window", "-no-audio",
                                 "-no-boot-anim", "-no-snapshot", "-gpu", "swiftshader"],
-                               cwd=APP, stdout=emulator_log, stderr=subprocess.STDOUT)
+                               cwd=APP, stdout=emulator_log, stderr=subprocess.STDOUT,
+                               env=android_env)
     device = "emulator-5554"
     command([android_tool("adb"), "-s", device, "wait-for-device"], timeout=180)
     deadline = time.monotonic() + 180
