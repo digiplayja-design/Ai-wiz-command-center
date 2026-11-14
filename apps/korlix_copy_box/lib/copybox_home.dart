@@ -586,6 +586,7 @@ class _CopyBoxHomeState extends State<CopyBoxHome> with WidgetsBindingObserver {
       introduction: copyBoxAiTrainingIntroduction,
       declineLabel: 'Use local only',
       allowLabel: 'Allow AI and training',
+      scrollable: true,
       additionalDisclosure: copyBoxAiConsentDetails,
       providers: const {KorlixThirdPartyAiProvider.openAi},
       dataCategories: const {

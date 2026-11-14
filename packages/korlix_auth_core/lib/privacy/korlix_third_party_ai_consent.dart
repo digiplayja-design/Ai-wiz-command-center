@@ -165,6 +165,7 @@ class KorlixThirdPartyAiConsent {
     String? introduction,
     String declineLabel = "Don't Allow",
     String allowLabel = 'Allow & Continue',
+    bool scrollable = false,
     String? additionalDisclosure,
   }) {
     final scope = _accountScope;
@@ -211,6 +212,7 @@ class KorlixThirdPartyAiConsent {
           introduction: introduction,
           declineLabel: declineLabel,
           allowLabel: allowLabel,
+          scrollable: scrollable,
           additionalDisclosure: additionalDisclosure,
         );
         if (accepted != true || !current()) return false;
@@ -275,6 +277,7 @@ class KorlixThirdPartyAiConsent {
     String? introduction,
     required String declineLabel,
     required String allowLabel,
+    required bool scrollable,
     String? additionalDisclosure,
   }) async {
     final providerLabels = providers.map((provider) => provider.label).toList()
@@ -289,61 +292,63 @@ class KorlixThirdPartyAiConsent {
       themes: InheritedTheme.capture(from: context, to: navigator.context),
       barrierDismissible: false,
       builder: (dialogContext) {
+        final noticeContent = Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              introduction ??
+                  'To use $featureName, Korlix needs your permission '
+                      'before sending the content you choose to third-party '
+                      'AI providers.',
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Providers that may process this request:',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            ...providerLabels.map(_bullet),
+            const SizedBox(height: 14),
+            const Text(
+              'Content that may be sent for the requested feature:',
+              style: TextStyle(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            ...categoryLabels.map(_bullet),
+            const SizedBox(height: 14),
+            const Text(
+              'The selected providers process this content to '
+              'produce the response, image, video, audio, document, '
+              'or other result you requested. Declining stops this '
+              'AI request and leaves non-AI parts of Korlix available.',
+            ),
+            if (additionalDisclosure != null &&
+                additionalDisclosure.trim().isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Text(additionalDisclosure),
+            ],
+            const SizedBox(height: 10),
+            Text(
+              rememberForAccount
+                  ? 'Your choice is stored for this account on this device. '
+                        'Korlix asks again when this notice changes or when a '
+                        'provider needs a content category you have not approved '
+                        'for that provider.'
+                  : 'This choice applies to this request only. Sign in to '
+                        'remember choices for your account on this device.',
+            ),
+          ],
+        );
         return AlertDialog(
           key: const ValueKey<String>('korlix-third-party-ai-consent-dialog'),
           title: Text(dialogTitle),
+          scrollable: scrollable,
           content: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 560),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    introduction ??
-                        'To use $featureName, Korlix needs your permission '
-                            'before sending the content you choose to third-party '
-                            'AI providers.',
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Providers that may process this request:',
-                    style: TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 8),
-                  ...providerLabels.map(_bullet),
-                  const SizedBox(height: 14),
-                  const Text(
-                    'Content that may be sent for the requested feature:',
-                    style: TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 8),
-                  ...categoryLabels.map(_bullet),
-                  const SizedBox(height: 14),
-                  const Text(
-                    'The selected providers process this content to '
-                    'produce the response, image, video, audio, document, '
-                    'or other result you requested. Declining stops this '
-                    'AI request and leaves non-AI parts of Korlix available.',
-                  ),
-                  if (additionalDisclosure != null &&
-                      additionalDisclosure.trim().isNotEmpty) ...[
-                    const SizedBox(height: 14),
-                    Text(additionalDisclosure),
-                  ],
-                  const SizedBox(height: 10),
-                  Text(
-                    rememberForAccount
-                        ? 'Your choice is stored for this account on this device. '
-                              'Korlix asks again when this notice changes or when a '
-                              'provider needs a content category you have not approved '
-                              'for that provider.'
-                        : 'This choice applies to this request only. Sign in to '
-                              'remember choices for your account on this device.',
-                  ),
-                ],
-              ),
-            ),
+            child: scrollable
+                ? noticeContent
+                : SingleChildScrollView(child: noticeContent),
           ),
           actions: <Widget>[
             TextButton(
@@ -412,6 +417,7 @@ Future<bool> ensureKorlixThirdPartyAiConsent({
   String? introduction,
   String declineLabel = "Don't Allow",
   String allowLabel = 'Allow & Continue',
+  bool scrollable = false,
   String? additionalDisclosure,
 }) {
   return KorlixThirdPartyAiConsent.ensure(
@@ -424,6 +430,7 @@ Future<bool> ensureKorlixThirdPartyAiConsent({
     introduction: introduction,
     declineLabel: declineLabel,
     allowLabel: allowLabel,
+    scrollable: scrollable,
     additionalDisclosure: additionalDisclosure,
   );
 }

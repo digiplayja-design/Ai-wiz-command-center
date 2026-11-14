@@ -30,6 +30,29 @@ String _fixtureToken() {
   })}.fixture';
 }
 
+// Own the authenticated fixture just as the application owns its controller.
+// Widget disposal runs before Flutter's pending-timer invariant checks.
+class _AuthOwner extends StatefulWidget {
+  const _AuthOwner({required this.auth, required this.child});
+
+  final CopyBoxAuthController auth;
+  final Widget child;
+
+  @override
+  State<_AuthOwner> createState() => _AuthOwnerState();
+}
+
+class _AuthOwnerState extends State<_AuthOwner> {
+  @override
+  Widget build(BuildContext context) => widget.child;
+
+  @override
+  void dispose() {
+    widget.auth.dispose();
+    super.dispose();
+  }
+}
+
 class _Fixture {
   _Fixture(this.prefs, this.auth, this.requests);
 
@@ -99,10 +122,7 @@ void main() {
         namespace: 'korlix_copybox',
       ),
     );
-    addTearDown(() {
-      auth.dispose();
-      client.close();
-    });
+    addTearDown(client.close);
     expect(
       await auth.authenticate(
         email: 'person@example.test',
@@ -128,11 +148,14 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: copyboxTheme(Brightness.light),
-        home: CopyBoxHome(
-          prefs: prefs,
+        home: _AuthOwner(
           auth: auth,
-          themeMode: ThemeMode.light,
-          onThemeChanged: (_) async {},
+          child: CopyBoxHome(
+            prefs: prefs,
+            auth: auth,
+            themeMode: ThemeMode.light,
+            onThemeChanged: (_) async {},
+          ),
         ),
       ),
     );
