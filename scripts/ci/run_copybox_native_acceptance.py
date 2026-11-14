@@ -135,14 +135,37 @@ def boot_android(report):
                                env=android_env)
     device = "emulator-5554"
     command([android_tool("adb"), "-s", device, "wait-for-device"], timeout=180)
+    report["adbDeviceConnected"] = True
     deadline = time.monotonic() + 180
-    while time.monotonic() < deadline:
-        value = command([android_tool("adb"), "-s", device, "shell", "getprop", "sys.boot_completed"], capture=True)
-        if value == "1":
-            break
-        time.sleep(2)
-    else:
-        raise RuntimeError("Android emulator did not finish booting")
+    with (OUT / "adb-boot.jsonl").open("w", encoding="utf-8") as boot_log:
+        while time.monotonic() < deadline:
+            if process.poll() is not None:
+                report["failureStage"] = "ANDROID_EMULATOR_EXIT"
+                report["emulatorExitCode"] = process.returncode
+                raise RuntimeError("Android emulator exited during startup")
+            # A connected ADB transport can restart before Android finishes booting.
+            # Retry readiness probes within the existing deadline; retain evidence.
+            try:
+                probe = subprocess.run(
+                    [android_tool("adb"), "-s", device, "shell", "getprop", "sys.boot_completed"],
+                    cwd=APP, text=True, capture_output=True, timeout=10,
+                    check=False, env=android_env,
+                )
+                record = {"returncode": probe.returncode,
+                          "stdout": probe.stdout.strip(), "stderr": probe.stderr.strip()}
+                ready = probe.returncode == 0 and probe.stdout.strip() == "1"
+            except subprocess.TimeoutExpired:
+                record = {"probeTimeout": True}
+                ready = False
+            boot_log.write(json.dumps(record) + "\n")
+            boot_log.flush()
+            if ready:
+                break
+            time.sleep(2)
+        else:
+            report["failureStage"] = "ANDROID_BOOT_READINESS"
+            raise RuntimeError("Android emulator did not finish booting")
+    report["androidBootCompleted"] = True
     command([android_tool("adb"), "-s", device, "shell", "input", "keyevent", "KEYCODE_WAKEUP"])
     command([android_tool("adb"), "-s", device, "shell", "wm", "dismiss-keyguard"])
     for setting in ["window_animation_scale", "transition_animation_scale", "animator_duration_scale"]:
