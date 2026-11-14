@@ -1,0 +1,97 @@
+{
+  "verifiedAtUtc": "2026-11-14T14:01:05.591722+00:00",
+  "result": "PASS_WITH_RECORDED_WARNINGS",
+  "sourceBuild": {
+    "provider": "Codemagic",
+    "buildId": "6af8607890e83b09c4fa3230",
+    "expectedHeadSha": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c",
+    "provenanceScope": "Build ID and head provided by parent; embedded VCS metadata unavailable."
+  },
+  "identity": {
+    "package": "com.korlixdeveloper.copybox",
+    "versionName": "1.0.0",
+    "versionCode": 2,
+    "minSdk": 24,
+    "targetSdk": 36,
+    "permissions": [
+      "android.permission.INTERNET",
+      "com.korlixdeveloper.copybox.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+    ],
+    "application": {
+      "allowBackup": "false",
+      "appComponentFactory": "androidx.core.app.CoreComponentFactory",
+      "dataExtractionRules": "@xml/data_extraction_rules",
+      "extractNativeLibs": "false",
+      "fullBackupContent": "@xml/backup_rules",
+      "icon": "@mipmap/ic_launcher",
+      "label": "KORLIX COPY Box",
+      "name": "android.app.Application",
+      "usesCleartextTraffic": "false"
+    },
+    "debuggableAttributePresent": false
+  },
+  "integrity": {
+    "bundle": {
+      "bytes": 55871051,
+      "sha256": "a787999b1c7eca8a1de656b64eeb8db98b070bb315b964e340e4b37ee6c444a2",
+      "zipEntryCount": 409,
+      "zipCRCFailure": null
+    },
+    "reportsZip": {
+      "bytes": 793,
+      "sha256": "557b09122845ff907f0c0c8949abbf40133ced606db6dc886f0d155c45f3f549",
+      "zipEntryCount": 2,
+      "zipCRCFailure": null
+    }
+  },
+  "bundletool": {
+    "version": "1.18.3",
+    "jarSha256": "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29",
+    "validateExitCode": 0
+  },
+  "signature": {
+    "verifier": "OpenJDK 21.0.13 jdk.jartool jarsigner",
+    "exitCode": 0,
+    "resultText": "jar verified.",
+    "digestAlgorithm": "SHA-256",
+    "signatureAlgorithm": "SHA256withRSA",
+    "rsaBits": 2048,
+    "certificateSha256": "4E:92:04:B6:04:11:F4:F5:72:30:51:6E:E3:CD:E8:8D:27:B9:8A:72:FF:3E:72:97:4A:44:94:31:10:B9:3F:A7",
+    "matchesExpectedCertificate": true,
+    "jarEntryCount": 409,
+    "verifiedSignedEntryCount": 407,
+    "signatureMechanismEntries": [
+      "META-INF/KORLIX_C.RSA",
+      "META-INF/KORLIX_C.SF"
+    ],
+    "unsignedPayloadEntries": []
+  },
+  "native": {
+    "reportValidationErrors": [],
+    "reportMatchesActualBundle": true,
+    "libraryCount": 12,
+    "allELFLoadSegments16KAligned": true,
+    "bundleConfigAlignment": "PAGE_ALIGNMENT_16K"
+  },
+  "warnings": [
+    "Signer certificate is self-signed and does not chain to a trusted CA in the default Java trust store; identity was verified against the supplied SHA-256 certificate pin.",
+    "No signature timestamp is embedded; signer certificate expires 2054-03-22.",
+    "Jarsigner reports POSIX permission/symlink attributes are not signature-protected.",
+    "META-INF signature files and MANIFEST.MF follow payload entries. JarInputStream does not see an initial manifest and reports 407 entries without streaming signatures; full JarFile verification reports all 407 substantive entries signed and succeeds.",
+    "Embedded version-control-info.textproto says generate_error_reason: NO_SUPPORTED_VCS_FOUND; the AAB itself does not attest its Git commit. Exact-head provenance comes from the supplied Codemagic build record."
+  ],
+  "limits": [
+    "No generated APK ZIP-alignment verification in this check.",
+    "No physical-device or 16KB page-size runtime test in this check.",
+    "No Play upload or Play-side processing/acceptance performed.",
+    "No UI tests rerun."
+  ],
+  "verifiedUploadCopy": {
+    "bytes": 55871051,
+    "sha256": "a787999b1c7eca8a1de656b64eeb8db98b070bb315b964e340e4b37ee6c444a2",
+    "identicalToDownloadedBundle": true,
+    "fileName": "KorlixCopyBox-build2.aab"
+  },
+  "originalReportSha256": "adf39fdab29675e5426002f2deb06be7059a94135d83592884f705428a84dd80",
+  "sanitization": "Removed transient local download/tool paths; values, warnings and scope retained."
+}

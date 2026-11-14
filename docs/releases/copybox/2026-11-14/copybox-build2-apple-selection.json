@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-11-14T14:00:20.088469+00:00",
+  "appId": "6830765098",
+  "bundleId": "com.korlixdeveloper.copybox",
+  "versionId": "3ae65f97-f9c5-498d-80b6-8f6d208615d6",
+  "version": "1.0.0",
+  "expectedBuildNumber": "2",
+  "success": true,
+  "phase": "complete",
+  "scopeVerified": true,
+  "alreadySelected": false,
+  "selectedBuildVerified": true,
+  "otherVersionAttributesUnchanged": true,
+  "patchAttempts": [
+    {
+      "httpStatus": 204,
+      "accepted": true
+    }
+  ],
+  "mutationOutcomeUnknown": false,
+  "requestCount": 14,
+  "submissionAttempted": false,
+  "failureCode": null,
+  "previousSelectedBuildId": "ddd61c5d-982c-404c-9aaa-d280bd0495be",
+  "desiredBuild": {
+    "id": "a9de6e95-a39b-46ae-a0c0-4264f34d4edd",
+    "buildNumber": "2",
+    "processingState": "VALID",
+    "expired": false,
+    "preReleaseVersion": "1.0.0",
+    "platform": "IOS",
+    "uploadedDate": "2026-11-14T05:36:13-08:00"
+  },
+  "selectedBuildId": "a9de6e95-a39b-46ae-a0c0-4264f34d4edd",
+  "releaseType": "AFTER_APPROVAL",
+  "state": "PREPARE_FOR_SUBMISSION"
+}

@@ -1,0 +1,413 @@
+{
+  "schemaVersion": 1,
+  "preparedAt": "2026-11-14T14:05:41.218125+00:00",
+  "checkpointDate": "2026-11-14",
+  "overallStatus": "NOT_SUBMITTED_OPTION_B_IMPLEMENTED_FINAL_STORE_STEPS_REMAIN",
+  "scope": {
+    "repository": "digiplayja-design/Ai-wiz-command-center",
+    "appPath": "apps/korlix_copy_box",
+    "bundleAndPackageId": "com.korlixdeveloper.copybox",
+    "version": "1.0.0+2",
+    "appPullRequest": 42,
+    "appSourceHead": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c",
+    "appSourceTree": "980d187598548fd8e3aba712aac9ca11a135e83e",
+    "previousAppSourceHead": "59fb45c3dd7a85f9e2576930b9f2bdb5360019be",
+    "appCodeChangedForOptionB": true,
+    "appPullRequestState": "OPEN_DRAFT",
+    "appPullRequestBase": "fix/korlix-ai-policy-reporting-20261103",
+    "appSourceBranch": "feature/korlix-copy-box-20261103"
+  },
+  "operationsCheckpoint": {
+    "branch": "ops/copybox-apple-status-20261113",
+    "expectedParentCommit": "f688b67a80365f2e9205f56ac206e8dfc0c1eef7",
+    "expectedParentTree": "f06db5ada18ab07fb7cdf100e28894f31d88d758",
+    "managedAppleIntegration": "Codemagic Korlix AI",
+    "newCredentialsCreated": false,
+    "previousEvidenceCommit": "05fca3d7da65e683912a28bd75fcd9e62985922e"
+  },
+  "userDecision": {
+    "choice": "B",
+    "resolved": true,
+    "meaning": "Retain provider model-improvement sharing with explicit renewed consent, matching disclosures and new signed binaries",
+    "choiceMustNotBeRequestedAgain": true
+  },
+  "nativeConsent": {
+    "noticeVersion": "copybox.third-party-ai-consent.v4.model-training",
+    "title": "Allow AI and model training?",
+    "allowLabel": "Allow AI and training",
+    "declineLabel": "Use local only",
+    "revokeLabel": "Revoke AI consent",
+    "previousProcessingOnlyGrantsInvalidated": true,
+    "declineDispatchesNoAiRequest": true,
+    "localWritingAvailableAfterDecline": true,
+    "revocationScope": "Current account on this device; future requests require a fresh choice",
+    "retainedHistoryEvenKeepOriginalDisclosed": true,
+    "providerTrainingOfTextInstructionsAndResponsesDisclosed": true,
+    "priorSentDataHistoryOrTrainingUseNotUndone": true,
+    "otherClientsDefaultSharedConsentUiPreserved": true
+  },
+  "validation": {
+    "currentSource": {
+      "evidenceFile": "copybox-training-ci-validation.json",
+      "sourceCommit": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c",
+      "checkoutMergeCommit": "662a4232c8889ee2ecea944f4acdaf8ddec3e2eb",
+      "run": {
+        "id": 43599088057,
+        "url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43599088057",
+        "event": "pull_request",
+        "attempt": 1,
+        "status": "completed",
+        "conclusion": "success",
+        "createdAt": "2026-11-14T13:18:24Z",
+        "completionUpdatedAt": "2026-11-14T13:27:02Z"
+      },
+      "sharedTestsPassed": 60,
+      "appTestsPassed": 84,
+      "totalTestsPassed": 144,
+      "failedTests": 0,
+      "sharedAnalyzer": "PASSED",
+      "appAnalyzer": "PASSED",
+      "webBuild": "PASSED_RELEASE",
+      "androidBuild": "PASSED_DEBUG_APK",
+      "iosBuild": "PASSED_DEBUG_SIMULATOR",
+      "smallPhoneLargeText": {
+        "width": 360,
+        "height": 740,
+        "textScale": 1.8,
+        "status": "PASSED",
+        "noticeScrolled": true,
+        "bothDecisionButtonsHitTestable": true,
+        "declineDispatchedNoAiRequest": true
+      },
+      "layoutWarnings": []
+    },
+    "priorNativeGuestAcceptance": {
+      "evidenceFile": "copybox-native-acceptance-evidence-20261114.json",
+      "iosGuestSimulatorPassed": true,
+      "androidStatus": "PASSED",
+      "physicalDeviceTested": false,
+      "signedReleaseArtifactTested": false,
+      "shareAndFilePickerUiTested": false,
+      "androidDiagnosis": "Three runner startup failures were resolved by runner-only fixes; attempt4 passed both native phases without app or locked-dependency changes",
+      "androidGuestEmulatorPassed": true,
+      "androidRunId": "43595443695",
+      "androidApplicationCommit": "59fb45c3dd7a85f9e2576930b9f2bdb5360019be",
+      "androidHarnessCommit": "4b2c4031ff5716736e18f9a047804cc0bd823423",
+      "androidEvidenceFile": "copybox-android-native-acceptance.json",
+      "iosAndAndroidGuestAcceptancePassed": true,
+      "applicationSourceCommit": "59fb45c3dd7a85f9e2576930b9f2bdb5360019be",
+      "evidenceLocation": "copybox-native-acceptance-evidence-20261114.json",
+      "scope": "Earlier source-built iOS simulator and Android emulator guest flows; these runs predate the v4 consent code. Current consent is covered by the e25b CI/widget tests and new builds."
+    },
+    "reviewerApiAcceptance": {
+      "evidenceFile": "copybox-reviewer-acceptance.json",
+      "checkedAt": "2026-11-14T12:28:34.686236+00:00",
+      "ciBuildId": "6af853a890e83b09c4fa2e1b",
+      "sourceCommitPrefix": "fee3403",
+      "success": true,
+      "credentialScopeVerified": true,
+      "signInSucceeded": true,
+      "syntheticRewriteSucceeded": true,
+      "ownSessionSignOutSucceeded": true,
+      "rewriteLatencyMs": 6671,
+      "oneCreditReported": true,
+      "syntheticRewriteMayRemainInHistory": true,
+      "failureCode": null,
+      "previousSuccessfulEvidence": {
+        "checkedAt": "2026-11-13T23:53:24.382812+00:00",
+        "ciBuildId": "6af7a2c390e83b09c4fa02c3",
+        "sourceCommit": "d92302e0ffa385e17152292f639aec1788ad2f9f",
+        "rewriteLatencyMs": 11497
+      },
+      "scope": "Live API acceptance on November 14 before the native v4 change; does not establish interaction with build2 UI"
+    },
+    "limits": [
+      "No physical-device acceptance claimed",
+      "Uploaded signed binaries were inspected for packaging; device interaction acceptance is separate",
+      "Native share/file-picker UI is outside the recorded native guest runs",
+      "Static Android 16 KB alignment does not establish a 16 KB runtime test"
+    ]
+  },
+  "website": {
+    "evidenceFile": "copybox-training-website-live.json",
+    "commit": "93baa8cad0031f868eba4612a14bc117e2c03598",
+    "tree": "403229a51d2e95ce09a764f8d8cb15fa506c26e3",
+    "configuredBranch": "release/k135z-frontend-20260919",
+    "serviceId": "srv-d8ekf7t7vvec73dpar60",
+    "deployId": "dep-dbs5ukjl550s73fhmi90",
+    "status": "LIVE",
+    "finishedAt": "2026-11-14T13:21:59.137173Z",
+    "checkedAt": "2026-11-14T13:22:41.610056+00:00",
+    "allFourPublicPagesByteMatchedSource": true,
+    "homeAndAppHttp200": true,
+    "previousWebsiteCommit": "93a5a5543eb3e64bf19ac85c6ee88be112415706",
+    "trainingConsentAndRevocationDisclosuresLive": true
+  },
+  "backend": {
+    "evidenceFile": "copybox-web-and-backend-evidence-20261114.json",
+    "candidateCommit": "a8a416fa77eac0a25236e72cc3828f1a5ccf96cf",
+    "candidateFocusedTestsPassed": 9,
+    "deploymentStatus": "LIVE",
+    "publicHealthPassed": true,
+    "routingTests": {
+      "liveSourceCommit": "a8a416fa77eac0a25236e72cc3828f1a5ccf96cf",
+      "testFile": "backend/test/copybox_rewrite_routing.test.mjs",
+      "passed": 9,
+      "testType": "FOCUSED_MOCKED_ROUTING_TESTS",
+      "baselineSourceCommit": "31f763a812d6b5506918429e7a86d6ad976868b0",
+      "baselinePassed": 7,
+      "syntaxChecksPassed": 2
+    },
+    "deployId": "dep-dbs5106c6qcc7386j6r0",
+    "deployedCommit": "a8a416fa77eac0a25236e72cc3828f1a5ccf96cf",
+    "evidenceLocation": "copybox-web-and-backend-evidence-20261114.json",
+    "scope": "CopyBox-specific higher-priority refusal instructions; not a deterministic model-output guarantee",
+    "changedForOptionB": false
+  },
+  "apple": {
+    "appId": "6830765098",
+    "versionId": "3ae65f97-f9c5-498d-80b6-8f6d208615d6",
+    "state": "PREPARE_FOR_SUBMISSION",
+    "releaseType": "AFTER_APPROVAL",
+    "stateLastVerifiedAt": "2026-11-14T14:02:03.315324+00:00",
+    "ageDeclaration": {
+      "id": "02fecba7-6986-4f9b-b400-749d9e36f499",
+      "unansweredDescriptorCount": 0,
+      "unansweredDescriptors": [],
+      "ageRatingOverrideV2": "SIXTEEN_PLUS",
+      "descriptorsCompleted": true,
+      "completed": true,
+      "currentWriteStatus": "COMPLETE_VERIFIED",
+      "evidenceFile": "copybox-apple-age-evidence-20261114.json",
+      "readbackAt": "2026-11-14T12:36:41.658646+00:00",
+      "ageRatingOverride": "SIXTEEN_PLUS",
+      "completionEvidenceFile": "copybox-apple-age-completion.json",
+      "territoriesCount": 175,
+      "displayedRatingCounts": {
+        "SIXTEEN_PLUS": 174,
+        "FIFTEEN_PLUS": 1
+      },
+      "koreaDisplayedRating": "FIFTEEN_PLUS",
+      "ratingsDecreased": false
+    },
+    "previouslySelectedBuild": {
+      "id": "ddd61c5d-982c-404c-9aaa-d280bd0495be",
+      "buildNumber": "1",
+      "processingState": "VALID",
+      "expired": false,
+      "uploadedDate": "2026-11-04T09:04:55-08:00",
+      "expirationDate": "2027-02-02T09:04:55-08:00",
+      "usesNonExemptEncryption": false,
+      "observedAt": "2026-11-14T12:31:02.317553+00:00"
+    },
+    "build2": {
+      "codemagicBuildId": "6af8614890e83b09c4fa326b",
+      "sourceCommit": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c",
+      "version": "1.0.0",
+      "buildNumber": "2",
+      "uploadedAppleBuildId": "a9de6e95-a39b-46ae-a0c0-4264f34d4edd",
+      "bytes": 24149622,
+      "sha256": "00ce0b91fa34217f1f4e6fbfa88a752ae3f723d0b005a3dc3d965767f404d7ef",
+      "downloadMatchesCiVerification": true,
+      "zipIntegrityPassed": true,
+      "signatureVerifiedByCi": true,
+      "evidenceFile": "copybox-build2-ios-local-verification.json",
+      "uploaded": true,
+      "selectionStatus": "SELECTED_VERIFIED",
+      "processingState": "VALID",
+      "expired": false,
+      "uploadedDate": "2026-11-14T05:36:13-08:00",
+      "selectedBuildId": "a9de6e95-a39b-46ae-a0c0-4264f34d4edd",
+      "selectionEvidenceFile": "copybox-build2-apple-selection.json",
+      "selectionProvenanceFile": "copybox-build2-apple-selection-provenance.json",
+      "selectionCodemagicBuildId": "6af8692e90e83b09c4fa3554",
+      "selectedAtReadback": "2026-11-14T14:00:20.088469+00:00",
+      "otherVersionAttributesUnchanged": true
+    },
+    "metadataSync": {
+      "status": "UPDATED_VERIFIED",
+      "workflowSource": "f688b67a80365f2e9205f56ac206e8dfc0c1eef7",
+      "appMetadataSourceCommit": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c",
+      "codemagicBuildId": "6af869ad90e83b09c4fa3576",
+      "checkedAt": "2026-11-14T14:02:03.315324+00:00",
+      "provenanceVerifiedAt": "2026-11-14T14:03:02.787913+00:00",
+      "locale": "en-US",
+      "localizationId": "0459e792-e3fc-4802-85bd-b82d5711613b",
+      "fields": {
+        "description": "updated_verified",
+        "notes": "updated_verified"
+      },
+      "patchAttempts": [
+        {
+          "field": "description",
+          "httpStatus": 200,
+          "readbackVerified": true
+        },
+        {
+          "field": "notes",
+          "httpStatus": 200,
+          "readbackVerified": true
+        }
+      ],
+      "sourceFilesAndSubmittedDigests": {
+        "description": {
+          "sourcePath": "docs/releases/copybox-20261103/store-submission/description.txt",
+          "sourceFileSha256": "c5af1d7e94273f8e68f5e60a58c9c4984808b1d0792428512c21eecf856bdbae",
+          "sourceGitBlobSha": "d91aa14999af2b613cced9f4afdf49dabe9fa35b",
+          "submittedSha256": "a08bad734981f4d09f6d85204e8ac28821bcaea41268678f5fda720bc772213e",
+          "submittedBytes": 3053
+        },
+        "notes": {
+          "sourcePath": "docs/releases/copybox-20261103/store-submission/apple-review-notes.txt",
+          "sourceFileSha256": "83d8a2acebdefb1709ed412740042d6132adbe75cffeb42cdcef4019a169a779",
+          "sourceGitBlobSha": "26c0d24207e6eaeb1f7cf896bf214370dcea5c19",
+          "submittedSha256": "b4794c96fef626acc1779c860a36056f4a79a5175dca1ac4fe5569df6d79dfcc",
+          "submittedBytes": 3050
+        }
+      },
+      "versionAttributesUnchanged": true,
+      "mutationOutcomeUnknown": false,
+      "submissionAttempted": false,
+      "evidenceFile": "copybox-build2-apple-metadata-sync.json",
+      "provenanceFile": "copybox-build2-apple-metadata-sync-provenance.json"
+    },
+    "privacyLabels": {
+      "status": "OTHER_USER_CONTENT_OTHER_PURPOSES_CHANGE_NOT_PERFORMED",
+      "proposal": [
+        "App Functionality",
+        "Other Purposes"
+      ],
+      "collectionLinkedToUser": true,
+      "tracking": false,
+      "modelImprovementPurposeMappingIsInference": true
+    },
+    "reviewerCredentialsPresentPreviouslyVerified": true,
+    "reviewerLiveApiVerified": true,
+    "reviewSubmitted": false,
+    "betaReviewSubmitted": false
+  },
+  "android": {
+    "codemagicBuildId": "6af8607890e83b09c4fa3230",
+    "sourceCommit": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c",
+    "versionName": "1.0.0",
+    "versionCode": 2,
+    "signedBuildStatus": "FINISHED",
+    "artifactVerificationStatus": "PASS_WITH_RECORDED_WARNINGS",
+    "googlePlayUploadPerformed": false,
+    "verifiedAt": "2026-11-14T14:01:05.591722+00:00",
+    "bytes": 55871051,
+    "sha256": "a787999b1c7eca8a1de656b64eeb8db98b070bb315b964e340e4b37ee6c444a2",
+    "minSdk": 24,
+    "targetSdk": 36,
+    "bundletoolValidationPassed": true,
+    "signatureVerificationPassed": true,
+    "expectedCertificateMatches": true,
+    "verifiedSignedEntries": 407,
+    "unsignedPayloadEntries": 0,
+    "nativeLibrariesVerified": 12,
+    "elfAndBundleConfig16KbAlignmentPassed": true,
+    "generatedApkZipAlignmentChecked": false,
+    "sixteenKbRuntimeTested": false,
+    "evidenceFile": "copybox-build2-android-verification.json",
+    "nativeEvidenceFile": "copybox-build2-android-native-verification.json",
+    "warningsRetained": true,
+    "embeddedGitCommitAttestedByArtifact": false,
+    "sourceAttribution": "Exact app head from Codemagic build record; embedded VCS metadata unavailable"
+  },
+  "googlePlay": {
+    "developerAccountId": "4772708594176030332",
+    "appId": "4974456296219116192",
+    "state": "DRAFT",
+    "browserAuthenticated": false,
+    "lastVerifiedSetupCompleted": 8,
+    "setupTotal": 11,
+    "setupCountEvidenceIsHistorical": true,
+    "reviewCredentialsSavedVerified": false,
+    "remainingSetup": [
+      "Sign in details",
+      "Target audience",
+      "Data safety"
+    ],
+    "uploadedBuild": {
+      "versionCode": 1,
+      "source": "Historical November 4 release record",
+      "internalTrackId": "4699672053930799570",
+      "internalReleaseState": "DRAFT"
+    },
+    "build2UploadPerformed": false,
+    "otherUserGeneratedContentDeclarationCompleted": false,
+    "reviewSubmitted": false,
+    "managedUploadAlternative": {
+      "availableInExistingAuthorizedConfiguration": false,
+      "scope": "Existing and prior Codemagic workflows and release documentation checked; no configured managed Google Play upload path was found",
+      "priorBuild1UploadMethod": "Manual Play Console draft",
+      "newUploadCredentialsCreated": false
+    }
+  },
+  "privacy": {
+    "productDecisionResolved": true,
+    "choice": "B",
+    "productionOpenAiOrganizationAndProjectEstablished": false,
+    "currentAccountSettingVerified": false,
+    "historicalObservation": {
+      "date": "2026-11-04",
+      "organization": "Personal",
+      "project": "Default",
+      "shareInputsAndOutputs": "ENABLED_FOR_ALL_PROJECTS",
+      "currentProductionApplicability": "UNESTABLISHED"
+    },
+    "settingsChangedByThisWork": false,
+    "newConsentAndPoliciesImplemented": true,
+    "storeLabelUpdatesCompleted": false,
+    "remainingFact": "Verify the organization/project used by the existing production API credential and its actual retained input/output-sharing setting. The B choice alone does not verify that association.",
+    "googleProposal": {
+      "collected": true,
+      "shared": true,
+      "ephemeral": false,
+      "optional": true,
+      "collectionPurposes": [
+        "App functionality",
+        "Analytics",
+        "Fraud prevention, security, and compliance"
+      ],
+      "sharingPurposes": [
+        "App functionality",
+        "Analytics"
+      ],
+      "modelImprovementAnalyticsMappingIsInference": true,
+      "serviceProviderOnlyExemptionReliedOn": false
+    }
+  },
+  "reviewQualification": {
+    "type": "MATERIAL_INTERPRETIVE_APPLE_REVIEW_RISK",
+    "observedAppleRejection": false,
+    "description": "Combining processing and provider-training consent means declining training also declines AI. Free local writing remains available, but Apple could treat loss of AI for an account using paid allowances as conditioning paid functionality on additional data use. Explicit permission alone does not guarantee approval.",
+    "relevantGuidelines": [
+      "5.1.1(ii)",
+      "5.1.1(iii)",
+      "5.1.1(iv)",
+      "5.1.2(i)"
+    ],
+    "source": "https://developer.apple.com/app-store/review/guidelines/",
+    "perRequestTrainingOptOutEstablished": false,
+    "noDecisionReversalMade": true
+  },
+  "access": {
+    "googlePlay": "SIGNED_OUT_FRESH_SIGN_IN_PAGE",
+    "appleWeb": "SIGN_IN_FAILED_FRESH_TARGET_PAGE_SHOWS_LOGIN",
+    "appleManagedIntegration": "WORKING",
+    "renderDeploymentConnection": "WORKING"
+  },
+  "remainingWork": [
+    "Upload verified Android build2 to Google Play",
+    "Complete Google authentication, reviewer access and target audience",
+    "Verify actual production OpenAI organization/project association and input/output-sharing setting",
+    "Publish accurate Apple privacy purpose change and complete Google Data Safety using actual practices",
+    "Run final store submission validation and submit both completed releases"
+  ],
+  "submitted": {
+    "apple": false,
+    "googlePlay": false
+  },
+  "evidenceStatus": "FINAL_FOR_RECORDED_SCOPE"
+}

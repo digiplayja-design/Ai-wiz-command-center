@@ -1,0 +1,23 @@
+{
+  "artifact": "KORLIX COPY Box.ipa",
+  "bundle_identifier": "com.korlixdeveloper.copybox",
+  "version": "1.0.0",
+  "build": "2",
+  "platforms": [
+    "iPhoneOS"
+  ],
+  "protected_access_purpose_strings": [],
+  "mach_o_binaries_inspected": 4,
+  "unused_native_references": [],
+  "privacy_manifests": [
+    "Payload/Runner.app/Frameworks/Flutter.framework/PrivacyInfo.xcprivacy",
+    "Payload/Runner.app/PrivacyInfo.xcprivacy",
+    "Payload/Runner.app/file_picker_darwin_file_picker_darwin.bundle/PrivacyInfo.xcprivacy",
+    "Payload/Runner.app/flutter_secure_storage_darwin_flutter_secure_storage_darwin.bundle/PrivacyInfo.xcprivacy",
+    "Payload/Runner.app/package_info_plus_package_info_plus.bundle/PrivacyInfo.xcprivacy",
+    "Payload/Runner.app/share_plus_share_plus.bundle/PrivacyInfo.xcprivacy",
+    "Payload/Runner.app/shared_preferences_foundation_shared_preferences_foundation.bundle/PrivacyInfo.xcprivacy",
+    "Payload/Runner.app/url_launcher_ios_url_launcher_ios.bundle/PrivacyInfo.xcprivacy"
+  ],
+  "validation_errors": []
+}

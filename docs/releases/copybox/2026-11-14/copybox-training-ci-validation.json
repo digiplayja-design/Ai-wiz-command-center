@@ -1,0 +1,325 @@
+{
+  "schemaVersion": 1,
+  "status": "PASSED",
+  "sourceCommit": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c",
+  "sourceTree": "980d187598548fd8e3aba712aac9ca11a135e83e",
+  "pullRequest": 42,
+  "checkoutMergeCommit": "662a4232c8889ee2ecea944f4acdaf8ddec3e2eb",
+  "run": {
+    "id": 43599088057,
+    "url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43599088057",
+    "event": "pull_request",
+    "attempt": 1,
+    "status": "completed",
+    "conclusion": "success",
+    "createdAt": "2026-11-14T13:18:24Z",
+    "completionUpdatedAt": "2026-11-14T13:27:02Z"
+  },
+  "jobs": [
+    {
+      "id": 132459781350,
+      "name": "android-and-web",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 132459781560,
+      "name": "ios-simulator",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  ],
+  "validation": {
+    "sharedAnalyzer": "PASSED",
+    "appAnalyzer": "PASSED",
+    "sharedTestsPassed": 60,
+    "appTestsPassed": 84,
+    "totalTestsPassed": 144,
+    "failedTests": 0,
+    "formatParseCommand": "PASSED_dart_format_output_none",
+    "sourceFormattingEnforced": false,
+    "coreConsentNoticeRegression": "PASSED",
+    "appConsentGateAndDeclineRegression": "PASSED",
+    "appConsentReuseAndRevocationRegression": "PASSED",
+    "smallPhoneLargeTextTest": {
+      "width": 360,
+      "height": 740,
+      "textScale": 1.8,
+      "status": "PASSED",
+      "noticeScrolled": true,
+      "bothDecisionButtonsHitTestable": true,
+      "declineDispatchedNoAiRequest": true
+    },
+    "layoutOverflowOrHitTestWarnings": []
+  },
+  "builds": {
+    "web": "PASSED_RELEASE",
+    "android": "PASSED_DEBUG_APK",
+    "ios": "PASSED_DEBUG_SIMULATOR"
+  },
+  "compiledAndroidReports": [
+    {
+      "application_id": "com.korlixdeveloper.copybox",
+      "min_sdk": "24",
+      "target_sdk": "36",
+      "permissions": [
+        "android.permission.INTERNET",
+        "com.korlixdeveloper.copybox.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+      ],
+      "artifact_type": "debug APK",
+      "validation_errors": []
+    },
+    {
+      "artifact": "app-debug.apk",
+      "artifact_type": "APK",
+      "libraries": [
+        {
+          "library": "lib/arm64-v8a/libVkLayer_khronos_validation.so",
+          "elf_class": 64,
+          "load_segment_alignments": [
+            65536,
+            65536,
+            65536
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": false,
+          "zip_data_offset_mod_16k": 0
+        },
+        {
+          "library": "lib/arm64-v8a/libdartjni.so",
+          "elf_class": 64,
+          "load_segment_alignments": [
+            16384,
+            16384,
+            16384
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": false,
+          "zip_data_offset_mod_16k": 0
+        },
+        {
+          "library": "lib/arm64-v8a/libdatastore_shared_counter.so",
+          "elf_class": 64,
+          "load_segment_alignments": [
+            16384,
+            16384,
+            16384,
+            16384
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": false,
+          "zip_data_offset_mod_16k": 0
+        },
+        {
+          "library": "lib/arm64-v8a/libflutter.so",
+          "elf_class": 64,
+          "load_segment_alignments": [
+            65536,
+            65536,
+            65536
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": false,
+          "zip_data_offset_mod_16k": 0
+        },
+        {
+          "library": "lib/armeabi-v7a/libdartjni.so",
+          "elf_class": 32,
+          "load_segment_alignments": [
+            16384,
+            16384,
+            16384
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": false,
+          "zip_data_offset_mod_16k": 0
+        },
+        {
+          "library": "lib/armeabi-v7a/libdatastore_shared_counter.so",
+          "elf_class": 32,
+          "load_segment_alignments": [
+            16384,
+            16384,
+            16384,
+            16384
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": false,
+          "zip_data_offset_mod_16k": 0
+        },
+        {
+          "library": "lib/armeabi-v7a/libflutter.so",
+          "elf_class": 32,
+          "load_segment_alignments": [
+            65536,
+            65536,
+            65536
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": false,
+          "zip_data_offset_mod_16k": 0
+        },
+        {
+          "library": "lib/x86_64/libdartjni.so",
+          "elf_class": 64,
+          "load_segment_alignments": [
+            16384,
+            16384,
+            16384
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": false,
+          "zip_data_offset_mod_16k": 0
+        },
+        {
+          "library": "lib/x86_64/libdatastore_shared_counter.so",
+          "elf_class": 64,
+          "load_segment_alignments": [
+            16384,
+            16384,
+            16384,
+            16384
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": false,
+          "zip_data_offset_mod_16k": 0
+        },
+        {
+          "library": "lib/x86_64/libflutter.so",
+          "elf_class": 64,
+          "load_segment_alignments": [
+            65536,
+            65536,
+            65536
+          ],
+          "elf_load_16k_aligned": true,
+          "zip_compressed": false,
+          "zip_data_offset_mod_16k": 0
+        }
+      ],
+      "apk_zip_layout_checked": true,
+      "additional_check": "Run on a 16KB-page Android device; this check does not verify runtime behavior or signing.",
+      "validation_errors": []
+    }
+  ],
+  "compiledIosReports": [
+    {
+      "artifact": "Runner.app",
+      "bundle_identifier": "com.korlixdeveloper.copybox",
+      "version": "1.0.0",
+      "build": "2",
+      "platforms": [
+        "iPhoneSimulator"
+      ],
+      "protected_access_purpose_strings": [
+        "NSLocalNetworkUsageDescription"
+      ],
+      "mach_o_binaries_inspected": 6,
+      "unused_native_references": [],
+      "privacy_manifests": [
+        "Frameworks/Flutter.framework/PrivacyInfo.xcprivacy",
+        "PrivacyInfo.xcprivacy",
+        "file_picker_darwin_file_picker_darwin.bundle/PrivacyInfo.xcprivacy",
+        "flutter_secure_storage_darwin_flutter_secure_storage_darwin.bundle/PrivacyInfo.xcprivacy",
+        "package_info_plus_package_info_plus.bundle/PrivacyInfo.xcprivacy",
+        "share_plus_share_plus.bundle/PrivacyInfo.xcprivacy",
+        "shared_preferences_foundation_shared_preferences_foundation.bundle/PrivacyInfo.xcprivacy",
+        "url_launcher_ios_url_launcher_ios.bundle/PrivacyInfo.xcprivacy"
+      ],
+      "validation_errors": []
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 14116175380,
+      "name": "korlix-copybox-ios-resolved-lockfile",
+      "sizeInBytes": 5831,
+      "digestReportedByGitHub": "sha256:b1fcd9f0cb8ad20964ed0024ff7ceb812109e8a82fb3640bd278e1c30862259a",
+      "downloadDigestIndependentlyVerified": false,
+      "sourceCommit": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c"
+    },
+    {
+      "id": 14116150427,
+      "name": "korlix-copybox-ios-native-dependencies",
+      "sizeInBytes": 557,
+      "digestReportedByGitHub": "sha256:0ccc0573f0bcab7d241b5aa6fb8fbdb21fff2cb0ff569d97772bb10fefa2ea9f",
+      "downloadDigestIndependentlyVerified": false,
+      "sourceCommit": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c"
+    },
+    {
+      "id": 14115911110,
+      "name": "korlix-copybox-android-metadata",
+      "sizeInBytes": 2376,
+      "digestReportedByGitHub": "sha256:6c7401d684872c833b3f1a345a48764eec503de6aa9d92ed2c37bcead80b3616",
+      "downloadDigestIndependentlyVerified": false,
+      "sourceCommit": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c"
+    },
+    {
+      "id": 14115886247,
+      "name": "korlix-auth-core-resolved-lockfile",
+      "sizeInBytes": 4425,
+      "digestReportedByGitHub": "sha256:ea1bdb61ea406d612a6be9e1b7fa2c5d76f115370e8c5ec2f7adbe174802ae75",
+      "downloadDigestIndependentlyVerified": false,
+      "sourceCommit": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c"
+    },
+    {
+      "id": 14115866304,
+      "name": "korlix-copybox-previews",
+      "sizeInBytes": 2964813,
+      "digestReportedByGitHub": "sha256:fe300ca150e7e3153c142323c7f399853253cc43eb7a3cc4ed72b05425883e77",
+      "downloadDigestIndependentlyVerified": false,
+      "sourceCommit": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c"
+    },
+    {
+      "id": 14115636558,
+      "name": "korlix-copybox-resolved-lockfile",
+      "sizeInBytes": 5831,
+      "digestReportedByGitHub": "sha256:6b51495203e61ffecc50f06db1260cc847d3b113624b97a1ce6752e06205ace0",
+      "downloadDigestIndependentlyVerified": false,
+      "sourceCommit": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c"
+    },
+    {
+      "id": 14115481940,
+      "name": "korlix-copybox-android-debug",
+      "sizeInBytes": 84674307,
+      "digestReportedByGitHub": "sha256:0d83016a1725a73cdc4dac0c8b7da7e86af49b1de11709971f44ca0266e5f7f1",
+      "downloadDigestIndependentlyVerified": false,
+      "sourceCommit": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c"
+    },
+    {
+      "id": 14115447031,
+      "name": "korlix-copybox-web",
+      "sizeInBytes": 16349789,
+      "digestReportedByGitHub": "sha256:aa23f15491cfc3562c3ad0fb77be71913adb0d8d5e64f6f4a643383bab832c74",
+      "downloadDigestIndependentlyVerified": false,
+      "sourceCommit": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c"
+    },
+    {
+      "id": 14114764632,
+      "name": "korlix-copybox-ios-simulator",
+      "sizeInBytes": 57406021,
+      "digestReportedByGitHub": "sha256:5eb63e9ca81d17a49751681246a3f92fde2a1a204bc8a90c99977c661be2ddd4",
+      "downloadDigestIndependentlyVerified": false,
+      "sourceCommit": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c"
+    }
+  ],
+  "initialFailure": {
+    "runId": 43598556892,
+    "sourceCommit": "d544bbc110d03f1e81d332f765f1a3d153c68129",
+    "sharedPassed": 60,
+    "appPassed": 81,
+    "appFailed": 3,
+    "resolvedBy": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c",
+    "resolvedIssues": [
+      "Authenticated test fixture needed widget-owned controller disposal before timer invariants",
+      "Long CopyBox notice needed title and content to share a scroll view on a small phone at large text"
+    ],
+    "originalFunctionalAndLayoutAssertionsRetained": true
+  },
+  "scope": [
+    "Widget tests and source compilation; no claim of physical-device or signed-store-artifact acceptance",
+    "Compiled native metadata and alignment reports are static packaging checks",
+    "No live backend request or user credentials are used by these tests"
+  ],
+  "remoteMutationsByMonitoringAgent": false
+}

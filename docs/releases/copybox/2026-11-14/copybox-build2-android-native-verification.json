@@ -1,0 +1,143 @@
+{
+  "reportMatchesActualBundle": true,
+  "libraryCount": 12,
+  "errors": [],
+  "libraries": [
+    {
+      "library": "base/lib/arm64-v8a/libapp.so",
+      "elf_class": 64,
+      "load_segment_alignments": [
+        65536,
+        65536,
+        65536
+      ],
+      "elf_load_16k_aligned": true,
+      "zip_compressed": true
+    },
+    {
+      "library": "base/lib/arm64-v8a/libdartjni.so",
+      "elf_class": 64,
+      "load_segment_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "elf_load_16k_aligned": true,
+      "zip_compressed": true
+    },
+    {
+      "library": "base/lib/arm64-v8a/libdatastore_shared_counter.so",
+      "elf_class": 64,
+      "load_segment_alignments": [
+        16384,
+        16384,
+        16384,
+        16384
+      ],
+      "elf_load_16k_aligned": true,
+      "zip_compressed": true
+    },
+    {
+      "library": "base/lib/arm64-v8a/libflutter.so",
+      "elf_class": 64,
+      "load_segment_alignments": [
+        65536,
+        65536,
+        65536
+      ],
+      "elf_load_16k_aligned": true,
+      "zip_compressed": true
+    },
+    {
+      "library": "base/lib/armeabi-v7a/libapp.so",
+      "elf_class": 32,
+      "load_segment_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "elf_load_16k_aligned": true,
+      "zip_compressed": true
+    },
+    {
+      "library": "base/lib/armeabi-v7a/libdartjni.so",
+      "elf_class": 32,
+      "load_segment_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "elf_load_16k_aligned": true,
+      "zip_compressed": true
+    },
+    {
+      "library": "base/lib/armeabi-v7a/libdatastore_shared_counter.so",
+      "elf_class": 32,
+      "load_segment_alignments": [
+        16384,
+        16384,
+        16384,
+        16384
+      ],
+      "elf_load_16k_aligned": true,
+      "zip_compressed": true
+    },
+    {
+      "library": "base/lib/armeabi-v7a/libflutter.so",
+      "elf_class": 32,
+      "load_segment_alignments": [
+        65536,
+        65536,
+        65536
+      ],
+      "elf_load_16k_aligned": true,
+      "zip_compressed": true
+    },
+    {
+      "library": "base/lib/x86_64/libapp.so",
+      "elf_class": 64,
+      "load_segment_alignments": [
+        65536,
+        65536,
+        65536
+      ],
+      "elf_load_16k_aligned": true,
+      "zip_compressed": true
+    },
+    {
+      "library": "base/lib/x86_64/libdartjni.so",
+      "elf_class": 64,
+      "load_segment_alignments": [
+        16384,
+        16384,
+        16384
+      ],
+      "elf_load_16k_aligned": true,
+      "zip_compressed": true
+    },
+    {
+      "library": "base/lib/x86_64/libdatastore_shared_counter.so",
+      "elf_class": 64,
+      "load_segment_alignments": [
+        16384,
+        16384,
+        16384,
+        16384
+      ],
+      "elf_load_16k_aligned": true,
+      "zip_compressed": true
+    },
+    {
+      "library": "base/lib/x86_64/libflutter.so",
+      "elf_class": 64,
+      "load_segment_alignments": [
+        65536,
+        65536,
+        65536
+      ],
+      "elf_load_16k_aligned": true,
+      "zip_compressed": true
+    }
+  ],
+  "scope": "Static ELF headers; generated APK ZIP alignment and 16KB runtime not exercised."
+}

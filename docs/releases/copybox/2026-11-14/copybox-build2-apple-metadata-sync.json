@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-11-14T14:02:03.315324+00:00",
+  "appId": "6830765098",
+  "versionId": "3ae65f97-f9c5-498d-80b6-8f6d208615d6",
+  "reviewDetailId": "46939d38-8276-4684-b64d-0b32b319bbf0",
+  "version": "1.0.0",
+  "locale": "en-US",
+  "sourceCommit": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c",
+  "success": true,
+  "phase": "complete",
+  "scopeVerified": true,
+  "fields": {
+    "description": "updated_verified",
+    "notes": "updated_verified"
+  },
+  "patchAttempts": [
+    {
+      "field": "description",
+      "httpStatus": 200,
+      "readbackVerified": true
+    },
+    {
+      "field": "notes",
+      "httpStatus": 200,
+      "readbackVerified": true
+    }
+  ],
+  "mutationOutcomeUnknown": false,
+  "versionAttributesUnchanged": true,
+  "requestCount": 21,
+  "submissionAttempted": false,
+  "failureCode": null,
+  "sources": {
+    "description": {
+      "sourcePath": "docs/releases/copybox-20261103/store-submission/description.txt",
+      "sourceFileSha256": "c5af1d7e94273f8e68f5e60a58c9c4984808b1d0792428512c21eecf856bdbae",
+      "sourceGitBlobSha": "d91aa14999af2b613cced9f4afdf49dabe9fa35b",
+      "submittedSha256": "a08bad734981f4d09f6d85204e8ac28821bcaea41268678f5fda720bc772213e",
+      "submittedBytes": 3053
+    },
+    "notes": {
+      "sourcePath": "docs/releases/copybox-20261103/store-submission/apple-review-notes.txt",
+      "sourceFileSha256": "83d8a2acebdefb1709ed412740042d6132adbe75cffeb42cdcef4019a169a779",
+      "sourceGitBlobSha": "26c0d24207e6eaeb1f7cf896bf214370dcea5c19",
+      "submittedSha256": "b4794c96fef626acc1779c860a36056f4a79a5175dca1ac4fe5569df6d79dfcc",
+      "submittedBytes": 3050
+    }
+  },
+  "localizationId": "0459e792-e3fc-4802-85bd-b82d5711613b",
+  "releaseType": "AFTER_APPROVAL",
+  "state": "PREPARE_FOR_SUBMISSION"
+}

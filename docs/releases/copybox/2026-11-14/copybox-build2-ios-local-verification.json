@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-11-14T13:55:50.961351+00:00",
+  "sourceCommit": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c",
+  "codemagicBuildId": "6af8614890e83b09c4fa326b",
+  "uploadedAppleBuildId": "a9de6e95-a39b-46ae-a0c0-4264f34d4edd",
+  "identity": {
+    "CFBundleIdentifier": "com.korlixdeveloper.copybox",
+    "CFBundleShortVersionString": "1.0.0",
+    "CFBundleVersion": "2"
+  },
+  "bytes": 24149622,
+  "sha256": "00ce0b91fa34217f1f4e6fbfa88a752ae3f723d0b005a3dc3d965767f404d7ef",
+  "downloadMatchesCiVerification": true,
+  "zipIntegrityPassed": true,
+  "embeddedProvisioningProfilePresent": true,
+  "signatureVerificationEvidence": "CI macOS signature_verified=true; no independent Linux code-signature verification",
+  "appleReviewSubmitted": false
+}

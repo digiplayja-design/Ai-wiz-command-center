@@ -1,0 +1,10 @@
+{
+  "CFBundleIdentifier": "com.korlixdeveloper.copybox",
+  "CFBundleShortVersionString": "1.0.0",
+  "CFBundleVersion": "2",
+  "bytes": 24149622,
+  "sha256": "00ce0b91fa34217f1f4e6fbfa88a752ae3f723d0b005a3dc3d965767f404d7ef",
+  "profile_type": "app_store",
+  "signature_verified": true,
+  "production_push_required": false
+}

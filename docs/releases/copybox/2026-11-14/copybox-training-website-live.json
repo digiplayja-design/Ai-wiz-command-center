@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "verifiedAt": "2026-11-14T13:22:41.610056+00:00",
+  "repository": "digiplayja-design/Ai-wiz-command-center",
+  "branch": "release/k135z-frontend-20260919",
+  "commit": "93baa8cad0031f868eba4612a14bc117e2c03598",
+  "tree": "403229a51d2e95ce09a764f8d8cb15fa506c26e3",
+  "serviceId": "srv-d8ekf7t7vvec73dpar60",
+  "deployId": "dep-dbs5ukjl550s73fhmi90",
+  "deployStatus": "live",
+  "deployFinishedAt": "2026-11-14T13:21:59.137173Z",
+  "pages": [
+    {
+      "url": "https://www.korlixdeveloper.com/delete-account.html",
+      "finalUrl": "https://www.korlixdeveloper.com/delete-account.html",
+      "status": 200,
+      "bytes": 11067,
+      "sha256": "72e849298c57457d3d28665cd43aae92a794a5a6e131d565717914edc931495f",
+      "sourceBlobSha": "41ad4cec78245e06255a336f0a1716e556a0ca80",
+      "sourceBytesMatch": true
+    },
+    {
+      "url": "https://www.korlixdeveloper.com/privacy-policy.html",
+      "finalUrl": "https://www.korlixdeveloper.com/privacy-policy.html",
+      "status": 200,
+      "bytes": 76963,
+      "sha256": "6668c15a509dcc2ea723cf442b9d3bee42ba0e93f068c542d51427b2631edf05",
+      "sourceBlobSha": "2b97d94443ec8133b81e1fa0c333cc8f19d36858",
+      "sourceBytesMatch": true
+    },
+    {
+      "url": "https://www.korlixdeveloper.com/support.html",
+      "finalUrl": "https://www.korlixdeveloper.com/support.html",
+      "status": 200,
+      "bytes": 6310,
+      "sha256": "7f98dee71796d3837f90d29b570cd999c6df32c14556e26e3596446348df605a",
+      "sourceBlobSha": "e5f5d65220dd486d6b9c5fc2c29da51bd5269b4c",
+      "sourceBytesMatch": true
+    },
+    {
+      "url": "https://www.korlixdeveloper.com/terms.html",
+      "finalUrl": "https://www.korlixdeveloper.com/terms.html",
+      "status": 200,
+      "bytes": 22523,
+      "sha256": "7a403537792631028188f7501c21d8d789e1172fb50fb0adfff183ee5bb6fc75",
+      "sourceBlobSha": "ae80cc44afe67ce9b1c70748dbd40dbb4406b673",
+      "sourceBytesMatch": true
+    }
+  ],
+  "health": [
+    {
+      "url": "https://www.korlixdeveloper.com/",
+      "finalUrl": "https://www.korlixdeveloper.com/",
+      "status": 200,
+      "bytes": 10637
+    },
+    {
+      "url": "https://www.korlixdeveloper.com/app/",
+      "finalUrl": "https://www.korlixdeveloper.com/app/",
+      "status": 200,
+      "bytes": 3545
+    }
+  ],
+  "productionOpenAiProjectSettingVerified": false
+}
