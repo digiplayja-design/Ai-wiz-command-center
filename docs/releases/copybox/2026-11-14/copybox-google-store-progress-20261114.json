@@ -1,21 +1,21 @@
 {
   "schemaVersion": 1,
-  "recordedAt": "2026-11-14T16:37:06Z",
+  "recordedAt": "2026-11-14T16:47:25Z",
   "checkpointDate": "2026-11-14",
-  "status": "APPLE_WAITING_FOR_REVIEW_GOOGLE_NOT_SUBMITTED",
+  "status": "BOTH_STORES_SUBMITTED_REVIEW_PENDING",
   "evidenceAttribution": {
     "observer": "Primary agent /root",
     "collectionMethod": "Authenticated Google Play Console and Apple sign-in UI",
     "source": "Contemporaneous observations supplied by the primary agent in this task",
     "compilerIndependentlyObservedUi": false,
     "exactObservationTimestampRecorded": false,
-    "recordedAt": "2026-11-14T16:26:21Z"
+    "recordedAt": "2026-11-14T16:47:25Z"
   },
   "baseline": {
-    "checkpointCommit": "fc7e69c45253c603181a91a5865e3d9aa31e2830",
-    "checkpointGitBlobSha": "d325dab45e4ec7b267677203736107ab9dad490b",
+    "checkpointCommit": "95d5a09e8d90d6eb4b695646f0771026d26b8fc8",
+    "checkpointGitBlobSha": "87a435c242a5d614d91e080fca832eeae6adfe00",
     "checkpointPath": "docs/releases/copybox/2026-11-14/copybox-training-release-checkpoint-20261114.json",
-    "checkpointUrl": "https://github.com/digiplayja-design/Ai-wiz-command-center/blob/fc7e69c45253c603181a91a5865e3d9aa31e2830/docs/releases/copybox/2026-11-14/copybox-training-release-checkpoint-20261114.json",
+    "checkpointUrl": "https://github.com/digiplayja-design/Ai-wiz-command-center/blob/95d5a09e8d90d6eb4b695646f0771026d26b8fc8/docs/releases/copybox/2026-11-14/copybox-training-release-checkpoint-20261114.json",
     "appSourceCommit": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c"
   },
   "googlePlay": {
@@ -63,7 +63,7 @@
       "trackId": "4697549831357455731",
       "releaseId": "1",
       "releaseName": "1.0.0 (2) - first production release",
-      "status": "DRAFT_SAVED_CHANGES_NOT_SUBMITTED",
+      "status": "IN_REVIEW",
       "createdFromArtifactLibrary": true,
       "includedVersionCodes": [
         2
@@ -75,30 +75,48 @@
       "navigatedToPublishingOverview": true,
       "publishingOverviewAction": "Start full rollout",
       "rolloutStarted": false,
-      "submittedForReview": false,
-      "saveConfirmation": "Your change has been saved"
+      "submittedForReview": true,
+      "saveConfirmation": "Your change has been saved",
+      "reviewRequestAccepted": true,
+      "reviewQueueTransferVerified": true
     },
     "publishingOverview": {
-      "heading": "Changes not yet submitted for review",
-      "submitButtonLabel": "Submit 9 changes for review",
-      "submitButtonEnabled": false,
-      "changesAwaitingSubmission": 9,
-      "preReviewIssues": [
-        "Incomplete target audience and content declaration",
-        "Incomplete data safety declaration",
-        "Missing sign in details"
-      ],
+      "heading": "Changes in review",
+      "preReviewIssues": [],
       "quickChecks": {
-        "status": "PRE_REVIEW_ISSUES_DISPLAYED",
-        "completionVerified": false,
-        "previousRunningIndicatorVisible": false,
-        "passingChecksCertified": false
+        "status": "COMPLETED_NO_BLOCKING_ISSUE_PREVENTING_QUEUE_TRANSFER",
+        "completionVerified": true,
+        "reviewQueueTransitionVerified": true,
+        "noBlockingIssuePreventedReviewQueueTransfer": true,
+        "allPolicyComplianceCertified": false,
+        "runningHeadingVisible": false,
+        "countdownVisible": false,
+        "evidence": "Fresh DOM shows the final in-review banner and no running quick-check heading/countdown",
+        "recordedAt": "2026-11-14T16:47:25Z"
       },
       "countryAvailabilityChangeLabel": "Add 177 countries/regions plus Rest of World",
       "previouslyApprovedAvailabilitySelectionChanged": false,
       "productionRolloutStarted": false,
-      "submittedForReview": false,
-      "issueCount": 3
+      "submittedForReview": true,
+      "issueCount": 0,
+      "reviewRequestAccepted": true,
+      "reviewQueueTransferVerified": true,
+      "submittedButtonLabel": "Submit 11 changes for review",
+      "submitButtonWasEnabled": true,
+      "confirmationButtonLabel": "Send changes for review",
+      "requestedChangeCount": 11,
+      "resultControl": "Remove changes",
+      "previousThreeIssuesResolved": true,
+      "managedPublishingEnabled": false,
+      "managedPublishingChanged": false,
+      "initialQuickChecksObservation": {
+        "status": "RUNNING_AT_OBSERVATION",
+        "completionVerified": false,
+        "passingChecksCertified": false,
+        "statedDurationUpToMinutes": 14,
+        "queueTransferAfterSuccessfulChecksOnly": true
+      },
+      "finalBanner": "Your changes are now in review. We may find additional issues when reviewing your app."
     },
     "mainStoreListing": {
       "status": "DESCRIPTION_UPDATED_FRESH_READBACK_VERIFIED",
@@ -130,51 +148,58 @@
       ],
       "existingFeatureGraphicAiGeneratedLabel": true,
       "otherImageLabelsUnchanged": true,
-      "submittedForReview": false
+      "submittedForReview": true,
+      "reviewRequestAccepted": true,
+      "reviewQueueTransferVerified": true
     },
     "appAccess": {
-      "status": "INCOMPLETE_UNSAVED",
-      "reviewerRecordSaved": false,
-      "reviewerCredentialsSavedVerified": false,
-      "intendedInstructionName": "KORLIX account for AI refinement",
+      "status": "SAVED_VERIFIED",
+      "reviewerRecordSaved": true,
+      "reviewerCredentialsSavedVerified": true,
       "instructionsSourceCommit": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c",
       "instructionsSourcePath": "docs/releases/copybox-20261103/store-submission/google-app-access-short.txt",
-      "instructionsFilledInUnsavedForm": true,
-      "lastAddAttempt": {
+      "privateCredentialValuesRecorded": false,
+      "fullAccessConfirmationChecked": true,
+      "credentialCorrectnessVerified": false,
+      "privateInputValueOrLengthRecorded": false,
+      "freshServerPageVerification": {
+        "status": "SAVED_REVIEWER_RECORD_PRESENT",
+        "observer": "Primary agent /root",
+        "source": "Fresh Google Sign in details page",
+        "yesSelected": true,
+        "savedRowName": "Reviewer",
+        "usernameAndPasswordPresent": true,
+        "instructionsInitiallyBlank": true,
+        "userSavedFullAccessConfirmationChecked": true,
+        "userSavedPartnerDeviceFeedbackEnabled": true,
+        "recordedAt": "2026-11-14T16:45:11Z",
+        "exactObservationTimestampRecorded": false
+      },
+      "previousFailedAddAttempt": {
         "accepted": false,
         "fullAccessConfirmationChecked": false,
         "temporaryIncompleteInstructionNameUsed": true,
         "messages": [
           "Is any other information required?",
           "Your changes couldn't be saved"
-        ]
+        ],
+        "historical": true
       },
-      "canonicalInstructionNameRestoration": "Restored to KORLIX account for AI refinement; unsaved",
-      "privateCredentialValuesRecorded": false,
-      "canonicalInstructionNameRestored": true,
-      "fullAccessConfirmationChecked": false,
-      "otherPreparedFormTextRetainedUnsaved": true,
-      "remainingAction": "Complete and save reviewer credentials",
-      "privateInputPresentInUnsavedForm": true,
-      "credentialCompletenessVerified": false,
-      "credentialCorrectnessVerified": false,
-      "privateInputValueOrLengthRecorded": false,
-      "freshServerPageVerification": {
-        "status": "INCOMPLETE_NO_SAVED_REVIEWER_RECORD",
-        "observer": "Primary agent /root",
-        "source": "Separately opened Google Sign in details page",
-        "visibleWarning": "Until you complete this section, we'll assume that all functionality in your app is available without special access",
-        "yesSelected": false,
-        "noSelected": false,
-        "saveButtonEnabled": false,
-        "addOrSavePerformedThisObservation": false,
-        "recordedAt": "2026-11-14T16:37:06Z",
-        "exactObservationTimestampRecorded": false
-      }
+      "savedInstructionName": "Reviewer",
+      "credentialsPresenceVerified": true,
+      "credentialVerificationScope": "Saved username and password presence verified; private values were not read or re-tested",
+      "partnerDeviceFeedbackEnabled": true,
+      "instructionsSaved": true,
+      "instructionsCharacters": 479,
+      "approvedInstructionsExactMatchVerified": true,
+      "privateFieldsAndSavedNameAndCheckboxesPreserved": true,
+      "addSucceeded": true,
+      "saveSucceeded": true,
+      "saveConfirmation": "Change saved. Send for review in Publishing overview."
     },
     "targetAudience": {
-      "status": "INCOMPLETE_BLOCKED_BY_APP_ACCESS",
-      "saved": false,
+      "status": "COMPLETED_SAVED",
+      "saved": true,
       "intendedAgeGroups": [
         "16–17",
         "18 and over"
@@ -194,10 +219,16 @@
         "scope": "Existing minimum age 16; parent/guardian permission declaration for ages 16–17",
         "independentAgeOrGuardianVerificationClaimed": false,
         "neutralAgeScreenCertificationClaimed": false
-      }
+      },
+      "savedAgeGroups": [
+        "16–17",
+        "18 and over"
+      ],
+      "summaryVerified": true,
+      "saveSucceeded": true
     },
     "dataSafety": {
-      "status": "DRAFT_SAVED_FINAL_DECLARATION_INCOMPLETE",
+      "status": "FINAL_DECLARATION_SAVED_IN_REVIEW",
       "otherUserGeneratedContentUsageDraftCompleted": true,
       "usage": {
         "dataType": "Other user-generated content",
@@ -221,11 +252,63 @@
       "finalPreviewMatchedPreparedAnswers": true,
       "saveAsDraftSucceeded": true,
       "saveAsDraftConfirmation": "Change saved",
-      "finalSaveEnabled": false,
-      "finalSaveBlockedBy": "Incomplete target audience and content declaration",
-      "finalDeclarationCompleted": false,
-      "submittedForReview": false
-    }
+      "finalSaveEnabled": true,
+      "finalDeclarationCompleted": true,
+      "submittedForReview": true,
+      "completedDataTypeRows": 6,
+      "finalSaveSucceeded": true,
+      "finalSaveConfirmationObserved": true,
+      "reviewRequestAccepted": true,
+      "reviewQueueTransferVerified": true,
+      "finalPreviewVerificationScope": "Other user-generated content sharing, optional collection and purposes verified in the expanded final preview; the non-ephemeral answer is retained from the earlier draft verification and was not explicitly shown in this final preview"
+    },
+    "submissionRequest": {
+      "status": "IN_REVIEW",
+      "reviewRequestAccepted": true,
+      "reviewQueueTransferVerified": true,
+      "humanReviewStartedVerified": false,
+      "requestedChangeCount": 11,
+      "submitAction": "Submit 11 changes for review",
+      "confirmationAction": "Send changes for review",
+      "resultHeading": "Changes in review",
+      "resultControl": "Remove changes",
+      "quickChecksRunning": false,
+      "recordedAt": "2026-11-14T16:47:25Z",
+      "evidenceAttribution": "Primary agent /root live Google Play Console UI observation",
+      "compilerIndependentlyObservedUi": false,
+      "exactObservationTimestampRecorded": false,
+      "publicReleaseVerified": false,
+      "initialRequestObservation": {
+        "status": "GOOGLE_SUBMISSION_REQUEST_ACCEPTED_QUICK_CHECKS_PENDING",
+        "reviewRequestAccepted": true,
+        "reviewQueueTransferVerified": false,
+        "humanReviewStartedVerified": false,
+        "requestedChangeCount": 11,
+        "submitAction": "Submit 11 changes for review",
+        "confirmationAction": "Send changes for review",
+        "resultHeading": "Changes in review",
+        "resultControl": "Remove changes",
+        "quickChecksRunning": true,
+        "quickChecksPassedVerified": false,
+        "queueTransferCondition": "Google states that changes will be sent for review after quick checks succeed",
+        "recordedAt": "2026-11-14T16:45:11Z",
+        "evidenceAttribution": "Primary agent /root live Google Play Console UI observation",
+        "compilerIndependentlyObservedUi": false,
+        "exactObservationTimestampRecorded": false,
+        "publicReleaseVerified": false
+      },
+      "previousStatus": "GOOGLE_SUBMISSION_REQUEST_ACCEPTED_QUICK_CHECKS_PENDING",
+      "preReviewChecksCompletedVerified": true,
+      "noBlockingIssuePreventedQueueTransfer": true,
+      "allPolicyComplianceCertified": false,
+      "finalBanner": "Your changes are now in review. We may find additional issues when reviewing your app.",
+      "runningQuickCheckHeadingVisible": false,
+      "countdownVisible": false
+    },
+    "state": "IN_REVIEW",
+    "reviewRequestAccepted": true,
+    "reviewQueueTransferVerified": true,
+    "humanReviewStartedVerified": false
   },
   "appleWebAuthentication": {
     "status": "VERIFICATION_CODE_RESENT_AWAITING_FRESH_CODE",
@@ -258,27 +341,21 @@
     "previouslyApprovedCountrySelectionChanged": false
   },
   "remainingWork": [
-    "Complete and save Google reviewer credentials with the prepared instructions. Private input is present in the unsaved form, but its completeness and correctness are unverified; a fresh server page confirms the declaration is incomplete and no reviewer record is saved.",
-    "Complete Google Target audience and content for the established 16–17 and 18-and-over audience.",
     "Verify the production OpenAI credential's organization/project association and current input/output-sharing setting; the approved B decision remains resolved.",
-    "Finalize the saved Google Data Safety draft after target audience is complete, using verified actual practices.",
     "Verify whether Apple's Other User Content purpose update was published; submission evidence does not establish it. Apply any needed correction using verified actual practices.",
-    "Verify completion of Play quick checks, resolve the three pre-review issues, run final Google store submission validation, and submit the Google release.",
-    "Monitor the submitted Apple version for review outcome; Waiting for Review does not establish approval or public release."
+    "Await Apple and Google review outcomes and address any store feedback; no automated monitoring task has been created."
   ],
   "submitted": {
     "apple": true,
-    "googlePlay": false
+    "googlePlay": true
   },
   "limitations": [
-    "This file attributes live UI observations to the primary agent; its compiler did not independently observe the browser.",
-    "Ready to release refers to the production release preview only; Publishing overview still blocks review submission.",
-    "Data Safety usage and final preview were saved as a draft; the final declaration remains incomplete.",
-    "Google App Access was not saved; a failed Add attempt does not establish a reviewer record.",
-    "Publishing overview displays three pre-review issues and no longer shows the prior running indicator; this evidence does not certify checks passing.",
-    "The actual production OpenAI project association and input/output-sharing setting remain unverified.",
+    "Live Google UI observations are attributed to primary agent /root; the compiler did not independently observe the browser.",
+    "Google review-queue transfer is verified by the final in-review banner after the running quick-check heading/countdown disappeared. Automated pre-review checks finished without a blocking issue preventing transfer; this does not establish universal policy compliance or the start of an individual human reviewer.",
+    "The saved Google reviewer record contains username/password and the approved instructions; private values were not read, recorded, or re-tested in this continuation.",
+    "Google Target audience and final Data Safety declarations are saved; this does not independently verify the actual production OpenAI project association/current sharing setting.",
     "Apple submission is established by the user-supplied success screenshot. Its local clock is not an exact server submission timestamp; build 2 attribution comes from the earlier draft screenshot and prior selection evidence. App Privacy publication and actual production OpenAI project association remain unverified.",
-    "Google reviewer-access status was freshly checked by root in a separately opened server page and remains incomplete; the Apple screenshot provides no Google evidence. Other Google release observations retain their prior scope."
+    "Neither store approval nor public release is established; the internal Google track remains unpublished."
   ],
   "appleSubmission": {
     "status": "WAITING_FOR_REVIEW",
@@ -311,5 +388,9 @@
     "productionOpenAiProjectAssociationEstablished": false,
     "appStoreApprovalEstablished": false,
     "publicReleaseEstablished": false
+  },
+  "submissionStatusScope": {
+    "apple": "User screenshot establishes Waiting for Review",
+    "googlePlay": "Google submission request accepted and review-queue transfer verified in the live UI; individual human reviewer start and policy approval are not established"
   }
 }
