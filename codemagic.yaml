@@ -64,3 +64,51 @@ workflows:
     artifacts:
       - $CM_BUILD_DIR/apps/korlix_copy_box/artifacts/native-acceptance/*
       - /tmp/xcodebuild_logs/*.log
+
+  korlix-copybox-complete-apple-age-rating:
+    name: KORLIX COPY Box — complete reviewed Apple age declaration
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    environment:
+      vars:
+        COPYBOX_RUN_REVIEWER_ACCEPTANCE: "true"
+    # Manual only. The CopyBox output boundary is already verified live at
+    # a8a416fa77eac0a25236e72cc3828f1a5ccf96cf. Managed Apple auth stays in memory.
+    # Only the exact age declaration can be patched; no app submission,
+    # release mode, build selection, pricing or publishing action is configured.
+    scripts:
+      - name: Verify identity guards, age-only mutations, ratings, and secret filtering
+        script: |
+          set -euo pipefail
+          python3 -B -m unittest discover -s scripts/tests -p 'test_read_copybox_apple_status.py' -v
+          python3 -B -m unittest discover -s scripts/tests -p 'test_complete_copybox_apple_age_rating.py' -v
+          python3 -B -m unittest discover -s scripts/tests -p 'test_check_copybox_reviewer_acceptance.py' -v
+      - name: Prepare existing managed Apple integration tooling
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.copybox-apple-age-tools"
+          "$CM_BUILD_DIR/.copybox-apple-age-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+      - name: Optionally rerun the existing bounded reviewer API acceptance
+        script: |
+          set -euo pipefail
+          case "${COPYBOX_RUN_REVIEWER_ACCEPTANCE:-false}" in
+            true)
+              "$CM_BUILD_DIR/.copybox-apple-age-tools/bin/python" scripts/check_copybox_reviewer_acceptance.py --run-once
+              ;;
+            false)
+              echo "Existing reviewer acceptance rerun is not selected."
+              ;;
+            *)
+              echo "COPYBOX_RUN_REVIEWER_ACCEPTANCE must be true or false." >&2
+              exit 2
+              ;;
+          esac
+      - name: Complete only the reviewed COPY Box age declaration
+        script: |
+          set -euo pipefail
+          "$CM_BUILD_DIR/.copybox-apple-age-tools/bin/python" scripts/complete_copybox_apple_age_rating.py --apply-reviewed
+    artifacts:
+      - artifacts/copybox-apple-age-completion.json
+      - artifacts/copybox-reviewer-acceptance.json
