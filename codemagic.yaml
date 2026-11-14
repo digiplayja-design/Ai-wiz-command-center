@@ -45,3 +45,22 @@ workflows:
           "$CM_BUILD_DIR/.copybox-reviewer-acceptance-tools/bin/python" scripts/check_copybox_reviewer_acceptance.py --run-once
     artifacts:
       - artifacts/copybox-reviewer-acceptance.json
+
+  korlix-copybox-native-ios-acceptance:
+    name: KORLIX COPY Box — native iOS guest acceptance
+    instance_type: mac_mini_m2
+    max_build_duration: 45
+    working_directory: apps/korlix_copy_box
+    environment:
+      flutter: 3.47.7
+      xcode: 26.6
+      cocoapods: default
+    scripts:
+      - name: Run actual iOS guest app and verify a fresh-process restore
+        script: |
+          set -euo pipefail
+          python3 "$CM_BUILD_DIR/scripts/ci/run_copybox_native_acceptance.py" ios
+        test_report: artifacts/native-acceptance/report-*.json
+    artifacts:
+      - $CM_BUILD_DIR/apps/korlix_copy_box/artifacts/native-acceptance/*
+      - /tmp/xcodebuild_logs/*.log
