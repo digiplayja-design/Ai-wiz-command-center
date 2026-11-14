@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "preparedAt": "2026-11-14T14:05:41.218125+00:00",
+  "preparedAt": "2026-11-14T16:17:29Z",
   "checkpointDate": "2026-11-14",
   "overallStatus": "NOT_SUBMITTED_OPTION_B_IMPLEMENTED_FINAL_STORE_STEPS_REMAIN",
   "scope": {
@@ -19,11 +19,13 @@
   },
   "operationsCheckpoint": {
     "branch": "ops/copybox-apple-status-20261113",
-    "expectedParentCommit": "f688b67a80365f2e9205f56ac206e8dfc0c1eef7",
-    "expectedParentTree": "f06db5ada18ab07fb7cdf100e28894f31d88d758",
+    "expectedParentCommit": "0924457108bdc8045c6b57d377581fa0146b7906",
+    "expectedParentTree": "f6207e1d8204eee8efb10e78a69e127afa07e512",
     "managedAppleIntegration": "Codemagic Korlix AI",
     "newCredentialsCreated": false,
-    "previousEvidenceCommit": "05fca3d7da65e683912a28bd75fcd9e62985922e"
+    "previousEvidenceCommit": "05fca3d7da65e683912a28bd75fcd9e62985922e",
+    "previousExpectedParentCommit": "f688b67a80365f2e9205f56ac206e8dfc0c1eef7",
+    "previousExpectedParentTree": "f06db5ada18ab07fb7cdf100e28894f31d88d758"
   },
   "userDecision": {
     "choice": "B",
@@ -284,7 +286,16 @@
     "reviewerCredentialsPresentPreviouslyVerified": true,
     "reviewerLiveApiVerified": true,
     "reviewSubmitted": false,
-    "betaReviewSubmitted": false
+    "betaReviewSubmitted": false,
+    "webAuthentication": {
+      "status": "VERIFICATION_CODE_REJECTED_NOT_SIGNED_IN",
+      "usernameAndPasswordAcceptedBySecureFlow": true,
+      "verificationStep": "Six-digit verification code",
+      "visibleMessage": "Incorrect verification code",
+      "authenticated": false,
+      "appleStoreWritesThisContinuation": false,
+      "credentialOrCodeValuesRecorded": false
+    }
   },
   "android": {
     "codemagicBuildId": "6af8607890e83b09c4fa3230",
@@ -293,7 +304,7 @@
     "versionCode": 2,
     "signedBuildStatus": "FINISHED",
     "artifactVerificationStatus": "PASS_WITH_RECORDED_WARNINGS",
-    "googlePlayUploadPerformed": false,
+    "googlePlayUploadPerformed": true,
     "verifiedAt": "2026-11-14T14:01:05.591722+00:00",
     "bytes": 55871051,
     "sha256": "a787999b1c7eca8a1de656b64eeb8db98b070bb315b964e340e4b37ee6c444a2",
@@ -312,13 +323,15 @@
     "nativeEvidenceFile": "copybox-build2-android-native-verification.json",
     "warningsRetained": true,
     "embeddedGitCommitAttestedByArtifact": false,
-    "sourceAttribution": "Exact app head from Codemagic build record; embedded VCS metadata unavailable"
+    "sourceAttribution": "Exact app head from Codemagic build record; embedded VCS metadata unavailable",
+    "googlePlayUploadStatus": "UPLOADED_AND_PROCESSED_ROOT_UI_VERIFIED",
+    "googlePlayUploadEvidenceFile": "copybox-google-store-progress-20261114.json"
   },
   "googlePlay": {
     "developerAccountId": "4772708594176030332",
     "appId": "4974456296219116192",
     "state": "DRAFT",
-    "browserAuthenticated": false,
+    "browserAuthenticated": true,
     "lastVerifiedSetupCompleted": 8,
     "setupTotal": 11,
     "setupCountEvidenceIsHistorical": true,
@@ -329,12 +342,16 @@
       "Data safety"
     ],
     "uploadedBuild": {
-      "versionCode": 1,
-      "source": "Historical November 4 release record",
+      "versionCode": 2,
+      "versionName": "1.0.0",
+      "source": "Root UI-verified code 2 upload and processing; exact pre-upload artifact checksum verified",
       "internalTrackId": "4699672053930799570",
-      "internalReleaseState": "DRAFT"
+      "internalReleaseState": "DRAFT",
+      "productionTrackId": "4697549831357455731",
+      "productionReleaseState": "DRAFT",
+      "evidenceFile": "copybox-google-store-progress-20261114.json"
     },
-    "build2UploadPerformed": false,
+    "build2UploadPerformed": true,
     "otherUserGeneratedContentDeclarationCompleted": false,
     "reviewSubmitted": false,
     "managedUploadAlternative": {
@@ -342,7 +359,199 @@
       "scope": "Existing and prior Codemagic workflows and release documentation checked; no configured managed Google Play upload path was found",
       "priorBuild1UploadMethod": "Manual Play Console draft",
       "newUploadCredentialsCreated": false
-    }
+    },
+    "previousUploadedBuild": {
+      "versionCode": 1,
+      "source": "Historical November 4 release record",
+      "internalTrackId": "4699672053930799570",
+      "internalReleaseState": "DRAFT"
+    },
+    "authenticationEvidenceScope": "Successful sign-in observed by the primary agent; session persistence beyond this observation is not established",
+    "otherUserGeneratedContentUsageDraftCompleted": true,
+    "upload": {
+      "status": "UPLOADED_AND_PROCESSED_ROOT_UI_VERIFIED",
+      "versionName": "1.0.0",
+      "versionCode": 2,
+      "package": "com.korlixdeveloper.copybox",
+      "bytes": 55871051,
+      "sha256": "a787999b1c7eca8a1de656b64eeb8db98b070bb315b964e340e4b37ee6c444a2",
+      "checksumVerifiedImmediatelyBeforeUpload": true,
+      "hashEvidenceScope": "Root-verified pre-upload file checksum; Google Play UI subsequently showed the processed version code 2",
+      "sourceCommit": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c",
+      "codemagicBuildId": "6af8607890e83b09c4fa3230",
+      "codemagicUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6af8607890e83b09c4fa3230",
+      "evidenceFile": "copybox-build2-android-verification.json"
+    },
+    "internalRelease": {
+      "trackId": "4699672053930799570",
+      "releaseId": "1",
+      "releaseName": "1.0.0 (2) - AI consent update",
+      "status": "DRAFT_SAVED",
+      "includedVersionCodes": [
+        2
+      ],
+      "versionCode1RemovedFromDraftOnly": true,
+      "versionCode1StillRecoverableInArtifactLibrary": true,
+      "permanentArtifactDeletionPerformed": false,
+      "previewBuildErrors": 0,
+      "previewWarnings": [
+        {
+          "message": "No testers",
+          "scope": "Internal testing release is unavailable to testers until testers are specified"
+        }
+      ],
+      "saved": true,
+      "published": false
+    },
+    "productionRelease": {
+      "trackId": "4697549831357455731",
+      "releaseId": "1",
+      "releaseName": "1.0.0 (2) - first production release",
+      "status": "DRAFT_SAVED_CHANGES_NOT_SUBMITTED",
+      "createdFromArtifactLibrary": true,
+      "includedVersionCodes": [
+        2
+      ],
+      "previewStatus": "Ready to release",
+      "previewErrors": 0,
+      "previewWarnings": 0,
+      "saveSucceeded": true,
+      "navigatedToPublishingOverview": true,
+      "publishingOverviewAction": "Start full rollout",
+      "rolloutStarted": false,
+      "submittedForReview": false,
+      "saveConfirmation": "Your change has been saved"
+    },
+    "publishingOverview": {
+      "heading": "Changes not yet submitted for review",
+      "submitButtonLabel": "Submit 9 changes for review",
+      "submitButtonEnabled": false,
+      "changesAwaitingSubmission": 9,
+      "preReviewIssues": [
+        "Incomplete target audience and content declaration",
+        "Incomplete data safety declaration"
+      ],
+      "quickChecks": {
+        "status": "RUNNING_AT_OBSERVATION",
+        "completionVerified": false
+      },
+      "countryAvailabilityChangeLabel": "Add 177 countries/regions plus Rest of World",
+      "previouslyApprovedAvailabilitySelectionChanged": false,
+      "productionRolloutStarted": false,
+      "submittedForReview": false
+    },
+    "mainStoreListing": {
+      "status": "DESCRIPTION_UPDATED_FRESH_READBACK_VERIFIED",
+      "description": {
+        "sourceCommit": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c",
+        "sourcePath": "docs/releases/copybox-20261103/store-submission/description.txt",
+        "sourceGitBlobSha": "d91aa14999af2b613cced9f4afdf49dabe9fa35b",
+        "transformation": "Terminal LF removed",
+        "submittedCharacters": 3053,
+        "submittedUtf8Bytes": 3053,
+        "submittedSha256": "a08bad734981f4d09f6d85204e8ac28821bcaea41268678f5fda720bc772213e",
+        "exactInputChecksumVerified": true,
+        "uiReviewCompleted": true,
+        "saveSucceeded": true,
+        "saveSuccessDialogObserved": true,
+        "freshServerByteComparisonPerformed": true,
+        "freshServerReadbackMatchedSource": true,
+        "freshServerReadbackCharacters": 3053,
+        "freshServerReadbackUtf8Bytes": 3053,
+        "freshServerReadbackSha256": "a08bad734981f4d09f6d85204e8ac28821bcaea41268678f5fda720bc772213e",
+        "freshServerReadbackScope": "Separately opened store-listing edit tab after Save"
+      },
+      "preservedFields": [
+        "App name",
+        "Short description",
+        "Icon",
+        "Feature graphic",
+        "Four phone screenshots"
+      ],
+      "existingFeatureGraphicAiGeneratedLabel": true,
+      "otherImageLabelsUnchanged": true,
+      "submittedForReview": false
+    },
+    "appAccess": {
+      "status": "INCOMPLETE_UNSAVED",
+      "reviewerRecordSaved": false,
+      "reviewerCredentialsSavedVerified": false,
+      "missingInput": "Reviewer password in the private Play Console app-access field",
+      "intendedInstructionName": "KORLIX account for AI refinement",
+      "instructionsSourceCommit": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c",
+      "instructionsSourcePath": "docs/releases/copybox-20261103/store-submission/google-app-access-short.txt",
+      "instructionsFilledInUnsavedForm": true,
+      "lastAddAttempt": {
+        "accepted": false,
+        "fullAccessConfirmationChecked": false,
+        "temporaryIncompleteInstructionNameUsed": true,
+        "messages": [
+          "Is any other information required?",
+          "Your changes couldn't be saved"
+        ]
+      },
+      "canonicalInstructionNameRestoration": "Restored to KORLIX account for AI refinement; unsaved",
+      "privateCredentialValuesRecorded": false,
+      "canonicalInstructionNameRestored": true,
+      "privatePasswordFieldEmpty": true,
+      "fullAccessConfirmationChecked": false,
+      "otherPreparedFormTextRetainedUnsaved": true
+    },
+    "targetAudience": {
+      "status": "INCOMPLETE_BLOCKED_BY_APP_ACCESS",
+      "saved": false,
+      "intendedAgeGroups": [
+        "16–17",
+        "18 and over"
+      ],
+      "intendedAgeGroupsSupportedByExistingProductPolicy": true,
+      "support": {
+        "websiteCommit": "93baa8cad0031f868eba4612a14bc117e2c03598",
+        "websitePaths": [
+          "website/terms.html",
+          "website/privacy-policy.html"
+        ],
+        "appSourceCommit": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c",
+        "appSourcePaths": [
+          "apps/korlix_copy_box/lib/copybox_auth_screen.dart",
+          "apps/korlix_copy_box/lib/copybox_auth.dart"
+        ],
+        "scope": "Existing minimum age 16; parent/guardian permission declaration for ages 16–17",
+        "independentAgeOrGuardianVerificationClaimed": false,
+        "neutralAgeScreenCertificationClaimed": false
+      }
+    },
+    "dataSafety": {
+      "status": "DRAFT_SAVED_FINAL_DECLARATION_INCOMPLETE",
+      "otherUserGeneratedContentUsageDraftCompleted": true,
+      "usage": {
+        "dataType": "Other user-generated content",
+        "collected": true,
+        "shared": true,
+        "ephemeral": false,
+        "optional": true,
+        "collectionPurposes": [
+          "App functionality",
+          "Analytics",
+          "Fraud prevention, security and compliance"
+        ],
+        "sharingPurposes": [
+          "App functionality",
+          "Analytics"
+        ],
+        "modelImprovementAnalyticsMappingIsInference": true,
+        "serviceProviderOnlySharingExemptionReliedOn": false
+      },
+      "otherFiveSavedRowsUnchanged": true,
+      "finalPreviewMatchedPreparedAnswers": true,
+      "saveAsDraftSucceeded": true,
+      "saveAsDraftConfirmation": "Change saved",
+      "finalSaveEnabled": false,
+      "finalSaveBlockedBy": "Incomplete target audience and content declaration",
+      "finalDeclarationCompleted": false,
+      "submittedForReview": false
+    },
+    "progressEvidenceFile": "copybox-google-store-progress-20261114.json"
   },
   "privacy": {
     "productDecisionResolved": true,
@@ -376,7 +585,10 @@
       ],
       "modelImprovementAnalyticsMappingIsInference": true,
       "serviceProviderOnlyExemptionReliedOn": false
-    }
+    },
+    "googleUsageDraftSaved": true,
+    "googleFinalDeclarationCompleted": false,
+    "googleDraftEvidenceFile": "copybox-google-store-progress-20261114.json"
   },
   "reviewQualification": {
     "type": "MATERIAL_INTERPRETIVE_APPLE_REVIEW_RISK",
@@ -393,21 +605,43 @@
     "noDecisionReversalMade": true
   },
   "access": {
-    "googlePlay": "SIGNED_OUT_FRESH_SIGN_IN_PAGE",
-    "appleWeb": "SIGN_IN_FAILED_FRESH_TARGET_PAGE_SHOWS_LOGIN",
+    "googlePlay": "SIGNED_IN_ROOT_UI_VERIFIED",
+    "appleWeb": "VERIFICATION_CODE_REJECTED_NOT_SIGNED_IN",
     "appleManagedIntegration": "WORKING",
     "renderDeploymentConnection": "WORKING"
   },
   "remainingWork": [
-    "Upload verified Android build2 to Google Play",
-    "Complete Google authentication, reviewer access and target audience",
-    "Verify actual production OpenAI organization/project association and input/output-sharing setting",
-    "Publish accurate Apple privacy purpose change and complete Google Data Safety using actual practices",
-    "Run final store submission validation and submit both completed releases"
+    "Complete Apple sign-in and its verification step.",
+    "Save Google App Access using the private reviewer password and the prepared instructions; no reviewer record is currently verified as saved.",
+    "Complete Google Target audience and content for the established 16–17 and 18-and-over audience.",
+    "Verify the production OpenAI credential's organization/project association and current input/output-sharing setting; the approved B decision remains resolved.",
+    "Finalize the saved Google Data Safety draft after target audience is complete, using verified actual practices.",
+    "Publish Apple's Other User Content purpose update using verified actual practices.",
+    "Verify completion of Play quick checks, resolve the two pre-review declaration issues, run final store submission validation, and submit both releases."
   ],
   "submitted": {
     "apple": false,
     "googlePlay": false
   },
-  "evidenceStatus": "FINAL_FOR_RECORDED_SCOPE"
+  "evidenceStatus": "FINAL_FOR_RECORDED_SCOPE",
+  "previousCheckpoint": {
+    "preparedAt": "2026-11-14T14:05:41.218125+00:00",
+    "commit": "0924457108bdc8045c6b57d377581fa0146b7906",
+    "gitBlobSha": "94c816b9994c6dd3ecccce789d110516dcc290a3",
+    "path": "docs/releases/copybox/2026-11-14/copybox-training-release-checkpoint-20261114.json",
+    "scope": "Earlier build, validation, deployment and Apple metadata evidence remains unchanged below."
+  },
+  "storeProgressUpdate": {
+    "evidenceFile": "copybox-google-store-progress-20261114.json",
+    "evidenceAttribution": {
+      "observer": "Primary agent /root",
+      "collectionMethod": "Authenticated Google Play Console and Apple sign-in UI",
+      "source": "Contemporaneous observations supplied by the primary agent in this task",
+      "compilerIndependentlyObservedUi": false,
+      "exactObservationTimestampRecorded": false,
+      "recordedAt": "2026-11-14T16:17:29Z"
+    },
+    "baselineCommit": "0924457108bdc8045c6b57d377581fa0146b7906",
+    "status": "GOOGLE_BUILD2_AND_RELEASE_DRAFTS_SAVED_NEITHER_STORE_SUBMITTED"
+  }
 }
