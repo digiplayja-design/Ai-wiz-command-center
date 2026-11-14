@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "preparedAt": "2026-11-14T12:48:15.715618+00:00",
+  "evidenceStatus": "WEBSITE_AND_BACKEND_VERIFIED_LIVE",
+  "website": {
+    "serviceId": "srv-d8ekf7t7vvec73dpar60",
+    "configuredBranch": "release/k135z-frontend-20260919",
+    "previousLiveCommit": "594d00a107aede0132b6c34e19f021dd7866cec9",
+    "deployedCommit": "93a5a5543eb3e64bf19ac85c6ee88be112415706",
+    "configuredBranchUpdate": "FAST_FORWARD",
+    "deployId": "dep-dbs4p1u1egvs73cr1hl0",
+    "status": "LIVE",
+    "finishedAt": "2026-11-14T12:01:51.268643Z",
+    "filesChanged": [
+      "website/privacy-policy.html",
+      "website/terms.html",
+      "website/delete-account.html",
+      "website/support.html"
+    ],
+    "validation": {
+      "fourPublicWwwPolicyPagesHttpStatus": 200,
+      "allFourByteMatchedCommittedSourceBlobs": true,
+      "homeHttpStatus": 200,
+      "appHttpStatus": 200,
+      "observedBy": "Root agent via production checks"
+    },
+    "preservesNewerSupportUi": true
+  },
+  "backend": {
+    "serviceId": "srv-d8csvkkp3tds73emfikg",
+    "configuredBranch": "release/signup-plan-intent-20261021",
+    "previousLiveCommit": "31f763a812d6b5506918429e7a86d6ad976868b0",
+    "candidateCommit": "a8a416fa77eac0a25236e72cc3828f1a5ccf96cf",
+    "directChildOfPreviousLive": true,
+    "configuredBranchUpdate": "FAST_FORWARD",
+    "deployId": "dep-dbs5106c6qcc7386j6r0",
+    "status": "LIVE",
+    "deployedCommitVerified": true,
+    "filesChanged": [
+      "backend/server.js",
+      "backend/test/copybox_rewrite_routing.test.mjs"
+    ],
+    "diff": {
+      "additions": 62,
+      "deletions": 1
+    },
+    "behavior": "Adds higher-priority CopyBox-specific provider instructions to return a brief refusal for graphic sexual content/nudity and prolonged graphic/sadistic realistic violence, including source-text transformations, and to preserve ordinary non-graphic editing. This is an instruction boundary, not a deterministic content guarantee.",
+    "validation": {
+      "baselineFocusedTestsPassed": 7,
+      "candidateFocusedTestsPassed": 9,
+      "syntaxChecksPassed": 2,
+      "peerReview": "NO_BLOCKING_FINDINGS",
+      "networkCallsDuringTests": 0,
+      "liveProviderCallsDuringCandidateTests": 0,
+      "publicHealth": {
+        "path": "/api/health",
+        "httpStatus": 200,
+        "healthy": true,
+        "openAiConfigured": true,
+        "authConfigured": true,
+        "doesNotEstablishOpenAiInputOutputSharing": true,
+        "observedBy": "Root agent"
+      }
+    },
+    "limits": [
+      "Offline tests establish request construction, instruction priority and branch isolation",
+      "Prompt instructions do not guarantee deterministic model compliance for every input"
+    ],
+    "finishedAt": "2026-11-14T12:14:27.095617Z",
+    "deployedCommit": "a8a416fa77eac0a25236e72cc3828f1a5ccf96cf"
+  },
+  "sourceAttribution": {
+    "deploymentStates": "Parent-provided observed Render and GitHub results",
+    "backendOfflineValidation": "Read local validation-results.json and manifest.json",
+    "manifestFreshness": "The local output-boundary manifest predates its later commit/deployment attempt; its NOT_COMMITTED_OR_DEPLOYED and zero-remote-action fields are historical, not current"
+  }
+}

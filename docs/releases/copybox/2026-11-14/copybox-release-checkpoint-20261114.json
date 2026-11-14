@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 1,
-  "preparedAt": "2026-11-14T03:56:37.453833+00:00",
+  "schemaVersion": 2,
+  "preparedAt": "2026-11-14T12:48:15.715618+00:00",
   "checkpointDate": "2026-11-14",
   "goal": "Finish KORLIX COPY Box and submit version 1.0.0 to Apple App Store and Google Play",
   "overallStatus": "NOT_SUBMITTED_REMAINING_WORK_IDENTIFIED",
@@ -15,17 +15,24 @@
   },
   "operationsCheckpoint": {
     "branch": "ops/copybox-apple-status-20261113",
-    "parentCommitForThisCheckpoint": "d92302e0ffa385e17152292f639aec1788ad2f9f",
-    "parentTree": "6a9509f1312464f25e99774fc910dadfb72501cc",
+    "parentCommitForThisCheckpoint": "f07e89408e358c37dbeaf6dae3c1c22c71134dd8",
+    "parentTree": "755d3ba6dd5b0aa3ae63812235ae14c96f0e159f",
     "managedAppleIntegration": "Codemagic Korlix AI",
     "newCredentialsCreated": false
   },
   "apple": {
     "evidence": {
       "file": "copybox-apple-status.json",
-      "checkedAt": "2026-11-13T23:38:42.735927+00:00",
-      "ciBuildId": "6af79f4490e83b09c4fa01c6",
-      "readOnly": true
+      "checkedAt": "2026-11-14T12:31:02.317553+00:00",
+      "ciBuildId": "6af8545490e83b09c4fa2e4a",
+      "readOnly": true,
+      "supersedes": {
+        "file": "copybox-apple-status.json",
+        "checkedAt": "2026-11-13T23:38:42.735927+00:00",
+        "ciBuildId": "6af79f4490e83b09c4fa01c6",
+        "readOnly": true
+      },
+      "scope": "App state, selected build, release type and read-only collection state observed before the subsequent final age override"
     },
     "appId": "6830765098",
     "versionId": "3ae65f97-f9c5-498d-80b6-8f6d208615d6",
@@ -44,35 +51,23 @@
     "reviewerLiveApiVerified": true,
     "ageDeclaration": {
       "id": "02fecba7-6986-4f9b-b400-749d9e36f499",
-      "unansweredDescriptorCount": 24,
-      "unansweredDescriptors": [
-        "advertising",
-        "alcoholTobaccoOrDrugUseOrReferences",
-        "contests",
-        "gambling",
-        "gamblingSimulated",
-        "gunsOrOtherWeapons",
-        "healthOrWellnessTopics",
-        "lootBox",
-        "medicalOrTreatmentInformation",
-        "messagingAndChat",
-        "parentalControls",
-        "profanityOrCrudeHumor",
-        "ageAssurance",
-        "sexualContentGraphicAndNudity",
-        "sexualContentOrNudity",
-        "socialMedia",
-        "socialMediaAgeRestricted",
-        "horrorOrFearThemes",
-        "matureOrSuggestiveThemes",
-        "unrestrictedWebAccess",
-        "userGeneratedContent",
-        "violenceCartoonOrFantasy",
-        "violenceRealisticProlongedGraphicOrSadistic",
-        "violenceRealistic"
-      ],
-      "ageRatingOverrideV2": "NONE",
-      "completed": false
+      "unansweredDescriptorCount": 0,
+      "unansweredDescriptors": [],
+      "ageRatingOverrideV2": "SIXTEEN_PLUS",
+      "descriptorsCompleted": true,
+      "completed": true,
+      "currentWriteStatus": "COMPLETE_VERIFIED",
+      "evidenceFile": "copybox-apple-age-evidence-20261114.json",
+      "readbackAt": "2026-11-14T12:36:41.658646+00:00",
+      "ageRatingOverride": "SIXTEEN_PLUS",
+      "completionEvidenceFile": "copybox-apple-age-completion.json",
+      "territoriesCount": 175,
+      "displayedRatingCounts": {
+        "SIXTEEN_PLUS": 174,
+        "FIFTEEN_PLUS": 1
+      },
+      "koreaDisplayedRating": "FIFTEEN_PLUS",
+      "ratingsDecreased": false
     },
     "betaGroupCount": 0,
     "reviewSubmissionCount": 0,
@@ -90,40 +85,74 @@
       "targetAudience": "BLOCKED_UNTIL_SIGN_IN_DETAILS_SAVED",
       "dataSafety": "UNFINISHED"
     },
-    "reviewFormReset": "Browser restart discarded the earlier unsaved form. The parent restored Yes, the review-account label, and 411-character instructions; username/password remain empty, full-access checkbox unchecked, Add/Save not performed.",
+    "reviewFormReset": "Earlier prepared review details were not verified saved. Current Google verification session expired before device approval; account is not signed in.",
     "androidBundle": {
       "version": "1.0.0+1",
       "uploadedDate": "2026-11-04",
       "evidenceFreshness": "HISTORICAL_RELEASE_RECORD",
       "internalReleaseState": "DRAFT"
     },
-    "submitted": false
+    "submitted": false,
+    "signInStatus": "VERIFICATION_SESSION_EXPIRED_NOT_SIGNED_IN",
+    "reviewCredentialsSavedVerified": false
   },
   "verification": {
     "reviewerApiAcceptance": {
       "evidenceFile": "copybox-reviewer-acceptance.json",
-      "checkedAt": "2026-11-13T23:53:24.382812+00:00",
-      "ciBuildId": "6af7a2c390e83b09c4fa02c3",
-      "sourceCommit": "d92302e0ffa385e17152292f639aec1788ad2f9f",
+      "checkedAt": "2026-11-14T12:28:34.686236+00:00",
+      "ciBuildId": "6af853a890e83b09c4fa2e1b",
+      "sourceCommitPrefix": "fee3403",
       "success": true,
       "credentialScopeVerified": true,
       "signInSucceeded": true,
       "syntheticRewriteSucceeded": true,
       "ownSessionSignOutSucceeded": true,
-      "rewriteLatencyMs": 11497,
+      "rewriteLatencyMs": 6671,
       "oneCreditReported": true,
       "syntheticRewriteMayRemainInHistory": true,
-      "failureCode": null
+      "failureCode": null,
+      "previousSuccessfulEvidence": {
+        "checkedAt": "2026-11-13T23:53:24.382812+00:00",
+        "ciBuildId": "6af7a2c390e83b09c4fa02c3",
+        "sourceCommit": "d92302e0ffa385e17152292f639aec1788ad2f9f",
+        "rewriteLatencyMs": 11497
+      }
     },
     "backendRoutingTests": {
-      "liveSourceCommit": "31f763a812d6b5506918429e7a86d6ad976868b0",
+      "liveSourceCommit": "a8a416fa77eac0a25236e72cc3828f1a5ccf96cf",
       "testFile": "backend/test/copybox_rewrite_routing.test.mjs",
-      "passed": 7,
-      "testType": "FOCUSED_MOCKED_ROUTING_TESTS"
+      "passed": 9,
+      "testType": "FOCUSED_MOCKED_ROUTING_TESTS",
+      "baselineSourceCommit": "31f763a812d6b5506918429e7a86d6ad976868b0",
+      "baselinePassed": 7,
+      "syntaxChecksPassed": 2
     },
-    "nativeDeviceAcceptanceEstablished": false,
     "providerSharingSettingEstablished": false,
-    "limitation": "The live API test verifies the ordinary sign-in, one AI rewrite, and local sign-out path; it does not establish native UI acceptance or the provider data-sharing setting"
+    "limitation": "The fresh live API acceptance passed after the backend output-boundary deployment. Source-built iOS simulator and Android emulator guest acceptance passed, including native clipboard and fresh-process persistence. Physical devices, uploaded signed artifacts, native share/file-picker UI and Android 16 KB runtime mode are outside the demonstrated coverage.",
+    "nativeAcceptance": {
+      "evidenceFile": "copybox-native-acceptance-evidence-20261114.json",
+      "iosGuestSimulatorPassed": true,
+      "androidStatus": "PASSED",
+      "physicalDeviceTested": false,
+      "signedReleaseArtifactTested": false,
+      "shareAndFilePickerUiTested": false,
+      "androidDiagnosis": "Three runner startup failures were resolved by runner-only fixes; attempt4 passed both native phases without app or locked-dependency changes",
+      "androidGuestEmulatorPassed": true,
+      "androidRunId": "43595443695",
+      "androidApplicationCommit": "59fb45c3dd7a85f9e2576930b9f2bdb5360019be",
+      "androidHarnessCommit": "4b2c4031ff5716736e18f9a047804cc0bd823423",
+      "androidEvidenceFile": "copybox-android-native-acceptance.json",
+      "iosAndAndroidGuestAcceptancePassed": true
+    },
+    "backendOutputBoundary": {
+      "evidenceFile": "copybox-web-and-backend-evidence-20261114.json",
+      "candidateCommit": "a8a416fa77eac0a25236e72cc3828f1a5ccf96cf",
+      "candidateFocusedTestsPassed": 9,
+      "deploymentStatus": "LIVE",
+      "publicHealthPassed": true
+    },
+    "nativeSimulatorEmulatorAcceptanceEstablished": true,
+    "physicalDeviceAcceptanceEstablished": false
   },
   "website": {
     "candidateBranch": "release/copybox-policy-20261113",
@@ -136,8 +165,14 @@
       "website/support.html"
     ],
     "preservesNewerSupportUi": true,
-    "deployedThisSession": false,
-    "reasonHeld": "Publish policy wording consistent with confirmed production AI data practices; do not deploy the older whole-site candidate over the newer live site"
+    "deployedThisSession": true,
+    "configuredBranch": "release/k135z-frontend-20260919",
+    "deployId": "dep-dbs4p1u1egvs73cr1hl0",
+    "status": "LIVE",
+    "finishedAt": "2026-11-14T12:01:51.268643Z",
+    "publicPolicyChecksPassed": true,
+    "evidenceFile": "copybox-web-and-backend-evidence-20261114.json",
+    "privacyLimitation": "The public policy update is live, but the actual production OpenAI input/output-sharing setting remains unverified and still affects consent and store declarations"
   },
   "privacy": {
     "productionOpenAiOrganizationAndProjectEstablished": false,
@@ -156,43 +191,54 @@
   "access": {
     "appleManagedCiAccess": "WORKING",
     "codemagicBrowserAccess": "WORKING",
-    "googlePlayBrowserAccess": "WORKING",
+    "googlePlayBrowserAccess": "VERIFICATION_SESSION_EXPIRED_NOT_SIGNED_IN",
     "renderDashboard": "EMAIL_PASSWORD_REJECTED_NO_AUTOMATIC_RETRY",
-    "openAiDashboard": "SECURE_SIGN_IN_REQUEST_ABORTED_BY_USER_ON_2026-11-14_DO_NOT_RETRY_WITHOUT_NEW_REQUEST"
+    "openAiDashboard": "SECURE_SIGN_IN_REQUEST_ABORTED_BY_USER_ON_2026-11-14_DO_NOT_RETRY_WITHOUT_NEW_REQUEST",
+    "renderDeploymentConnection": "WORKING_VIA_EXISTING_CONNECTOR"
   },
   "nextActions": [
     {
       "order": 1,
-      "action": "Hand off the already prepared Google Play review form for the user to enter the dedicated reviewer credential, confirm full access, choose Add, then Save the declaration",
-      "whyUserInputNeeded": "Secure browserAuth supports actual sign-in flows, not secret entry into store review settings; credentials must not be pasted into chat"
+      "action": "Continue Google sign-in from a concrete current page; the earlier verification session expired before device approval"
     },
     {
       "order": 2,
-      "action": "After reviewer details are saved, finish Google target audience and the remaining accurate Data safety declaration"
+      "action": "Verify or save Google reviewer details and complete target audience"
     },
     {
       "order": 3,
-      "action": "Resolve the actual production OpenAI sharing setting and apply the corresponding disclosure and policy changes"
+      "action": "Confirm the actual production OpenAI organization/project and input/output-sharing setting, then align consent and privacy declarations; do not retry the declined OpenAI sign-in without a new user request"
     },
     {
       "order": 4,
-      "action": "Complete Apple age descriptors accurately from supported product behavior and finish the existing privacy submission work"
-    },
-    {
-      "order": 5,
-      "action": "Finish the previously outstanding native-device acceptance, then submit the verified release to both stores"
+      "action": "Finish the remaining accurate Google Data safety and applicable store privacy fields, run each store final submission validation, and submit the completed release"
     }
   ],
   "scopeLimits": {
     "noStoreSubmissionMade": true,
-    "noProductionDeploymentMade": true,
+    "noProductionDeploymentMade": false,
     "noBrowserCredentialValuesRetained": true,
-    "noNewNativeDeviceAcceptanceClaim": true,
-    "readOnlyAppleAuditIsNotCompleteSubmissionValidation": true
+    "readOnlyAppleAuditIsNotCompleteSubmissionValidation": true,
+    "noPhysicalDeviceAcceptanceClaim": true,
+    "nativeAcceptanceClaimLimitedToVerifiedGuestSimulatorAndEmulator": true
   },
   "reconciledHistoricalClaims": [
     "Current Apple release type is AFTER_APPROVAL; the earlier manual-release note is stale",
     "The read-only Apple audit did not test reviewer credential validity; the later successful bounded API test now establishes that path",
-    "The website deployment evidence file predates creation of the isolated candidate branch; its sourcePushed=false flag must not be used to deny the later candidate commit"
+    "The website deployment evidence file predates creation of the isolated candidate branch; its sourcePushed=false flag must not be used to deny the later candidate commit",
+    "Website deployment is now live at 93a5a5543eb3e64bf19ac85c6ee88be112415706; the previous held/not-deployed state is superseded",
+    "iOS source-built guest simulator acceptance now passed; this does not establish physical-device or uploaded-binary acceptance",
+    "Google authentication verification expired before approval; the earlier WORKING session and pending-device-prompt states are stale",
+    "The backend output-boundary local manifest predates its later commit and deployment; the verified live deployment evidence supersedes those candidate-only remote-action fields",
+    "Backend output boundary a8a416fa77eac0a25236e72cc3828f1a5ccf96cf is now verified LIVE with healthy HTTP200; the earlier building state is superseded",
+    "Apple content descriptors and the SIXTEEN_PLUS override are now saved and verified; final readback at 2026-11-14T12:36:41.658646+00:00 found 174 territories at 16+ and Korea at 15+, with no rating reduced",
+    "Android attempt4 now passed both native guest phases with exact app source and unchanged existing locked dependencies; the three startup failures belong to earlier runner attempts"
+  ],
+  "evidenceStatus": "FINAL_CURRENT_CHECKPOINT_WITH_REMAINING_STORE_BLOCKERS",
+  "previousCheckpointCommit": "c6b48d6308a0a2145fcbc342604689a9caa5d988",
+  "remainingBlockers": [
+    "Google session is not authenticated and saved reviewer access is unverified",
+    "Google target audience and final Data safety remain incomplete",
+    "Actual production OpenAI input/output sharing and matching consent/privacy declarations remain unresolved"
   ]
 }

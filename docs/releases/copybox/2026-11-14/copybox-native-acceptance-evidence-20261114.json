@@ -1,0 +1,305 @@
+{
+  "schemaVersion": 1,
+  "preparedAt": "2026-11-14T12:48:15.715618+00:00",
+  "evidenceStatus": "IOS_AND_ANDROID_GUEST_NATIVE_ACCEPTANCE_VERIFIED",
+  "ios": {
+    "ciProvider": "Codemagic",
+    "ciBuildId": "6af84caa90e83b09c4fa2bf1",
+    "ciBuildUrl": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6af84caa90e83b09c4fa2bf1",
+    "acceptanceSummary": {
+      "schemaVersion": 1,
+      "startedAt": "2026-11-14T11:59:10.545489+00:00",
+      "platform": "ios",
+      "bundleId": "com.korlixdeveloper.copybox",
+      "sourceVersion": "1.0.0",
+      "sourceBuildNumber": "1",
+      "sourceCommit": "24571326c541be62ea17c952bd79806879f2b046",
+      "harnessSha256": "b06d4c15c49a13c5854e7d1734f98c001c27f070e0af7a4dccf8a1f1903efb6e",
+      "success": true,
+      "phases": {
+        "seed": "PASSED",
+        "restore": "PASSED"
+      },
+      "guestOnly": true,
+      "productionBackend": "NOT_USED_LOCALHOST_OVERRIDE",
+      "releaseArtifactTested": false,
+      "nativeShareAndFilePickerUiTested": false,
+      "physicalDeviceTested": false,
+      "existingLockedPackagesUnchanged": true,
+      "addedTestPackages": [
+        "flutter_driver",
+        "fuchsia_remote_debug_protocol",
+        "integration_test",
+        "process",
+        "sync_http",
+        "webdriver"
+      ],
+      "deviceName": "iPhone 17",
+      "operatingSystem": "iOS 26.5",
+      "freshProcessRestoredNativePreferences": true,
+      "completedAt": "2026-11-14T12:05:31.692472+00:00"
+    },
+    "sanitizedPhaseEvidence": {
+      "seed": {
+        "phaseLogSha256": "912e921516f116811fa311c93a22a8f6232b24f0bd368fba44b998067389c634",
+        "runnerReportedSuccess": true,
+        "visibleTests": [
+          {
+            "name": "native guest workspace: seed",
+            "result": "success",
+            "skipped": false
+          }
+        ]
+      },
+      "restore": {
+        "phaseLogSha256": "9a407f21ca9a6d49f58eb3f3634fe7b0ac651fc15c6d8bed5a0401d2640c0d95",
+        "runnerReportedSuccess": true,
+        "visibleTests": [
+          {
+            "name": "native guest workspace: restore",
+            "result": "success",
+            "skipped": false
+          }
+        ]
+      }
+    },
+    "coveredByPassingHarness": [
+      "Native app startup and Flutter plugin initialization",
+      "Guest authentication state and secure-storage restoration without error",
+      "Native package identity and version metadata",
+      "Twelve starter boxes",
+      "Writing, title, folder, favorites, search and autosave",
+      "Native clipboard through Copy All and placeholder replacement",
+      "Focus editor and revision history",
+      "Move to trash and restore",
+      "Starter template insertion",
+      "Dark-theme preference",
+      "Fresh process restores persisted native preferences and local workspace"
+    ],
+    "limits": [
+      "Simulator guest-only test of source-built integration binary",
+      "No physical device tested",
+      "Uploaded signed store artifact not tested",
+      "Native share-sheet and file-picker UI not tested",
+      "Production backend disabled by localhost override; live API acceptance is separate"
+    ],
+    "applicationSourceCommit": "59fb45c3dd7a85f9e2576930b9f2bdb5360019be",
+    "harnessCommit": "24571326c541be62ea17c952bd79806879f2b046"
+  },
+  "android": {
+    "ciProvider": "GitHub Actions",
+    "branch": "ops/copybox-android-acceptance-20261114",
+    "testedApplicationSource": "59fb45c3dd7a85f9e2576930b9f2bdb5360019be",
+    "runnerFix": {
+      "commit": "96b799685276f01a748fb31cf9235f8e0f8287ff",
+      "tree": "cd886f26ea5507a4db39f100137491b1af278766",
+      "changedFile": "scripts/ci/run_copybox_native_acceptance.py",
+      "change": "Pass the same explicit ANDROID_AVD_HOME to AVD creation, emulator enumeration, and emulator launch; explicitly put the AVD data there; verify that emulator -list-avds discovers it before the adb wait. Keep large AVD files outside uploaded artifacts.",
+      "pythonSyntax": "PASSED",
+      "appOrDependencyChanges": "NONE",
+      "nativeAssertionsRetained": true,
+      "pushed": true
+    },
+    "overallAcceptancePassed": true,
+    "attempts": [
+      {
+        "runId": "43593215637",
+        "sourceCommit": "7074731f6078802fb897054de9e720fcec54c049",
+        "artifactId": "14113247492",
+        "failedStepNumber": 8,
+        "status": "FAILED_EMULATOR_BOOT_BEFORE_APP_LAUNCH",
+        "success": false,
+        "appLaunched": false,
+        "completedTestPhases": 0,
+        "diagnosis": "Unknown AVD name [copybox_native_2816]; missing corresponding .ini in emulator search directories",
+        "consequence": "Emulator exited before adb registration; the later wait-for-device timed out, before any app test phase",
+        "productBugEstablished": false,
+        "attempt": 1
+      },
+      {
+        "attempt": 2,
+        "acceptanceSummary": {
+          "schemaVersion": 1,
+          "startedAt": "2026-11-14T12:21:45.397422+00:00",
+          "platform": "android",
+          "bundleId": "com.korlixdeveloper.copybox",
+          "sourceVersion": "1.0.0",
+          "sourceBuildNumber": "1",
+          "sourceCommit": "59fb45c3dd7a85f9e2576930b9f2bdb5360019be",
+          "harnessSha256": "b06d4c15c49a13c5854e7d1734f98c001c27f070e0af7a4dccf8a1f1903efb6e",
+          "success": false,
+          "phases": {},
+          "guestOnly": true,
+          "productionBackend": "NOT_USED_LOCALHOST_OVERRIDE",
+          "releaseArtifactTested": false,
+          "nativeShareAndFilePickerUiTested": false,
+          "physicalDeviceTested": false,
+          "existingLockedPackagesUnchanged": true,
+          "addedTestPackages": [
+            "flutter_driver",
+            "fuchsia_remote_debug_protocol",
+            "integration_test",
+            "process",
+            "sync_http",
+            "webdriver"
+          ],
+          "androidAvdDiscovered": true,
+          "failureClass": "TimeoutExpired",
+          "completedAt": "2026-11-14T12:25:06.524206+00:00"
+        },
+        "status": "FAILED_BEFORE_APP_TEST_PHASES",
+        "appTestPhasesCompleted": 0,
+        "diagnosis": "ADB reported the emulator unauthorized; adb wait timed out before app phases",
+        "diagnosisIncludesInference": false,
+        "productBugEstablished": false,
+        "diagnosticSha256": "7b73b4ca3e9e4270f67ce95f39bf7cfd8fa9c794a9163c37373cd195ff2cc341"
+      },
+      {
+        "attempt": 3,
+        "acceptanceSummary": {
+          "schemaVersion": 1,
+          "startedAt": "2026-11-14T12:29:46.852102+00:00",
+          "platform": "android",
+          "bundleId": "com.korlixdeveloper.copybox",
+          "sourceVersion": "1.0.0",
+          "sourceBuildNumber": "1",
+          "sourceCommit": "59fb45c3dd7a85f9e2576930b9f2bdb5360019be",
+          "harnessSha256": "b06d4c15c49a13c5854e7d1734f98c001c27f070e0af7a4dccf8a1f1903efb6e",
+          "success": false,
+          "phases": {},
+          "guestOnly": true,
+          "productionBackend": "NOT_USED_LOCALHOST_OVERRIDE",
+          "releaseArtifactTested": false,
+          "nativeShareAndFilePickerUiTested": false,
+          "physicalDeviceTested": false,
+          "existingLockedPackagesUnchanged": true,
+          "addedTestPackages": [
+            "flutter_driver",
+            "fuchsia_remote_debug_protocol",
+            "integration_test",
+            "process",
+            "sync_http",
+            "webdriver"
+          ],
+          "androidAvdDiscovered": true,
+          "adbServerStartedBeforeEmulator": true,
+          "failureClass": "RuntimeError",
+          "completedAt": "2026-11-14T12:30:50.021851+00:00"
+        },
+        "status": "FAILED_BEFORE_APP_TEST_PHASES",
+        "appTestPhasesCompleted": 0,
+        "diagnosis": "A startup readiness command returned nonzero before app phases",
+        "diagnosisIncludesInference": true,
+        "productBugEstablished": false,
+        "diagnosticSha256": "dcbb626e4a2ffec6e15a72696bace5865a2b2e7bafc86bb0211f5dc5be0d6496"
+      }
+    ],
+    "currentAttempt": {
+      "attempt": 4,
+      "runId": "43595443695",
+      "jobId": "132448824700",
+      "runUrl": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43595443695",
+      "harnessCommit": "4b2c4031ff5716736e18f9a047804cc0bd823423",
+      "applicationCommit": "59fb45c3dd7a85f9e2576930b9f2bdb5360019be",
+      "status": "PASSED",
+      "success": true,
+      "artifactId": "14115150117",
+      "artifactSha256": "f346283a9bc98ce21da97e7fa65dd9b9b3deba5dd30703e424693b539ed59db7",
+      "artifactDigestVerified": true,
+      "evidenceFile": "copybox-android-native-acceptance.json",
+      "acceptanceSummary": {
+        "schemaVersion": 1,
+        "startedAt": "2026-11-14T12:35:41.663313+00:00",
+        "platform": "android",
+        "bundleId": "com.korlixdeveloper.copybox",
+        "sourceVersion": "1.0.0",
+        "sourceBuildNumber": "1",
+        "sourceCommit": "59fb45c3dd7a85f9e2576930b9f2bdb5360019be",
+        "harnessSha256": "b06d4c15c49a13c5854e7d1734f98c001c27f070e0af7a4dccf8a1f1903efb6e",
+        "success": true,
+        "phases": {
+          "seed": "PASSED",
+          "restore": "PASSED"
+        },
+        "guestOnly": true,
+        "productionBackend": "NOT_USED_LOCALHOST_OVERRIDE",
+        "releaseArtifactTested": false,
+        "nativeShareAndFilePickerUiTested": false,
+        "physicalDeviceTested": false,
+        "existingLockedPackagesUnchanged": true,
+        "addedTestPackages": [
+          "flutter_driver",
+          "fuchsia_remote_debug_protocol",
+          "integration_test",
+          "process",
+          "sync_http",
+          "webdriver"
+        ],
+        "androidAvdDiscovered": true,
+        "adbServerStartedBeforeEmulator": true,
+        "adbDeviceConnected": true,
+        "androidBootCompleted": true,
+        "deviceName": "Pixel 6a",
+        "operatingSystem": "Android API 36",
+        "freshProcessRestoredNativePreferences": true,
+        "completedAt": "2026-11-14T12:42:08.982273+00:00"
+      },
+      "machineReports": {
+        "seed": {
+          "name": "native guest workspace: seed",
+          "result": "success",
+          "skipped": false,
+          "testDurationMilliseconds": 34807,
+          "runnerDurationMilliseconds": 304039,
+          "runnerSuccess": true,
+          "errors": [],
+          "reportSha256": "ffc1a7a59536b84b1108a5959f2ddd2b627c899d489b39cb7f0c95fba9d2f025"
+        },
+        "restore": {
+          "name": "native guest workspace: restore",
+          "result": "success",
+          "skipped": false,
+          "testDurationMilliseconds": 4836,
+          "runnerDurationMilliseconds": 27190,
+          "runnerSuccess": true,
+          "errors": [],
+          "reportSha256": "49d71eb99fedfece7176d1f6198ab268e2deb927529868f9c4567dd2aed0ac04"
+        }
+      }
+    },
+    "appCodeChanges": "NONE",
+    "fixScope": "RUNNER_ONLY",
+    "nativeAssertionsRetained": true,
+    "existingLockedDependenciesUnchanged": true,
+    "uiTestDurationMs": {
+      "seed": 34807,
+      "restore": 4836
+    },
+    "durationSemantics": "UI-test durations only, excluding compilation, installation, emulator boot and other runner overhead; not total build duration",
+    "coveredByPassingHarness": [
+      "Native app startup and Flutter plugin initialization",
+      "Guest authentication state and secure-storage restoration without error",
+      "Native package identity and version metadata",
+      "Twelve starter boxes",
+      "Writing, title, folder, favorites, search and autosave",
+      "Native clipboard through Copy All and placeholder replacement",
+      "Focus editor and revision history",
+      "Move to trash and restore",
+      "Starter template insertion",
+      "Dark-theme preference",
+      "Fresh process restores persisted native preferences and local workspace"
+    ],
+    "limits": [
+      "Emulator guest-only test of source-built debug integration binary",
+      "No physical device tested",
+      "Uploaded signed store artifact not tested",
+      "Native share-sheet and file-picker UI not tested",
+      "Production backend disabled by localhost override; live API acceptance is separate",
+      "This Android API 36 run does not establish 16 KB runtime mode; prior 16 KB evidence is static package alignment"
+    ]
+  },
+  "sourceAttribution": {
+    "ios": "Read local completed acceptance summary, phase logs and exact harness; raw VM-service URIs are excluded from this artifact",
+    "android": "Read completed attempt4 acceptance summary and independently verified artifact report. Both seed and fresh-process restore passed unskipped with no errors. Earlier runner failures are retained as history and were resolved without app or dependency changes."
+  }
+}

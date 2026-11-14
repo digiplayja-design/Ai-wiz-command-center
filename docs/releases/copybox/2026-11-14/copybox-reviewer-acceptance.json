@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "checkedAt": "2026-11-13T23:53:24.382812+00:00",
+  "checkedAt": "2026-11-14T12:28:34.686236+00:00",
   "appId": "6830765098",
   "targetVersion": "1.0.0",
   "success": true,
@@ -10,14 +10,14 @@
     "success": true,
     "httpStatusClass": "2xx",
     "responseType": "object",
-    "latencyMs": 480
+    "latencyMs": 646
   },
   "rewrite": {
     "attempted": true,
     "success": true,
     "httpStatusClass": "2xx",
     "responseType": "object",
-    "latencyMs": 11497,
+    "latencyMs": 6671,
     "resultNonempty": true,
     "clientSizeCompatible": true,
     "noSearchOrFileRouting": true,
@@ -30,7 +30,7 @@
     "success": true,
     "httpStatusClass": "2xx",
     "responseType": "object",
-    "latencyMs": 205
+    "latencyMs": 250
   },
   "syntheticRewriteMayRemainInHistory": true,
   "intendedCreditCost": 1,

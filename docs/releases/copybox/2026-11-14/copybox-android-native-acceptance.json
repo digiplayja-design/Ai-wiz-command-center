@@ -1,0 +1,89 @@
+{
+  "status": "PASSED",
+  "runUrl": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43595443695",
+  "runId": 43595443695,
+  "jobId": 132448824700,
+  "harnessCommit": "4b2c4031ff5716736e18f9a047804cc0bd823423",
+  "artifactId": 14115150117,
+  "artifactSha256": "f346283a9bc98ce21da97e7fa65dd9b9b3deba5dd30703e424693b539ed59db7",
+  "artifactDigestVerified": true,
+  "summary": {
+    "schemaVersion": 1,
+    "startedAt": "2026-11-14T12:35:41.663313+00:00",
+    "platform": "android",
+    "bundleId": "com.korlixdeveloper.copybox",
+    "sourceVersion": "1.0.0",
+    "sourceBuildNumber": "1",
+    "sourceCommit": "59fb45c3dd7a85f9e2576930b9f2bdb5360019be",
+    "harnessSha256": "b06d4c15c49a13c5854e7d1734f98c001c27f070e0af7a4dccf8a1f1903efb6e",
+    "success": true,
+    "phases": {
+      "seed": "PASSED",
+      "restore": "PASSED"
+    },
+    "guestOnly": true,
+    "productionBackend": "NOT_USED_LOCALHOST_OVERRIDE",
+    "releaseArtifactTested": false,
+    "nativeShareAndFilePickerUiTested": false,
+    "physicalDeviceTested": false,
+    "existingLockedPackagesUnchanged": true,
+    "addedTestPackages": [
+      "flutter_driver",
+      "fuchsia_remote_debug_protocol",
+      "integration_test",
+      "process",
+      "sync_http",
+      "webdriver"
+    ],
+    "androidAvdDiscovered": true,
+    "adbServerStartedBeforeEmulator": true,
+    "adbDeviceConnected": true,
+    "androidBootCompleted": true,
+    "deviceName": "Pixel 6a",
+    "operatingSystem": "Android API 36",
+    "freshProcessRestoredNativePreferences": true,
+    "completedAt": "2026-11-14T12:42:08.982273+00:00"
+  },
+  "machineReports": {
+    "seed": {
+      "name": "native guest workspace: seed",
+      "result": "success",
+      "skipped": false,
+      "testDurationMilliseconds": 34807,
+      "runnerDurationMilliseconds": 304039,
+      "runnerSuccess": true,
+      "errors": [],
+      "reportSha256": "ffc1a7a59536b84b1108a5959f2ddd2b627c899d489b39cb7f0c95fba9d2f025"
+    },
+    "restore": {
+      "name": "native guest workspace: restore",
+      "result": "success",
+      "skipped": false,
+      "testDurationMilliseconds": 4836,
+      "runnerDurationMilliseconds": 27190,
+      "runnerSuccess": true,
+      "errors": [],
+      "reportSha256": "49d71eb99fedfece7176d1f6198ab268e2deb927529868f9c4567dd2aed0ac04"
+    }
+  },
+  "bootProbeSummary": {
+    "count": 10,
+    "nonzeroResponses": 1,
+    "timedOutProbes": 0,
+    "transientErrors": [
+      "adb: device 'emulator-5554' not found"
+    ],
+    "lastProbe": {
+      "returncode": 0,
+      "stdout": "1",
+      "stderr": ""
+    }
+  },
+  "emulatorDiagnostic": [
+    "INFO         | Android emulator version 37.2.13.0 (build_id 16740729) (CL:N/A)",
+    "INFO         | Found systemPath /usr/local/lib/android/sdk/system-images/android-36/google_apis_playstore/x86_64/",
+    "INFO         | Boot completed in 35491 ms"
+  ],
+  "scope": "Native Android guest integration against exact application source, with unchanged existing locked dependencies; debug integration build rather than uploaded signed artifact. Native share/file-picker UI and physical-device behavior are not claimed.",
+  "remoteChangesByMonitoringAgent": false
+}

@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "preparedAt": "2026-11-14T12:38:37.737790+00:00",
+  "status": "COMPLETE_VERIFIED",
+  "appId": "6830765098",
+  "declarationId": "02fecba7-6986-4f9b-b400-749d9e36f499",
+  "backendBoundaryVerifiedLiveCommit": "a8a416fa77eac0a25236e72cc3828f1a5ccf96cf",
+  "attempt1": {
+    "ciBuildId": "6af853a890e83b09c4fa2e1b",
+    "sourceCommitPrefix": "fee3403",
+    "checkedAt": "2026-11-14T12:28:44.755760+00:00",
+    "scopeVerified": true,
+    "patchAttempts": [
+      {
+        "kind": "descriptors",
+        "httpStatus": 200,
+        "responseConfirmed": false
+      }
+    ],
+    "scriptSuccess": false,
+    "failureCode": "apple_patch_response_mismatch",
+    "mutationOutcomeWasUnknownAtAttemptEnd": true,
+    "laterReadbackResolvedMutationOutcome": true,
+    "cause": "Apple canonicalized nine requested INFREQUENT descriptors to the equivalent returned INFREQUENT_OR_MILD; the initial strict response comparison stopped before override"
+  },
+  "normalizationFix": {
+    "outgoingDescriptorGuardRemainsStrict": true,
+    "normalizationLimitedToObservedResponses": true,
+    "offlineTestsPassed": {
+      "ageCompletion": 21,
+      "readOnlyAudit": 12,
+      "reviewerAcceptance": 8,
+      "total": 41
+    }
+  },
+  "completionRerun": {
+    "ciBuildId": "6af855a590e83b09c4fa2ec3",
+    "sourceCommit": "f07e89408e358c37dbeaf6dae3c1c22c71134dd8",
+    "status": "PASSED",
+    "success": true,
+    "additionalReviewerGeneration": false,
+    "checkedAt": "2026-11-14T12:36:41.658646+00:00",
+    "evidenceFile": "copybox-apple-age-completion.json",
+    "requestCount": 15,
+    "descriptorPatchesThisRun": 0,
+    "overridePatchesThisRun": 1,
+    "overridePatchHttpStatus": 200,
+    "overridePatchResponseConfirmed": true
+  },
+  "submissionAttempted": false,
+  "historySourceDates": {
+    "initialUnansweredAudit": "2026-11-13T23:38:42.735927+00:00",
+    "descriptorWrite": "2026-11-14T12:28:44.755760+00:00",
+    "savedDescriptorReadback": "2026-11-14T12:31:02.317553+00:00",
+    "finalOverrideAndTerritoryReadback": "2026-11-14T12:36:41.658646+00:00"
+  },
+  "descriptorReadbackBeforeOverride": {
+    "ciBuildId": "6af8545490e83b09c4fa2e4a",
+    "checkedAt": "2026-11-14T12:31:02.317553+00:00",
+    "evidenceFile": "copybox-apple-status.json",
+    "all24DescriptorsSaved": true,
+    "unansweredDescriptorCount": 0,
+    "returnedNormalizedFields": [
+      "alcoholTobaccoOrDrugUseOrReferences",
+      "gunsOrOtherWeapons",
+      "medicalOrTreatmentInformation",
+      "profanityOrCrudeHumor",
+      "sexualContentOrNudity",
+      "horrorOrFearThemes",
+      "matureOrSuggestiveThemes",
+      "violenceCartoonOrFantasy",
+      "violenceRealistic"
+    ],
+    "observedAttributes": {
+      "advertising": false,
+      "alcoholTobaccoOrDrugUseOrReferences": "INFREQUENT_OR_MILD",
+      "contests": "NONE",
+      "gambling": false,
+      "gamblingSimulated": "NONE",
+      "gunsOrOtherWeapons": "INFREQUENT_OR_MILD",
+      "healthOrWellnessTopics": true,
+      "lootBox": false,
+      "medicalOrTreatmentInformation": "INFREQUENT_OR_MILD",
+      "messagingAndChat": false,
+      "parentalControls": false,
+      "profanityOrCrudeHumor": "INFREQUENT_OR_MILD",
+      "ageAssurance": true,
+      "sexualContentGraphicAndNudity": "NONE",
+      "sexualContentOrNudity": "INFREQUENT_OR_MILD",
+      "socialMedia": false,
+      "socialMediaAgeRestricted": false,
+      "horrorOrFearThemes": "INFREQUENT_OR_MILD",
+      "matureOrSuggestiveThemes": "INFREQUENT_OR_MILD",
+      "unrestrictedWebAccess": false,
+      "userGeneratedContent": false,
+      "violenceCartoonOrFantasy": "INFREQUENT_OR_MILD",
+      "violenceRealisticProlongedGraphicOrSadistic": "NONE",
+      "violenceRealistic": "INFREQUENT_OR_MILD",
+      "kidsAgeBand": null,
+      "ageRatingOverride": "NONE",
+      "ageRatingOverrideV2": "NONE",
+      "koreaAgeRatingOverride": "NONE"
+    },
+    "legacyAppInfoRating": "TWELVE_PLUS",
+    "ratingSemantics": "Historical pre-override legacy appInfo rating; final displayed territory ratings are reported in finalCompletion"
+  },
+  "finalCompletion": {
+    "checkedAt": "2026-11-14T12:36:41.658646+00:00",
+    "evidenceFile": "copybox-apple-age-completion.json",
+    "all24DescriptorsVerified": true,
+    "legacyOverride": "SIXTEEN_PLUS",
+    "v2Override": "SIXTEEN_PLUS",
+    "territoriesCount": 175,
+    "displayedRatingCounts": {
+      "SIXTEEN_PLUS": 174,
+      "FIFTEEN_PLUS": 1
+    },
+    "koreaDisplayedRating": "FIFTEEN_PLUS",
+    "ratingsDecreased": false,
+    "ratingSemantics": "Displayed territory ratings; separate base calculation not exposed",
+    "submissionAttempted": false
+  }
+}
