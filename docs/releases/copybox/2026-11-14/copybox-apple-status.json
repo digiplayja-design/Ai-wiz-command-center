@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "checkedAt": "2026-11-13T23:38:42.735927+00:00",
+  "readOnly": true,
+  "app": {
+    "id": "6830765098",
+    "bundleId": "com.korlixdeveloper.copybox",
+    "contentRightsDeclaration": "USES_THIRD_PARTY_CONTENT",
+    "primaryLocale": "en-US"
+  },
+  "targetVersion": "1.0.0",
+  "appStoreVersions": [
+    {
+      "id": "3ae65f97-f9c5-498d-80b6-8f6d208615d6",
+      "platform": "IOS",
+      "versionString": "1.0.0",
+      "appStoreState": "PREPARE_FOR_SUBMISSION",
+      "appVersionState": "PREPARE_FOR_SUBMISSION",
+      "releaseType": "AFTER_APPROVAL",
+      "copyrightPresent": true,
+      "reviewDetails": {
+        "exists": true,
+        "id": "46939d38-8276-4684-b64d-0b32b319bbf0",
+        "demoAccountRequired": true,
+        "demoAccountNamePresent": true,
+        "demoAccountPasswordPresent": true,
+        "contactFirstNamePresent": true,
+        "contactLastNamePresent": true,
+        "contactPhonePresent": true,
+        "contactEmailPresent": true,
+        "notesPresent": true
+      },
+      "selectedBuildId": "ddd61c5d-982c-404c-9aaa-d280bd0495be"
+    }
+  ],
+  "appInfos": [
+    {
+      "id": "02fecba7-6986-4f9b-b400-749d9e36f499",
+      "appStoreState": "PREPARE_FOR_SUBMISSION",
+      "state": "PREPARE_FOR_SUBMISSION",
+      "appStoreAgeRating": null,
+      "australiaAgeRating": null,
+      "brazilAgeRating": null,
+      "brazilAgeRatingV2": null,
+      "franceAgeRating": null,
+      "koreaAgeRating": null,
+      "ageDeclaration": {
+        "exists": true,
+        "id": "02fecba7-6986-4f9b-b400-749d9e36f499",
+        "observedAttributes": {
+          "advertising": null,
+          "alcoholTobaccoOrDrugUseOrReferences": null,
+          "contests": null,
+          "gambling": null,
+          "gamblingSimulated": null,
+          "gunsOrOtherWeapons": null,
+          "healthOrWellnessTopics": null,
+          "lootBox": null,
+          "medicalOrTreatmentInformation": null,
+          "messagingAndChat": null,
+          "parentalControls": null,
+          "profanityOrCrudeHumor": null,
+          "ageAssurance": null,
+          "sexualContentGraphicAndNudity": null,
+          "sexualContentOrNudity": null,
+          "socialMedia": null,
+          "socialMediaAgeRestricted": null,
+          "horrorOrFearThemes": null,
+          "matureOrSuggestiveThemes": null,
+          "unrestrictedWebAccess": null,
+          "userGeneratedContent": null,
+          "violenceCartoonOrFantasy": null,
+          "violenceRealisticProlongedGraphicOrSadistic": null,
+          "violenceRealistic": null,
+          "kidsAgeBand": null,
+          "ageRatingOverride": "NONE",
+          "ageRatingOverrideV2": "NONE",
+          "koreaAgeRatingOverride": "NONE"
+        },
+        "unansweredReturnedDescriptors": [
+          "advertising",
+          "alcoholTobaccoOrDrugUseOrReferences",
+          "contests",
+          "gambling",
+          "gamblingSimulated",
+          "gunsOrOtherWeapons",
+          "healthOrWellnessTopics",
+          "lootBox",
+          "medicalOrTreatmentInformation",
+          "messagingAndChat",
+          "parentalControls",
+          "profanityOrCrudeHumor",
+          "ageAssurance",
+          "sexualContentGraphicAndNudity",
+          "sexualContentOrNudity",
+          "socialMedia",
+          "socialMediaAgeRestricted",
+          "horrorOrFearThemes",
+          "matureOrSuggestiveThemes",
+          "unrestrictedWebAccess",
+          "userGeneratedContent",
+          "violenceCartoonOrFantasy",
+          "violenceRealisticProlongedGraphicOrSadistic",
+          "violenceRealistic"
+        ],
+        "notReturnedDescriptors": [],
+        "developerAgeRatingInfoUrlPresent": false
+      }
+    }
+  ],
+  "builds": [
+    {
+      "id": "ddd61c5d-982c-404c-9aaa-d280bd0495be",
+      "buildNumber": "1",
+      "processingState": "VALID",
+      "expired": false,
+      "usesNonExemptEncryption": false,
+      "uploadedDate": "2026-11-04T09:04:55-08:00",
+      "expirationDate": "2027-02-02T09:04:55-08:00",
+      "minOsVersion": "15.0",
+      "preReleaseVersion": "1.0.0",
+      "platform": "IOS",
+      "beta": {
+        "internalBuildState": "READY_FOR_BETA_TESTING",
+        "externalBuildState": "READY_FOR_BETA_SUBMISSION",
+        "autoNotifyEnabled": true
+      }
+    }
+  ],
+  "betaGroups": [],
+  "reviewSubmissions": [],
+  "detectedMissingFields": [],
+  "completeness": {
+    "appStoreVersionsHasMore": false,
+    "appInfosHasMore": false,
+    "buildsHasMore": false,
+    "buildDetailsLimited": false,
+    "betaGroupsHasMore": false,
+    "betaGroupDetailsLimited": false,
+    "reviewSubmissionsHasMore": false
+  },
+  "requestCount": 11,
+  "notAssessed": [
+    "review_credentials_validity_or_live_login",
+    "physical_device_acceptance",
+    "public_privacy_urls_and_actual_data_practices",
+    "privacy_nutrition_labels",
+    "screenshots_and_localized_listing_completeness",
+    "pricing_and_territory_availability",
+    "agreements_tax_and_banking",
+    "all_apple_submission_validation_rules",
+    "testers_outside_copybox_groups_or_their_identities"
+  ],
+  "overallSubmissionReadiness": "NOT_ESTABLISHED_BY_READ_ONLY_AUDIT"
+}

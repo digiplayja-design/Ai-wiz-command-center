@@ -1,0 +1,198 @@
+{
+  "schemaVersion": 1,
+  "preparedAt": "2026-11-14T03:56:37.453833+00:00",
+  "checkpointDate": "2026-11-14",
+  "goal": "Finish KORLIX COPY Box and submit version 1.0.0 to Apple App Store and Google Play",
+  "overallStatus": "NOT_SUBMITTED_REMAINING_WORK_IDENTIFIED",
+  "scope": {
+    "repository": "digiplayja-design/Ai-wiz-command-center",
+    "appPath": "apps/korlix_copy_box",
+    "bundleAndPackageId": "com.korlixdeveloper.copybox",
+    "version": "1.0.0+1",
+    "appPullRequest": 42,
+    "appSourceHead": "59fb45c3dd7a85f9e2576930b9f2bdb5360019be",
+    "appCodeChangedThisSession": false
+  },
+  "operationsCheckpoint": {
+    "branch": "ops/copybox-apple-status-20261113",
+    "parentCommitForThisCheckpoint": "d92302e0ffa385e17152292f639aec1788ad2f9f",
+    "parentTree": "6a9509f1312464f25e99774fc910dadfb72501cc",
+    "managedAppleIntegration": "Codemagic Korlix AI",
+    "newCredentialsCreated": false
+  },
+  "apple": {
+    "evidence": {
+      "file": "copybox-apple-status.json",
+      "checkedAt": "2026-11-13T23:38:42.735927+00:00",
+      "ciBuildId": "6af79f4490e83b09c4fa01c6",
+      "readOnly": true
+    },
+    "appId": "6830765098",
+    "versionId": "3ae65f97-f9c5-498d-80b6-8f6d208615d6",
+    "state": "PREPARE_FOR_SUBMISSION",
+    "releaseType": "AFTER_APPROVAL",
+    "selectedBuild": {
+      "id": "ddd61c5d-982c-404c-9aaa-d280bd0495be",
+      "buildNumber": "1",
+      "processingState": "VALID",
+      "expired": false,
+      "uploadedDate": "2026-11-04T09:04:55-08:00",
+      "expirationDate": "2027-02-02T09:04:55-08:00",
+      "usesNonExemptEncryption": false
+    },
+    "reviewerCredentialAndContactFieldsPresent": true,
+    "reviewerLiveApiVerified": true,
+    "ageDeclaration": {
+      "id": "02fecba7-6986-4f9b-b400-749d9e36f499",
+      "unansweredDescriptorCount": 24,
+      "unansweredDescriptors": [
+        "advertising",
+        "alcoholTobaccoOrDrugUseOrReferences",
+        "contests",
+        "gambling",
+        "gamblingSimulated",
+        "gunsOrOtherWeapons",
+        "healthOrWellnessTopics",
+        "lootBox",
+        "medicalOrTreatmentInformation",
+        "messagingAndChat",
+        "parentalControls",
+        "profanityOrCrudeHumor",
+        "ageAssurance",
+        "sexualContentGraphicAndNudity",
+        "sexualContentOrNudity",
+        "socialMedia",
+        "socialMediaAgeRestricted",
+        "horrorOrFearThemes",
+        "matureOrSuggestiveThemes",
+        "unrestrictedWebAccess",
+        "userGeneratedContent",
+        "violenceCartoonOrFantasy",
+        "violenceRealisticProlongedGraphicOrSadistic",
+        "violenceRealistic"
+      ],
+      "ageRatingOverrideV2": "NONE",
+      "completed": false
+    },
+    "betaGroupCount": 0,
+    "reviewSubmissionCount": 0,
+    "submitted": false
+  },
+  "googlePlay": {
+    "evidenceSource": "Parent agent browser observations on 2026-11-13 and 2026-11-14",
+    "developerAccountId": "4772708594176030332",
+    "appId": "4974456296219116192",
+    "state": "DRAFT",
+    "setupCompleted": 8,
+    "setupTotal": 11,
+    "remainingSetup": {
+      "signInDetails": "UNSAVED",
+      "targetAudience": "BLOCKED_UNTIL_SIGN_IN_DETAILS_SAVED",
+      "dataSafety": "UNFINISHED"
+    },
+    "reviewFormReset": "Browser restart discarded the earlier unsaved form. The parent restored Yes, the review-account label, and 411-character instructions; username/password remain empty, full-access checkbox unchecked, Add/Save not performed.",
+    "androidBundle": {
+      "version": "1.0.0+1",
+      "uploadedDate": "2026-11-04",
+      "evidenceFreshness": "HISTORICAL_RELEASE_RECORD",
+      "internalReleaseState": "DRAFT"
+    },
+    "submitted": false
+  },
+  "verification": {
+    "reviewerApiAcceptance": {
+      "evidenceFile": "copybox-reviewer-acceptance.json",
+      "checkedAt": "2026-11-13T23:53:24.382812+00:00",
+      "ciBuildId": "6af7a2c390e83b09c4fa02c3",
+      "sourceCommit": "d92302e0ffa385e17152292f639aec1788ad2f9f",
+      "success": true,
+      "credentialScopeVerified": true,
+      "signInSucceeded": true,
+      "syntheticRewriteSucceeded": true,
+      "ownSessionSignOutSucceeded": true,
+      "rewriteLatencyMs": 11497,
+      "oneCreditReported": true,
+      "syntheticRewriteMayRemainInHistory": true,
+      "failureCode": null
+    },
+    "backendRoutingTests": {
+      "liveSourceCommit": "31f763a812d6b5506918429e7a86d6ad976868b0",
+      "testFile": "backend/test/copybox_rewrite_routing.test.mjs",
+      "passed": 7,
+      "testType": "FOCUSED_MOCKED_ROUTING_TESTS"
+    },
+    "nativeDeviceAcceptanceEstablished": false,
+    "providerSharingSettingEstablished": false,
+    "limitation": "The live API test verifies the ordinary sign-in, one AI rewrite, and local sign-out path; it does not establish native UI acceptance or the provider data-sharing setting"
+  },
+  "website": {
+    "candidateBranch": "release/copybox-policy-20261113",
+    "candidateCommit": "93a5a5543eb3e64bf19ac85c6ee88be112415706",
+    "parentObservedLiveCommit": "594d00a107aede0132b6c34e19f021dd7866cec9",
+    "filesChanged": [
+      "website/privacy-policy.html",
+      "website/terms.html",
+      "website/delete-account.html",
+      "website/support.html"
+    ],
+    "preservesNewerSupportUi": true,
+    "deployedThisSession": false,
+    "reasonHeld": "Publish policy wording consistent with confirmed production AI data practices; do not deploy the older whole-site candidate over the newer live site"
+  },
+  "privacy": {
+    "productionOpenAiOrganizationAndProjectEstablished": false,
+    "historicalObservation": {
+      "date": "2026-11-04",
+      "organization": "Personal",
+      "project": "Default",
+      "shareInputsAndOutputs": "ENABLED_FOR_ALL_PROJECTS",
+      "currentProductionApplicability": "UNESTABLISHED"
+    },
+    "currentAccountSettingVerified": false,
+    "settingsChangedThisSession": false,
+    "remainingDecision": "Confirm the production key organization/project and actual input/output sharing setting, then align the in-app disclosure, website policy, and both store privacy declarations",
+    "conditionalImplementation": "If model-improvement sharing is retained, the previously prepared approach requires explicit refreshed in-app consent and new signed binaries; if the production project does not share, use declarations supported by that verified setting"
+  },
+  "access": {
+    "appleManagedCiAccess": "WORKING",
+    "codemagicBrowserAccess": "WORKING",
+    "googlePlayBrowserAccess": "WORKING",
+    "renderDashboard": "EMAIL_PASSWORD_REJECTED_NO_AUTOMATIC_RETRY",
+    "openAiDashboard": "SECURE_SIGN_IN_REQUEST_ABORTED_BY_USER_ON_2026-11-14_DO_NOT_RETRY_WITHOUT_NEW_REQUEST"
+  },
+  "nextActions": [
+    {
+      "order": 1,
+      "action": "Hand off the already prepared Google Play review form for the user to enter the dedicated reviewer credential, confirm full access, choose Add, then Save the declaration",
+      "whyUserInputNeeded": "Secure browserAuth supports actual sign-in flows, not secret entry into store review settings; credentials must not be pasted into chat"
+    },
+    {
+      "order": 2,
+      "action": "After reviewer details are saved, finish Google target audience and the remaining accurate Data safety declaration"
+    },
+    {
+      "order": 3,
+      "action": "Resolve the actual production OpenAI sharing setting and apply the corresponding disclosure and policy changes"
+    },
+    {
+      "order": 4,
+      "action": "Complete Apple age descriptors accurately from supported product behavior and finish the existing privacy submission work"
+    },
+    {
+      "order": 5,
+      "action": "Finish the previously outstanding native-device acceptance, then submit the verified release to both stores"
+    }
+  ],
+  "scopeLimits": {
+    "noStoreSubmissionMade": true,
+    "noProductionDeploymentMade": true,
+    "noBrowserCredentialValuesRetained": true,
+    "noNewNativeDeviceAcceptanceClaim": true,
+    "readOnlyAppleAuditIsNotCompleteSubmissionValidation": true
+  },
+  "reconciledHistoricalClaims": [
+    "Current Apple release type is AFTER_APPROVAL; the earlier manual-release note is stale",
+    "The read-only Apple audit did not test reviewer credential validity; the later successful bounded API test now establishes that path",
+    "The website deployment evidence file predates creation of the isolated candidate branch; its sourcePushed=false flag must not be used to deny the later candidate commit"
+  ]
+}
