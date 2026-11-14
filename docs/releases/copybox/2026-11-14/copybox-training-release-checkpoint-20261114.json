@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "preparedAt": "2026-11-14T16:17:29Z",
+  "preparedAt": "2026-11-14T16:26:21Z",
   "checkpointDate": "2026-11-14",
   "overallStatus": "NOT_SUBMITTED_OPTION_B_IMPLEMENTED_FINAL_STORE_STEPS_REMAIN",
   "scope": {
@@ -19,13 +19,13 @@
   },
   "operationsCheckpoint": {
     "branch": "ops/copybox-apple-status-20261113",
-    "expectedParentCommit": "0924457108bdc8045c6b57d377581fa0146b7906",
-    "expectedParentTree": "f6207e1d8204eee8efb10e78a69e127afa07e512",
+    "expectedParentCommit": "46fb5ef52ca224b78f84c095eff7a27d41921db3",
+    "expectedParentTree": "eb28121dfb81bd00f768ce740a34c5c825d5b2db",
     "managedAppleIntegration": "Codemagic Korlix AI",
     "newCredentialsCreated": false,
     "previousEvidenceCommit": "05fca3d7da65e683912a28bd75fcd9e62985922e",
-    "previousExpectedParentCommit": "f688b67a80365f2e9205f56ac206e8dfc0c1eef7",
-    "previousExpectedParentTree": "f06db5ada18ab07fb7cdf100e28894f31d88d758"
+    "previousExpectedParentCommit": "0924457108bdc8045c6b57d377581fa0146b7906",
+    "previousExpectedParentTree": "f6207e1d8204eee8efb10e78a69e127afa07e512"
   },
   "userDecision": {
     "choice": "B",
@@ -288,13 +288,22 @@
     "reviewSubmitted": false,
     "betaReviewSubmitted": false,
     "webAuthentication": {
-      "status": "VERIFICATION_CODE_REJECTED_NOT_SIGNED_IN",
+      "status": "VERIFICATION_CODE_RESENT_AWAITING_FRESH_CODE",
       "usernameAndPasswordAcceptedBySecureFlow": true,
       "verificationStep": "Six-digit verification code",
-      "visibleMessage": "Incorrect verification code",
+      "visibleMessage": null,
       "authenticated": false,
       "appleStoreWritesThisContinuation": false,
-      "credentialOrCodeValuesRecorded": false
+      "credentialOrCodeValuesRecorded": false,
+      "previousRejection": {
+        "visibleMessage": "Incorrect verification code",
+        "status": "VERIFICATION_CODE_REJECTED_NOT_SIGNED_IN",
+        "historical": true
+      },
+      "latestAction": "Clicked visible Resend code to devices",
+      "latestDomObservation": "Code-entry form remains visible; the previous incorrect-code error is absent",
+      "smsOptionVisible": false,
+      "codeDeliveryVerified": false
     }
   },
   "android": {
@@ -429,16 +438,20 @@
       "changesAwaitingSubmission": 9,
       "preReviewIssues": [
         "Incomplete target audience and content declaration",
-        "Incomplete data safety declaration"
+        "Incomplete data safety declaration",
+        "Missing sign in details"
       ],
       "quickChecks": {
-        "status": "RUNNING_AT_OBSERVATION",
-        "completionVerified": false
+        "status": "PRE_REVIEW_ISSUES_DISPLAYED",
+        "completionVerified": false,
+        "previousRunningIndicatorVisible": false,
+        "passingChecksCertified": false
       },
       "countryAvailabilityChangeLabel": "Add 177 countries/regions plus Rest of World",
       "previouslyApprovedAvailabilitySelectionChanged": false,
       "productionRolloutStarted": false,
-      "submittedForReview": false
+      "submittedForReview": false,
+      "issueCount": 3
     },
     "mainStoreListing": {
       "status": "DESCRIPTION_UPDATED_FRESH_READBACK_VERIFIED",
@@ -495,7 +508,8 @@
       "canonicalInstructionNameRestored": true,
       "privatePasswordFieldEmpty": true,
       "fullAccessConfirmationChecked": false,
-      "otherPreparedFormTextRetainedUnsaved": true
+      "otherPreparedFormTextRetainedUnsaved": true,
+      "visiblePasswordCharacterCount": "0/100"
     },
     "targetAudience": {
       "status": "INCOMPLETE_BLOCKED_BY_APP_ACCESS",
@@ -606,18 +620,18 @@
   },
   "access": {
     "googlePlay": "SIGNED_IN_ROOT_UI_VERIFIED",
-    "appleWeb": "VERIFICATION_CODE_REJECTED_NOT_SIGNED_IN",
+    "appleWeb": "VERIFICATION_CODE_RESENT_AWAITING_FRESH_CODE",
     "appleManagedIntegration": "WORKING",
     "renderDeploymentConnection": "WORKING"
   },
   "remainingWork": [
-    "Complete Apple sign-in and its verification step.",
+    "Complete Apple sign-in with a fresh verification code; Resend code to devices was clicked and the code-entry form remains visible.",
     "Save Google App Access using the private reviewer password and the prepared instructions; no reviewer record is currently verified as saved.",
     "Complete Google Target audience and content for the established 16–17 and 18-and-over audience.",
     "Verify the production OpenAI credential's organization/project association and current input/output-sharing setting; the approved B decision remains resolved.",
     "Finalize the saved Google Data Safety draft after target audience is complete, using verified actual practices.",
     "Publish Apple's Other User Content purpose update using verified actual practices.",
-    "Verify completion of Play quick checks, resolve the two pre-review declaration issues, run final store submission validation, and submit both releases."
+    "Verify completion of Play quick checks, resolve the three pre-review issues, run final store submission validation, and submit both releases."
   ],
   "submitted": {
     "apple": false,
@@ -625,11 +639,11 @@
   },
   "evidenceStatus": "FINAL_FOR_RECORDED_SCOPE",
   "previousCheckpoint": {
-    "preparedAt": "2026-11-14T14:05:41.218125+00:00",
-    "commit": "0924457108bdc8045c6b57d377581fa0146b7906",
-    "gitBlobSha": "94c816b9994c6dd3ecccce789d110516dcc290a3",
+    "preparedAt": "2026-11-14T16:17:29Z",
+    "commit": "46fb5ef52ca224b78f84c095eff7a27d41921db3",
+    "gitBlobSha": "640d5bf6b5360749052f53da983dd35d45673833",
     "path": "docs/releases/copybox/2026-11-14/copybox-training-release-checkpoint-20261114.json",
-    "scope": "Earlier build, validation, deployment and Apple metadata evidence remains unchanged below."
+    "scope": "Earlier build, validation, deployment, Apple metadata and Google release preparation evidence remains unchanged below."
   },
   "storeProgressUpdate": {
     "evidenceFile": "copybox-google-store-progress-20261114.json",
@@ -639,9 +653,9 @@
       "source": "Contemporaneous observations supplied by the primary agent in this task",
       "compilerIndependentlyObservedUi": false,
       "exactObservationTimestampRecorded": false,
-      "recordedAt": "2026-11-14T16:17:29Z"
+      "recordedAt": "2026-11-14T16:26:21Z"
     },
-    "baselineCommit": "0924457108bdc8045c6b57d377581fa0146b7906",
+    "baselineCommit": "46fb5ef52ca224b78f84c095eff7a27d41921db3",
     "status": "GOOGLE_BUILD2_AND_RELEASE_DRAFTS_SAVED_NEITHER_STORE_SUBMITTED"
   }
 }
