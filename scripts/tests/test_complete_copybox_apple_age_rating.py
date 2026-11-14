@@ -63,6 +63,7 @@ class Session:
         self.reject_patch = False
         self.patch_failure = None
         self.ignore_descriptor = False
+        self.canonicalize_frequencies = False
         self.get_failure = None
 
     def declaration(self):
@@ -109,6 +110,10 @@ class Session:
                 return Response({"errors": [{"detail": "PRIVATE_ERROR_SECRET"}]}, status=403)
             attrs = kwargs["json"]["data"]["attributes"]
             self.attrs.update(attrs)
+            if self.canonicalize_frequencies:
+                for key, value in self.attrs.items():
+                    if key in age.REVIEWED_ATTRIBUTES and value == "INFREQUENT":
+                        self.attrs[key] = "INFREQUENT_OR_MILD"
             if "ageRatingOverrideV2" in attrs:
                 self.override_patched = True
             else:
@@ -154,6 +159,47 @@ class CompletionTests(unittest.TestCase):
         self.assertTrue(report["success"], report)
         self.assertEqual(session.patch_bodies, [])
         self.assertEqual(report["overrideDecision"], "preserved_existing_override")
+
+    def test_confirmed_legacy_get_values_skip_descriptor_repatch(self):
+        session = Session(complete=True)
+        for key, value in session.attrs.items():
+            if key in age.REVIEWED_ATTRIBUTES and value == "INFREQUENT":
+                session.attrs[key] = "INFREQUENT_OR_MILD"
+        report = execute(session)
+        self.assertTrue(report["success"], report)
+        self.assertFalse(session.descriptor_patched)
+        self.assertEqual(len(session.patch_bodies), 1)
+        self.assertEqual(session.patch_bodies[0]["data"]["attributes"],
+                         {"ageRatingOverrideV2": "SIXTEEN_PLUS"})
+        self.assertEqual(sum(value == "INFREQUENT_OR_MILD" for value in
+                             report["finalDeclaration"]["attributes"].values()), 9)
+
+    def test_confirmed_legacy_patch_response_is_accepted_but_outgoing_values_stay_modern(self):
+        session = Session()
+        session.canonicalize_frequencies = True
+        report = execute(session)
+        self.assertTrue(report["success"], report)
+        self.assertEqual(session.patch_bodies[0]["data"]["attributes"], age.REVIEWED_ATTRIBUTES)
+        self.assertEqual(report["patchAttempts"][0]["mismatchedFields"], [])
+        self.assertEqual(report["patchAttempts"][0]["returnedAttributes"]["violenceRealistic"],
+                         "INFREQUENT_OR_MILD")
+
+    def test_readback_alias_cannot_loosen_outbound_body_or_other_values(self):
+        session, report = Session(), age.new_report()
+        api = age.AppleAgeCompletion(session, lambda: {}, report)
+        api.verify_scope()
+        api.declaration()
+        legacy = {key: "INFREQUENT_OR_MILD" if value == "INFREQUENT" else value
+                  for key, value in age.REVIEWED_ATTRIBUTES.items()}
+        self.assertTrue(age.observed_attributes_match(legacy, age.REVIEWED_ATTRIBUTES))
+        with self.assertRaisesRegex(age.CompletionStop, "mutation_attributes_not_reviewed"):
+            api.patch("descriptors", legacy)
+        self.assertEqual(session.patch_bodies, [])
+        self.assertFalse(age.observed_attributes_match(
+            {"violenceRealistic": "FREQUENT_OR_INTENSE"}, {"violenceRealistic": "FREQUENT"}))
+        self.assertFalse(age.observed_attributes_match({"gambling": 0}, {"gambling": False}))
+        self.assertFalse(age.observed_attributes_match(
+            {"ageRatingOverrideV2": "INFREQUENT_OR_MILD"}, {"ageRatingOverrideV2": "INFREQUENT"}))
 
     def test_higher_computed_rating_is_preserved_without_override_write(self):
         ratings = {"USA": "EIGHTEEN_PLUS", "BRA": "EIGHTEEN_PLUS", "KOR": "NINETEEN_PLUS"}

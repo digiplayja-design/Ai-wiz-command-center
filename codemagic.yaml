@@ -73,7 +73,7 @@ workflows:
       app_store_connect: Codemagic Korlix AI
     environment:
       vars:
-        COPYBOX_RUN_REVIEWER_ACCEPTANCE: "true"
+        COPYBOX_RUN_REVIEWER_ACCEPTANCE: "false"
     # Manual only. The CopyBox output boundary is already verified live at
     # a8a416fa77eac0a25236e72cc3828f1a5ccf96cf. Managed Apple auth stays in memory.
     # Only the exact age declaration can be patched; no app submission,

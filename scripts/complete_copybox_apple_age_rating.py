@@ -150,6 +150,16 @@ def attributes_match(attrs, expected):
                for key, value in expected.items())
 
 
+def observed_attributes_match(attrs, expected):
+    # Apple's 2026-11-14 GET readback confirmed this legacy representation
+    # for all nine submitted INFREQUENT values. Outbound bodies stay exact.
+    observed = dict(attrs)
+    for key, value in expected.items():
+        if key in REVIEWED_ATTRIBUTES and value == "INFREQUENT" and observed.get(key) == "INFREQUENT_OR_MILD":
+            observed[key] = "INFREQUENT"
+    return attributes_match(observed, expected)
+
+
 def preserve_options(before, after, include_override=True):
     keys = PRESERVED_OPTIONS + (("ageRatingOverrideV2", "ageRatingOverride") if include_override else ())
     for key in keys:
@@ -282,7 +292,11 @@ class AppleAgeCompletion:
             raise CompletionStop("apple_patch_response_invalid") from None
         require(isinstance(payload, dict), "apple_patch_response_invalid")
         returned = declaration_attributes(payload)
-        require(attributes_match(returned, attrs), "apple_patch_response_mismatch")
+        # Retain only validated values for the exact allowed write fields.
+        attempt["returnedAttributes"] = {key: returned[key] for key in attrs}
+        attempt["mismatchedFields"] = [key for key, value in attrs.items()
+                                     if not observed_attributes_match(returned, {key: value})]
+        require(not attempt["mismatchedFields"], "apple_patch_response_mismatch")
         attempt["responseConfirmed"] = True
         self.report["mutationOutcomeUnknown"] = False
 
@@ -318,10 +332,10 @@ def run(session, auth_headers, pause=time.sleep):
                 and before.get("ageRatingOverrideV2") != "UNRATED", "unrated_preserved_no_mutation")
 
         report["phase"] = "apply_reviewed_descriptors"
-        if not attributes_match(before, REVIEWED_ATTRIBUTES):
+        if not observed_attributes_match(before, REVIEWED_ATTRIBUTES):
             api.patch("descriptors", dict(REVIEWED_ATTRIBUTES))
         after = api.declaration()
-        require(attributes_match(after, REVIEWED_ATTRIBUTES), "descriptor_readback_mismatch")
+        require(observed_attributes_match(after, REVIEWED_ATTRIBUTES), "descriptor_readback_mismatch")
         preserve_options(before, after)
         report["descriptorsVerified"] = True
         report["afterDescriptors"] = declaration_snapshot(after)
@@ -344,7 +358,7 @@ def run(session, auth_headers, pause=time.sleep):
             # before the second narrowly scoped write.
             api.verify_scope()
             latest = api.declaration()
-            require(attributes_match(latest, REVIEWED_ATTRIBUTES), "declaration_changed_during_run")
+            require(observed_attributes_match(latest, REVIEWED_ATTRIBUTES), "declaration_changed_during_run")
             preserve_options(after, latest)
             ratings = complete_ratings(api, pause)
             if RATING_AGES[ratings["USA"]] >= 16:
@@ -354,7 +368,7 @@ def run(session, auth_headers, pause=time.sleep):
                 api.override_allowed = True
                 api.patch("override", {"ageRatingOverrideV2": "SIXTEEN_PLUS"})
                 after = api.declaration()
-                require(attributes_match(after, REVIEWED_ATTRIBUTES)
+                require(observed_attributes_match(after, REVIEWED_ATTRIBUTES)
                         and after.get("ageRatingOverrideV2") == "SIXTEEN_PLUS",
                         "override_readback_mismatch")
                 preserve_options(latest, after, include_override=False)
