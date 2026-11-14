@@ -1,5 +1,40 @@
 # COPY Box data-handling evidence
 
+## Model-improvement consent update — November 14, 2026
+
+The owner selected **B: retain model-improvement sharing with explicit renewed consent and new signed builds**. This resolves the product choice. The association between the production API credential and the observed OpenAI organization/project remains unverified. The November 4 console setting is historical; it does not prove the current production setting.
+
+The proposed release asks **Allow AI and model training?**, with **Allow AI and training** and **Use local only** choices before transmission. It names full box text, editing instructions, generated responses, OpenAI model training/improvement, and retained KORLIX account AI history even when the original is kept. Earlier processing-only grants must be renewed. **Revoke AI consent** affects future requests by the current account on this device; it does not delete online history, recall sent information, or reverse prior training use. Sensitive, confidential or proprietary information must not be submitted. These are prepared release changes; this document does not assert that they have already shipped.
+
+### Apple review risk
+
+The current [App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/) require explicit third-party AI permission, restrict conditioning paid functionality on data access, and require minimization and alternatives where possible (5.1.1(ii)–(iv), 5.1.2(i)). **Inference:** Apple may question bundling provider model-training permission with AI access using paid KORLIX allowances. Local-only decline preserves writing but does not preserve AI access. This is a material review risk, not an observed rejection; explicit consent does not guarantee approval. The owner-selected B path remains in effect, and no separate private-AI route is established.
+
+### Proposed Apple change
+
+Retain **Other User Content** as collected, linked to the user, and not used for tracking. Keep **App Functionality** and add **Other Purposes** for provider model improvement beyond servicing the request. That purpose mapping is an inference from Apple's catch-all category. Consent does not remove this category from disclosure. Generic writing maps to Other User Content without enumerating every subject a person might type. Existing authentication-event Analytics purposes on User ID, Device ID and Product Interaction remain distinct. [Apple definitions](https://developer.apple.com/app-store/app-privacy-details/)
+
+### Proposed Google UGC row
+
+| Field | Proposed answer |
+| --- | --- |
+| Data type | Other user-generated content |
+| Collected / Shared | Yes / Yes |
+| Ephemeral processing | No |
+| Optional collection | Yes; local writing remains available |
+| Collection purposes | App functionality; Analytics; Fraud prevention, security, and compliance |
+| Sharing purposes | App functionality; Analytics |
+
+Google has no **Other Purposes** selector. Mapping provider model-quality evaluation and future model improvement to **Analytics** is an inference; it is not the same evidence as KORLIX's authentication-event analytics. Safety collection reflects optional output reports. Report text is not claimed to be sent to OpenAI for training. The other five saved rows remain unchanged by this proposal.
+
+Google offers a sharing exemption for qualifying prominent disclosure and consent, separate from its service-provider exemption. This proposal declares the provider transfer as shared and does not rely on either exemption for model improvement. Account AI history makes processing non-ephemeral. [Google definitions and purposes](https://support.google.com/googleplay/android-developer/answer/10787469?hl=en)
+
+OpenAI describes opted-in inputs/outputs as usable for usage-pattern analysis, model-quality evaluation and future training. Its program expects appropriate permissions and excludes sensitive, confidential or proprietary submissions. These facts inform the explicit notice and the proposed purpose mapping. [OpenAI sharing documentation](https://help.openai.com/en/articles/10306912-sharing-feedback-evaluation-and-fine-tuning-data-and-api-inputs-and-outputs-with-openai)
+
+The exact proposed answers, uncertainty and publication steps are in [training-disclosure-update-20261114.json](training-disclosure-update-20261114.json). Apple currently documents editing and publishing these answers through [App Privacy in App Store Connect](https://developer.apple.com/help/app-store-connect/manage-app-information/manage-app-privacy/); a supported public API write route for data-type/purpose declarations has not been established. No declaration has been changed by this preparation. The remaining production fact is the provider project/setting, followed by normal binary validation, publication of matching notices and final store validation.
+
+The older sections below preserve the source audit and console observations available on November 4. References there to an unresolved user choice are superseded by the B decision above; they are not fresh console readback.
+
 This evidence map records the source-backed inventory, initial published Apple
 answers, and subsequent corrections/drafts. It does not establish that the
 current declarations are complete or that operational deletion has been tested.

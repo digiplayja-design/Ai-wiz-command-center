@@ -991,28 +991,28 @@
       "limit_unit": "bytes"
     },
     "description.txt": {
-      "characters": 2685,
-      "utf8_bytes": 2685
+      "characters": 3053,
+      "utf8_bytes": 3053
     },
     "apple-review-notes.txt": {
-      "characters": 2605,
-      "utf8_bytes": 2605
+      "characters": 3050,
+      "utf8_bytes": 3050
     },
     "google-app-access.txt": {
-      "characters": 1404,
-      "utf8_bytes": 1404
+      "characters": 1777,
+      "utf8_bytes": 1777
     },
     "testflight-what-to-test.txt": {
-      "characters": 1895,
-      "utf8_bytes": 1897
+      "characters": 2399,
+      "utf8_bytes": 2401
     },
     "release-notes.txt": {
-      "characters": 216,
-      "utf8_bytes": 216
+      "characters": 314,
+      "utf8_bytes": 314
     },
     "google-app-access-short.txt": {
-      "characters": 390,
-      "utf8_bytes": 390
+      "characters": 479,
+      "utf8_bytes": 479
     }
   },
   "handoff_provenance": {
@@ -1326,5 +1326,45 @@
     },
     "remaining_scope": "Complete actual COPY Box login/AI and device acceptance. The exact reviewed backend is deployed and its unauthenticated health endpoint responds successfully; those checks do not establish product-runtime acceptance or a new signed binary.",
     "configured_root_directory": "backend"
+  },
+  "model_improvement_release_revision_20261114": {
+    "status": "PREPARED_NOT_PUBLISHED_OR_SUBMITTED",
+    "user_choice": "B",
+    "decision_resolved": true,
+    "evidence_file": "training-disclosure-update-20261114.json",
+    "consent_notice_version": "copybox.third-party-ai-consent.v4.model-training",
+    "current_production_project_setting_verified": false,
+    "existing_console_observations_are_historical": true,
+    "proposed_apple_other_user_content_purposes": [
+      "App Functionality",
+      "Other Purposes"
+    ],
+    "proposed_google_ugc_collected": true,
+    "proposed_google_ugc_shared": true,
+    "proposed_google_ugc_collection_purposes": [
+      "App functionality",
+      "Analytics",
+      "Fraud prevention, security, and compliance"
+    ],
+    "proposed_google_ugc_sharing_purposes": [
+      "App functionality",
+      "Analytics"
+    ],
+    "google_model_improvement_analytics_mapping_is_inference": true,
+    "saved_console_fields_modified_by_this_preparation": false,
+    "apple_review_risk": {
+      "status": "MATERIAL_REVIEW_RISK_NOT_OBSERVED_REJECTION",
+      "interpretationIsInference": true,
+      "description": "Apple may interpret requiring model-training permission for AI access using paid KORLIX allowances as conditioning paid functionality on an additional data use. Local writing remains available after declining, but AI access does not. Explicit consent does not guarantee approval.",
+      "guidelines": [
+        "5.1.1(ii)",
+        "5.1.1(iii)",
+        "5.1.1(iv)",
+        "5.1.2(i)"
+      ],
+      "source": "https://developer.apple.com/app-store/review/guidelines/",
+      "approvedPathRetained": "B",
+      "separatePrivateAiRouteEstablished": false
+    }
   }
 }

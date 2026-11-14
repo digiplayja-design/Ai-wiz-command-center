@@ -616,6 +616,7 @@ workflows:
           set -euo pipefail
           python3 "$CM_BUILD_DIR/scripts/prepare_ios_release.py" \
             --bundle-id com.korlixdeveloper.copybox \
+            --app-id 6830765098 --require-existing-build \
             --environment-file "$CM_ENV"
           cp "$CM_BUILD_DIR/docs/releases/copybox-20261103/release-notes.txt" release_notes_en-US.txt
       - name: Validate the independent writing app

@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-14",
+  "status": "PREPARED_NOT_PUBLISHED_OR_SUBMITTED",
+  "userDecision": "B_RETAIN_MODEL_IMPROVEMENT_SHARING_WITH_RENEWED_EXPLICIT_CONSENT",
+  "sourceAppCommit": "59fb45c3dd7a85f9e2576930b9f2bdb5360019be",
+  "sourceWebsiteCommit": "93a5a5543eb3e64bf19ac85c6ee88be112415706",
+  "intendedVersion": "1.0.0+2",
+  "consentNoticeVersion": "copybox.third-party-ai-consent.v4.model-training",
+  "consent": {
+    "title": "Allow AI and model training?",
+    "allow": "Allow AI and training",
+    "decline": "Use local only",
+    "revoke": "Revoke AI consent",
+    "renewalRequiredForPreviousProcessingOnlyGrants": true,
+    "declineKeepsLocalWriting": true,
+    "revocationScope": "Current signed-in account on this device; future AI requests",
+    "priorHistoryAndProviderUseNotUndone": true
+  },
+  "productionConfiguration": {
+    "organizationAndProjectAssociationVerified": false,
+    "currentInputOutputSharingSettingVerified": false,
+    "lastObservedAccountDate": "2026-11-04",
+    "lastObservedAccountSetting": "Enabled for all projects",
+    "userDecisionResolved": true,
+    "settingsChangedByThisPreparation": false,
+    "remainingFact": "Verify which organization/project serves the existing production API credential and that input/output sharing matches the retained-sharing release. Account labels or a single visible project do not establish credential association."
+  },
+  "applePrivacyProposal": {
+    "status": "PROPOSED_NOT_SAVED",
+    "dataType": "Other User Content",
+    "collected": true,
+    "linkedToUser": true,
+    "usedForTracking": false,
+    "purposes": [
+      "App Functionality",
+      "Other Purposes"
+    ],
+    "purposesReasoning": "App Functionality covers requested editing and retained history. Other Purposes is the explicit inference for provider model-training/improvement beyond servicing the request. Existing authentication-event Analytics purposes remain on User ID, Device ID and Product Interaction; they do not alone prove content is used for app analytics.",
+    "optionalDisclosureExemptionClaimed": false,
+    "otherSavedTypesChangedByThisProposal": false,
+    "additionalTrackingBehaviorIntroduced": false
+  },
+  "googleDataSafetyProposal": {
+    "status": "PROPOSED_NOT_SAVED",
+    "dataType": "Other user-generated content",
+    "collected": true,
+    "shared": true,
+    "processedEphemerally": false,
+    "collectionOptional": true,
+    "collectionPurposes": [
+      "App functionality",
+      "Analytics",
+      "Fraud prevention, security, and compliance"
+    ],
+    "sharingPurposes": [
+      "App functionality",
+      "Analytics"
+    ],
+    "modelImprovementPurposeMappingIsInference": true,
+    "purposeReasoning": {
+      "App functionality": "Requested AI editing, retained account history and user support",
+      "Analytics": "Inference for the opted-in provider program: usage-pattern/model-quality evaluation and future model-performance improvement; distinct from verified KORLIX authentication-event analytics",
+      "Fraud prevention, security, and compliance": "Collection covers optional AI-output reports stored by KORLIX for safety/abuse handling; this proposal does not claim report text is sent to OpenAI for training"
+    },
+    "otherPurposesOptionExists": false,
+    "serviceProviderOnlySharingExemptionClaimedForModelImprovement": false,
+    "prominentDisclosureConsentSharingExemptionReliedOn": false,
+    "exemptionNuance": "Google permits a separate sharing exemption for qualifying prominent disclosure and consent. This proposal explicitly declares the provider transfer as shared and does not use that exemption to present a no-sharing result. Collection remains reportable either way.",
+    "otherFiveSavedRowsChangedByThisProposal": false
+  },
+  "storeAndReleaseSteps": [
+    "Verify the production provider project and actual input/output-sharing setting without storing credentials.",
+    "Validate the v4 consent gate, decline, previous-grant renewal, account separation and revocation before signing.",
+    "Deploy the reviewed public CopyBox notice updates and use the matching renewed-consent binaries.",
+    "Replace reviewer instructions and store description with the prepared versions, then update and publish Apple Other User Content purposes and complete Google UGC usage plus final preview using verified actual practices.",
+    "Retain the other saved data categories and purposes unless new evidence changes their actual flows; no new credentials, pricing or provider configuration are created by this preparation."
+  ],
+  "applePublicApiFinding": "No documented public App Store Connect endpoint for changing App Privacy data-type/purpose declarations was established. Current official guidance describes the App Privacy UI and Publish action. No private iris API was used.",
+  "officialSources": [
+    {
+      "topic": "Apple App Privacy data types, purposes, linked data and free-form content",
+      "url": "https://developer.apple.com/app-store/app-privacy-details/"
+    },
+    {
+      "topic": "Apple App Privacy editing and publication workflow",
+      "url": "https://developer.apple.com/help/app-store-connect/manage-app-information/manage-app-privacy/"
+    },
+    {
+      "topic": "Google collection, sharing exemptions, optional handling and available purposes",
+      "url": "https://support.google.com/googleplay/android-developer/answer/10787469?hl=en"
+    },
+    {
+      "topic": "Google prominent disclosure and affirmative consent",
+      "url": "https://support.google.com/googleplay/android-developer/answer/10144311?hl=en"
+    },
+    {
+      "topic": "OpenAI input/output sharing, model-improvement uses and permission expectations",
+      "url": "https://help.openai.com/en/articles/10306912-sharing-feedback-evaluation-and-fine-tuning-data-and-api-inputs-and-outputs-with-openai"
+    }
+  ],
+  "appleReviewRisk": {
+    "status": "MATERIAL_REVIEW_RISK_NOT_OBSERVED_REJECTION",
+    "interpretationIsInference": true,
+    "description": "Apple may interpret requiring model-training permission for AI access using paid KORLIX allowances as conditioning paid functionality on an additional data use. Local writing remains available after declining, but AI access does not. Explicit consent does not guarantee approval.",
+    "guidelines": [
+      "5.1.1(ii)",
+      "5.1.1(iii)",
+      "5.1.1(iv)",
+      "5.1.2(i)"
+    ],
+    "source": "https://developer.apple.com/app-store/review/guidelines/",
+    "approvedPathRetained": "B",
+    "separatePrivateAiRouteEstablished": false
+  }
+}

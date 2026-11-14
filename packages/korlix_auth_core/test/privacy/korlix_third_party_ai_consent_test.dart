@@ -163,6 +163,58 @@ void main() {
     expect(record['version'], 'build131.apple-third-party-ai-consent.v2');
   });
 
+  testWidgets('feature notice versions require a fresh explicit choice', (
+    tester,
+  ) async {
+    final context = await mount(tester);
+    await grant(tester, context);
+    final prefs = await SharedPreferences.getInstance();
+    final key = KorlixThirdPartyAiConsent.accountStorageKey(account);
+    const revisedNotice = 'copybox.third-party-ai-consent.v4.model-training';
+    const introduction = 'OpenAI may use submitted text to train its models.';
+    Future<bool> revisedRequest() => ensureKorlixThirdPartyAiConsent(
+      context: context,
+      featureName: 'COPY Box text refinement',
+      providers: const {openAi},
+      dataCategories: const {textData},
+      noticeVersion: revisedNotice,
+      dialogTitle: 'Allow AI and model training?',
+      introduction: introduction,
+      declineLabel: 'Use local only',
+      allowLabel: 'Allow AI and training',
+    );
+
+    final declining = revisedRequest();
+    await tester.pumpAndSettle();
+    expect(find.text('Allow AI and model training?'), findsOneWidget);
+    expect(find.text(introduction), findsOneWidget);
+    await tester.tap(find.text('Use local only'));
+    await tester.pumpAndSettle();
+    expect(await declining, isFalse);
+    expect(
+      (jsonDecode(prefs.getString(key)!) as Map)['version'],
+      KorlixThirdPartyAiConsent.consentNoticeVersion,
+    );
+
+    final allowing = revisedRequest();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Allow AI and training'));
+    await tester.pumpAndSettle();
+    expect(await allowing, isTrue);
+    expect((jsonDecode(prefs.getString(key)!) as Map)['version'], revisedNotice);
+    expect(await revisedRequest(), isTrue);
+    await tester.pumpAndSettle();
+    expect(dialog, findsNothing);
+
+    // An unrelated caller still uses its original notice and labels. A grant
+    // for a different notice must not be treated as a matching permission.
+    final originalRequest = request(context);
+    await tester.pumpAndSettle();
+    expect(find.text('Share data with AI providers?'), findsOneWidget);
+    await choose(tester, false);
+    expect(await originalRequest, isFalse);
+  });
+
   testWidgets(
     'existing text and image permission cannot authorize inventory records',
     (tester) async {

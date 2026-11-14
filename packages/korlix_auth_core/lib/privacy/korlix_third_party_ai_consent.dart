@@ -128,13 +128,17 @@ class KorlixThirdPartyAiConsent {
       for (final category in categories) '${provider.name}:${category.name}',
   };
 
-  static Set<String> _readGrants(SharedPreferences preferences, String key) {
+  static Set<String> _readGrants(
+    SharedPreferences preferences,
+    String key,
+    String noticeVersion,
+  ) {
     if (_untrustedRecords.contains(key)) return {};
     try {
       final stored = preferences.getString(key);
       if (stored == null) return {};
       final record = jsonDecode(stored);
-      if (record is! Map || record['version'] != consentNoticeVersion) {
+      if (record is! Map || record['version'] != noticeVersion) {
         return {};
       }
       final grants = record['grants'];
@@ -149,11 +153,18 @@ class KorlixThirdPartyAiConsent {
     }
   }
 
+  /// Feature-specific disclosures must use a new [noticeVersion] when their
+  /// data practices change. Default callers retain their existing notice.
   static Future<bool> ensure({
     required BuildContext context,
     required String featureName,
     required Set<KorlixThirdPartyAiProvider> providers,
     required Set<KorlixThirdPartyAiDataCategory> dataCategories,
+    String noticeVersion = consentNoticeVersion,
+    String dialogTitle = 'Share data with AI providers?',
+    String? introduction,
+    String declineLabel = "Don't Allow",
+    String allowLabel = 'Allow & Continue',
     String? additionalDisclosure,
   }) {
     final scope = _accountScope;
@@ -166,7 +177,10 @@ class KorlixThirdPartyAiConsent {
         context.mounted &&
         revision == _sessionRevision &&
         scope == _accountScope;
-    if (providers.isEmpty || dataCategories.isEmpty || !current()) {
+    if (providers.isEmpty ||
+        dataCategories.isEmpty ||
+        noticeVersion.trim().isEmpty ||
+        !current()) {
       return Future.value(false);
     }
 
@@ -176,7 +190,9 @@ class KorlixThirdPartyAiConsent {
         final preferences = await SharedPreferences.getInstance();
         if (!context.mounted || !current()) return false;
         final key = scope == null ? null : accountStorageKey(scope);
-        final grants = key == null ? <String>{} : _readGrants(preferences, key);
+        final grants = key == null
+            ? <String>{}
+            : _readGrants(preferences, key, noticeVersion);
         final requested = _requestedGrants(
           requestedProviders,
           requestedCategories,
@@ -191,6 +207,10 @@ class KorlixThirdPartyAiConsent {
           providers: requestedProviders,
           dataCategories: requestedCategories,
           rememberForAccount: scope != null,
+          dialogTitle: dialogTitle,
+          introduction: introduction,
+          declineLabel: declineLabel,
+          allowLabel: allowLabel,
           additionalDisclosure: additionalDisclosure,
         );
         if (accepted != true || !current()) return false;
@@ -203,7 +223,7 @@ class KorlixThirdPartyAiConsent {
         final saved = await preferences.setString(
           key,
           jsonEncode({
-            'version': consentNoticeVersion,
+            'version': noticeVersion,
             'grants': combined,
             'acceptedAt': DateTime.now().toUtc().toIso8601String(),
           }),
@@ -251,6 +271,10 @@ class KorlixThirdPartyAiConsent {
     required Set<KorlixThirdPartyAiProvider> providers,
     required Set<KorlixThirdPartyAiDataCategory> dataCategories,
     required bool rememberForAccount,
+    required String dialogTitle,
+    String? introduction,
+    required String declineLabel,
+    required String allowLabel,
     String? additionalDisclosure,
   }) async {
     final providerLabels = providers.map((provider) => provider.label).toList()
@@ -267,7 +291,7 @@ class KorlixThirdPartyAiConsent {
       builder: (dialogContext) {
         return AlertDialog(
           key: const ValueKey<String>('korlix-third-party-ai-consent-dialog'),
-          title: const Text('Share data with AI providers?'),
+          title: Text(dialogTitle),
           content: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 560),
             child: SingleChildScrollView(
@@ -276,9 +300,10 @@ class KorlixThirdPartyAiConsent {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    'To use $featureName, Korlix needs your permission '
-                    'before sending the content you choose to third-party '
-                    'AI providers.',
+                    introduction ??
+                        'To use $featureName, Korlix needs your permission '
+                            'before sending the content you choose to third-party '
+                            'AI providers.',
                   ),
                   const SizedBox(height: 16),
                   const Text(
@@ -339,13 +364,13 @@ class KorlixThirdPartyAiConsent {
               onPressed: () {
                 Navigator.of(dialogContext).pop(false);
               },
-              child: const Text("Don't Allow"),
+              child: Text(declineLabel),
             ),
             FilledButton(
               onPressed: () {
                 Navigator.of(dialogContext).pop(true);
               },
-              child: const Text('Allow & Continue'),
+              child: Text(allowLabel),
             ),
           ],
         );
@@ -382,6 +407,11 @@ Future<bool> ensureKorlixThirdPartyAiConsent({
   required String featureName,
   required Set<KorlixThirdPartyAiProvider> providers,
   required Set<KorlixThirdPartyAiDataCategory> dataCategories,
+  String noticeVersion = KorlixThirdPartyAiConsent.consentNoticeVersion,
+  String dialogTitle = 'Share data with AI providers?',
+  String? introduction,
+  String declineLabel = "Don't Allow",
+  String allowLabel = 'Allow & Continue',
   String? additionalDisclosure,
 }) {
   return KorlixThirdPartyAiConsent.ensure(
@@ -389,6 +419,11 @@ Future<bool> ensureKorlixThirdPartyAiConsent({
     featureName: featureName,
     providers: providers,
     dataCategories: dataCategories,
+    noticeVersion: noticeVersion,
+    dialogTitle: dialogTitle,
+    introduction: introduction,
+    declineLabel: declineLabel,
+    allowLabel: allowLabel,
     additionalDisclosure: additionalDisclosure,
   );
 }

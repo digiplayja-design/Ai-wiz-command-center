@@ -18,6 +18,26 @@ import 'copybox_files.dart';
 import 'copybox_store.dart';
 import 'copybox_theme.dart';
 
+const copyBoxAiConsentNoticeVersion =
+    'copybox.third-party-ai-consent.v4.model-training';
+
+const copyBoxAiTrainingIntroduction =
+    'To refine this box, KORLIX sends its full text and your editing instructions '
+    'to OpenAI. OpenAI may use that text, those instructions, and generated '
+    'responses to train and improve its AI models.';
+
+const copyBoxAiConsentDetails =
+    'Only submit text you have permission to share for AI processing and model '
+    'training. Do not send sensitive, confidential, or proprietary information.\n\n'
+    'KORLIX saves the request and generated response in your account’s AI '
+    'history, even if you keep the original. Deleting a local box does not '
+    'remove that online history.\n\n'
+    'Choose Use local only to keep writing without sending this AI request. '
+    'You can revoke consent for this account on this device in Settings; future '
+    'AI requests here will ask again. Revocation '
+    'does not delete account history or undo information already sent or used '
+    'for training.';
+
 class CopyBoxHome extends StatefulWidget {
   const CopyBoxHome({
     super.key,
@@ -561,11 +581,12 @@ class _CopyBoxHomeState extends State<CopyBoxHome> with WidgetsBindingObserver {
     final consent = await ensureKorlixThirdPartyAiConsent(
       context: context,
       featureName: 'COPY Box text refinement',
-      additionalDisclosure:
-          'This sends the full text of this box and your refinement instruction '
-          'to KORLIX and OpenAI. KORLIX saves the request and generated response '
-          'in your account’s AI history, even if you keep the original. '
-          'Deleting a local box does not remove that online history.',
+      noticeVersion: copyBoxAiConsentNoticeVersion,
+      dialogTitle: 'Allow AI and model training?',
+      introduction: copyBoxAiTrainingIntroduction,
+      declineLabel: 'Use local only',
+      allowLabel: 'Allow AI and training',
+      additionalDisclosure: copyBoxAiConsentDetails,
       providers: const {KorlixThirdPartyAiProvider.openAi},
       dataCategories: const {
         KorlixThirdPartyAiDataCategory.typedTextAndPrompts,
@@ -618,6 +639,18 @@ class _CopyBoxHomeState extends State<CopyBoxHome> with WidgetsBindingObserver {
       );
     } finally {
       if (mounted) setState(() => _busyId = null);
+    }
+  }
+
+  Future<void> _revokeAiConsent() async {
+    try {
+      await KorlixThirdPartyAiConsent.revoke();
+      _message(
+        'AI consent revoked on this device. Your next AI request will ask for permission '
+        'again. Local writing remains available.',
+      );
+    } catch (_) {
+      _message('Your AI privacy choice could not be saved. Please try again.');
     }
   }
 
@@ -1382,13 +1415,28 @@ class _CopyBoxHomeState extends State<CopyBoxHome> with WidgetsBindingObserver {
       icon: Icons.privacy_tip_outlined,
       title: 'Your words, your choice',
       description:
-          'Editing saves boxes on this device. With your permission, AI refinement '
-          'sends the selected box’s full text and instruction to KORLIX and OpenAI. '
-          'KORLIX saves the request and response in your account’s AI history, '
-          'even if you keep the original. Deleting a local box does not remove '
-          'this online history. Sharing and export send the content you choose. '
-          'Local boxes and backups are not encrypted by COPY Box.',
+          'Editing saves boxes on this device without automatic cloud sync. '
+          'With your consent, AI refinement sends the selected box’s full text '
+          'and editing instructions to KORLIX and OpenAI. OpenAI may use the '
+          'text, instructions, and generated responses to train and improve '
+          'its AI models. Only submit text you have permission to share for '
+          'these purposes, and avoid sensitive, confidential, or proprietary '
+          'information. KORLIX saves the request and response in your account’s '
+          'AI history, even if you keep the original. Deleting a local box '
+          'does not remove this online history. Revoking AI consent for this '
+          'account on this device makes future AI requests here ask again; '
+          'it does not delete account history '
+          'or undo information already sent or used for training. Local '
+          'writing remains available. Sharing and export send the content '
+          'you choose. Local boxes and backups are not encrypted by COPY Box.',
       actions: [
+        if (widget.auth.session != null)
+          OutlinedButton.icon(
+            key: const Key('revoke-ai-consent'),
+            onPressed: _revokeAiConsent,
+            icon: const Icon(Icons.privacy_tip_outlined),
+            label: const Text('Revoke AI consent'),
+          ),
         TextButton(
           onPressed: () => _openUrl(
             Uri.https('www.korlixdeveloper.com', '/privacy-policy.html'),

@@ -23,7 +23,7 @@ A black-and-white KORLIX emblem, softly colored writing cards, light and dark ap
 YOUR WRITING AND YOUR CHOICES
 Local writing does not require sign-in. Guest and account workspaces are separate. Boxes are stored on your device; automatic cross-device synchronization is not included. Local boxes and exported backups are not encrypted by COPY Box.
 
-After your consent, AI refinement sends the selected box's full text and your refinement instruction to KORLIX and OpenAI. KORLIX saves the request and generated response in your account's AI history, even if you keep the original. Deleting a local box does not remove this online history.
+After you choose Allow AI and training, AI refinement sends the selected box's full text and editing instructions to OpenAI. OpenAI may use that text, those instructions and generated responses to train and improve its models. Only submit text you have permission to share for these purposes; do not send sensitive, confidential or proprietary information. KORLIX saves the request and result in your account's AI history even if you keep the original. Choose Use local only to decline, or revoke consent in Settings for future requests by this account on this device. Revocation and local deletion do not remove online history or undo earlier training use.
 
 Support: support@korlixdeveloper.com
 Privacy: https://www.korlixdeveloper.com/privacy-policy.html

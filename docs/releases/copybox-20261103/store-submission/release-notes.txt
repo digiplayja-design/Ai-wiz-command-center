@@ -1,1 +1,3 @@
-The first KORLIX COPY Box release brings a dedicated writing workspace, reusable templates, folders and favorites, autosave, version recovery, backup and sharing, plus optional AI refinement with your KORLIX account.
+KORLIX COPY Box brings a dedicated writing workspace with templates, folders, favorites, autosave, history, backup and sharing.
+
+Optional AI refinement now clearly asks permission for OpenAI processing and model training. Choose Use local only to keep writing, or revoke AI consent in Settings for future requests.

@@ -9,5 +9,7 @@ Save your ideas in independent colored boxes, find the right words quickly, and 
 - Recoverable trash and saved versions for replacements.
 - JSON backup, previewed imports, plain-text export, and native sharing.
 - Local editing without sign-in; connect your existing KORLIX account for AI refinement.
+- Explicit renewed permission for OpenAI processing and model training before optional AI use.
+- Use local only to decline; revoke AI consent in Settings for future requests.
 - Review AI drafts before applying them and report an output directly in the app.
 - Light and dark appearance, device text scaling, and visible workspace scrollbar.
