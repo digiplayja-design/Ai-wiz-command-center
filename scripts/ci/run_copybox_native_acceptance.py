@@ -163,7 +163,7 @@ def main():
             device, android_process, android_log = boot_android(report)
         for phase in ["seed", "restore"]:
             print("Running native guest acceptance phase: " + phase, flush=True)
-            command(["flutter", "test", "--no-pub", "--machine", "-d", device,
+            command(["flutter", "test", "--no-pub", "--no-uninstall", "--machine", "-d", device,
                      "--dart-define=KORLIX_BACKEND_URL=http://127.0.0.1:1",
                      "--dart-define=COPYBOX_EXPECTED_VERSION=" + version.group(1),
                      "--dart-define=COPYBOX_EXPECTED_BUILD=" + version.group(2),
