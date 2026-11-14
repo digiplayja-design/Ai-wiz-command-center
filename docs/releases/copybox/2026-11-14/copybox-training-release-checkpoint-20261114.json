@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
-  "preparedAt": "2026-11-14T16:26:21Z",
+  "preparedAt": "2026-11-14T16:37:06Z",
   "checkpointDate": "2026-11-14",
-  "overallStatus": "NOT_SUBMITTED_OPTION_B_IMPLEMENTED_FINAL_STORE_STEPS_REMAIN",
+  "overallStatus": "APPLE_WAITING_FOR_REVIEW_GOOGLE_NOT_SUBMITTED",
   "scope": {
     "repository": "digiplayja-design/Ai-wiz-command-center",
     "appPath": "apps/korlix_copy_box",
@@ -19,13 +19,13 @@
   },
   "operationsCheckpoint": {
     "branch": "ops/copybox-apple-status-20261113",
-    "expectedParentCommit": "46fb5ef52ca224b78f84c095eff7a27d41921db3",
-    "expectedParentTree": "eb28121dfb81bd00f768ce740a34c5c825d5b2db",
+    "expectedParentCommit": "fc7e69c45253c603181a91a5865e3d9aa31e2830",
+    "expectedParentTree": "6d7e041504adc4b666f7aee02353922503fd549b",
     "managedAppleIntegration": "Codemagic Korlix AI",
     "newCredentialsCreated": false,
     "previousEvidenceCommit": "05fca3d7da65e683912a28bd75fcd9e62985922e",
-    "previousExpectedParentCommit": "0924457108bdc8045c6b57d377581fa0146b7906",
-    "previousExpectedParentTree": "f6207e1d8204eee8efb10e78a69e127afa07e512"
+    "previousExpectedParentCommit": "46fb5ef52ca224b78f84c095eff7a27d41921db3",
+    "previousExpectedParentTree": "eb28121dfb81bd00f768ce740a34c5c825d5b2db"
   },
   "userDecision": {
     "choice": "B",
@@ -169,9 +169,9 @@
   "apple": {
     "appId": "6830765098",
     "versionId": "3ae65f97-f9c5-498d-80b6-8f6d208615d6",
-    "state": "PREPARE_FOR_SUBMISSION",
+    "state": "WAITING_FOR_REVIEW",
     "releaseType": "AFTER_APPROVAL",
-    "stateLastVerifiedAt": "2026-11-14T14:02:03.315324+00:00",
+    "stateLastVerifiedAt": null,
     "ageDeclaration": {
       "id": "02fecba7-6986-4f9b-b400-749d9e36f499",
       "unansweredDescriptorCount": 0,
@@ -274,18 +274,20 @@
       "provenanceFile": "copybox-build2-apple-metadata-sync-provenance.json"
     },
     "privacyLabels": {
-      "status": "OTHER_USER_CONTENT_OTHER_PURPOSES_CHANGE_NOT_PERFORMED",
+      "status": "PUBLICATION_NOT_VERIFIED_AFTER_USER_SUBMISSION",
       "proposal": [
         "App Functionality",
         "Other Purposes"
       ],
       "collectionLinkedToUser": true,
       "tracking": false,
-      "modelImprovementPurposeMappingIsInference": true
+      "modelImprovementPurposeMappingIsInference": true,
+      "previousStatus": "OTHER_USER_CONTENT_OTHER_PURPOSES_CHANGE_NOT_PERFORMED",
+      "submissionScreenshotEstablishesPublication": false
     },
     "reviewerCredentialsPresentPreviouslyVerified": true,
     "reviewerLiveApiVerified": true,
-    "reviewSubmitted": false,
+    "reviewSubmitted": true,
     "betaReviewSubmitted": false,
     "webAuthentication": {
       "status": "VERIFICATION_CODE_RESENT_AWAITING_FRESH_CODE",
@@ -303,7 +305,45 @@
       "latestAction": "Clicked visible Resend code to devices",
       "latestDomObservation": "Code-entry form remains visible; the previous incorrect-code error is absent",
       "smsOptionVisible": false,
-      "codeDeliveryVerified": false
+      "codeDeliveryVerified": false,
+      "observationScope": "Last observed agent cloud-browser session; separate from successful submission in the user session"
+    },
+    "previousState": {
+      "state": "PREPARE_FOR_SUBMISSION",
+      "stateLastVerifiedAt": "2026-11-14T14:02:03.315324+00:00"
+    },
+    "stateEvidenceRecordedAt": "2026-11-14T16:36:01Z",
+    "submissionEvidence": {
+      "status": "WAITING_FOR_REVIEW",
+      "submittedForReview": true,
+      "platform": "App Store Connect",
+      "appName": "KORLIX COPY Box",
+      "version": "1.0.0",
+      "sourceType": "USER_SUPPLIED_SCREENSHOT",
+      "sourceImageName": "IMG_3647.png",
+      "visibleConfirmation": "1 Item Submitted",
+      "visibleVersionState": "Waiting for Review",
+      "observedBy": "Primary agent /root from user-supplied screenshot",
+      "compilerIndependentlyObservedScreenshot": false,
+      "submissionPerformedIn": "User session",
+      "cloudBrowserSubmissionPerformed": false,
+      "exactServerSubmissionTimestampEstablished": false,
+      "screenshotLocalClock": {
+        "displayedDate": "November 14, 2026",
+        "displayedTime": "11:34 AM",
+        "usedAsServerTimestamp": false
+      },
+      "recordedAt": "2026-11-14T16:36:01Z",
+      "buildAttribution": {
+        "buildNumber": "2",
+        "latestSuccessScreenshotShowsBuildNumber": false,
+        "source": "Earlier user screenshot IMG_3646.png shows draft submission 1.0.0 (2), supported by prior selected-build verification",
+        "selectedAppleBuildId": "a9de6e95-a39b-46ae-a0c0-4264f34d4edd"
+      },
+      "privacyLabelPublicationEstablished": false,
+      "productionOpenAiProjectAssociationEstablished": false,
+      "appStoreApprovalEstablished": false,
+      "publicReleaseEstablished": false
     }
   },
   "android": {
@@ -489,7 +529,6 @@
       "status": "INCOMPLETE_UNSAVED",
       "reviewerRecordSaved": false,
       "reviewerCredentialsSavedVerified": false,
-      "missingInput": "Reviewer password in the private Play Console app-access field",
       "intendedInstructionName": "KORLIX account for AI refinement",
       "instructionsSourceCommit": "e25b4b57f34cf1fc82d92fea2e6e9ab98d3f730c",
       "instructionsSourcePath": "docs/releases/copybox-20261103/store-submission/google-app-access-short.txt",
@@ -506,10 +545,25 @@
       "canonicalInstructionNameRestoration": "Restored to KORLIX account for AI refinement; unsaved",
       "privateCredentialValuesRecorded": false,
       "canonicalInstructionNameRestored": true,
-      "privatePasswordFieldEmpty": true,
       "fullAccessConfirmationChecked": false,
       "otherPreparedFormTextRetainedUnsaved": true,
-      "visiblePasswordCharacterCount": "0/100"
+      "remainingAction": "Complete and save reviewer credentials",
+      "privateInputPresentInUnsavedForm": true,
+      "credentialCompletenessVerified": false,
+      "credentialCorrectnessVerified": false,
+      "privateInputValueOrLengthRecorded": false,
+      "freshServerPageVerification": {
+        "status": "INCOMPLETE_NO_SAVED_REVIEWER_RECORD",
+        "observer": "Primary agent /root",
+        "source": "Separately opened Google Sign in details page",
+        "visibleWarning": "Until you complete this section, we'll assume that all functionality in your app is available without special access",
+        "yesSelected": false,
+        "noSelected": false,
+        "saveButtonEnabled": false,
+        "addOrSavePerformedThisObservation": false,
+        "recordedAt": "2026-11-14T16:37:06Z",
+        "exactObservationTimestampRecorded": false
+      }
     },
     "targetAudience": {
       "status": "INCOMPLETE_BLOCKED_BY_APP_ACCESS",
@@ -625,25 +679,25 @@
     "renderDeploymentConnection": "WORKING"
   },
   "remainingWork": [
-    "Complete Apple sign-in with a fresh verification code; Resend code to devices was clicked and the code-entry form remains visible.",
-    "Save Google App Access using the private reviewer password and the prepared instructions; no reviewer record is currently verified as saved.",
+    "Complete and save Google reviewer credentials with the prepared instructions. Private input is present in the unsaved form, but its completeness and correctness are unverified; a fresh server page confirms the declaration is incomplete and no reviewer record is saved.",
     "Complete Google Target audience and content for the established 16–17 and 18-and-over audience.",
     "Verify the production OpenAI credential's organization/project association and current input/output-sharing setting; the approved B decision remains resolved.",
     "Finalize the saved Google Data Safety draft after target audience is complete, using verified actual practices.",
-    "Publish Apple's Other User Content purpose update using verified actual practices.",
-    "Verify completion of Play quick checks, resolve the three pre-review issues, run final store submission validation, and submit both releases."
+    "Verify whether Apple's Other User Content purpose update was published; submission evidence does not establish it. Apply any needed correction using verified actual practices.",
+    "Verify completion of Play quick checks, resolve the three pre-review issues, run final Google store submission validation, and submit the Google release.",
+    "Monitor the submitted Apple version for review outcome; Waiting for Review does not establish approval or public release."
   ],
   "submitted": {
-    "apple": false,
+    "apple": true,
     "googlePlay": false
   },
   "evidenceStatus": "FINAL_FOR_RECORDED_SCOPE",
   "previousCheckpoint": {
-    "preparedAt": "2026-11-14T16:17:29Z",
-    "commit": "46fb5ef52ca224b78f84c095eff7a27d41921db3",
-    "gitBlobSha": "640d5bf6b5360749052f53da983dd35d45673833",
+    "preparedAt": "2026-11-14T16:26:21Z",
+    "commit": "fc7e69c45253c603181a91a5865e3d9aa31e2830",
+    "gitBlobSha": "d325dab45e4ec7b267677203736107ab9dad490b",
     "path": "docs/releases/copybox/2026-11-14/copybox-training-release-checkpoint-20261114.json",
-    "scope": "Earlier build, validation, deployment, Apple metadata and Google release preparation evidence remains unchanged below."
+    "scope": "Earlier build, validation, deployment, store metadata, Google preparation and cloud-browser authentication evidence is retained with its original scope."
   },
   "storeProgressUpdate": {
     "evidenceFile": "copybox-google-store-progress-20261114.json",
@@ -655,7 +709,10 @@
       "exactObservationTimestampRecorded": false,
       "recordedAt": "2026-11-14T16:26:21Z"
     },
-    "baselineCommit": "46fb5ef52ca224b78f84c095eff7a27d41921db3",
-    "status": "GOOGLE_BUILD2_AND_RELEASE_DRAFTS_SAVED_NEITHER_STORE_SUBMITTED"
+    "baselineCommit": "fc7e69c45253c603181a91a5865e3d9aa31e2830",
+    "status": "APPLE_WAITING_FOR_REVIEW_GOOGLE_NOT_SUBMITTED",
+    "appleSubmissionEvidenceAttribution": "User-supplied screenshot interpreted by primary agent /root; final submission performed in user session",
+    "appleSubmissionRecordedAt": "2026-11-14T16:36:01Z",
+    "googleObservationScope": "Root freshly verified that reviewer access remains incomplete in a separately opened server page; other Google release observations retain their prior scope"
   }
 }
