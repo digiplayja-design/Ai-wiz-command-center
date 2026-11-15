@@ -205,7 +205,7 @@ workflows:
 
   esha-android-candidate:
     name: Esha by Korlix — signed Android candidate
-    instance_type: linux_x2
+    instance_type: mac_mini_m2
     max_build_duration: 60
     working_directory: apps/esha
     # Manual only. No Play upload or publication is configured.
@@ -401,6 +401,30 @@ workflows:
           "$CM_BUILD_DIR/.esha-apple-subscription-tools/bin/python" "$CM_BUILD_DIR/scripts/esha/prepare_apple_subscription.py" --apply-draft
     artifacts:
       - $CM_BUILD_DIR/apps/esha/artifacts/apple-subscription/Esha-Apple-subscription-draft-verification.json
+
+  esha-apple-select-build:
+    name: Esha by Korlix — select verified build 2 for draft
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    working_directory: apps/esha
+    # Manual linkage only. Does not answer encryption or submit for review.
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    environment:
+      groups:
+        - esha_release
+    scripts:
+      - name: Install the pinned Apple build-selection CLI
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.esha-apple-selection-tools"
+          "$CM_BUILD_DIR/.esha-apple-selection-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+      - name: Select only the verified Esha build on its empty draft version
+        script: |
+          set -euo pipefail
+          "$CM_BUILD_DIR/.esha-apple-selection-tools/bin/python" "$CM_BUILD_DIR/scripts/esha/select_apple_build.py" --apply-draft
+    artifacts:
+      - $CM_BUILD_DIR/apps/esha/artifacts/apple-build-selection/Esha-Apple-build-selection-verification.json
 
   esha-apple-release-inventory:
     name: Esha by Korlix — inspect Apple release readiness
