@@ -118,6 +118,16 @@ class _AccountScreenState extends State<AccountScreen> {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
+                              if (c.hasAppAccess &&
+                                  Navigator.of(context).canPop()) ...[
+                                const SizedBox(height: 14),
+                                FilledButton.icon(
+                                  key: const ValueKey('account-open-esha'),
+                                  onPressed: _openEsha,
+                                  icon: const Icon(Icons.home_outlined),
+                                  label: const Text('Open Esha'),
+                                ),
+                              ],
                               const SizedBox(height: 14),
                               OutlinedButton.icon(
                                 onPressed: c.authBusy
@@ -202,16 +212,20 @@ class _AccountScreenState extends State<AccountScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text(
-                              'Esha membership',
-                              style: TextStyle(
+                            Text(
+                              c.purchases.hasDeveloperAccess
+                                  ? 'Developer access'
+                                  : 'Esha membership',
+                              style: const TextStyle(
                                 fontFamily: 'Georgia',
                                 fontSize: 25,
                               ),
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              c.hasAppAccess
+                              c.purchases.hasDeveloperAccess
+                                  ? 'Your developer access is active. Paid AI requires a separate verified allowance.'
+                                  : c.hasAppAccess
                                   ? 'Your store membership is active.'
                                   : '3 days free for eligible subscribers, then US \$4.99 per month. Local price and eligibility come from your store.',
                             ),
@@ -535,6 +549,12 @@ class _AccountScreenState extends State<AccountScreen> {
     });
   }
 
+  void _openEsha() {
+    if (!widget.controller.hasAppAccess) return;
+    FocusScope.of(context).unfocus();
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
   Future<void> _submitAuth() async {
     final c = widget.controller;
     if (c.authBusy || resetBusy) return;
@@ -598,7 +618,8 @@ class _AccountScreenState extends State<AccountScreen> {
       password.clear();
       confirmPassword.clear();
       FocusScope.of(context).unfocus();
-      showMessage(context, 'Your Korlix account collection is open.');
+      showMessage(context, 'You are signed in to Korlix.');
+      if (c.hasAppAccess) _openEsha();
     } else {
       setState(() => localAuthError = c.authError);
     }
@@ -655,9 +676,12 @@ class MembershipScreen extends StatelessWidget {
           store = controller.purchases,
           status = controller.purchases.membership;
       final active = store.hasAppAccess;
+      final developer = store.hasDeveloperAccess;
       final price = store.localizedMonthlyPrice;
       final eligible = store.trialEligible == true;
-      final String headline = active
+      final String headline = developer
+          ? 'Your developer access is active.'
+          : active
           ? status.trial
                 ? 'Your Esha trial is active.'
                 : 'Your Esha membership.'
@@ -719,7 +743,9 @@ class MembershipScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              active
+                              developer
+                                  ? 'Developer access'
+                                  : active
                                   ? status.trial
                                         ? 'Your trial is active.'
                                         : price == null
@@ -739,7 +765,9 @@ class MembershipScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 14),
                             Text(
-                              active
+                              developer
+                                  ? 'You can open Esha’s beauty features. Paid AI requires a separate verified allowance.'
+                                  : active
                                   ? 'Review your renewal price and billing date in Manage subscription.'
                                   : price == null
                                   ? 'Available after the store offer and membership service are ready. No payment or trial starts here yet.'
@@ -764,8 +792,10 @@ class MembershipScreen extends StatelessWidget {
                         style: TextStyle(fontFamily: 'Georgia', fontSize: 26),
                       ),
                       const SizedBox(height: 16),
-                      const Text(
-                        'An active Esha trial or subscription unlocks product browsing, guided edits, your vanity and the look studio. Live AI consultations also use the allowance shown below.',
+                      Text(
+                        developer
+                            ? 'Your developer access opens product browsing, guided edits, your vanity and the look studio. It does not start a store subscription or grant paid AI usage.'
+                            : 'An active Esha trial or subscription unlocks product browsing, guided edits, your vanity and the look studio. Live AI consultations also use the allowance shown below.',
                       ),
                       const SizedBox(height: 16),
                       _feature(
@@ -794,7 +824,9 @@ class MembershipScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              active && status.allowanceLimit != null
+                              developer && !store.canConsult
+                                  ? 'Developer access does not include a paid AI allowance. Live consultations remain unavailable until a separate allowance is verified.'
+                                  : active && status.allowanceLimit != null
                                   ? '${status.remaining ?? 0} of ${status.allowanceLimit} consultations remaining this period.'
                                   : store.trialConsultationLimit != null &&
                                         store.monthlyConsultationLimit != null
@@ -823,7 +855,9 @@ class MembershipScreen extends StatelessWidget {
                             if (active) ...[
                               const SizedBox(height: 10),
                               Text(
-                                status.verificationFresh
+                                developer
+                                    ? 'Developer access verified by Korlix.'
+                                    : status.verificationFresh
                                     ? 'Membership verified by the store service.'
                                     : 'Membership verification needs to be refreshed.',
                                 style: const TextStyle(
@@ -873,7 +907,21 @@ class MembershipScreen extends StatelessWidget {
                           ),
                         ),
                       const SizedBox(height: 22),
-                      if (c.session == null)
+                      if (active && Navigator.of(context).canPop())
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            key: const ValueKey('membership-open-esha'),
+                            onPressed: () {
+                              if (!c.hasAppAccess) return;
+                              Navigator.of(context)
+                                  .popUntil((route) => route.isFirst);
+                            },
+                            icon: const Icon(Icons.home_outlined),
+                            label: const Text('Open Esha'),
+                          ),
+                        )
+                      else if (c.session == null)
                         SizedBox(
                           width: double.infinity,
                           child: FilledButton(

@@ -103,8 +103,13 @@ class EshaPurchases extends ChangeNotifier {
       _checkedAt != null &&
       !_now().toUtc().isBefore(_checkedAt!) &&
       _now().toUtc().difference(_checkedAt!) < freshnessWindow;
+  bool get hasDeveloperAccess =>
+      hasCurrentStatus &&
+      object(membership.catalog['appAccess'])['active'] == true &&
+      object(membership.catalog['appAccess'])['source'] == 'developer';
   bool get hasAppAccess =>
-      hasCurrentStatus && membership.isCurrentAt(_now().toUtc());
+      hasDeveloperAccess ||
+      (hasCurrentStatus && membership.isCurrentAt(_now().toUtc()));
   bool get canConsult =>
       hasAppAccess &&
       membership.catalog['consultationEnabled'] == true &&
@@ -113,7 +118,9 @@ class EshaPurchases extends ChangeNotifier {
   bool get needsVerification =>
       api.session != null &&
       (!hasCurrentStatus ||
-          (membership.active && !membership.isCurrentAt(_now().toUtc())));
+          (!hasDeveloperAccess &&
+              membership.active &&
+              !membership.isCurrentAt(_now().toUtc())));
   String get accessMessage {
     if (api.session == null) {
       return 'Sign in to start or restore your Esha membership. An eligible 3-day trial begins only after store confirmation.';
@@ -124,6 +131,9 @@ class EshaPurchases extends ChangeNotifier {
     }
     if (!hasAppAccess) {
       return 'An active Esha trial or subscription is required to explore products, build edits and use your vanity and look studio.';
+    }
+    if (hasDeveloperAccess) {
+      return 'Your developer access is active. Store subscriptions and paid AI are managed separately.';
     }
     return membership.trial
         ? 'Your store-verified Esha trial is active.'
@@ -158,11 +168,12 @@ class EshaPurchases extends ChangeNotifier {
         (status['warning'] is String &&
             (status['warning'] as String).trim().isNotEmpty);
     if (!hasCurrentStatus) return;
-    final untilExpiry = hasAppAccess
+    final untilExpiry = !hasDeveloperAccess && hasAppAccess
         ? membership.expiry!.difference(_checkedAt!)
         : freshnessWindow;
     // Quietly refresh before the in-memory verification lease ends. Neither
     // interval starts or extends a trial, which comes only from the store.
+    // A developer grant has no store expiry and must renew this same lease.
     _accessTimer = Timer(
       untilExpiry < freshnessWindow ? untilExpiry : freshnessWindow,
       () {
@@ -217,7 +228,7 @@ class EshaPurchases extends ChangeNotifier {
       !loading &&
       !awaitingApproval &&
       !hasUnverifiedPurchase &&
-      !membership.active;
+      !hasAppAccess;
   String get productId =>
       object(catalog['product'])['productId'] as String? ??
       (api.provider == 'apple'
@@ -317,7 +328,7 @@ class EshaPurchases extends ChangeNotifier {
         }, OwnerSnapshot(authEpoch, user));
       }
       _clearStoreTerms();
-      if (supported) {
+      if (supported && !hasDeveloperAccess) {
         try {
           final available = await _store.isAvailable();
           if (!current()) return;
@@ -344,7 +355,9 @@ class EshaPurchases extends ChangeNotifier {
       if (!current()) return;
       if (awaitingApproval) {
         message = 'This purchase is awaiting store approval. You can restore purchases to check again.';
-      } else if (!catalogReady && !membership.active) {
+      } else if (hasDeveloperAccess) {
+        message = accessMessage;
+      } else if (!catalogReady && !hasAppAccess) {
         message = 'Membership is being prepared for launch. No trial or payment starts in this preview.';
       }
       if (user != null) unawaited(retryVerification());
@@ -638,7 +651,9 @@ class EshaPurchases extends ChangeNotifier {
       if (!api.isOwner(snapshot)) return;
       _pendingVerification.remove(key);
       error = null;
-      message = hasAppAccess
+      message = hasDeveloperAccess
+          ? accessMessage
+          : hasAppAccess
           ? 'Your Esha membership is verified.'
           : needsVerification
           ? accessMessage
@@ -689,6 +704,8 @@ class EshaPurchases extends ChangeNotifier {
       if (!api.isOwner(snapshot)) return;
       message = awaitingApproval
           ? 'This purchase is still awaiting store approval. No membership has been activated.'
+          : hasDeveloperAccess
+          ? accessMessage
           : hasAppAccess
           ? 'Your Esha membership is verified.'
           : 'Restore requested. Store results will be verified as they arrive.';

@@ -277,6 +277,7 @@ class EshaController extends ChangeNotifier {
     // Turn off audio and send the account-bound stop before discarding auth.
     await voice.stop();
     final closing = api.signOut();
+    authBusy = false;
     purchases.accountChanged();
     unawaited(sync.attach(null));
     _changed();
@@ -292,6 +293,9 @@ class EshaController extends ChangeNotifier {
 
   Future<void> _accountLost() async {
     ++_accountEpoch;
+    // This transition owns cancellation; an older auth future must not clear a
+    // newer request's busy state when its epoch-guarded finally runs.
+    authBusy = false;
     _resetAccountPrivacy();
     chat = [];
     _pendingConsultation = null;
