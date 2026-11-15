@@ -113,14 +113,40 @@ Downloaded bytes were independently checked against the embedded verification
 reports. Public source/build/hash details are recorded in
 [build-verification.json](release/build-verification.json).
 
-The backend-only source is prepared at commit
-`4bb80c1ce6fe1a314a31a23b60b70832c1045556` on
-`release/signup-plan-intent-20261021`. Automatic deployment is off. The requested
-manual Render deployment was rejected by automatic approval review because the
-current prompt did not explicitly authorize restarting the shared production
-service. No alternate deployment route was attempted. The new backend routes
-and Esha policy pages still require that authorized deployment and live checks;
-the applied database migrations do not establish that the new server is live.
+With explicit user authorization, Render deployment
+`dep-dbsv84psrm7s739ov350` went **live on November 15, 2026 at 18:04:37 UTC**
+for the exact backend commit `4bb80c1ce6fe1a314a31a23b60b70832c1045556` on
+`release/signup-plan-intent-20261021`. Automatic deployment remains off. The
+commit identity was verified from Render's live deployment metadata; the health
+endpoint does not report a commit identifier.
+
+All **nine GET-only post-deployment checks passed at 18:06:09 UTC**. Health
+returned HTTP 200, and the live catalog exactly matched the local catalog's 12
+products, including one unknown price. The Apple and Google billing catalogs
+returned the intended 3-day / US $4.99 monthly offer while retaining
+`purchasesEnabled: false`, `consultationEnabled: false`,
+`storeConfigurationVerified: false` and `allowanceConfigured: false`. Both
+consultation limits remain unset and the membership state remains `planned`.
+An invalid billing provider returned HTTP 400, and unauthenticated billing-status
+and account requests returned HTTP 401. No account, purchase or consultation was
+created by these checks. Render's application error-log query since this
+deployment returned no errors.
+
+The following public policy URLs are verified live. The Privacy and Terms pages
+returned HTTP 200 with the expected Esha content and restrictive CSP, `nosniff`,
+`no-store` and `no-referrer` headers; the linked deletion and offer anchors were
+checked in those pages.
+
+| Public URL | Verified content |
+| --- | --- |
+| [Esha Privacy Policy](https://chee-chai-chee-backend.onrender.com/esha/privacy) | Esha data handling and AI-provider disclosure |
+| [Esha Terms & Membership](https://chee-chai-chee-backend.onrender.com/esha/terms) | Service and intended membership offer |
+| [Account/data deletion](https://chee-chai-chee-backend.onrender.com/esha/privacy#deletion) | Outside-app deletion-request instructions |
+| [Subscription terms](https://chee-chai-chee-backend.onrender.com/esha/terms#offer-heading) | Trial, pricing and renewal disclosures |
+
+The deployment identity and public HTTP results are recorded alongside the
+unchanged native artifact hashes in
+[build-verification.json](release/build-verification.json).
 
 [Store metadata](release/store-metadata.json) is prepared as a draft, with source
 identifiers distinguished from unverified store records. Store login/verification
@@ -128,6 +154,7 @@ and Google Play browser access remain unresolved. No app listing, subscription
 product, signing identity or store submission was created by this checkpoint.
 
 Signed Android/iPhone release builds, Esha's actual store app and subscription
-records, localized prices, eligible trial configuration, and real-device purchase,
-restore, cancellation, refund and account-switch checks remain pending. Neither
-these source files nor the applied migrations establish a live store release.
+records, localized prices, eligible trial configuration, consultation allowances,
+and real-device purchase, restore, cancellation, refund and account-switch checks
+remain pending. The backend deployment and these test artifacts do not establish
+a live store release.

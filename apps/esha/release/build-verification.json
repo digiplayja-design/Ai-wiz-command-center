@@ -37,9 +37,108 @@
     }
   ],
   "backend": {
-    "prepared_commit": "4bb80c1ce6fe1a314a31a23b60b70832c1045556",
-    "deployment_status": "blocked_by_automatic_approval_review_pending_explicit_user_authorization",
-    "live_policy_routes_verified": false
+    "deployed_commit": "4bb80c1ce6fe1a314a31a23b60b70832c1045556",
+    "deployment_id": "dep-dbsv84psrm7s739ov350",
+    "deployment_status": "live",
+    "deployment_finished_at_utc": "2026-11-15T18:04:37.313863Z",
+    "origin": "https://chee-chai-chee-backend.onrender.com",
+    "commit_identity_source": "Render live deployment metadata; the HTTP health endpoint does not expose a commit identifier.",
+    "live_policy_routes_verified": true,
+    "post_deployment_checks": {
+      "checked_at_utc": "2026-11-15T18:06:09.694445+00:00",
+      "all_passed": true,
+      "request_count": 9,
+      "mutating_requests": 0,
+      "requests": [
+        {
+          "method": "GET",
+          "path": "/api/health",
+          "status": 200,
+          "passed": true
+        },
+        {
+          "method": "GET",
+          "path": "/api/esha/catalog",
+          "status": 200,
+          "passed": true
+        },
+        {
+          "method": "GET",
+          "path": "/api/esha/billing/catalog?provider=apple",
+          "status": 200,
+          "passed": true
+        },
+        {
+          "method": "GET",
+          "path": "/api/esha/billing/catalog?provider=google",
+          "status": 200,
+          "passed": true
+        },
+        {
+          "method": "GET",
+          "path": "/api/esha/billing/catalog?provider=invalid",
+          "status": 400,
+          "passed": true
+        },
+        {
+          "method": "GET",
+          "path": "/api/esha/billing/status?provider=apple",
+          "status": 401,
+          "passed": true
+        },
+        {
+          "method": "GET",
+          "path": "/api/me",
+          "status": 401,
+          "passed": true
+        },
+        {
+          "method": "GET",
+          "path": "/esha/privacy",
+          "status": 200,
+          "passed": true
+        },
+        {
+          "method": "GET",
+          "path": "/esha/terms",
+          "status": 200,
+          "passed": true
+        }
+      ],
+      "catalog": {
+        "product_count": 12,
+        "unknown_price_count": 1,
+        "exact_local_catalog_match": true,
+        "catalog_sha256": "e094962299ffe512daa1b5f81f02a3c0755f746ea076a03b5210cb1d9f6592a2"
+      },
+      "membership_state_observed_for_both_providers": {
+        "state": "planned",
+        "purchases_enabled": false,
+        "consultation_enabled": false,
+        "store_configuration_verified": false,
+        "allowance_configured": false,
+        "trial_consultation_limit": null,
+        "monthly_consultation_limit": null,
+        "trial_days": 3,
+        "monthly_price_cents": 499,
+        "currency": "USD",
+        "billing_period": "P1M"
+      },
+      "public_policy_pages": {
+        "privacy_url": "https://chee-chai-chee-backend.onrender.com/esha/privacy",
+        "terms_url": "https://chee-chai-chee-backend.onrender.com/esha/terms",
+        "deletion_anchor_verified": true,
+        "offer_anchor_verified": true,
+        "content_security_policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+        "cache_control": "no-store",
+        "x_content_type_options": "nosniff",
+        "referrer_policy": "no-referrer"
+      }
+    },
+    "application_error_log_check": {
+      "source": "Render application error-log query since this deployment",
+      "errors_returned": 0
+    }
   },
   "store_release": {
     "signed_device_candidates_verified": false,
