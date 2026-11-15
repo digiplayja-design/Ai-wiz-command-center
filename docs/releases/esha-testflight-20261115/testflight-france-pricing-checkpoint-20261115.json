@@ -1,0 +1,133 @@
+{
+  "schema_version": 1,
+  "recorded_on": "2026-11-15",
+  "recorded_at_utc": "2026-11-15T23:19:52Z",
+  "status": "approved_free_download_pricing_saved_france_draft_blocked_required_document_not_supplied_in_asc",
+  "scope": "Live App Store Connect readbacks supplied by the coordinating agent after explicit owner approval. Pricing is saved; app-country availability is unset; the France export-compliance draft is not submitted; TestFlight has no assigned builds or verified installation.",
+  "previous_checkpoint": {
+    "file": "testflight-checkpoint-20261115.json",
+    "sha256_at_new_checkpoint_creation": "600d1b7b91a762d07ddd54c22100bdee104d7a1f38ac166243db80d252aa98f7",
+    "retained_unchanged": true,
+    "relationship": "The older pricing approval rejection is historical and resolved by the latest explicit approval and successful save. The earlier receipt remains unchanged."
+  },
+  "latest_owner_approval": {
+    "literal_response": "1. Yes 2. Approved",
+    "evidence_source": "Explicit owner response relayed by the coordinating agent in this session.",
+    "france_answer_approved": "Yes",
+    "prepared_free_download_price_schedule_approved": true,
+    "scope": "Approval covers the previously prepared France answer and free-download pricing confirmation. It is not an encryption approval document, government filing, signature or authority contact."
+  },
+  "application": {
+    "app_reference": "Esha by Korlix",
+    "app_id": "6835184869",
+    "last_application_source_commit": "538974f08f4c99ce1c4746f6f1d3a8fa6ef0b2be",
+    "prior_remote_repository_head": "c708787b7059da743f3f58cba5821524e233065e",
+    "source_code_changed_this_checkpoint": false
+  },
+  "download_price": {
+    "status": "saved_and_verified_by_fresh_reload",
+    "canonical_url": "https://appstoreconnect.apple.com/apps/6835184869/distribution/pricing",
+    "base_country": "US",
+    "currency": "USD",
+    "initial_download_price": "0.00",
+    "observed_current_price_value": "AUTO_FREE|0",
+    "price_table_countries_and_regions": 175,
+    "fresh_reload_readback_verified": true,
+    "prior_confirmation_approval_rejection_resolved": true,
+    "scope": "Saved initial app-download pricing. The 175-country/region price table does not enable app availability in those countries or change the membership subscription."
+  },
+  "app_availability": {
+    "observed_control": "Set Up Availability",
+    "configured_release_country_list_observed": false,
+    "release_territories_enabled_this_checkpoint": false,
+    "scope": "App availability remains unset; price-table coverage is not release-territory selection."
+  },
+  "membership": {
+    "changed_this_checkpoint": false,
+    "scope": "The existing membership offer remains separate from the free initial app download."
+  },
+  "build_2_encryption_draft": {
+    "build_number": "2",
+    "standard_encryption_selected": true,
+    "france_answer_selected": "Yes",
+    "france_answer_saved_in_completed_declaration": false,
+    "purpose_text_prepared": "Esha by Korlix helps users discover cosmetics, plan beauty routines, save favorites, and view illustrated looks. It uses HTTPS for account sign-in, saved collections, subscription verification and optional AI consultations.",
+    "purpose_text_scope": "Prepared technical app-purpose text in an unfinished declaration flow; no completed submission is established.",
+    "observed_step": {
+      "current": 3,
+      "total": 3
+    },
+    "required_document_label": "French encryption declaration approval form",
+    "file_chooser_empty": true,
+    "save_enabled": false,
+    "document_uploaded": false,
+    "form_submitted": false,
+    "declaration_completed": false,
+    "blocker": "no applicable declaration supplied in ASC at observation",
+    "blocker_scope": "This observation concerns the required file in the current App Store Connect draft. It does not assert that no applicable declaration exists elsewhere.",
+    "existing_declaration_search": "No applicable declaration found in the targeted available-file searches; no claim of exhaustive search or that none exists elsewhere."
+  },
+  "internal_testflight_group": {
+    "name": "Esha Internal Testers",
+    "group_id": "34951be9-1955-4e01-94da-778608de638f",
+    "canonical_url": "https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6835184869/testflight/groups/34951be9-1955-4e01-94da-778608de638f",
+    "tester_count": 1,
+    "tester": {
+      "name": "Ricardo Bailey",
+      "email_masked": "d***@gmail.com",
+      "same_existing_signed_in_owner_verified": true
+    },
+    "build_count": 0,
+    "automatic_distribution_enabled": false,
+    "tester_status": "No Builds Available",
+    "additional_tester_added_this_checkpoint": false
+  },
+  "add_build_dialog_observation": {
+    "opened": true,
+    "builds": [
+      {
+        "build_number": "1",
+        "status": "Missing Compliance",
+        "selection_enabled": false
+      },
+      {
+        "build_number": "2",
+        "status": "Missing Compliance",
+        "selection_enabled": false
+      }
+    ],
+    "add_enabled": false,
+    "build_selected": false,
+    "dialog_cancelled": true,
+    "build_assignment_completed": false
+  },
+  "remaining_work": [
+    "Locate and supply a genuine applicable French encryption declaration approval form for the observed App Store Connect requirement; do not treat the owner answer or technical purpose text as that document.",
+    "Complete and verify the export-compliance submission after the required document is available.",
+    "Recheck build eligibility, assign an eligible build to the internal group, and separately verify TestFlight availability and physical-device installation.",
+    "Treat app-country availability as separate unfinished distribution setup; the saved 175-country/region price table has not enabled release territories."
+  ],
+  "receipt_scope": {
+    "only_new_json_file_written": true,
+    "prior_checkpoint_modified": false,
+    "technical_annex_modified": false,
+    "staged_by_receipt_author": false,
+    "committed_or_published_by_receipt_author": false,
+    "authentication_factors_included": false,
+    "full_personal_email_included": false,
+    "internal_browser_urls_or_queries_included": false
+  },
+  "actions_this_checkpoint": {
+    "application_code_changed": false,
+    "new_native_build_created": false,
+    "new_build_uploaded": false,
+    "production_deployed": false,
+    "ai_activated": false,
+    "government_encryption_filing_submitted": false,
+    "government_form_signed": false,
+    "new_authority_contact_made": false,
+    "app_or_beta_review_submitted": false,
+    "public_release_performed": false,
+    "testflight_installation_verified": false
+  }
+}
