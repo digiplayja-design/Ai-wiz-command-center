@@ -141,6 +141,54 @@
     }
   },
   "store_release": {
+    "codemagic_read_only_check": {
+      "verified_on": "2026-11-15",
+      "account_scope": "Personal Account",
+      "signing_certificate": {
+        "reference": "KORLIX_APP_STORE_CERT",
+        "type": "production",
+        "team_name": "Korlix LLC",
+        "expires_on": "2027-06-22"
+      },
+      "saved_app_store_profiles": {
+        "profiles": [
+          {
+            "reference": "KORLIX_APP_STORE_PROFILE",
+            "application_id": "com.korlixdeveloper.korlixai"
+          },
+          {
+            "reference": "KORLIX_MESSENGER_APP_STORE_PROFILE",
+            "application_id": "com.korlixdeveloper.messenger"
+          },
+          {
+            "reference": "KORLIX_MAGIC_CAMERA_APP_STORE_PROFILE",
+            "application_id": "com.korlixdeveloper.magiccamera"
+          },
+          {
+            "reference": "KORLIX_COPYBOX_APP_STORE_PROFILE",
+            "application_id": "com.korlixdeveloper.copybox"
+          }
+        ],
+        "team_name": "Korlix LLC",
+        "expires_on": "2027-06-22"
+      },
+      "profile_fetch": {
+        "integration_name": "Codemagic Korlix AI",
+        "status": "success",
+        "returned_profile_count": 6,
+        "included_all_saved_profiles": true,
+        "additional_profile_bundles": [
+          "com.korlix.brain",
+          "com.korlixdeveloper.receiptwiz"
+        ],
+        "esha_profile_returned": false
+      },
+      "profile_imported_or_generated": false,
+      "certificate_or_private_key_downloaded": false,
+      "numeric_esha_app_store_id_verified": false,
+      "apple_developer_team_id_verified": false,
+      "interactive_apple_login_status": "awaiting_two_factor_verification"
+    },
     "signed_device_candidates_verified": false,
     "store_records_and_products_verified": false,
     "sandbox_purchase_lifecycle_verified": false,

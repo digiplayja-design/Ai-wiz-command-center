@@ -148,6 +148,17 @@ The deployment identity and public HTTP results are recorded alongside the
 unchanged native artifact hashes in
 [build-verification.json](release/build-verification.json).
 
+A read-only Codemagic Personal Account inspection showed the existing production
+certificate `KORLIX_APP_STORE_CERT` for Korlix LLC, expiring June 22, 2027, and four
+saved App Store profiles for other Korlix apps with the same team and expiry.
+The existing `Codemagic Korlix AI` App Store Connect integration successfully
+fetched six profiles, including Brain Voice and Receipt Wiz. This integration
+returned no profile for Esha's `com.korlixdeveloper.esha` bundle.
+No profile was imported or generated, and no
+certificate or private key was downloaded. Esha's numeric App Store ID and the
+Apple Developer team ID remain unverified. Interactive Apple sign-in is awaiting
+two-factor verification.
+
 [Store metadata](release/store-metadata.json) is prepared as a draft, with source
 identifiers distinguished from unverified store records. Store login/verification
 and Google Play browser access remain unresolved. No app listing, subscription
