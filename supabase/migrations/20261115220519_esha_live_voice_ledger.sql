@@ -10,6 +10,17 @@ create table public.korlix_esha_voice_budgets (
   created_at timestamptz not null default now()
 );
 create index korlix_esha_voice_budgets_user on public.korlix_esha_voice_budgets(user_id);
+-- A provider initialization can cost money even when final customer time is
+-- zero. Pin this independent engineering cap only at the first paid begin in
+-- a verified period. A committed begin consumes one start permanently.
+create table public.korlix_esha_voice_start_budgets (
+  period_key text primary key references public.korlix_esha_voice_budgets(period_key) on delete cascade,
+  user_id uuid not null references public.korlix_esha_billing_accounts(user_id) on delete cascade,
+  start_limit integer not null check (start_limit between 1 and 999999),
+  used integer not null default 0 check (used>=0 and used<=start_limit),
+  created_at timestamptz not null default now()
+);
+create index korlix_esha_voice_start_budgets_user on public.korlix_esha_voice_start_budgets(user_id);
 create table public.korlix_esha_voice_sessions (
   user_id uuid not null references public.korlix_esha_billing_accounts(user_id) on delete cascade,
   request_id uuid not null,
@@ -56,10 +67,11 @@ create table public.korlix_esha_voice_delegations (
   foreign key(user_id,voice_request_id) references public.korlix_esha_voice_sessions(user_id,request_id) on delete cascade
 );
 alter table public.korlix_esha_voice_budgets enable row level security;
+alter table public.korlix_esha_voice_start_budgets enable row level security;
 alter table public.korlix_esha_voice_sessions enable row level security;
 alter table public.korlix_esha_voice_delegations enable row level security;
-revoke all on public.korlix_esha_voice_budgets,public.korlix_esha_voice_sessions,public.korlix_esha_voice_delegations from public,anon,authenticated;
-grant select,insert,update on public.korlix_esha_voice_budgets,public.korlix_esha_voice_sessions to service_role;
+revoke all on public.korlix_esha_voice_budgets,public.korlix_esha_voice_start_budgets,public.korlix_esha_voice_sessions,public.korlix_esha_voice_delegations from public,anon,authenticated;
+grant select,insert,update on public.korlix_esha_voice_budgets,public.korlix_esha_voice_start_budgets,public.korlix_esha_voice_sessions to service_role;
 grant select,insert on public.korlix_esha_voice_delegations to service_role;
 
 create function public.korlix_esha_voice_command(p_actor uuid,p_action text,p jsonb default '{}')
@@ -68,6 +80,7 @@ declare
   t timestamptz;
   r public.korlix_esha_voice_sessions;
   budget public.korlix_esha_voice_budgets;
+  start_budget public.korlix_esha_voice_start_budgets;
   chosen public.korlix_esha_purchases;
   g public.korlix_esha_consultation_grants;
   d public.korlix_esha_voice_delegations;
@@ -79,6 +92,11 @@ declare
   observed_ms bigint;
   charge_ms bigint;
   active_period boolean;
+  start_limits_configured boolean;
+  trial_start_limit integer;
+  monthly_start_limit integer;
+  start_cap integer;
+  period_start_configured boolean;
 begin
   if p_actor is null then raise exception 'ESHA401:authentication_required:Sign in to use Esha.'; end if;
   if p_action not in ('snapshot','status','reserve','begin','attach','request_close','uncertain','usage','settle','delegation') then
@@ -86,6 +104,14 @@ begin
   end if;
   if p->>'trial_limit_seconds' is distinct from '300' or p->>'monthly_limit_seconds' is distinct from '1800' then
     raise exception 'ESHA503:voice_allowance_unconfigured:Esha voice allowances do not match the approved offer.';
+  end if;
+  -- Missing/malformed start caps must not block stop, status, trusted usage or
+  -- settlement. Validate here without throwing; enforce only for new work.
+  start_limits_configured:=coalesce(p->>'trial_start_attempts','')~'^[1-9][0-9]{0,5}$' and
+    coalesce(p->>'monthly_start_attempts','')~'^[1-9][0-9]{0,5}$';
+  if start_limits_configured then
+    trial_start_limit:=(p->>'trial_start_attempts')::integer;
+    monthly_start_limit:=(p->>'monthly_start_attempts')::integer;
   end if;
   -- Same first account lock as consultation debit, refund and entitlement change.
   -- Snapshot may create the account through the existing membership RPC.
@@ -134,6 +160,19 @@ begin
       if least(g.expires_at,chosen.expires_at)<t+make_interval(secs=>hold_ms/1000.0) then
         raise exception 'ESHA402:membership_expiring:This voice session would outlast the verified membership period.';
       end if;
+      if not start_limits_configured then
+        raise exception 'ESHA503:voice_start_attempts_not_configured:Esha voice start limits are being configured.';
+      end if;
+      start_cap:=case when g.trial then trial_start_limit else monthly_start_limit end;
+      select * into start_budget from public.korlix_esha_voice_start_budgets where period_key=g.period_key for update;
+      if start_budget.period_key is not null then
+        if start_budget.user_id<>p_actor or start_budget.start_limit<>start_cap then
+          raise exception 'ESHA409:voice_start_budget_conflict:This voice period has a different fixed start limit.';
+        end if;
+        if start_budget.used>=start_budget.start_limit then
+          raise exception 'ESHA402:voice_start_attempts_exhausted:No voice session starts remain in this billing period.';
+        end if;
+      end if;
       cap_ms:=case when g.trial then 300000 else 1800000 end;
       insert into public.korlix_esha_voice_budgets(period_key,user_id,limit_ms) values(g.period_key,p_actor,cap_ms) on conflict do nothing;
       select * into budget from public.korlix_esha_voice_budgets where period_key=g.period_key for update;
@@ -165,6 +204,23 @@ begin
       if chosen.observed_at<t-interval '15 minutes' then
         raise exception 'ESHA503:verification_stale:Restore your membership so Esha can verify your access.';
       end if;
+      if not start_limits_configured then
+        raise exception 'ESHA503:voice_start_attempts_not_configured:Esha voice start limits are being configured.';
+      end if;
+      start_cap:=case when g.trial then trial_start_limit else monthly_start_limit end;
+      insert into public.korlix_esha_voice_start_budgets(period_key,user_id,start_limit)
+        values(g.period_key,p_actor,start_cap) on conflict do nothing;
+      select * into start_budget from public.korlix_esha_voice_start_budgets where period_key=g.period_key for update;
+      if start_budget.user_id<>p_actor or start_budget.start_limit<>start_cap then
+        raise exception 'ESHA409:voice_start_budget_conflict:This voice period has a different fixed start limit.';
+      end if;
+      if start_budget.used>=start_budget.start_limit then
+        raise exception 'ESHA402:voice_start_attempts_exhausted:No voice session starts remain in this billing period.';
+      end if;
+      -- Same transaction/account-first lock as the session transition. A lost
+      -- reply cannot authorize a provider retry; failed/zero-duration calls do
+      -- not refund this irreversible initialization allowance.
+      update public.korlix_esha_voice_start_budgets set used=used+1 where period_key=g.period_key;
       update public.korlix_esha_voice_sessions set state='starting',request_hash=p->>'request_hash',started_at=t,
         authorized_until=t+make_interval(secs=>r.authorized_ms/1000.0) where user_id=p_actor and request_id=r.request_id returning * into r;
       extra:=jsonb_build_object('started',true,'duplicate',false);
@@ -290,6 +346,12 @@ begin
     select * into g from public.korlix_esha_consultation_grants where period_key=chosen.period_key and user_id=p_actor;
   end if;
   select * into budget from public.korlix_esha_voice_budgets where period_key=g.period_key and user_id=p_actor;
+  select * into start_budget from public.korlix_esha_voice_start_budgets where period_key=g.period_key and user_id=p_actor;
+  start_cap:=case when g.period_key is not null and start_limits_configured then
+    case when g.trial then trial_start_limit else monthly_start_limit end end;
+  period_start_configured:=g.period_key is not null and start_limits_configured and
+    (start_budget.period_key is null or start_budget.start_limit=start_cap);
+  start_cap:=coalesce(start_budget.start_limit,start_cap);
   cap_ms:=coalesce(budget.limit_ms,case when g.period_key is not null then case when g.trial then 300000 else 1800000 end end);
   active_period:=coalesce(chosen.active and not chosen.revoked and chosen.period_key=g.period_key and not g.revoked and
     least(g.expires_at,chosen.expires_at)>t,false);
@@ -297,6 +359,9 @@ begin
     'voice',jsonb_build_object('configured',g.period_key is not null,'limitSeconds',cap_ms/1000.0,
       'usedSeconds',coalesce(budget.used_ms,0)/1000.0,'reservedSeconds',coalesce(budget.reserved_ms,0)/1000.0,
       'remainingSeconds',case when active_period then greatest(0,cap_ms-coalesce(budget.used_ms,0)-coalesce(budget.reserved_ms,0))/1000.0 else 0 end,
+      'periodEndsAt',g.expires_at),
+    'voiceStarts',jsonb_build_object('configured',period_start_configured,'limit',start_cap,'used',coalesce(start_budget.used,0),
+      'remaining',case when active_period and period_start_configured then greatest(0,start_cap-coalesce(start_budget.used,0)) else 0 end,
       'periodEndsAt',g.expires_at),
     'deep',jsonb_build_object('configured',g.period_key is not null,'limit',g.quantity,'used',coalesce(g.used,0),
       'reserved',coalesce(g.reserved,0),'remaining',case when active_period then greatest(0,g.quantity-g.used-g.reserved) else 0 end,'periodEndsAt',g.expires_at)));

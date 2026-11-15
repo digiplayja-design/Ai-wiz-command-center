@@ -20,6 +20,7 @@ const environment = {KORLIX_ESHA_AI_POLICY: ESHA_AI_ROLE_POLICY, KORLIX_ESHA_NAT
   KORLIX_ESHA_VOICE_ENABLED: 'true', KORLIX_ESHA_BILLING_ENABLED: 'true', KORLIX_ESHA_APPLE_PRODUCTS_READY: 'true',
   KORLIX_ESHA_MAX_INPUT_TOKENS: '8192', KORLIX_ESHA_MAX_OUTPUT_TOKENS: '4096',
   KORLIX_ESHA_TRIAL_PROVIDER_ATTEMPTS: '4', KORLIX_ESHA_MONTHLY_PROVIDER_ATTEMPTS: '12',
+  KORLIX_ESHA_TRIAL_VOICE_START_ATTEMPTS: '5', KORLIX_ESHA_MONTHLY_VOICE_START_ATTEMPTS: '20',
   OPENAI_API_KEY: 'offline-test-not-a-key'};
 const input = (changes = {}) => ({requestId: id, sdpOffer: 'v=0\r\na=sendrecv\r\n', audioSharingConsent: true, ...changes});
 const answer = {answer: 'Consider the satin lipstick and choose a shade on the manufacturer page.', productIds: ['elf-o-face-dirty-talk']};
@@ -46,6 +47,7 @@ async function waitFor(check) {
   while (!(await check())) {if (Date.now() >= until) assert.fail('Expected asynchronous result did not arrive.'); await new Promise(resolve => setTimeout(resolve, 5));}
 }
 function harness(options = {}) {
+  const configuredEnvironment = {...environment, ...options.environment};
   const calls = {create: [], close: [], commentary: [], generate: [], attach: 0};
   const observers = new Map();
   const transport = {available: () => true,
@@ -57,7 +59,7 @@ function harness(options = {}) {
         commentary: (...args) => calls.commentary.push(args), dispose() {}};},
   };
   let settleFailures = options.settleFailures || 0;
-  const ledger = createEshaVoiceLedger({store: async (actor, action, data) => {
+  const ledger = createEshaVoiceLedger({environment: configuredEnvironment, store: async (actor, action, data) => {
     if (action === 'settle' && settleFailures-- > 0) throw new EshaBillingError('Fixture storage outage.', 503, 'storage_unavailable');
     return voiceStore(actor, action, data);
   }});
@@ -65,18 +67,22 @@ function harness(options = {}) {
     const begin = ledger.begin;
     ledger.begin = async (...args) => {await begin(...args); throw new Error('lost committed begin reply');};
   }
-  const billing = createEshaBilling({environment, store: billingStore, aiRole: 'deep_thinking', autoStart: false,
+  if (options.beforeBegin) {
+    const begin = ledger.begin;
+    ledger.begin = async (...args) => {await options.beforeBegin(configuredEnvironment); return begin(...args);};
+  }
+  const billing = createEshaBilling({environment: configuredEnvironment, store: billingStore, aiRole: 'deep_thinking', autoStart: false,
     provider: {ready: () => true}, countInputTokens: options.countInputTokens || (async () => 100),
     generate: async request => {calls.generate.push(request); return {output_text: JSON.stringify(answer)};},
     voiceReady: () => runtime.ready()});
   // The injectable fixture represents a separately proven provider bound. No
   // environment variable can turn the production configuration into this value.
-  const runtime = createEshaVoice({environment, ledger, billing, transport, watchdogMs: options.watchdogMs || 5000,
+  const runtime = createEshaVoice({environment: configuredEnvironment, ledger, billing, transport, watchdogMs: options.watchdogMs || 5000,
     requireUser: options.requireUser || (async () => user),
-    configuration: options.productionConfiguration ? undefined : () => ({...voiceConfiguration(environment),
+    configuration: options.productionConfiguration ? undefined : () => ({...voiceConfiguration(configuredEnvironment),
       configured: true, voiceEnabled: true, hardDurationBoundVerified: true, maxSessionSeconds: 60})});
   runtimes.add(runtime);
-  return {runtime, billing, ledger, calls,
+  return {runtime, billing, ledger, calls, environment: configuredEnvironment,
     emit: (event, sessionId = 'live_fixture_1') => observers.get(sessionId).onEvent(event),
     disconnect: (sessionId = 'live_fixture_1') => observers.get(sessionId).onDisconnect(),
   };
@@ -151,7 +157,43 @@ test('a lost database begin reply cannot trigger a paid request or release its c
   assert.equal(h.calls.create.length, 0);
   const status = await h.runtime.stopSession(user, id, 'transport_error');
   assert.equal(status.finalizationConfirmed, false); assert.equal(status.usage.voice.reservedSeconds, 60);
+  assert.equal(status.usage.voiceStarts.used, 1);
   await assert.rejects(h.runtime.start(user, input({requestId: nextId})), {code: 'voice_session_in_progress'});
+});
+
+test('zero-duration sessions still consume a bounded provider start and reject a new UUID with zero-work proof', async () => {
+  const h = harness({environment: {KORLIX_ESHA_TRIAL_VOICE_START_ATTEMPTS: '1'}});
+  await h.runtime.start(user, input()); await h.emit(started());
+  assert.equal(h.runtime.ready(), true, 'Spending the final start must not turn off the existing session.');
+  assert.equal((await h.runtime.session(user, id)).state, 'active');
+  await h.emit(closed(0));
+  const availability = await h.runtime.status(user, 'apple');
+  assert.equal(availability.usage.voice.usedSeconds, 0); assert.equal(availability.usage.voice.remainingSeconds, 300);
+  assert.equal(availability.usage.voiceStarts.used, 1); assert.equal(availability.voiceEnabled, false);
+  assert.equal(availability.unavailabilityReason, 'voice_start_attempts_exhausted');
+  await assert.rejects(h.runtime.start(user, input({requestId: nextId})), {code: 'voice_start_not_created'});
+  await assert.rejects(h.runtime.session(user, nextId), {code: 'voice_session_not_found'});
+  await assert.rejects(h.runtime.start(user, input()), {code: 'voice_request_pending'});
+  assert.equal(h.calls.create.length, 1);
+});
+
+test('begin-stage cap rejection retains its specific error and produces a recoverable cancelled reservation', async () => {
+  const h = harness({beforeBegin: async env => {delete env.KORLIX_ESHA_TRIAL_VOICE_START_ATTEMPTS;}});
+  await assert.rejects(h.runtime.start(user, input()), {code: 'voice_start_attempts_not_configured'});
+  assert.equal(h.calls.create.length, 0);
+  const status = await h.runtime.session(user, id);
+  assert.equal(status.state, 'closed'); assert.equal(status.finalizationConfirmed, true);
+  assert.equal(status.usage.voice.usedSeconds, 0); assert.equal(status.usage.voice.reservedSeconds, 0);
+});
+
+test('a changed period start cap is unavailable instead of silently refilling or advertising a rejected call', async () => {
+  const h = harness(); await h.runtime.start(user, input()); await h.emit(started()); await h.emit(closed(0));
+  h.environment.KORLIX_ESHA_TRIAL_VOICE_START_ATTEMPTS = '99';
+  const status = await h.runtime.status(user, 'apple');
+  assert.equal(status.voiceEnabled, false); assert.equal(status.unavailabilityReason, 'voice_start_budget_conflict');
+  assert.equal(status.usage.voiceStarts.limit, 5); assert.equal(status.usage.voiceStarts.used, 1);
+  await assert.rejects(h.runtime.start(user, input({requestId: nextId})), {code: 'voice_start_not_created'});
+  assert.equal(h.calls.create.length, 1);
 });
 test('sideband failure preserves provider identity and recovery sends close without another create', async () => {
   let failAttach = true;

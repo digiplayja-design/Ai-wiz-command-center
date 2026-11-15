@@ -38,6 +38,21 @@ test('engineering flags and an asserted provider bound cannot activate the unver
   }
 });
 
+test('voice provider starts require both explicit canonical technical caps and never supply production defaults', () => {
+  const environment = {KORLIX_ESHA_TRIAL_VOICE_START_ATTEMPTS: '5', KORLIX_ESHA_MONTHLY_VOICE_START_ATTEMPTS: '20'};
+  const configured = voiceConfiguration(environment);
+  assert.equal(configured.startAttemptsConfigured, true);
+  assert.equal(configured.trialStartAttempts, 5); assert.equal(configured.monthlyStartAttempts, 20);
+  assert.equal(configured.voiceEnabled, false); assert.equal(configured.configured, false);
+  for (const change of [{}, {KORLIX_ESHA_TRIAL_VOICE_START_ATTEMPTS: '5'},
+    ...[undefined, '', '0', '-1', '1.5', '1e2', '01', '1000000', 5, {}, ['5']].map(value =>
+      ({...environment, KORLIX_ESHA_MONTHLY_VOICE_START_ATTEMPTS: value}))]) {
+    const configuration = voiceConfiguration(change);
+    assert.equal(configuration.startAttemptsConfigured, false);
+    assert.equal(configuration.trialStartAttempts, null); assert.equal(configuration.monthlyStartAttempts, null);
+  }
+});
+
 test('voice input requires audio consent, defaults deep consent off, and binds SDP and consent into identity', () => {
   const plain = voiceCreateInput(offer);
   assert.equal(plain.deepThinkingConsent, false); assert.equal(plain.model, 'gpt-live-1');

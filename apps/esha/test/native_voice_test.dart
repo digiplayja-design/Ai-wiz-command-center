@@ -90,6 +90,7 @@ class VoiceTestStore extends MemoryStore {
 
 class FakeVoiceGateway implements VoiceGateway {
   bool enabled = true, stopFinalized = true;
+  String? unavailabilityReason;
   Object? createFailure, statusFailure;
   Completer<VoiceSessionStatus>? pendingCreate;
   VoiceUsage allowance = voiceUsage();
@@ -104,8 +105,11 @@ class FakeVoiceGateway implements VoiceGateway {
   final List<String> checkedIds = [];
   List<VoiceDeepResult> results = [];
   @override
-  Future<VoiceAvailability> availability() async =>
-      VoiceAvailability(enabled: enabled, usage: allowance);
+  Future<VoiceAvailability> availability() async => VoiceAvailability(
+    enabled: enabled,
+    usage: allowance,
+    unavailabilityReason: unavailabilityReason,
+  );
   VoiceSessionStatus result(String id, {bool created = false}) =>
       VoiceSessionStatus(
         requestId: id,
@@ -424,6 +428,88 @@ void main() {
     await f.voice.reconcile();
     expect(f.voice.hasPendingSession, isTrue);
     expect(f.gateway.creates, 2);
+  });
+
+  test('explicit absent-reservation rejection clears only that UUID and requires fresh consent without retry', () async {
+    final f = await fixture();
+    f.gateway.createFailure = const EshaException(
+      'voice_start_not_created',
+      'The voice connection limit has been reached.',
+      429,
+    );
+    await f.begin(deep: true);
+    expect(f.gateway.creates, 1);
+    expect(f.gateway.stops, isEmpty);
+    expect(f.voice.hasPendingSession, isFalse);
+    expect(
+      f.secure.values.containsKey('esha.voice.pending.$accountA'),
+      isFalse,
+    );
+    expect(f.audios.single.closed, isTrue);
+    expect(f.audios.single.enabled, 0);
+    expect(f.voice.audioConsent, isFalse);
+    expect(f.voice.deepThinkingConsent, isFalse);
+    await f.voice.start();
+    expect(f.gateway.creates, 1);
+  });
+
+  test('generic start-budget and storage failures retain the intent until terminal evidence', () async {
+    for (final code in [
+      'voice_start_attempts_exhausted',
+      'storage_unavailable',
+      'voice_request_pending',
+    ]) {
+      final f = await fixture();
+      f.gateway.createFailure = EshaException(
+        code,
+        'Start could not be confirmed.',
+        503,
+      );
+      f.gateway.stopFinalized = false;
+      await f.begin(deep: true);
+      expect(f.gateway.creates, 1, reason: code);
+      expect(f.voice.hasPendingSession, isTrue, reason: code);
+      expect(f.secure.values['esha.voice.pending.$accountA'], f.gateway.lastId);
+      expect(f.voice.audioConsent, isFalse);
+      expect(f.voice.deepThinkingConsent, isFalse);
+      await f.voice.start();
+      expect(f.gateway.creates, 1);
+      f.gateway.state = 'closed';
+      f.gateway.finalized = true;
+      await f.voice.reconcile();
+      expect(f.voice.hasPendingSession, isFalse);
+    }
+  });
+
+  test('an exhausted connection budget is explained without microphone access, pending ID or lost membership', () async {
+    final f = await fixture();
+    f.gateway.enabled = false;
+    f.gateway.unavailabilityReason = 'voice_start_attempts_exhausted';
+    await f.voice.refresh();
+    expect(f.voice.error, EshaVoiceController.connectionLimitMessage);
+    await f.begin(deep: true);
+    expect(f.voice.error, EshaVoiceController.connectionLimitMessage);
+    expect(f.audios, isEmpty);
+    expect(f.gateway.creates, 0);
+    expect(f.voice.hasPendingSession, isFalse);
+    expect(f.purchases.hasAppAccess, isTrue);
+    expect(f.voice.audioConsent, isFalse);
+    final parsed = VoiceAvailability.fromJson({
+      ...readyJson(),
+      'unavailabilityReason': 'voice_start_attempts_exhausted',
+      'usage': {
+        ...usageJson(),
+        'voiceStarts': {
+          'configured': true,
+          'limit': 5,
+          'used': 5,
+          'remaining': 0,
+        },
+      },
+    }, DateTime.now());
+    expect(parsed.enabled, isFalse);
+    expect(parsed.connectionLimitReached, isTrue);
+    expect(parsed.usage!.limitSeconds, 300);
   });
 
   test('closing and uncertain recovery reattaches the server watcher with stop without another create', () async {

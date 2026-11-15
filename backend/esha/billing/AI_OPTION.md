@@ -9,7 +9,8 @@ Live minutes plus two deep-thinking consultations during the trial**, and **30
 Live minutes plus ten deep-thinking consultations per month**: exactly 300/1800
 voice seconds and 2/10 successful consultations. The previous 10/120 consultation
 proposal was not approved and is superseded. Engineering input/output, provider
-attempt and per-session bounds remain explicit settings without approved defaults.
+generation attempts, voice-start attempts and per-session bounds remain explicit
+settings without approved defaults.
 No production environment was changed, no deployment or migration was applied,
 and no live model call was made during this preparation.
 
@@ -120,8 +121,8 @@ reconcile its usage. It cannot resume unmonitored media or authorize paid creati
 
 ## Durable voice reservation and settlement
 
-`20261115220519_esha_live_voice_ledger.sql` adds Esha-only period budgets, session
-records and immutable session/delegation-to-consultation mappings. Its RPC takes
+`20261115220519_esha_live_voice_ledger.sql` adds Esha-only duration and provider-start
+period budgets, session records and immutable session/delegation-to-consultation mappings. Its RPC takes
 the same account row lock as membership refunds and consultation spending.
 `voice_ledger.mjs` wraps this RPC and cannot create a provider session.
 
@@ -130,6 +131,32 @@ Reserve an explicit engineering duration bound before creation. A confirmed
 reply cannot authorize another. At most one unfinished session per account is
 permitted, including uncertain requests across billing-period changes. The ledger
 stores request hashes and accounting metadata, without SDP, audio or transcripts.
+
+Each confirmed first `begin` also consumes one irreversible provider-start attempt,
+before any paid creation request. Both trial and monthly start caps require explicit
+canonical positive integer settings; they have no production defaults. The first
+committed begin pins the selected cap for that verified billing period. Duplicate
+begins never spend again, and a lost commit reply cannot authorize another provider
+request. Failed or uncertain creation, a stop after begin, and a final duration of
+zero never refund a start attempt. Cancellation before begin spends none.
+
+`usage.voiceStarts` reports this technical budget separately from customer seconds.
+Repeated zero-duration sessions therefore exhaust a finite creation allowance even
+though they consume no confirmed customer minutes. Restore cannot refill it;
+changing the configured cap fails closed for new work in that period. Renewals
+receive a separate budget with no rollover. Missing or changed settings never
+prevent status, stop, provider identity attachment, trusted usage or final settlement
+for an existing request. Existing reserve/begin replays are resolved before these
+configuration checks, preserving the original immutable outcome.
+
+Only a known reserve-stage cap rejection for an absent request UUID is translated
+to `voice_start_not_created`. That code guarantees no reservation, provider begin
+or paid create exists for the request, so the native app can clear its pending ID.
+Failures after reservation keep their original errors and reconcile or cancel
+the durable row; they never use this no-work code. Status reports a separate
+`unavailabilityReason` when the start budget is exhausted or incompatible with
+the configured cap. It disables new-call availability without subtracting
+customer minutes or changing recovery access for existing calls.
 
 Immediately persist a returned provider session ID, even if expiry is not yet
 known. Identity-only attachment stays `starting`; verified startup expiry can
@@ -184,6 +211,9 @@ commercial environment settings fail closed. Legacy no-policy behavior is unchan
 | Successful consultations per verified monthly period: approved 10 | `KORLIX_ESHA_MONTHLY_CONSULTATIONS` (optional exact override under new policy) |
 | Provider generation attempts during a verified trial | `KORLIX_ESHA_TRIAL_PROVIDER_ATTEMPTS` |
 | Provider generation attempts per verified monthly period | `KORLIX_ESHA_MONTHLY_PROVIDER_ATTEMPTS` |
+| Voice provider starts during a verified trial | `KORLIX_ESHA_TRIAL_VOICE_START_ATTEMPTS` |
+| Voice provider starts per verified monthly period | `KORLIX_ESHA_MONTHLY_VOICE_START_ATTEMPTS` |
+| Authorized duration for one voice session | `KORLIX_ESHA_VOICE_MAX_SESSION_SECONDS` |
 
 Sol input is capped at no more than its documented 922,000 maximum input tokens;
 output cannot exceed 128,000 tokens. The inherited minimum valid non-Astra output
@@ -251,9 +281,12 @@ without copying questions or answers. Account deletion cascades to these records
 1. Establish the independently enforceable duration bound described above. The
    wired transport, local timers and approved commercial allowances do not prove
    that bound; paid voice creation remains disabled in production configuration.
-2. Select and validate explicit input/output, provider-attempt and per-session
+2. Select and validate explicit input/output, provider-generation-attempt,
+   voice-start-attempt and per-session
    engineering limits. The approved commercial inclusions do not choose these
-   technical limits, and fixture values are not production settings.
+   technical limits, and fixture values are not production settings. Disclose
+   any selected connection/start limit in the actual offer before enabling
+   checkout; no production start-cap values have been selected.
 3. Review and apply the prepared additive voice and Sol migrations through the
    authorized deployment process while preserving account, period, expiry,
    verification, idempotency, cap and irreversible-debit guards.
@@ -280,16 +313,23 @@ cd backend
 node --test test/esha*.test.mjs
 ```
 
-At the November 15 local checkpoint, a clean locked install with lifecycle
-scripts disabled installed 363 packages. Node **22.23.5** passed
-`node --check server.js` and **109 tests across nine Esha files** (104 top-level
-and five nested, zero failures). This is the authoritative aggregate and already
+At the corrected November 15 local checkpoint, the clean 363-package environment
+was retained with a byte-identical lockfile, and current Esha source, tests and
+prepared SQL were refreshed. Node **22.23.5** passed `node --check server.js`
+and **116 tests across nine Esha files** (111 top-level and five nested, zero
+failures or skips). This is the authoritative aggregate and already
 includes the policy, ledger, Sol, transport and route suites. Flutter **3.47.9** /
-Dart **3.13.7** separately passed analysis with no issues and **76 native tests**
-(49 existing plus 27 voice). Historical answer retrieval is covered by a
-regression ensuring it cannot replace renewed current-period allowance.
-Remote CI for this source, fresh signed artifacts, physical audio and real paid
-provider behavior remain unverified. These local results do not activate service.
+Dart **3.13.7** separately passed analysis with no issues and **79 native tests**
+(49 existing plus 30 voice). Coverage includes the reserve-only no-work error,
+separate connection-limit availability, and historical answer retrieval that
+cannot replace renewed current-period allowance.
+
+The first voice checkpoint at `1440c0f46a105e7b4467ff0d603814e2ad801b18`
+passed all three jobs in [GitHub run 43769036015](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43769036015).
+Its earlier local counts were 109 backend and 76 native tests. That successful
+workflow precedes this start-budget correction; the corrected commit/run remains
+pending. Fresh signed artifacts, physical audio and real paid provider behavior
+remain unverified. These results do not activate service.
 
 They cover Sol/high request preparation, resolved but inactive Live selection,
 rejection of Live by the Responses adapter even with forged ready flags,
@@ -299,7 +339,9 @@ route's refusal to run a client-selected role. The baseline-only SQL test verifi
 that Sol is blocked before its migration; the additive-migration tests verify
 Sol/high admission, irreversible attempts and rejection after voice closure.
 Voice tests exercise actual SQL reservation, replay, lost-commit replies,
-cumulative fractional settlement, startup exposure, overshoot, refunds, ownership,
+cumulative fractional settlement, irreversible start caps independent of zero or
+fractional customer duration, frozen per-period limits, configuration-free recovery,
+startup exposure, overshoot, refunds, ownership,
 renewal, consent, delegation identity, post-closure answer recovery, permissions
 and account deletion.
 Existing ledger tests cover disabled configuration, retry suppression,

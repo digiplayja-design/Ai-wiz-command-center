@@ -130,15 +130,27 @@ class VoiceDeepResult {
 }
 
 class VoiceAvailability {
-  const VoiceAvailability({required this.enabled, required this.usage});
+  const VoiceAvailability({
+    required this.enabled,
+    required this.usage,
+    this.unavailabilityReason,
+  });
   final bool enabled;
   final VoiceUsage? usage;
+  final String? unavailabilityReason;
+  bool get connectionLimitReached =>
+      unavailabilityReason == 'voice_start_attempts_exhausted';
   factory VoiceAvailability.fromJson(Json value, DateTime now) {
     final membership = object(value['membership']);
     final expiresAt = membership['expiresAt'] is String
         ? DateTime.tryParse(membership['expiresAt'] as String)
         : null;
+    final reason =
+        value['unavailabilityReason'] == 'voice_start_attempts_exhausted'
+        ? 'voice_start_attempts_exhausted'
+        : null;
     final enabled =
+        reason == null &&
         value['voiceEnabled'] == true &&
         value['model'] == eshaVoiceModel &&
         membership['active'] == true &&
@@ -149,7 +161,11 @@ class VoiceAvailability {
     if (value['usage'] is Map) {
       usage = VoiceUsage.optional(object(value['usage']));
     }
-    return VoiceAvailability(enabled: enabled && usage != null, usage: usage);
+    return VoiceAvailability(
+      enabled: enabled && usage != null,
+      usage: usage,
+      unavailabilityReason: reason,
+    );
   }
 }
 

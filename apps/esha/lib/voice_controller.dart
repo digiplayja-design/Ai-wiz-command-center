@@ -22,6 +22,8 @@ enum EshaVoicePhase {
 }
 
 class EshaVoiceController extends ChangeNotifier {
+  static const connectionLimitMessage =
+      'The voice connection limit has been reached for this billing period. Your other membership features remain available.';
   EshaVoiceController({
     required this.api,
     required this.purchases,
@@ -212,7 +214,9 @@ class EshaVoiceController extends ChangeNotifier {
       availability = value;
       usage = value.usage;
       if (!value.enabled && !canStop) {
-        error = 'Live voice is not available yet. Your microphone is off.';
+        error = value.connectionLimitReached
+            ? connectionLimitMessage
+            : 'Live voice is not available yet. Your microphone is off.';
       } else if (!hasPendingSession) {
         error = null;
       }
@@ -271,9 +275,9 @@ class EshaVoiceController extends ChangeNotifier {
       availability = ready;
       usage = ready.usage;
       if (!ready.enabled || (usage?.remainingSeconds ?? 0) <= 0) {
-        throw const EshaException(
+        throw EshaException(
           'voice_not_configured',
-          'Live voice is not available or the voice allowance has been used. Your microphone is off.',
+          ready.connectionLimitReached ? connectionLimitMessage : 'Live voice is not available or the voice allowance has been used. Your microphone is off.',
         );
       }
       final allowanceAtStart = usage!.remainingSeconds;
@@ -332,9 +336,14 @@ class EshaVoiceController extends ChangeNotifier {
         error = _message(failure);
         if (!_creationSent ||
             failure is EshaException &&
-                failure.code == 'voice_not_configured') {
-          // voice_not_configured has an explicit server contract: no durable
-          // reservation and no provider call. Other failures remain ambiguous.
+                {
+                  'voice_not_configured',
+                  'voice_start_not_created',
+                }.contains(failure.code)) {
+          // Only these two server codes prove no reservation/provider work for
+          // this UUID. A generic exhausted/begin/storage failure stays pending.
+          audioConsent = false;
+          deepThinkingConsent = false;
           if (_pendingId != null) {
             try {
               await api.secureStorage.remove(_intentKey(owner.userId));

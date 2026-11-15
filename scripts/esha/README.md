@@ -87,15 +87,18 @@ analyzes and tests the app, then compiles Android. The macOS job independently
 compiles iOS for the simulator. Adding the backend job is not evidence that a
 new remote run has passed.
 
-The latest verified [GitHub run 43766450852](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43766450852)
-at published source `43a327f8a89102423e053140c9eecfc5c7c26834` completed
-successfully. Independent GitHub connector reads matched that source to the
-feature branch and verified both Android validation/build and iOS Simulator
-jobs. The workflow was last updated at **22:02:52 UTC on November 15**.
-This covers that published source only; ongoing uncommitted AI/allowance changes
-require their own validation and **fresh signed native builds**. No artifact
-hash or signed store upload is inferred from this CI result. The earlier
-successful `b17af5a` run remains in the release index.
+The latest verified [GitHub run 43769036015](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43769036015)
+at published source `1440c0f46a105e7b4467ff0d603814e2ad801b18` completed
+successfully. The coordinating agent's GitHub API readback confirmed all three
+jobs: Esha backend/SQL checks, Android validation/build and iOS Simulator
+compilation. This verifies the **first voice checkpoint**, before the later
+provider-start-cap correction. That correction requires its own remote CI run
+and **fresh signed native builds**. No artifact hash or signed store upload is
+inferred from this workflow result.
+
+The preceding successful [run 43766450852](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43766450852)
+at `43a327f8a89102423e053140c9eecfc5c7c26834`, updated **22:02:52 UTC**, and
+the earlier `b17af5a` checkpoint remain separately preserved in the release index.
 
 The earlier [GitHub run 43762836653](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43762836653)
 at source `afce6caf8499b211fbd980295be6589034798ef2` completed successfully at
@@ -662,6 +665,27 @@ create another call or generate another answer. Fractional final voice duration
 is preserved, and silence/waiting time counts. The provider's 15-second startup
 exposure is reserved separately and is not invented as minimum user consumption.
 
+A separate immutable **provider-start budget** now bounds repeated initialization
+costs. Each first committed begin consumes one attempt before the paid create;
+duplicate or lost replies cannot spend again. Final zero seconds still consumes
+zero customer time, while the provider-start attempt remains spent. Both
+`KORLIX_ESHA_TRIAL_VOICE_START_ATTEMPTS` and
+`KORLIX_ESHA_MONTHLY_VOICE_START_ATTEMPTS` require explicit positive values with
+no production defaults. The first begin fixes that period's limit. Restores,
+failed calls and later setting changes cannot refill it; a verified new period
+gets a separate budget.
+
+No production start-cap values have been chosen. Any selected connection/start
+limit must be disclosed in the actual offer before checkout is enabled; the
+approved voice-minute and deep-consultation inclusions do not imply new
+commercial numbers.
+
+Missing or changed startup settings cannot block status, stop or final settlement.
+Only a known cap refusal before a new reservation returns `voice_start_not_created`,
+which lets native clear its pending UUID safely. Later failures retain the durable
+recovery record. Start-budget exhaustion is reported separately from remaining
+voice minutes, and another call still requires fresh consent.
+
 Server recovery retains uncertain holds, retries exact terminal evidence after
 transient storage failure and reattaches only to close an existing session.
 Observer attachment races and repeated close-error feedback are covered by
@@ -671,19 +695,20 @@ retrieval must not replace the current membership period's allowance.
 
 The [release evidence index](../../apps/esha/release/build-verification.json)
 records the current preparation and its verification scope. Final local checks
-passed **109 backend tests** across nine Esha test files under Node **22.23.5**,
-after a clean 363-package locked install with lifecycle scripts disabled;
+passed **116 backend tests** across nine Esha test files under Node **22.23.5**,
+using the clean 363-package environment with its byte-identical lockfile and
+refreshed source/tests/SQL after the startup-cap correction;
 `node --check server.js` also passed. That aggregate already includes the policy,
 SQL, Sol, transport and route suites; overlapping earlier counts are not added.
 Flutter **3.47.9** / Dart **3.13.7** analysis found no issues, and the full local
-native suite passed **76 tests**: 49 existing tests and 27 voice tests, including
-the renewal allowance correction. These are actual local executions, separate
+native suite passed **79 tests**: 49 existing tests and 30 voice tests, including
+the no-work, connection-limit and renewal allowance corrections. These are actual local executions, separate
 from physical audio and signed artifact verification.
 
-Remote CI for the new implementation remains **pending a new commit and run**.
-No new remote result or signed artifact is established by the preceding
-`43a327f8` run or the
-previously uploaded iOS build 2. Actual Live audio, provider billing and device
+Remote CI for the startup-cap correction remains **pending a new commit and run**.
+The successful `1440c0f4` first-voice run and its 109/76 local-test checkpoint are
+preserved separately; they do not validate this later correction. The previously
+uploaded iOS build 2 also predates voice. Actual Live audio, provider billing and device
 behavior still require their own verification after the activation gates are
 resolved.
 

@@ -8,6 +8,10 @@ const stopReasons = new Set(['user_stop', 'paused', 'background', 'transport_err
 export function voiceConfiguration(environment = process.env) {
   const raw = environment.KORLIX_ESHA_VOICE_MAX_SESSION_SECONDS;
   const maximum = typeof raw === 'string' && /^[1-9]\d{0,5}$/.test(raw) ? Number(raw) : null;
+  const startLimit = value => typeof value === 'string' && /^[1-9]\d{0,5}$/.test(value) ? Number(value) : null;
+  const trialStartAttempts = startLimit(environment.KORLIX_ESHA_TRIAL_VOICE_START_ATTEMPTS);
+  const monthlyStartAttempts = startLimit(environment.KORLIX_ESHA_MONTHLY_VOICE_START_ATTEMPTS);
+  const startAttemptsConfigured = trialStartAttempts !== null && monthlyStartAttempts !== null;
   return {
     model: ESHA_LIVE_MODEL, api: 'live', transport: 'webrtc', delegation: 'client',
     policySelected: environment.KORLIX_ESHA_AI_POLICY === ESHA_AI_ROLE_POLICY,
@@ -15,6 +19,11 @@ export function voiceConfiguration(environment = process.env) {
     blocker: 'provider_duration_bound_unverified',
     maxSessionSeconds: maximum !== null && maximum >= ESHA_LIVE_INITIALIZATION_SECONDS &&
       maximum <= ESHA_APPROVED_ALLOWANCES.monthly.voiceSeconds ? maximum : null,
+    // Engineering spending limits have no production defaults. Customer minutes
+    // do not bound repeated initialized sessions with a final duration of zero.
+    startAttemptsConfigured,
+    trialStartAttempts: startAttemptsConfigured ? trialStartAttempts : null,
+    monthlyStartAttempts: startAttemptsConfigured ? monthlyStartAttempts : null,
     voiceLimits: {trialSeconds: ESHA_APPROVED_ALLOWANCES.trial.voiceSeconds,
       monthlySeconds: ESHA_APPROVED_ALLOWANCES.monthly.voiceSeconds},
     deepLimits: {trial: ESHA_APPROVED_ALLOWANCES.trial.deepConsultations,

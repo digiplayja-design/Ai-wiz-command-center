@@ -1,13 +1,18 @@
 import {ESHA_APPROVED_ALLOWANCES, UUID, fail} from './catalog.mjs';
-import {ESHA_LIVE_MODEL, voiceUsageMilliseconds, voiceProviderEvent} from './voice.mjs';
+import {ESHA_LIVE_MODEL, voiceConfiguration, voiceUsageMilliseconds, voiceProviderEvent} from './voice.mjs';
 
 // Storage only. This module cannot create a paid session or retry a provider call.
 // A caller may send one create request only after a confirmed begin.started=true.
-export function createEshaVoiceLedger({database, store} = {}) {
-  const limits = {trial_limit_seconds: ESHA_APPROVED_ALLOWANCES.trial.voiceSeconds,
-    monthly_limit_seconds: ESHA_APPROVED_ALLOWANCES.monthly.voiceSeconds};
+export function createEshaVoiceLedger({database, store, environment = process.env} = {}) {
   async function command(actor, action, data = {}) {
     if (typeof actor !== 'string' || !UUID.test(actor)) fail('Sign in to use Esha.', 401, 'authentication_required');
+    const configuration = voiceConfiguration(environment);
+    const limits = {trial_limit_seconds: ESHA_APPROVED_ALLOWANCES.trial.voiceSeconds,
+      monthly_limit_seconds: ESHA_APPROVED_ALLOWANCES.monthly.voiceSeconds,
+      trial_start_attempts: configuration.trialStartAttempts,
+      monthly_start_attempts: configuration.monthlyStartAttempts};
+    // Only SQL reserve/new begin enforce current configuration. Existing calls
+    // must remain stoppable and reconcilable when these settings are removed.
     if (store) return store(actor, action, {...limits, ...data});
     if (!database) fail('Esha voice storage is temporarily unavailable.', 503, 'storage_unavailable');
     const result = await database.rpc('korlix_esha_voice_command', {p_actor: actor, p_action: action, p: {...limits, ...data}});

@@ -10,6 +10,8 @@ const first='33333333-3333-4333-8333-333333333333', next='44444444-4444-4444-844
 const deepId='55555555-5555-4555-8555-555555555555';
 const inputHash=digest('voice-offer-and-consent'), requestHash=digest('server-owned-live-request');
 const reserve={requestId:first,inputHash,reserveSeconds:60,deepThinkingConsent:false};
+// Explicit offline engineering fixtures; these are not production defaults.
+const environment={KORLIX_ESHA_TRIAL_VOICE_START_ATTEMPTS:'5',KORLIX_ESHA_MONTHLY_VOICE_START_ATTEMPTS:'20'};
 let db, ledger;
 const facts=(overrides={})=>{
   const now=Date.now()-1000;
@@ -35,10 +37,10 @@ const database={rpc:async(name,parameters)=>{
     [parameters.p_actor,parameters.p_action,JSON.stringify(parameters.p)])).rows[0].result,error:null};}
   catch(error){return {data:null,error:{message:error.message}};}
 }};
-async function start(options={}){
-  await ledger.reserve(owner,{...reserve,...options});
-  assert.equal((await ledger.begin(owner,{requestId:options.requestId||first,inputHash,requestHash})).started,true);
-  return ledger.attach(owner,{requestId:options.requestId||first,sessionId:options.sessionId||'live_fixture',
+async function start(options={},target=ledger){
+  await target.reserve(owner,{...reserve,...options});
+  assert.equal((await target.begin(owner,{requestId:options.requestId||first,inputHash,requestHash})).started,true);
+  return target.attach(owner,{requestId:options.requestId||first,sessionId:options.sessionId||'live_fixture',
     expiresAt:new Date(Date.now()+3600000).toISOString()});
 }
 const final=(overrides={})=>({requestId:first,sessionId:'live_fixture',eventId:'evt_final',reason:'close_requested',seconds:20,...overrides});
@@ -53,7 +55,7 @@ test.before(async()=>{
     catch(error){throw new Error(`${file}: ${error.message} at SQL character ${error.position}`);}
   }
   await db.query('insert into auth.users values($1),($2)',[owner,other]);
-  ledger=createEshaVoiceLedger({database});
+  ledger=createEshaVoiceLedger({database,environment});
 });
 test.beforeEach(async()=>{
   await db.exec('reset role; truncate korlix_esha_billing_accounts,korlix_esha_voided_periods cascade; set role service_role;');
@@ -81,6 +83,7 @@ test('only an unstarted cancellation releases time; it becomes an idempotent con
     const result=await ledger.requestClose(owner,{requestId:first,reason:'paused'});
     assert.equal(result.state,'closed');assert.equal(result.finalizationConfirmed,true);assert.equal(result.settledSeconds,0);
     assert.equal(result.usage.voice.reservedSeconds,0);assert.equal(result.usage.voice.remainingSeconds,300);
+    assert.equal(result.usage.voiceStarts.used,0);
   }
   assert.equal((await ledger.begin(owner,{requestId:first,inputHash,requestHash})).started,false);
   assert.equal((await ledger.reserve(owner,{...reserve,requestId:next})).created,true);
@@ -89,7 +92,7 @@ test('only an unstarted cancellation releases time; it becomes an idempotent con
 test('a lost committed begin response never authorizes a retry or refunds uncertain provider time',async()=>{
   await ledger.reserve(owner,reserve);
   let failed=false,providerCalls=0;
-  const fault=createEshaVoiceLedger({database:{rpc:async(name,p)=>{
+  const fault=createEshaVoiceLedger({environment,database:{rpc:async(name,p)=>{
     const result=await database.rpc(name,p);
     if(p.p_action==='begin'&&!failed){failed=true;return {error:{message:'Lost reply after transaction commit'}};}
     return result;
@@ -102,11 +105,93 @@ test('a lost committed begin response never authorizes a retry or refunds uncert
   assert.equal((await ledger.begin(owner,{requestId:first,inputHash,requestHash})).started,false);
   const uncertain=await ledger.markUncertain(owner,{requestId:first,reason:'create_unconfirmed'});
   assert.equal(uncertain.finalizationConfirmed,false);assert.equal(uncertain.usage.voice.reservedSeconds,60);
+  assert.equal(uncertain.usage.voiceStarts.used,1);assert.equal(uncertain.usage.voiceStarts.remaining,4);
   await db.query("update korlix_esha_voice_sessions set authorized_until=now()-interval '1 hour' where user_id=$1",[owner]);
   const closing=await ledger.requestClose(owner,{requestId:first,reason:'transport_error'});
   assert.equal(closing.state,'closing');assert.equal(closing.finalizationConfirmed,false);
   assert.equal(closing.usage.voice.reservedSeconds,60);
+  assert.equal(closing.usage.voiceStarts.used,1);
   await assert.rejects(ledger.reserve(owner,{...reserve,requestId:next}),{code:'voice_session_in_progress'});
+});
+
+test('missing start caps block only new work; reserved and started UUID replays and finalization remain recoverable',async()=>{
+  const disabled=createEshaVoiceLedger({database,environment:{}});
+  const empty=await disabled.snapshot(owner);
+  assert.equal(empty.usage.voiceStarts.configured,false);assert.equal(empty.usage.voiceStarts.limit,null);
+  await assert.rejects(disabled.reserve(owner,reserve),{code:'voice_start_attempts_not_configured'});
+  assert.equal((await db.query('select count(*)::integer count from korlix_esha_voice_sessions')).rows[0].count,0);
+  await ledger.reserve(owner,reserve);
+  assert.equal((await disabled.reserve(owner,reserve)).replay,true);
+  await assert.rejects(disabled.begin(owner,{requestId:first,inputHash,requestHash}),{code:'voice_start_attempts_not_configured'});
+  assert.equal((await db.query('select count(*)::integer count from korlix_esha_voice_start_budgets')).rows[0].count,0);
+  assert.equal((await disabled.requestClose(owner,{requestId:first,reason:'paused'})).finalizationConfirmed,true);
+  await start({requestId:next});
+  assert.equal((await disabled.reserve(owner,{...reserve,requestId:next})).replay,true);
+  assert.equal((await disabled.begin(owner,{requestId:next,inputHash,requestHash})).started,false);
+  await disabled.recordUsage(owner,{requestId:next,sessionId:'live_fixture',seconds:5.8});
+  await disabled.requestClose(owner,{requestId:next,reason:'user_stop'});
+  const closed=await disabled.settle(owner,final({requestId:next,seconds:5.8}));
+  assert.equal(closed.finalizationConfirmed,true);assert.equal(closed.usage.voice.usedSeconds,5.8);
+  assert.equal(closed.usage.voiceStarts.configured,false);assert.equal(closed.usage.voiceStarts.limit,5);
+  assert.equal(closed.usage.voiceStarts.used,1);assert.equal(closed.usage.voiceStarts.remaining,0);
+  assert.equal((await disabled.status(owner,next)).state,'closed');
+});
+
+test('the first committed begin pins the start cap and concurrent duplicate begins consume exactly one attempt',async()=>{
+  await ledger.reserve(owner,reserve);
+  assert.equal((await db.query('select count(*)::integer count from korlix_esha_voice_start_budgets')).rows[0].count,0);
+  const selected=createEshaVoiceLedger({database,environment:{...environment,KORLIX_ESHA_TRIAL_VOICE_START_ATTEMPTS:'2'}});
+  const replies=await Promise.all([selected.begin(owner,{requestId:first,inputHash,requestHash}),
+    selected.begin(owner,{requestId:first,inputHash,requestHash})]);
+  assert.equal(replies.filter(result=>result.started).length,1);
+  const status=await selected.status(owner,first);
+  assert.equal(status.usage.voiceStarts.limit,2);assert.equal(status.usage.voiceStarts.used,1);
+  assert.equal(status.usage.voiceStarts.remaining,1);
+  // Changing the setting cannot alter an existing debit or authorize a retry.
+  assert.equal((await ledger.begin(owner,{requestId:first,inputHash,requestHash})).started,false);
+  assert.equal((await ledger.status(owner,first)).usage.voiceStarts.configured,false);
+  await selected.attach(owner,{requestId:first,sessionId:'live_fixture',expiresAt:null});
+  await selected.settle(owner,final({seconds:0}));
+  await selected.reserve(owner,{...reserve,requestId:next});
+  await assert.rejects(ledger.begin(owner,{requestId:next,inputHash,requestHash}),{code:'voice_start_budget_conflict'});
+  const blocked=await ledger.status(owner,next);
+  assert.equal(blocked.state,'reserved');assert.equal(blocked.usage.voiceStarts.used,1);
+  // Conflict does not hide the reservation or prevent safe unstarted cleanup.
+  assert.equal((await ledger.reserve(owner,{...reserve,requestId:next})).replay,true);
+  const cancelled=await ledger.requestClose(owner,{requestId:next,reason:'paused'});
+  assert.equal(cancelled.finalizationConfirmed,true);assert.equal(cancelled.usage.voiceStarts.used,1);
+});
+
+test('zero-duration initialized sessions exhaust independent start limits; restore or configuration changes never refill them',async()=>{
+  const bounded=createEshaVoiceLedger({database,environment:{...environment,KORLIX_ESHA_TRIAL_VOICE_START_ATTEMPTS:'2'}});
+  for(const [requestId,sessionId] of [[first,'live_first_zero'],[next,'live_next_zero']]){
+    await start({requestId,sessionId},bounded);
+    await bounded.requestClose(owner,{requestId,reason:'paused'});
+    const closed=await bounded.settle(owner,final({requestId,sessionId,seconds:0}));
+    assert.equal(closed.settledSeconds,0);assert.equal(closed.usage.voice.usedSeconds,0);
+    assert.equal(closed.usage.voice.remainingSeconds,300);
+  }
+  let snapshot=await bounded.snapshot(owner);
+  assert.equal(snapshot.usage.voiceStarts.limit,2);assert.equal(snapshot.usage.voiceStarts.used,2);
+  assert.equal(snapshot.usage.voiceStarts.remaining,0);
+  // A replay precedes all cap checks, so a prior UUID is never misreported as
+  // an absent, pre-reservation no-provider-work rejection.
+  for(const target of [bounded,ledger,createEshaVoiceLedger({database,environment:{}})]){
+    assert.equal((await target.reserve(owner,reserve)).replay,true);
+    assert.equal((await target.begin(owner,{requestId:first,inputHash,requestHash})).started,false);
+  }
+  await assert.rejects(bounded.reserve(owner,{...reserve,requestId:deepId}),{code:'voice_start_attempts_exhausted'});
+  await billing(owner,'apply',facts({allowance:999}));
+  await assert.rejects(bounded.reserve(owner,{...reserve,requestId:deepId}),{code:'voice_start_attempts_exhausted'});
+  for(const value of ['1','5']){
+    const changed=createEshaVoiceLedger({database,environment:{...environment,KORLIX_ESHA_TRIAL_VOICE_START_ATTEMPTS:value}});
+    await assert.rejects(changed.reserve(owner,{...reserve,requestId:deepId}),{code:'voice_start_budget_conflict'});
+    snapshot=await changed.snapshot(owner);
+    assert.equal(snapshot.usage.voiceStarts.configured,false);assert.equal(snapshot.usage.voiceStarts.limit,2);
+    assert.equal(snapshot.usage.voiceStarts.used,2);assert.equal(snapshot.usage.voiceStarts.remaining,0);
+  }
+  assert.equal((await bounded.snapshot(owner)).usage.voiceStarts.remaining,0);
+  assert.equal((await db.query('select count(*)::integer count from korlix_esha_voice_sessions')).rows[0].count,2);
 });
 
 test('provider identity persists before startup without invented expiry; later verified expiry cannot change or disappear',async()=>{
@@ -155,7 +240,7 @@ test('final duration below a prior observation retains an uncertain hold; consis
 test('a lost committed settlement response reconciles as closed without consuming time twice',async()=>{
   await start();
   let failed=false;
-  const fault=createEshaVoiceLedger({database:{rpc:async(name,p)=>{
+  const fault=createEshaVoiceLedger({environment,database:{rpc:async(name,p)=>{
     const result=await database.rpc(name,p);
     if(p.p_action==='settle'&&!failed){failed=true;return {error:{message:'Lost reply after settlement commit'}};}
     return result;
@@ -186,7 +271,12 @@ test('refund, stale verification and account ownership are checked before start;
   await ledger.attach(owner,{requestId:first,sessionId:'live_fixture',expiresAt:new Date(Date.now()+3600000).toISOString()});
   await billing(null,'record_void',{purchase_key:facts().purchase_key,period_key:facts().period_key});
   assert.equal((await ledger.status(owner,first)).closeRequired,true);
+  await ledger.snapshot(other);
   await assert.rejects(ledger.status(other,first),{code:'voice_session_not_found'});
+  await assert.rejects(ledger.begin(other,{requestId:first,inputHash,requestHash}),{code:'voice_session_not_found'});
+  await assert.rejects(ledger.settle(other,final()),{code:'voice_session_not_found'});
+  assert.equal((await ledger.status(owner,first)).usage.voiceStarts.used,1);
+  assert.equal((await ledger.snapshot(other)).usage.voiceStarts.used,0);
   await assert.rejects(ledger.settle(owner,final({sessionId:'live_other'})),{code:'invalid_voice_usage'});
   assert.equal((await ledger.settle(owner,final())).usage.voice.usedSeconds,20);
   await assert.rejects(ledger.reserve(owner,{...reserve,requestId:next}),{code:'membership_required'});
@@ -196,13 +286,21 @@ test('renewal creates the approved monthly budget without rollover and restores 
   await start();await ledger.settle(owner,final({seconds:45}));
   await billing(owner,'apply',facts({allowance:999}));
   assert.equal((await ledger.snapshot(owner)).usage.voice.remainingSeconds,255);
+  assert.equal((await ledger.snapshot(owner)).usage.voiceStarts.used,1);
   await billing(owner,'apply',facts({trial:false,allowance:10,period_key:digest('renewal'),
     period_started_at:new Date(Date.now()-500).toISOString(),expires_at:new Date(Date.now()+30*86400000).toISOString()}));
   const newPeriod=await ledger.snapshot(owner);
   assert.equal(newPeriod.usage.voice.limitSeconds,1800);assert.equal(newPeriod.usage.voice.remainingSeconds,1800);
   assert.equal(newPeriod.usage.deep.remaining,10);
+  assert.equal(newPeriod.usage.voiceStarts.limit,20);assert.equal(newPeriod.usage.voiceStarts.used,0);
+  assert.equal(newPeriod.usage.voiceStarts.remaining,20);
   await start({requestId:next,sessionId:'live_renewal'});
   assert.equal((await ledger.status(owner,first)).usage.voice.remainingSeconds,0);
+  assert.equal((await ledger.status(owner,first)).usage.voiceStarts.limit,5);
+  assert.equal((await ledger.status(owner,first)).usage.voiceStarts.used,1);
+  assert.equal((await ledger.status(owner,first)).usage.voiceStarts.remaining,0);
+  assert.equal((await ledger.status(owner,next)).usage.voiceStarts.used,1);
+  assert.equal((await ledger.status(owner,next)).usage.voiceStarts.remaining,19);
 });
 
 test('consented delegation maps one immutable consultation identity; cancelled voice cannot authorize a later Sol debit',async()=>{
@@ -269,16 +367,18 @@ test('voice RPC/tables are inaccessible to public clients and owning-account del
   await start({deepThinkingConsent:true});
   await ledger.delegation(owner,{requestId:first,sessionId:'live_fixture',delegationId:'item_delete',inputHash:digest('question'),consultationRequestId:deepId});
   await db.exec('reset role');
-  const security=await db.query("select relname,relrowsecurity from pg_class where relname in ('korlix_esha_voice_budgets','korlix_esha_voice_sessions','korlix_esha_voice_delegations')");
-  assert.equal(security.rows.length,3);assert(security.rows.every(x=>x.relrowsecurity));
+  const security=await db.query("select relname,relrowsecurity from pg_class where relname in ('korlix_esha_voice_budgets','korlix_esha_voice_start_budgets','korlix_esha_voice_sessions','korlix_esha_voice_delegations')");
+  assert.equal(security.rows.length,4);assert(security.rows.every(x=>x.relrowsecurity));
   for(const role of ['anon','authenticated']){
     await db.exec(`set role ${role}`);
     await assert.rejects(db.query('select * from korlix_esha_voice_sessions'),/permission denied/);
+    await assert.rejects(db.query('select * from korlix_esha_voice_start_budgets'),/permission denied/);
     await assert.rejects(db.query('select korlix_esha_voice_command($1,$2,$3)',[owner,'snapshot','{}']),/permission denied/);
     await db.exec('reset role');
   }
   await db.query('delete from auth.users where id=$1',[owner]);
   assert.equal((await db.query('select count(*)::integer count from korlix_esha_voice_sessions')).rows[0].count,0);
   assert.equal((await db.query('select count(*)::integer count from korlix_esha_voice_delegations')).rows[0].count,0);
+  assert.equal((await db.query('select count(*)::integer count from korlix_esha_voice_start_budgets')).rows[0].count,0);
   await db.query('insert into auth.users values($1)',[owner]);
 });

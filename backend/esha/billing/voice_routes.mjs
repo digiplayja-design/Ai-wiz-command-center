@@ -18,7 +18,7 @@ function consultationId(actor, requestId, delegationId) {
 }
 
 export function createEshaVoice({database, store, requireUser, billing, environment = process.env,
-  ledger = createEshaVoiceLedger({database, store}), transport = createEshaLiveTransport({environment}),
+  ledger = createEshaVoiceLedger({database, store, environment}), transport = createEshaLiveTransport({environment}),
   configuration = () => voiceConfiguration(environment), now = Date.now, watchdogMs = 5000} = {}) {
   const sessions = new Map();
   const rates = new Map();
@@ -29,6 +29,8 @@ export function createEshaVoice({database, store, requireUser, billing, environm
     return !durationContradicted && config.configured === true && config.voiceEnabled === true && config.policySelected === true &&
       config.hardDurationBoundVerified === true && Number.isInteger(config.maxSessionSeconds) &&
       config.maxSessionSeconds >= ESHA_LIVE_INITIALIZATION_SECONDS && config.maxSessionSeconds <= 1800 &&
+      config.startAttemptsConfigured === true && Number.isInteger(config.trialStartAttempts) && config.trialStartAttempts > 0 &&
+      Number.isInteger(config.monthlyStartAttempts) && config.monthlyStartAttempts > 0 &&
       environment.KORLIX_ESHA_VOICE_ENABLED === 'true' && transport.available() && billing?.ready?.() === true;
   };
   const uncertain = (record, reason) => ledger.markUncertain(record.user.id,
@@ -217,7 +219,14 @@ export function createEshaVoice({database, store, requireUser, billing, environm
   async function status(user, providerName, refresh = false) {
     requireVerifiedUser(user); productFor(providerName);
     if (refresh) await billing?.refresh(user.id);
-    return voiceStatus({...configuration(), voiceEnabled: ready()}, await ledger.snapshot(user.id));
+    const snapshot = await ledger.snapshot(user.id);
+    const startBudget = snapshot.usage?.voiceStarts;
+    const startsConfigured = startBudget?.configured === true;
+    const startsExhausted = startBudget?.configured === true && startBudget.remaining === 0;
+    const reason = !ready() ? 'voice_not_configured' : !startsConfigured ? 'voice_start_budget_conflict'
+      : startsExhausted ? 'voice_start_attempts_exhausted' : null;
+    return {...voiceStatus({...configuration(), voiceEnabled: ready() && startsConfigured && !startsExhausted}, snapshot),
+      unavailabilityReason: reason};
   }
   async function start(user, body) {
     requireVerifiedUser(user);
@@ -228,7 +237,18 @@ export function createEshaVoice({database, store, requireUser, billing, environm
     const reserveSeconds = configuration().maxSessionSeconds;
     // Reserve the complete verified worst-case duration, not a guessed shorter
     // call duration. Users cannot create a session with a partial hold.
-    const reserved = await ledger.reserve(user.id, {...input, reserveSeconds});
+    let reserved;
+    try {reserved = await ledger.reserve(user.id, {...input, reserveSeconds});}
+    catch (error) {
+      if (error instanceof EshaBillingError && ['voice_start_attempts_exhausted', 'voice_start_attempts_not_configured',
+        'voice_start_budget_conflict'].includes(error.code)) {
+        // SQL replays existing UUIDs before these checks. Only an absent UUID
+        // can receive this rejection: no reservation or provider begin exists.
+        // Never reuse this zero-work code for begin/transport/storage failures.
+        fail(error.message, error.status, 'voice_start_not_created');
+      }
+      throw error;
+    }
     if (reserved.created !== true) fail('This voice request already exists. Check its status before starting another call.', 409, 'voice_request_pending');
     const request = liveSessionRequest({actor: user.id, ...input});
     let record, began = false, beginReturned = false;
@@ -236,6 +256,10 @@ export function createEshaVoice({database, store, requireUser, billing, environm
       const authorization = await ledger.begin(user.id, {requestId: input.requestId, inputHash: input.inputHash,
         requestHash: digest(JSON.stringify(request))});
       beginReturned = true;
+      if (authorization.exhausted === true) {
+        await ledger.requestClose(user.id, {requestId: input.requestId, reason: 'transport_error'});
+        fail('The voice connection limit has been reached for this billing period.', 429, 'voice_start_attempts_exhausted');
+      }
       if (authorization.started !== true) fail('This voice request has already been sent.', 409, 'voice_request_pending');
       began = true;
       const created = await transport.create(request);

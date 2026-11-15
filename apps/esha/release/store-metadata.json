@@ -364,7 +364,7 @@
     "account_legal_support_and_deletion_controls_require_subscription": false,
     "ai_model": null,
     "ai_max_output_tokens": null,
-    "ai_configuration_status": "live_and_sol_integration_locally_tested_inactive_provider_bound_technical_limits_migrations_and_device_validation_pending",
+    "ai_configuration_status": "live_sol_and_provider_start_budget_locally_tested_inactive_provider_bound_explicit_limits_offer_disclosure_migrations_and_device_validation_pending",
     "ai_preparation": {
       "source_commit": "e9415b73c0dc36d4474c2a2e2c6abbda7d126acd",
       "proposal_document": "backend/esha/billing/AI_OPTION.md",
@@ -383,8 +383,9 @@
       "commercial_allowances_approved": true,
       "prior_10_trial_120_monthly_allowance_approved": false,
       "service_activated": false,
-      "scope": "Model choices and commercial inclusions are explicitly approved. Native and backend Live/Sol integration is implemented and locally tested. Provider duration proof, explicit technical limits, production migrations/deployment, real device/store verification and fresh signed artifacts remain gates. Existing store listing copy is unchanged; no activation is established.",
-      "durable_accounting_implemented": true
+      "scope": "Model choices and commercial inclusions are explicitly approved. Native/backend integration and an independent irreversible provider-start budget are locally tested. Production start caps are unselected; provider-duration proof, explicit technical limits, disclosure in the enabled offer, migrations/deployment, real device/store verification and fresh signed artifacts remain gates. Existing listing copy is unchanged; no activation is established.",
+      "durable_accounting_implemented": true,
+      "independent_voice_start_budget_implemented": true
     },
     "approved_commercial_allowances": {
       "approved": true,
@@ -424,7 +425,7 @@
       "The exact Apple app, bundle, SKU and team identity is API-verified. The dedicated Esha App Store profile was created, imported into Codemagic and used by the signed build. Branded version 1.0.0 build 2 is independently hash/plist-verified and uploaded. Apple subscription group, exact monthly product, U.S. $4.99 price and eligible three-day trial are created and read back; Apple build 2 processing is VALID and unexpired in the later read-only inventory. The later build-selection receipt confirms build 2 attached to the existing editable version. Review submission remains incomplete. The exact Google Play app record, package and developer identity are now verified; Google subscription records and signed Android upload remain unverified.",
       "Earlier Esha Privacy and Terms pages returned HTTP 200 after deployment of commit 4bb80c1ce6fe1a314a31a23b60b70832c1045556 at the November 15, 2026 18:06:09 UTC checkpoint. The current whole-app membership wording is now deployed on live commit 5e2a4086b7c4a58e8614abfa3625270b05def152, Render deploy dep-dbt0l93l550s739n1p3g, and verified by the 20:47 UTC HTTP receipt. The current checks cover policy wording, the offer and deletion anchor; they do not activate purchases or AI.",
       "The native membership correction at bf4ff498e3aa71eea07d4052d8789cd37ddba7c0 passed 49 Flutter tests and successful Android and iOS Simulator compilation in GitHub Actions run 43754059868. It requires fresh same-account server verification for Discover, planner, vanity, studio and AI. Active members retain non-AI features at zero consultations. Account, recovery, restore/manage, legal, support and deletion controls remain accessible without an active subscription. The native build evidence is separate from signed-device release verification.",
-      "The owner selected GPT-Live-1 through the Live API and gpt-6.1-sol/high for deep thinking, with 5 voice minutes / 2 Sol consultations for the trial and 30 voice minutes / 10 Sol consultations monthly. Native transport, authenticated routes, trusted role routing and durable accounting are implemented and locally tested: 109 backend tests and 76 native tests passed, with native analysis clean. Provider-duration proof, explicit engineering limits, unapplied migrations, remote CI for this source, genuine device/store checks and fresh signed artifacts remain. The last verified live catalog still reports purchases/consultations disabled and null counts; implementation and approval are not activation.",
+      "The owner selected GPT-Live-1 and gpt-6.1-sol/high, with 5 voice minutes / 2 Sol consultations for the trial and 30 voice minutes / 10 Sol consultations monthly. The corrected implementation, including an independent immutable provider-start cap, passed 116 backend and 79 native tests; native analysis is clean. First-voice commit 1440c0f4 passed all 3 GitHub jobs, but that success precedes the startup-cap correction. Production start-cap values and other technical limits remain unselected, and any chosen connection limit must be disclosed in the actual offer before checkout. Provider-duration proof, migrations/deployment, corrected-source CI, genuine device/store checks and fresh signed artifacts remain. The last verified live catalog still reports purchases/consultations disabled and null counts.",
       "Owner review of remaining privacy, age-rating, content-rights and release declarations, reviewer access and store screenshots remains outstanding. The Google app-creation policy/export declarations were explicitly acknowledged and accepted; this does not complete the separate app-content or release forms. The Apple review contact is approved and read back, with existing demo credentials preserved but login untested.",
       "The earlier Google redirect approval block was resolved by explicit user approval and successful KORLIX sign-in. The Esha Play app is created and dashboard-verified; its privacy URL and Beauty category are saved pending review. Google-managed app signing shows the exact public certificate and 0% install base, without any signing-setting change. The prior Codemagic inventory found ESHA_ANDROID_UPLOAD_KEY absent; the Play app-signing page did not show an upload-key section and cannot establish private-key absence.",
       "Google Play contact email support@korlixdeveloper.com and phone +16148942317 remain saved. Following explicit user authorization, https://www.korlixdeveloper.com/support.html was saved and freshly read back after the settings modal closed. Prior HTTP normalization and blocked correction attempts remain historical in the original receipt; the supplemental receipt records successful application and screenshot proof.",
@@ -501,35 +502,53 @@
     "apple_processing_evidence_file": "apple-inventory-after-subscription-20261115.json"
   },
   "latest_native_ci_workflow": {
-    "source_commit": "43a327f8a89102423e053140c9eecfc5c7c26834",
+    "source_commit": "1440c0f46a105e7b4467ff0d603814e2ad801b18",
     "source_branch": "feature/esha-native-20261115",
-    "branch_head_verified_same_commit": true,
-    "workflow_run_id": 43766450852,
-    "workflow_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43766450852",
+    "workflow_run_id": 43769036015,
+    "workflow_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43769036015",
     "workflow_status": "completed",
     "workflow_conclusion": "success",
-    "workflow_updated_at_utc": "2026-11-15T22:02:52Z",
-    "recorded_at_utc": "2026-11-15T22:04:11Z",
-    "observation_method": "Independent documentation-agent GitHub connector GET readbacks of branch commit, workflow collection and exact run jobs.",
+    "recorded_at_utc": "2026-11-15T22:32:49Z",
+    "observation_method": "Coordinating agent confirmed exact source/run and all three successful jobs through GitHub API readback.",
     "jobs": [
       {
-        "id": 132972527266,
-        "name": "Analyze, test, and compile Android",
-        "conclusion": "success",
-        "completed_at_utc": "2026-11-15T22:02:51Z",
-        "source_validation_step": "success",
-        "android_debug_apk_and_unsigned_aab_step": "success"
+        "id": 132980547085,
+        "name": "Esha backend and SQL checks",
+        "conclusion": "success"
       },
       {
-        "id": 132972527584,
+        "id": 132980547311,
+        "name": "Analyze, test, and compile Android",
+        "conclusion": "success"
+      },
+      {
+        "id": 132980547533,
         "name": "Compile iOS Simulator application",
-        "conclusion": "success",
-        "completed_at_utc": "2026-11-15T22:00:50Z",
-        "simulator_compile_and_verify_step": "success"
+        "conclusion": "success"
       }
     ],
     "artifact_bytes_rehashed_by_this_update": false,
-    "scope": "Current published 43a327f8 source only: Android validation/debug APK/unsigned AAB and iOS Simulator jobs succeeded. No exact test count, artifact rehash, signed store upload or validation of subsequent uncommitted AI/native changes is inferred. Prior CI/artifact checkpoints remain separate historical evidence."
+    "scope": "Verified first voice checkpoint only, before the provider-start-attempt cap correction. Backend, Android and iOS Simulator jobs succeeded. No downloaded artifact hash, signed store upload or success for the later corrected source is inferred.",
+    "workflow_updated_at_utc": "2026-11-15T22:31:01Z",
+    "artifact_api_metadata": [
+      {
+        "platform": "Android",
+        "artifact_id": 14184280588,
+        "api_size_in_bytes": 176953985,
+        "api_digest": "sha256:387d78b9fadbf9d9bc1625260a9bb5308db327068285fd18a752f325ee8a4e62",
+        "independently_downloaded": false,
+        "independently_rehashed": false
+      },
+      {
+        "platform": "iOS Simulator",
+        "artifact_id": 14183611559,
+        "api_size_in_bytes": 74765050,
+        "api_digest": "sha256:7a607e074c9cfe20566982f5476cc49e3ebe2d8838604aa2963916d70809ef53",
+        "independently_downloaded": false,
+        "independently_rehashed": false
+      }
+    ],
+    "artifact_metadata_scope": "Coordinating-agent GitHub API readback for first-voice source 1440c0f4 only; no independent download, contents inspection or byte rehash. This is not proof for the later startup-cap correction."
   },
   "voice_policy_amendment": {
     "status": "prepared_and_tested_not_deployed",
@@ -564,8 +583,8 @@
   },
   "voice_implementation_preparation": {
     "status": "local_backend_and_native_validation_passed_remote_ci_pending",
-    "recorded_at_utc": "2026-11-15T22:20:56Z",
-    "source_scope": "Current prepared worktree source; commit and remote workflow result not yet assigned to this checkpoint.",
+    "recorded_at_utc": "2026-11-15T22:32:49Z",
+    "source_scope": "Prepared provider-start-budget correction after published 1440c0f4; corrected source commit and remote CI run remain pending.",
     "source_commit": null,
     "models": {
       "conversation": {
@@ -598,7 +617,8 @@
       "Durable voice reservation, one-attempt creation authorization, cumulative fractional settlement and independent Sol consultation/provider-attempt accounting.",
       "Recovery of known sessions only to request closure and reconcile trusted final usage, including attachment races and transient storage failure; no recovery create.",
       "Account-bound pending request UUID and at most 20 recent call UUIDs; saved answers are retrieved without regeneration or local answer-text persistence.",
-      "Validated deepResults scoped to the owning account/session; historical result reads cannot replace current-period allowance."
+      "Validated deepResults scoped to the owning account/session; historical result reads cannot replace current-period allowance.",
+      "Independent irreversible provider-start budget: explicit no-default trial/monthly caps pin at the first committed begin; duplicates, failed calls, restores and final zero seconds cannot refill it."
     ],
     "dependencies": {
       "direct_ws": "8.23.0",
@@ -615,13 +635,14 @@
         "server_syntax_check": "node --check server.js",
         "server_syntax_check_passed": true,
         "test_files": 9,
-        "tests_passed": 109,
-        "top_level_tests": 104,
+        "tests_passed": 116,
+        "top_level_tests": 111,
         "nested_tests": 5,
         "tests_failed": 0,
-        "duration_ms": 6653.058209,
-        "log_sha256": "f1a7a42384b5afe3d38f71634a349feb6116ac96a668f48ffe0b3072f858ad41",
-        "scope": "Authoritative all-Esha aggregate executed by the CI agent; log totals independently read back. Includes policy, SQL, Sol, transport and route tests; overlapping 26/18/51/50-test checkpoints are not added to this total. Real SQL runs only in offline PGlite with mocked providers."
+        "duration_ms": 5655.866334,
+        "log_sha256": "3d765747fa14d04745a53cfe439e2884ce681e0460db7124ab63134f7ccf446b",
+        "scope": "Authoritative corrected all-Esha aggregate executed in the existing clean Node22.23.5 environment with byte-identical lockfile and refreshed Esha source/tests/prepared SQL. Log totals independently read back. Includes focused 22 start-budget tests and root 29 transport/route tests; subsets are not added. SQL is offline PGlite with mocked providers.",
+        "tests_skipped": 0
       },
       "native": {
         "flutter_version": "3.47.9",
@@ -629,20 +650,20 @@
         "analysis_command": "flutter analyze --no-pub",
         "analysis_result": "No issues found",
         "test_command": "flutter test --no-pub --reporter expanded",
-        "tests_passed": 76,
+        "tests_passed": 79,
         "existing_tests": 49,
-        "new_voice_tests": 27,
+        "new_voice_tests": 30,
         "tests_failed": 0,
-        "scope": "Native agent actually executed local analysis and tests after the historical-usage renewal correction, including real plugin method-channel audio-only permission denial. This does not verify Gradle/Xcode release artifacts or physical audio."
+        "scope": "Native agent actually executed the full local suite and clean analysis after the scoped no-work error, exhausted-start availability and wire-fixture corrections. No Gradle/Xcode release artifacts, physical audio or live provider behavior are established."
       },
       "independent_wire_contract_review_completed": true,
       "remote_ci": {
-        "status": "pending_new_commit_and_run",
+        "status": "pending_corrected_commit_and_run",
         "source_commit": null,
         "workflow_run_id": null,
-        "prior_success_commit": "43a327f8a89102423e053140c9eecfc5c7c26834",
-        "prior_success_run_id": 43766450852,
-        "scope": "The prior successful workflow does not validate this later voice implementation."
+        "prior_success_commit": "1440c0f46a105e7b4467ff0d603814e2ad801b18",
+        "prior_success_run_id": 43769036015,
+        "scope": "The successful 1440c0f4 first-voice workflow precedes this provider-start-cap correction. Current corrected source requires its own remote run."
       },
       "physical_device_audio_verified": false,
       "paid_provider_call_performed": false,
@@ -662,15 +683,158 @@
       ],
       "production_migrations_applied": false,
       "production_deployed": false,
-      "service_activated": false
+      "service_activated": false,
+      "voice_start_attempt_caps_selected": false,
+      "connection_limit_offer_disclosure_completed": false
     },
     "remaining_gates": [
-      "Establish a verified independent provider duration bound and explicit technical limits.",
+      "Establish a verified independent provider duration bound and explicit token, provider-generation-attempt, voice-start-attempt and session limits.",
       "Review and apply prepared database guards through an authorized deployment, then verify complete service configuration.",
       "Verify this source in remote Android/iOS CI, produce fresh signed artifacts and perform physical permission/interruption/audio validation.",
       "Complete separately authorized real provider and store sandbox verification before activation.",
-      "Deploy and read back the optional-voice policy amendment and finish applicable store disclosures and genuine screenshots."
+      "Deploy and read back the optional-voice policy amendment and finish applicable store disclosures and genuine screenshots.",
+      "Disclose any selected connection/start limit in the actual offer before enabling checkout; no production start-cap values are selected by this preparation."
     ],
-    "scope": "Implemented and locally tested preparation only. Production voice, purchases, provider calls, migrations, deployment and fresh signed uploads are not established by this checkpoint."
+    "scope": "Implemented and locally tested preparation only. Production voice, purchases, provider calls, migrations, deployment and fresh signed uploads are not established by this checkpoint.",
+    "previous_checkpoint_before_start_attempt_cap": {
+      "source_commit": "1440c0f46a105e7b4467ff0d603814e2ad801b18",
+      "local_recorded_at_utc": "2026-11-15T22:20:56Z",
+      "local_backend": {
+        "command": "node --test test/esha*.test.mjs",
+        "working_directory": "backend",
+        "node_version": "22.23.5",
+        "dependency_install": "npm ci --ignore-scripts --no-audit --no-fund",
+        "locked_packages_installed": 363,
+        "server_syntax_check": "node --check server.js",
+        "server_syntax_check_passed": true,
+        "test_files": 9,
+        "tests_passed": 109,
+        "top_level_tests": 104,
+        "nested_tests": 5,
+        "tests_failed": 0,
+        "duration_ms": 6653.058209,
+        "log_sha256": "f1a7a42384b5afe3d38f71634a349feb6116ac96a668f48ffe0b3072f858ad41",
+        "scope": "Authoritative all-Esha aggregate executed by the CI agent; log totals independently read back. Includes policy, SQL, Sol, transport and route tests; overlapping 26/18/51/50-test checkpoints are not added to this total. Real SQL runs only in offline PGlite with mocked providers."
+      },
+      "local_native": {
+        "flutter_version": "3.47.9",
+        "dart_version": "3.13.7",
+        "analysis_command": "flutter analyze --no-pub",
+        "analysis_result": "No issues found",
+        "test_command": "flutter test --no-pub --reporter expanded",
+        "tests_passed": 76,
+        "existing_tests": 49,
+        "new_voice_tests": 27,
+        "tests_failed": 0,
+        "scope": "Native agent actually executed local analysis and tests after the historical-usage renewal correction, including real plugin method-channel audio-only permission denial. This does not verify Gradle/Xcode release artifacts or physical audio."
+      },
+      "remote_ci": {
+        "source_commit": "1440c0f46a105e7b4467ff0d603814e2ad801b18",
+        "source_branch": "feature/esha-native-20261115",
+        "workflow_run_id": 43769036015,
+        "workflow_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43769036015",
+        "workflow_status": "completed",
+        "workflow_conclusion": "success",
+        "recorded_at_utc": "2026-11-15T22:32:49Z",
+        "observation_method": "Coordinating agent confirmed exact source/run and all three successful jobs through GitHub API readback.",
+        "jobs": [
+          {
+            "id": 132980547085,
+            "name": "Esha backend and SQL checks",
+            "conclusion": "success"
+          },
+          {
+            "id": 132980547311,
+            "name": "Analyze, test, and compile Android",
+            "conclusion": "success"
+          },
+          {
+            "id": 132980547533,
+            "name": "Compile iOS Simulator application",
+            "conclusion": "success"
+          }
+        ],
+        "artifact_bytes_rehashed_by_this_update": false,
+        "scope": "Verified first voice checkpoint only, before the provider-start-attempt cap correction. Backend, Android and iOS Simulator jobs succeeded. No downloaded artifact hash, signed store upload or success for the later corrected source is inferred.",
+        "workflow_updated_at_utc": "2026-11-15T22:31:01Z",
+        "artifact_api_metadata": [
+          {
+            "platform": "Android",
+            "artifact_id": 14184280588,
+            "api_size_in_bytes": 176953985,
+            "api_digest": "sha256:387d78b9fadbf9d9bc1625260a9bb5308db327068285fd18a752f325ee8a4e62",
+            "independently_downloaded": false,
+            "independently_rehashed": false
+          },
+          {
+            "platform": "iOS Simulator",
+            "artifact_id": 14183611559,
+            "api_size_in_bytes": 74765050,
+            "api_digest": "sha256:7a607e074c9cfe20566982f5476cc49e3ebe2d8838604aa2963916d70809ef53",
+            "independently_downloaded": false,
+            "independently_rehashed": false
+          }
+        ],
+        "artifact_metadata_scope": "Coordinating-agent GitHub API readback for first-voice source 1440c0f4 only; no independent download, contents inspection or byte rehash. This is not proof for the later startup-cap correction."
+      },
+      "scope": "Preserved first voice checkpoint; its 109/76 local tests and successful remote CI do not validate the later provider-start-budget correction."
+    },
+    "provider_start_attempt_budget": {
+      "implemented": true,
+      "scope": "Technical provider initialization spending guard, separate from customer voice seconds and Sol consultation/provider-generation counts.",
+      "table": "korlix_esha_voice_start_budgets",
+      "trial_cap_environment": "KORLIX_ESHA_TRIAL_VOICE_START_ATTEMPTS",
+      "monthly_cap_environment": "KORLIX_ESHA_MONTHLY_VOICE_START_ATTEMPTS",
+      "production_defaults": null,
+      "production_values_selected": false,
+      "limit_fixed_at": "first_committed_begin_in_verified_billing_period",
+      "debit_before_provider_create": true,
+      "debit_irreversible": true,
+      "duplicate_begin_debits_again": false,
+      "pre_begin_cancellation_uses_attempt": false,
+      "zero_final_seconds_refunds_attempt": false,
+      "zero_final_seconds_customer_consumption": 0,
+      "restore_refills_limit": false,
+      "changed_cap_blocks_new_work": true,
+      "missing_or_changed_caps_block_existing_status_stop_or_settlement": false,
+      "no_work_error": {
+        "code": "voice_start_not_created",
+        "scope": "Only known reserve-stage cap failures for an absent request UUID, after existing-UUID replay. No reservation, begin or provider create exists; native may clear that pending UUID. Begin/transport/storage failures retain their original errors and durable reconciliation."
+      },
+      "availability_contract": "New-call availability requires a compatible nonexhausted start budget. A separate unavailabilityReason reports the connection limit without subtracting customer minutes. Existing call recovery is independent of new-call availability.",
+      "offer_disclosure_required_before_enabled_checkout": true,
+      "selected_connection_limit_disclosed_in_actual_offer": false
+    }
+  },
+  "previous_successful_native_ci_43a327f8": {
+    "source_commit": "43a327f8a89102423e053140c9eecfc5c7c26834",
+    "source_branch": "feature/esha-native-20261115",
+    "branch_head_verified_same_commit": true,
+    "workflow_run_id": 43766450852,
+    "workflow_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43766450852",
+    "workflow_status": "completed",
+    "workflow_conclusion": "success",
+    "workflow_updated_at_utc": "2026-11-15T22:02:52Z",
+    "recorded_at_utc": "2026-11-15T22:04:11Z",
+    "observation_method": "Independent documentation-agent GitHub connector GET readbacks of branch commit, workflow collection and exact run jobs.",
+    "jobs": [
+      {
+        "id": 132972527266,
+        "name": "Analyze, test, and compile Android",
+        "conclusion": "success",
+        "completed_at_utc": "2026-11-15T22:02:51Z",
+        "source_validation_step": "success",
+        "android_debug_apk_and_unsigned_aab_step": "success"
+      },
+      {
+        "id": 132972527584,
+        "name": "Compile iOS Simulator application",
+        "conclusion": "success",
+        "completed_at_utc": "2026-11-15T22:00:50Z",
+        "simulator_compile_and_verify_step": "success"
+      }
+    ],
+    "artifact_bytes_rehashed_by_this_update": false,
+    "scope": "Current published 43a327f8 source only: Android validation/debug APK/unsigned AAB and iOS Simulator jobs succeeded. No exact test count, artifact rehash, signed store upload or validation of subsequent uncommitted AI/native changes is inferred. Prior CI/artifact checkpoints remain separate historical evidence."
   }
 }
