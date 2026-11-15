@@ -36,6 +36,9 @@ SKU = "ESHA_IOS_001"
 PROFILE_NAME = "Esha App Store"
 PROFILE_FILE = "Esha-App-Store.mobileprovision"
 REPORT_FILE = "Esha-iOS-signing-setup-verification.json"
+# CLI 0.69.0 rejects zero. Its retry counter starts at one, so a limit of one
+# makes exactly one HTTP attempt; a 401/5xx response is never retried.
+CLI_SINGLE_ATTEMPT = "1"
 UTC = dt.timezone.utc
 RESOURCE_ID = re.compile(r"[A-Za-z0-9_-]{1,128}\Z")
 PEM_CERTIFICATE = re.compile(
@@ -123,11 +126,20 @@ class ToolRunner:
             except OSError:
                 raise SetupError(f"{stage} could not run its required tool.") from None
             if result.returncode:
-                # Recognize an authorization denial without echoing its body.
                 output = result.stdout + result.stderr
-                if re.search(rb"\b403\b|FORBIDDEN|not authorized", output, re.I):
+                # argparse diagnostics include the option name "unauthorized".
+                # That word alone is not evidence of an Apple HTTP response.
+                if result.returncode == 2 and re.search(rb"(?:^|\n)usage:|error: (?:argument|unrecognized)", output, re.I):
+                    raise SetupError(f"{stage} failed local command validation before an Apple request. No authentication result was obtained.")
+                # Match the pinned CLI's AppStoreConnectApiError rendering,
+                # including the Apple origin, request method and numeric status.
+                status = re.search(
+                    rb"\b(?:GET|POST|PATCH|DELETE) https://api\.appstoreconnect\.apple\.com/\S+ returned (401|403):",
+                    output,
+                )
+                if status and status[1] == b"403":
                     raise SetupError(f"{stage} was denied by the existing API permissions (403).")
-                if re.search(rb"\b401\b|UNAUTHORIZED", output, re.I):
+                if status and status[1] == b"401":
                     raise SetupError(f"{stage} could not authenticate with the configured integration (401).")
                 raise SetupError(f"{stage} failed. Raw tool output is withheld; no retry was attempted.")
             require(len(result.stdout) <= 16_000_000, f"{stage} returned an oversized response.")
@@ -138,8 +150,8 @@ class ToolRunner:
         stage = "Profile creation" if creating else "Apple signing inventory lookup"
         output = self.capture([
             self.cli, *arguments, "--json", "--no-color", "--log-stream", "stderr",
-            "--disable-jwt-cache", "--api-unauthorized-retries", "0",
-            "--api-server-error-retries", "0",
+            "--disable-jwt-cache", "--api-unauthorized-retries", CLI_SINGLE_ATTEMPT,
+            "--api-server-error-retries", CLI_SINGLE_ATTEMPT,
         ], stage, apple=True)
         # The pinned CLI paginates list requests before printing one JSON value.
         # Empty output, concatenated/partial JSON, and errors cannot mean [] here.

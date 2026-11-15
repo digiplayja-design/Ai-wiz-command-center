@@ -2,13 +2,18 @@
 
 `sync_apple_listing.py` prepares or updates the existing **en-US** listing for
 Esha by Korlix. The default invocation reads Apple and writes a local change
-plan. `--apply-draft` applies only the field allowlist below. No Codemagic
-workflow has been added for this helper yet.
+plan. `--apply-draft` applies only the field allowlist below. The manual Codemagic
+workflow `esha-apple-draft-listing` runs that apply mode with the existing Apple
+integration and `esha_release` environment group.
 
-The existing Apple integration returned HTTP 401 in signing-setup build
-`6afa092a90e83b09c4fab31e` from commit
-`be140a0c4bf713218e96f3d03e7631d97054700c`. This helper is prepared for use after
-that authentication issue is resolved. It has not been run against Apple.
+Signing-setup build `6afa092a90e83b09c4fab31e` from commit
+`be140a0c4bf713218e96f3d03e7631d97054700c` was labeled HTTP 401 by the helper,
+but offline reproduction found a local CLI argument failure: CLI 0.69.0 rejects
+zero retry limits, and its option name `--api-unauthorized-retries` was mistaken
+for an HTTP authentication error. That result did not establish invalid Apple
+credentials. CLI calls now use one attempt with no retry and distinguish local
+parser failures from numeric Apple HTTP errors. Live authentication remains
+unverified until a corrected run succeeds. This helper has not run against Apple.
 It does not retry authentication failures or change credentials or permissions.
 
 ## Inputs and exact scope
@@ -44,6 +49,10 @@ Renaming version **1.0 → 1.0.0** is allowed only when the version has no selec
 build and the app has no uploaded builds. Those checks run again immediately
 before the rename. A version already named 1.0.0 can receive the allowed draft
 text changes while it remains Prepare for Submission.
+
+Run and verify the draft synchronization **before the first IPA upload** so the
+prepared 1.0 → 1.0.0 transition can complete. Then use the separate signed-build
+and upload workflows after their Esha profile and identity checks pass.
 
 Every write rechecks identity and draft state and compares current target
 fields with the values observed during planning. Another editor's changes stop

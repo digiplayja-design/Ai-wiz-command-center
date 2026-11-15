@@ -1,0 +1,140 @@
+{
+  "evidence_method": "GitHub connector run/job/artifact metadata and the verifier JSON printed in successful cloud job logs; exact-commit verifier/build source inspected. No artifact binaries or archive manifest downloaded, and no local binary rehash performed.",
+  "run": {
+    "id": 43754059868,
+    "url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43754059868",
+    "status": "completed",
+    "conclusion": "success",
+    "source_commit": "bf4ff498e3aa71eea07d4052d8789cd37ddba7c0",
+    "run_attempt": 1,
+    "created_at": "2026-11-15T19:44:05Z",
+    "updated_at": "2026-11-15T19:51:18Z"
+  },
+  "jobs": [
+    {
+      "id": 132934274890,
+      "name": "Analyze, test, and compile Android",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-15T19:44:29Z",
+      "completed_at": "2026-11-15T19:51:17Z",
+      "head_sha": "bf4ff498e3aa71eea07d4052d8789cd37ddba7c0",
+      "labels": [
+        "ubuntu-24.04"
+      ]
+    },
+    {
+      "id": 132934275227,
+      "name": "Compile iOS Simulator application",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-15T19:44:30Z",
+      "completed_at": "2026-11-15T19:47:32Z",
+      "head_sha": "bf4ff498e3aa71eea07d4052d8789cd37ddba7c0",
+      "labels": [
+        "macos-latest"
+      ]
+    }
+  ],
+  "flutter_tests_passed": 49,
+  "flutter_version": "3.47.9",
+  "artifacts": [
+    {
+      "id": 14177961689,
+      "name": "Esha-iOS-Simulator-only-bf4ff498e3aa71eea07d4052d8789cd37ddba7c0",
+      "size_in_bytes": 58224880,
+      "url": "https://api.github.com/repos/digiplayja-design/Ai-wiz-command-center/actions/artifacts/14177961689",
+      "archive_download_url": "https://api.github.com/repos/digiplayja-design/Ai-wiz-command-center/actions/artifacts/14177961689/zip",
+      "expired": false,
+      "created_at": "2026-11-15T19:47:26Z",
+      "expires_at": "2026-11-29T19:47:22Z",
+      "updated_at": "2026-11-15T19:47:26Z",
+      "digest": "sha256:5395f68a1d528a6396ce798cddc195c909d7c2957fb264c83de6c3a57defeed1",
+      "workflow_run": {
+        "id": 43754059868,
+        "repository_id": 1247079822,
+        "head_repository_id": 1247079822,
+        "head_branch": "feature/esha-native-20261115",
+        "head_sha": "bf4ff498e3aa71eea07d4052d8789cd37ddba7c0"
+      },
+      "upload_log_digest_matches_metadata": true,
+      "upload_log_file_count": 2,
+      "files_supported_by_build_script_and_verifier_logs": [
+        "Esha-iOS-Simulator.zip",
+        "Esha-simulator-verification.json"
+      ]
+    },
+    {
+      "id": 14177527286,
+      "name": "Esha-Android-debug-and-unsigned-bf4ff498e3aa71eea07d4052d8789cd37ddba7c0",
+      "size_in_bytes": 140735130,
+      "url": "https://api.github.com/repos/digiplayja-design/Ai-wiz-command-center/actions/artifacts/14177527286",
+      "archive_download_url": "https://api.github.com/repos/digiplayja-design/Ai-wiz-command-center/actions/artifacts/14177527286/zip",
+      "expired": false,
+      "created_at": "2026-11-15T19:51:14Z",
+      "expires_at": "2026-11-29T19:51:08Z",
+      "updated_at": "2026-11-15T19:51:14Z",
+      "digest": "sha256:0b56c544ef843028c85dd5a701d1e8f0f4a63e51cdad5b4834f354a0b2cfbfd5",
+      "workflow_run": {
+        "id": 43754059868,
+        "repository_id": 1247079822,
+        "head_repository_id": 1247079822,
+        "head_branch": "feature/esha-native-20261115",
+        "head_sha": "bf4ff498e3aa71eea07d4052d8789cd37ddba7c0"
+      },
+      "upload_log_digest_matches_metadata": true,
+      "upload_log_file_count": 4,
+      "files_supported_by_build_script_and_verifier_logs": [
+        "Esha-debug.apk",
+        "Esha-debug-verification.json",
+        "Esha-unsigned-release.aab",
+        "Esha-unsigned-verification.json"
+      ]
+    }
+  ],
+  "reports": [
+    {
+      "artifact": "Esha-debug.apk",
+      "artifact_kind": "android-debug",
+      "source_commit": "bf4ff498e3aa71eea07d4052d8789cd37ddba7c0",
+      "bytes": 165902534,
+      "sha256": "315cc028c75124afca544a54bee7c2fbc8d62c9428e65dd8d90112ee355b8082",
+      "application_id": "com.korlixdeveloper.esha",
+      "platform": "android",
+      "signing": "debug-test-only",
+      "submitted_to_store": false,
+      "job_id": 132934274890,
+      "evidence": "verification JSON printed in successful cloud job log"
+    },
+    {
+      "artifact": "Esha-unsigned-release.aab",
+      "artifact_kind": "android-unsigned",
+      "source_commit": "bf4ff498e3aa71eea07d4052d8789cd37ddba7c0",
+      "bytes": 56352945,
+      "sha256": "32f53120605c7c237880d46cb3f6fab06a9256072830438abac8ee73bf1f2d41",
+      "application_id": "com.korlixdeveloper.esha",
+      "version_name": "1.0.0",
+      "version_code": "1",
+      "platform": "android",
+      "signing": "unsigned-not-uploadable",
+      "submitted_to_store": false,
+      "job_id": 132934274890,
+      "evidence": "verification JSON printed in successful cloud job log"
+    },
+    {
+      "artifact": "Esha-iOS-Simulator.zip",
+      "artifact_kind": "ios-simulator",
+      "source_commit": "bf4ff498e3aa71eea07d4052d8789cd37ddba7c0",
+      "bytes": 58659140,
+      "sha256": "2ed6bbefab169b40aaa80ee7ad91eaa6397dde14a233d7b9f4ba13e4296e4e76",
+      "application_id": "com.korlixdeveloper.esha",
+      "version_name": "1.0.0",
+      "version_code": "1",
+      "platform": "ios-simulator",
+      "signing": "simulator-only-not-an-ipa",
+      "submitted_to_store": false,
+      "job_id": 132934275227,
+      "evidence": "verification JSON printed in successful cloud job log"
+    }
+  ]
+}

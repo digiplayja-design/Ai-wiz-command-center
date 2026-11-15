@@ -157,13 +157,31 @@ of any later distribution or submission steps. The candidate workflow remains
 available for artifact review without uploading.
 
 The existing Apple integration must authenticate successfully and the verified
-Esha profile must be imported before running either signed workflow. The
-observed HTTP 401 from the signing setup has not been resolved by these scripts.
+Esha profile must be imported before running either signed workflow. The prior
+signing setup labeled a local CLI argument failure as HTTP 401: CLI 0.69.0
+rejects zero retry limits, and the option name `--api-unauthorized-retries`
+matched an overly broad error classifier. That failure did not establish an
+Apple authentication rejection. Signing and listing CLI calls now use a limit
+of one, which this CLI defines as one request with no retry, and authentication
+errors require a numeric status from the CLI's Apple HTTP-error rendering.
+Authentication and profile creation still require a successful corrected run.
+
+The regression check uses the actual pinned CLI parser and HTTP session with
+credentials absent and transport mocked. After installing
+`codemagic-cli-tools==0.69.0`, run:
+
+```sh
+python3 -B -m unittest discover -s scripts/esha/tests -p 'test_cli_contract.py' -v
+```
+
+Its single-attempt behavior follows the pinned
+[retry argument validation](https://github.com/codemagic-ci-cd/cli-tools/blob/v0.69.0/src/codemagic/tools/app_store_connect/arguments.py)
+and [HTTP session counter](https://github.com/codemagic-ci-cd/cli-tools/blob/v0.69.0/src/codemagic/apple/app_store_connect/api_session.py).
 
 ## Apple draft listing
 
 Manual workflow: `esha-apple-draft-listing`. It applies the prepared draft fields
-using the existing integration after authentication has been repaired.
+using the existing integration after authentication has been verified.
 
 `sync_apple_listing.py` reads `apps/esha/release/store-metadata.json` and verifies
 Esha's exact Apple identity and editable pending records. Its default mode
