@@ -5,6 +5,7 @@ import vm from 'node:vm';
 import chatQuality from '../chat_quality.cjs';
 import {createTextResponse} from '../korlix_astra.cjs';
 import {resumeTextPolicy} from '../resume_studio/policy.mjs';
+import * as eshaPolicy from '../esha/policy.mjs';
 
 const source = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
 
@@ -12,7 +13,7 @@ const source = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
 function fixture() {
   const calls = [], saved = [], usage = [], routes = {};
   const scope = {
-    ...chatQuality, createTextResponse, resumeTextPolicy,
+    ...chatQuality, ...eshaPolicy, createTextResponse, resumeTextPolicy,
     process: {env: {OPENAI_API_KEY: 'offline-fixture'}},
     console: {error() {}}, supabaseAdmin: {},
     languageMap: {en: {name: 'English', instruction: 'Use English.'}},

@@ -8,6 +8,7 @@ import express from 'express';
 import { PGlite } from '@electric-sql/pglite';
 import { registerChatMemory, prepareChatMemory, memoryAction, rememberText, memoryPrompt } from '../chat_memory/memory.mjs';
 import { resumeTextPolicy } from '../resume_studio/policy.mjs';
+import * as eshaPolicy from '../esha/policy.mjs';
 import chatQuality from '../chat_quality.cjs';
 
 let db, server, base, prompts = [];
@@ -40,7 +41,7 @@ before(async () => {
   const generateRoute = source.slice(source.indexOf('app.post("/api/generate",'), source.indexOf('// CREDIT DISPUTE LETTERS'));
   const context = {
     app, process: { env: { OPENAI_API_KEY: 'fixture-key' } }, console: { error() {} },
-    supabaseAdmin: database, prepareChatMemory, resumeTextPolicy, ...chatQuality,
+    supabaseAdmin: database, prepareChatMemory, resumeTextPolicy, ...chatQuality, ...eshaPolicy,
     languageMap: { en: { name: 'English', instruction: 'Use English' } }, shouldUseLiveSearch: () => false, wantsFile: () => false, calculateCredits: () => 1,
     getAuthenticatedUser: requireUser, getOrCreateProfile: async () => ({ tier: 'basic' }), getOrCreateUsageCounter: async () => ({}), checkUsageAllowed: () => ({ allowed: true }),
     sanitize: x => x, getKorlixUserFacingError: e => e.message, OpenAI: class {}, CHAT_MODEL: 'fixture', CHAT_EFFORT: 'fixture',
