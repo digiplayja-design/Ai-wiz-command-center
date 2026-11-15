@@ -140,6 +140,17 @@
       "errors_returned": 0
     }
   },
+  "latest_native_source_validation": {
+    "source_commit": "6f9d4acc74df8617e6ac05f95fc378cb7d7c4ed1",
+    "flutter_tests_passed": 49,
+    "new_membership_boundary_tests": 13,
+    "flutter_analysis": "no_issues",
+    "dart_format_check": "passed",
+    "membership_scope": "all_beauty_features_require_fresh_same_account_verified_active_trial_or_paid_entitlement",
+    "core_access_at_zero_ai_allowance": true,
+    "device_or_simulator_artifacts_from_this_revision_verified": false,
+    "note": "The artifact hashes above remain evidence for the earlier d97cdda build only."
+  },
   "store_release": {
     "apple_identity_screenshot_evidence": {
       "source": "user_provided_screenshots",
@@ -207,6 +218,27 @@
       "numeric_esha_app_store_id_verified": false,
       "apple_developer_team_id_verified": false,
       "interactive_apple_login_status": "awaiting_two_factor_verification"
+    },
+    "codemagic_release_environment": {
+      "group": "esha_release",
+      "ESHA_APP_STORE_ID": "6835184869",
+      "ESHA_APPLE_TEAM_ID": "FJKJ9MUDZ4",
+      "saved_via_codemagic_ui": true
+    },
+    "codemagic_signing_setup_attempt": {
+      "source_commit": "be140a0c4bf713218e96f3d03e7631d97054700c",
+      "build_id": "6afa092a90e83b09c4fab31e",
+      "build_url": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa092a90e83b09c4fab31e",
+      "workflow": "esha-ios-signing-setup",
+      "status": "failed",
+      "duration_seconds": 51,
+      "failed_stage": "first_apple_inventory_authentication",
+      "http_status": 401,
+      "integration": "Codemagic Korlix AI",
+      "profile_created": false,
+      "apple_app_identity_verified_by_api": false,
+      "credential_environment_mapping_review": "matches_pinned_cli_0.69.0_and_codemagic_documentation",
+      "connection_repair_required": true
     },
     "signed_device_candidates_verified": false,
     "store_records_and_products_verified": false,
