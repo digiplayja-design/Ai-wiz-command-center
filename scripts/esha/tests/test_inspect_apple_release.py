@@ -323,5 +323,69 @@ class ScopeAndPaginationTests(unittest.TestCase):
             self.assertNotIn(PRIVATE, path.read_text())
 
 
+class SubscriptionRouteTests(unittest.TestCase):
+    def setUp(self):
+        self.documents = fixture_documents()
+        self.transport = Transport(self.documents)
+        self.client = inventory.AppleReadClient(lambda: {"Authorization": "Bearer FIXTURE"}, open_request=self.transport)
+        self.client.verify_identity()
+        self.client.read("apps", inventory.APP_ID, "subscriptionGroups")
+        self.client.read("subscriptionGroups", "GROUP", "subscriptions")
+
+    def price_query(self, **changes):
+        query = {"filter[territory]": "USA", "filter[planType]": "UPFRONT", "include": "territory", "limit": "200"}
+        query.update(changes)
+        return urllib.parse.urlencode(query)
+
+    def test_price_points_are_usa_upfront_scoped_and_can_exceed_200_rows(self):
+        path = "/v1/subscriptions/SUB/pricePoints"
+        points = [resource("subscriptionPricePoints", "POINT" + str(i), customerPrice="4.99") for i in range(201)]
+        self.documents[path] = many(*points[:200], total=201,
+                                    next_page=inventory.API_ORIGIN + path + "?" + self.price_query(cursor="two"))
+        self.documents[(path, "two")] = many(points[-1], total=201)
+        fetched = self.client.read("subscriptions", "SUB", "pricePoints")
+        self.assertEqual(len(fetched.values), 201)
+        self.assertIn(("subscriptionPricePoints", "POINT200"), self.client.bound)
+        for url in self.transport.calls[-2:]:
+            query = dict(urllib.parse.parse_qsl(urllib.parse.urlsplit(url).query))
+            self.assertEqual(query["filter[territory]"], "USA")
+            self.assertEqual(query["filter[planType]"], "UPFRONT")
+        # Other inventory collections retain the existing 200-resource cap.
+        self.documents[f"/v1/apps/{inventory.APP_ID}/appInfos"] = many(*[
+            resource("appInfos", "INFO" + str(i), appStoreState="PREPARE_FOR_SUBMISSION") for i in range(201)])
+        with self.assertRaisesRegex(inventory.InventoryError, "resource_count_limit"):
+            self.client.read("apps", inventory.APP_ID, "appInfos")
+
+    def test_price_pagination_cannot_change_plan_or_territory_scope(self):
+        path = "/v1/subscriptions/SUB/pricePoints"
+        for changed in ({"filter[planType]": "MONTHLY"}, {"filter[territory]": "CAN"}):
+            with self.subTest(changed=changed):
+                self.documents[path] = many(resource("subscriptionPricePoints", "POINT", customerPrice="4.99"),
+                    next_page=inventory.API_ORIGIN + path + "?" + self.price_query(cursor="two", **changed))
+                before = len(self.transport.calls)
+                with self.assertRaisesRegex(inventory.InventoryError, "query_scope"):
+                    self.client.read("subscriptions", "SUB", "pricePoints")
+                self.assertEqual(len(self.transport.calls), before + 1)
+                self.assertNotIn(("subscriptionPricePoints", "POINT"), self.client.bound)
+
+    def test_shared_territory_is_terminal_and_valid_under_two_bound_plans(self):
+        self.documents["/v1/subscriptions/SUB/planAvailabilities"] = many(*[
+            relate(resource("subscriptionPlanAvailabilities", identifier, planType=plan, availableInNewTerritories=False),
+                   "subscription", "subscriptions", "SUB")
+            for identifier, plan in (("UPFRONTPLAN", "UPFRONT"), ("INSTALLMENTPLAN", "MONTHLY"))])
+        self.client.read("subscriptions", "SUB", "planAvailabilities")
+        for identifier in ("UPFRONTPLAN", "INSTALLMENTPLAN"):
+            self.documents[f"/v1/subscriptionPlanAvailabilities/{identifier}/availableTerritories"] = many(
+                resource("territories", "USA", currency="USD"))
+            result = self.client.read("subscriptionPlanAvailabilities", identifier, "availableTerritories")
+            self.assertEqual(result.values[0]["id"], "USA")
+        self.assertNotIn(("territories", "USA"), self.client.bound)
+        self.assertFalse(any(key[:2] == ("territories", "USA") for key in self.client.parents))
+        with self.assertRaisesRegex(inventory.InventoryError, "not_bound"):
+            self.client.read("subscriptionPlanAvailabilities", "FOREIGN", "availableTerritories")
+        with self.assertRaises(inventory.InventoryError):
+            self.client.read("territories", "USA", "anything")
+
+
 if __name__ == "__main__":
     unittest.main()

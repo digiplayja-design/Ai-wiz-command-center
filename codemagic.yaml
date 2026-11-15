@@ -354,6 +354,54 @@ workflows:
     artifacts:
       - $CM_BUILD_DIR/apps/esha/artifacts/apple-listing/Esha-Apple-draft-listing-verification.json
 
+  esha-apple-subscription-plan:
+    name: Esha by Korlix — plan Apple monthly subscription
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    working_directory: apps/esha
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    environment:
+      groups:
+        - esha_release
+    scripts:
+      - name: Install the pinned Apple subscription CLI
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.esha-apple-subscription-tools"
+          "$CM_BUILD_DIR/.esha-apple-subscription-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+      - name: Plan Esha's exact monthly subscription without changing Apple
+        script: |
+          set -euo pipefail
+          "$CM_BUILD_DIR/.esha-apple-subscription-tools/bin/python" "$CM_BUILD_DIR/scripts/esha/prepare_apple_subscription.py"
+    artifacts:
+      - $CM_BUILD_DIR/apps/esha/artifacts/apple-subscription/Esha-Apple-subscription-draft-verification.json
+
+  esha-apple-subscription-draft:
+    name: Esha by Korlix — prepare Apple monthly subscription draft
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    working_directory: apps/esha
+    # Manual create-missing draft only: USA, $4.99/month, eligible three-day trial.
+    # Rechecks exact app identity and records every write and scoped readback.
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    environment:
+      groups:
+        - esha_release
+    scripts:
+      - name: Install the pinned Apple subscription CLI
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.esha-apple-subscription-tools"
+          "$CM_BUILD_DIR/.esha-apple-subscription-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+      - name: Create and verify only Esha's missing monthly subscription draft
+        script: |
+          set -euo pipefail
+          "$CM_BUILD_DIR/.esha-apple-subscription-tools/bin/python" "$CM_BUILD_DIR/scripts/esha/prepare_apple_subscription.py" --apply-draft
+    artifacts:
+      - $CM_BUILD_DIR/apps/esha/artifacts/apple-subscription/Esha-Apple-subscription-draft-verification.json
+
   esha-apple-release-inventory:
     name: Esha by Korlix — inspect Apple release readiness
     instance_type: mac_mini_m2

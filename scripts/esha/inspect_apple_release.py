@@ -67,6 +67,8 @@ class Route:
     parent_field: str | None = None
     query: tuple = ()
     included_types: tuple = ()
+    max_items: int = MAX_ITEMS
+    bind_children: bool = True
 
 
 # Only child endpoints of resources already reached through Esha are allowed.
@@ -106,6 +108,18 @@ ROUTES = {
         "subscriptionIntroductoryOffers", parent_field="subscription",
         query=(("filter[territory]", "USA"), ("include", "territory")),
         included_types=("territories",)),
+    # API 4.6 supports these filters; UPFRONT is the ordinary non-installment
+    # plan. Price-point IDs remain opaque and are never traversed as URL paths.
+    ("subscriptions", "pricePoints"): Route(
+        "subscriptionPricePoints", query=(("filter[territory]", "USA"),
+        ("filter[planType]", "UPFRONT"), ("include", "territory")),
+        included_types=("territories",), max_items=2000),
+    ("subscriptions", "planAvailabilities"):
+        Route("subscriptionPlanAvailabilities", parent_field="subscription"),
+    # A territory is global, not exclusively owned by a plan. Read it only from
+    # a bound plan's endpoint and do not register it for subsequent traversal.
+    ("subscriptionPlanAvailabilities", "availableTerritories"):
+        Route("territories", bind_children=False),
 }
 
 
@@ -240,10 +254,11 @@ class AppleReadClient:
                 if route.parent_field:
                     backref = linkage(item, route.parent_field, parent_kind)
                     require(backref is None or backref == parent_id, "resource_parent_mismatch")
-                old_parent = self.parents.get((route.kind, item["id"], parent_kind))
-                require(old_parent is None or old_parent == parent_id, "resource_seen_under_different_parent")
+                if route.bind_children:
+                    old_parent = self.parents.get((route.kind, item["id"], parent_kind))
+                    require(old_parent is None or old_parent == parent_id, "resource_seen_under_different_parent")
                 values.append(item)
-            require(len(values) <= MAX_ITEMS, "resource_count_limit_exceeded")
+            require(len(values) <= route.max_items, "resource_count_limit_exceeded")
             extras = document.get("included", [])
             require(isinstance(extras, list), "invalid_included_resources")
             for item in extras:
@@ -268,9 +283,10 @@ class AppleReadClient:
             url = urllib.parse.urljoin(API_ORIGIN + path, next_link) if next_link else None
         require(total is None or total == len(values), "incomplete_paginated_collection")
         # Bind only after the complete collection and parent relationships pass.
-        for item in values:
-            self.bound.add((route.kind, item["id"]))
-            self.parents[(route.kind, item["id"], parent_kind)] = parent_id
+        if route.bind_children:
+            for item in values:
+                self.bound.add((route.kind, item["id"]))
+                self.parents[(route.kind, item["id"], parent_kind)] = parent_id
         return Fetched(values, included, route.many)
 
 
