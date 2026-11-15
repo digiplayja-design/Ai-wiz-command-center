@@ -6,20 +6,31 @@ the pink Korlix icon and the existing Esha visual direction.
 
 ## Native experience
 
+Discover, the routine planner, My Vanity, Try a Look and live consultations all
+require a signed-in account with a freshly server-verified active Esha trial or
+paid membership. A local purchase result or stored collection does not unlock
+the app. Core features remain usable when an active member's AI allowance is
+exhausted; live consultations also require available service, remaining
+allowance and explicit AI-sharing permission.
+
 - **Discover:** browse the manufacturer-sourced starter catalog, filter product
   categories, inspect product details and open the manufacturer page.
 - **Ask Esha:** create a guided beauty edit around a budget and stated preferences,
-  optionally using products already owned. Live AI consultation uses a separate,
-  verified Esha membership and consultation allowance.
+  optionally using products already owned. Live AI consultations use the same
+  Esha membership and its disclosed consultation allowance.
 - **Try a Look:** explore illustrated lip colors, finishes and lash choices, then
   save a look. This is an illustration; the app does not scan a face or provide a
   camera-based virtual try-on.
-- **My Vanity:** keep favorites, owned products, saved edits and looks. Guest
-  collections stay on the device; signed-in collections can sync to the account
-  with explicit handling of conflicting edits and pending changes.
+- **My Vanity:** keep favorites, owned products, saved edits and looks. Signed-in
+  collections can sync to the account with explicit handling of conflicting
+  edits and pending changes. Existing device-only guest data remains separate
+  and does not provide continued app access without membership.
 - **Account and membership:** sign in, create a shared Korlix account, request a
   password-reset email, restore purchases, manage store subscriptions and request
-  whole-account deletion. Deleting an account does not cancel store renewals.
+  whole-account deletion. These account, recovery, restore, subscription,
+  legal, support and deletion controls remain available without an active
+  subscription, with account verification where needed. Deleting an account
+  does not cancel store renewals.
 
 Unknown product prices display as **Check price** and do not count as zero in a
 claimed shopping budget. Known prices are dated snapshots, not live stock or
@@ -55,14 +66,19 @@ The native app's account screens link to these public backend policy paths:
 The approved U.S. offer is **3 days free for eligible subscribers, then $4.99 per
 month**, automatically renewing through Apple or Google. The native purchase
 sheet must show the actual localized price and the offer available to that store
-account. A store-confirmed purchase starts an eligible trial; installation and
-the device clock do not grant paid access.
+account. A store-confirmed purchase starts an eligible trial; installation,
+account creation and the device clock do not grant app access. A fresh server
+check must verify the active store entitlement for the same signed-in Korlix
+account. Stale or unavailable verification pauses feature access while keeping
+saved collections; account and membership controls remain reachable.
 
-**No trial or monthly consultation counts have been chosen.** The backend has no
-default or unlimited allowance. Its configured counts must be disclosed before
-purchase. Missing counts, output budget, explicit activation or verified store
-configuration keep new purchases and native consultations unavailable. Purchase
-restoration remains separate from opening new sales.
+**No trial or monthly consultation counts, Esha-specific AI model choice or
+output budget have been approved.** The backend has no default or unlimited
+allowance. Its configured counts must be disclosed before purchase. Missing
+counts, output budget, explicit activation or verified store configuration keep
+new purchases and native consultations unavailable. Purchase restoration remains
+available separately from opening new sales; restored feature access still
+requires fresh verification of an active same-account entitlement.
 
 See [the native billing contract](../../backend/esha/billing/README.md) for
 verification, entitlement accounting, refund handling and configuration.
@@ -77,17 +93,29 @@ bash scripts/esha/validate.sh
 ```
 
 This validates source configuration, resolves locked dependencies, checks Dart
-formatting, runs static analysis and executes Flutter tests. Backend billing,
-companion-session, signup, reporting, policy and surrounding-app checks passed
-**121 tests**. The final native validation passed **36 tests**, checked formatting,
-and reported no static-analysis issues. SDK telemetry is explicitly suppressed
-by the Esha validation and build commands.
+formatting, runs static analysis and executes Flutter tests. At the earlier
+build checkpoint below, backend billing, companion-session, signup, reporting,
+policy and surrounding-app checks passed **121 tests**, and native validation
+passed **36 tests**, checked formatting and reported no static-analysis issues.
+The subsequent local app-wide membership correction passed **49 native tests**.
+Those later source changes are not represented by the older artifact hashes.
+SDK telemetry is explicitly suppressed by the Esha validation and build commands.
 
 See [the build and signing guide](../../scripts/esha/README.md) for Android debug
 and unsigned builds, iOS Simulator builds, and the separately configured signed
 store-candidate workflows. Test artifacts are not store submissions.
 
 ## Release checkpoint — November 15, 2026
+
+**Current source revision:** app-wide membership gating and the corresponding
+listing/policy corrections are local release work. The policy wording in
+`backend/esha/policies.mjs` has not been deployed as part of this correction, and
+the updated listing is not published or submitted. AI model/budget approval,
+consultation allowances, store configuration and activation remain unfinished;
+these edits do not establish live AI or a released membership product.
+
+The deployment, build and URL results below describe the **earlier checkpoint**,
+not verification of these later membership-scope changes.
 
 The following database migrations have been applied and their row-level security
 and service-only command permissions checked:
@@ -132,10 +160,11 @@ and account requests returned HTTP 401. No account, purchase or consultation was
 created by these checks. Render's application error-log query since this
 deployment returned no errors.
 
-The following public policy URLs are verified live. The Privacy and Terms pages
+The following public policy URLs were verified at the earlier deployment. The Privacy and Terms pages
 returned HTTP 200 with the expected Esha content and restrictive CSP, `nosniff`,
 `no-store` and `no-referrer` headers; the linked deletion and offer anchors were
-checked in those pages.
+checked in those pages. That check predates the app-wide membership wording now
+in source; deploy and recheck the revised content before submission.
 
 | Public URL | Verified content |
 | --- | --- |
