@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-11-15T22:00:41Z",
+  "evidence_type": "esha_release_owner_approval_and_application",
+  "status": "approved_google_changes_saved_and_read_back_commercial_inclusions_approved_inactive",
+  "source": "Explicit user approval of the prior final requests, relayed by the coordinating agent. No console or production actions performed by the documentation agent.",
+  "prior_evidence": {
+    "file": "google-play-app-created-20261115.json",
+    "sha256": "44b82ad0e25ec2b6544e9cd98afa0916f1f7f8446dc4c8fe645537c24e77685c",
+    "preserved_unchanged": true
+  },
+  "google_play": {
+    "developer_id": "4772708594176030332",
+    "app_id": "4972696331669549016",
+    "package_name": "com.korlixdeveloper.esha",
+    "website_correction": {
+      "exact_url": "https://www.korlixdeveloper.com/support.html",
+      "explicit_user_authorization_received": true,
+      "application_status": "saved_and_read_back",
+      "saved_verified": true,
+      "page_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/store-settings",
+      "saved_url": "https://www.korlixdeveloper.com/support.html",
+      "save_confirmation": "Change saved",
+      "contact_email_preserved": true,
+      "contact_phone_preserved": true,
+      "page_readback_after_modal_closed": true
+    },
+    "health_declaration": {
+      "exact_answer": "My app does not have any health features",
+      "explicit_user_authorization_received": true,
+      "application_status": "saved_and_read_back",
+      "saved_verified": true,
+      "page_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/app-content/health?source=dashboard",
+      "selected_answer_unchanged": true,
+      "save_confirmation": "Change saved. Send for review in Publishing overview."
+    },
+    "unchanged_saved_contact": {
+      "email": "support@korlixdeveloper.com",
+      "phone": "+16148942317",
+      "evidence_file": "google-play-app-created-20261115.json",
+      "scope": "Previously verified contact fields; no new contact write is claimed."
+    },
+    "review_submitted": false,
+    "published": false,
+    "dashboard": {
+      "page_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/app-dashboard",
+      "fresh_reload_verified": true,
+      "setup_progress_displayed": "6 of 11 complete",
+      "completed_setup_tasks": 6,
+      "total_setup_tasks": 11,
+      "scope": "Dashboard setup progress only; not review submission, store readiness or publication."
+    },
+    "support_settings_screenshot": {
+      "path": "/workspace/shared/esha-release-proof/esha-google-support-approved.jpg",
+      "size_bytes": 49711,
+      "sha256": "321de7775e106fd0d1f724d06ff6e471f4b72bd637d9d879b54b487d204aa272",
+      "capture_attribution": "Coordinating agent live console screenshot. File presence, byte length and hash independently verified by documentation agent.",
+      "reported_visible_fields": [
+        "Beauty",
+        "support@korlixdeveloper.com",
+        "+16148942317",
+        "https://www.korlixdeveloper.com/support.html"
+      ]
+    }
+  },
+  "commercial_allowances": {
+    "approved": true,
+    "approval_source": "User explicitly approved the prior final requests, as relayed by the coordinating agent in this session.",
+    "trial": {
+      "voice_minutes": 5,
+      "voice_seconds": 300,
+      "sol_deep_thinking_consultations": 2
+    },
+    "monthly": {
+      "voice_minutes": 30,
+      "voice_seconds": 1800,
+      "sol_deep_thinking_consultations": 10
+    },
+    "voice_model": "gpt-live-1",
+    "deep_thinking_model": "gpt-6.1-sol",
+    "prior_10_trial_120_monthly_proposal_approved": false,
+    "technical_input_output_attempt_session_limits_selected_by_this_receipt": false,
+    "production_applied": false,
+    "service_activated": false,
+    "scope": "Approved commercial inclusions only. Voice duration and Sol consultation counts require compatible implementation, durable accounting, actual store validation and verified deployment before service activation. Consultation inclusions are not an implicit provider-attempt or token budget."
+  },
+  "scope_limit": "Records explicit approvals and fresh successful Google health/HTTPS saves, preserving the prior blocked-action receipt. Commercial inclusions are approved but not applied to production by this record. No review submission, publication, production configuration, paid model call or AI/billing activation is performed or established.",
+  "application_recorded_at_utc": "2026-11-15T22:04:11Z"
+}

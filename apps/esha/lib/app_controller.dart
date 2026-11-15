@@ -8,6 +8,7 @@ import 'models.dart';
 import 'services/korlix_api.dart';
 import 'services/purchases.dart';
 import 'services/vanity_sync.dart';
+import 'voice_controller.dart';
 
 class ChatTurn {
   const ChatTurn(this.role, this.content, {this.requestId, this.prompt});
@@ -63,7 +64,11 @@ class EshaController extends ChangeNotifier {
     required this.api,
     required this.sync,
     required this.purchases,
+    EshaVoiceController? voiceController,
   }) {
+    voice =
+        voiceController ?? EshaVoiceController(api: api, purchases: purchases);
+    voice.addListener(_changed);
     sync.addListener(_changed);
     purchases.addListener(_changed);
     api.onSessionInvalidated = () {
@@ -74,6 +79,7 @@ class EshaController extends ChangeNotifier {
   final KorlixApi api;
   final VanitySync sync;
   final EshaPurchases purchases;
+  late final EshaVoiceController voice;
   bool initializing = true,
       authBusy = false,
       chatBusy = false,
@@ -112,6 +118,7 @@ class EshaController extends ChangeNotifier {
   }
 
   void _resetAccountPrivacy() {
+    voice.setAudioConsent(false);
     _aiConsentUser = null;
     _reporting.clear();
     _reportReceipts.clear();
@@ -267,6 +274,8 @@ class EshaController extends ChangeNotifier {
     _pendingConsultation = null;
     chatBusy = false;
     authError = null;
+    // Turn off audio and send the account-bound stop before discarding auth.
+    await voice.stop();
     final closing = api.signOut();
     purchases.accountChanged();
     unawaited(sync.attach(null));
@@ -628,6 +637,8 @@ class EshaController extends ChangeNotifier {
     ++_accountEpoch;
     sync.removeListener(_changed);
     purchases.removeListener(_changed);
+    voice.removeListener(_changed);
+    voice.dispose();
     sync.dispose();
     purchases.dispose();
     api.dispose();

@@ -25,6 +25,7 @@ test('Esha policy and deletion notices are public, readable HTML without account
     assert.match(html, /Esha by Korlix/);
     assert.match(html, /support@korlixdeveloper\.com/);
     assert.match(html, /href="\/esha\/privacy#deletion"/);
+    assert.match(html, /New membership purchases and live voice are currently unavailable/);
     assert.doesNotMatch(html, /<script\b|<iframe\b|<input\b/i);
     if (path.endsWith('privacy')) {
       assert.match(html, /id="deletion"/);
@@ -32,9 +33,21 @@ test('Esha policy and deletion notices are public, readable HTML without account
       assert.match(html, /does not mean deletion has already finished/);
       assert.match(html, /Hash-only records/);
       assert.match(html, /Korlix and OpenAI/);
+      assert.match(html, /Optional live voice, when enabled/);
+      assert.match(html, /microphone audio and conversation transcripts are processed by Korlix and OpenAI/);
+      assert.match(html, /Before each call<\/strong>, you must explicitly allow audio and conversation sharing/);
+      assert.match(html, /Deep thinking during a call is a separate, optional choice that starts off/);
+      assert.match(html, /device permission alone does not start a call/);
+      assert.match(html, /does not promise zero provider retention/);
+      assert.doesNotMatch(html, /does not capture photographs, microphone recordings or location/);
     } else {
       assert.match(html, /3 days free for eligible subscribers, then \$4\.99 USD per month/);
       assert.match(html, /configured trial and monthly consultation counts before enabling a new purchase/);
+      assert.match(html, /Planned launch inclusions, once enabled/);
+      assert.match(html, /5 voice minutes and 2 Sol deep-thinking consultations/);
+      assert.match(html, /30 voice minutes and 10 Sol deep-thinking consultations/);
+      assert.match(html, /voice time includes silence and time waiting for answers/);
+      assert.doesNotMatch(html, /does not provide camera analysis, medical assessment, voice consultation/);
       assert.match(html, /Restore purchases/);
       assert.match(html, /Manage subscription/);
       assert.match(html, /itunes\/dev\/stdeula/);

@@ -2,6 +2,8 @@ import {brainRuntimeContext} from './brain_voice/context.mjs';
 import {createBrainBilling} from './brain_voice/billing/routes.mjs';
 import {createEshaBilling} from './esha/billing/routes.mjs';
 import {createEshaAi} from './esha/billing/ai.mjs';
+import {ESHA_AI_ROLE_POLICY} from './esha/billing/catalog.mjs';
+import {createEshaVoice} from './esha/billing/voice_routes.mjs';
 import {registerEshaPolicyRoutes} from './esha/policies.mjs';
 import {checkBrainModelAccess} from './brain_voice/model_access.mjs';
 import {createBrainVoice, brainSpeechConfig, isBrainVoice, brainProfile, BRAIN_PROFILES, BRAIN_MODEL, BRAIN_EFFORT, BRAIN_PROTOCOL} from './brain_voice/core.mjs';
@@ -355,12 +357,18 @@ registerAutoEmailMailboxRoutes(app,{requireUser,database:supabaseAdmin});
 const automatedSupport = createAutomatedSupportRuntime({app,requireUser,database:supabaseAdmin});
 const brainBilling = createBrainBilling({database:supabaseAdmin,requireUser});
 brainBilling.register(app);
+let eshaVoice;
+const eshaAiRole = process.env.KORLIX_ESHA_AI_POLICY === ESHA_AI_ROLE_POLICY ? 'deep_thinking' : undefined;
 const eshaBilling = createEshaBilling({
   database: supabaseAdmin,
   requireUser,
-  ...createEshaAi(),
+  aiRole: eshaAiRole,
+  voiceReady: () => eshaVoice?.ready() === true,
+  ...createEshaAi({role: eshaAiRole}),
 });
 eshaBilling.register(app);
+eshaVoice = createEshaVoice({database: supabaseAdmin, requireUser, billing: eshaBilling});
+eshaVoice.register(app);
 registerAutoEmailOutboxRoutes(app,{requireUser,database:supabaseAdmin,loadAgentProfile:korlixAgentLoadProfileV1});
 
 const videoAccess = createVideoAccess({database:supabaseAdmin});

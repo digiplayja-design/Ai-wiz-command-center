@@ -6,8 +6,14 @@ import astra from '../../korlix_astra.cjs';
 export const ESHA_BUNDLE = 'com.korlixdeveloper.esha';
 export const ESHA_CATALOG_VERSION = 'esha_monthly_v1';
 export const ESHA_AI_ROLE_POLICY = 'conversation_and_deep_thinking_v1';
-// Owner-selected roles use distinct APIs. Resolving Live's model does not make
-// its unimplemented voice transport or duration budget ready for activation.
+// Owner-approved commercial allowances. Engineering token/attempt/session bounds
+// remain explicit configuration and are not inferred from these quantities.
+export const ESHA_APPROVED_ALLOWANCES = Object.freeze({
+  trial: Object.freeze({voiceSeconds: 300, deepConsultations: 2}),
+  monthly: Object.freeze({voiceSeconds: 1800, deepConsultations: 10}),
+});
+// Owner-selected roles use distinct APIs. Resolving Live's model does not prove
+// the provider duration bound or make the prepared voice integration live.
 export const ESHA_AI_ROLES = Object.freeze({
   conversation: Object.freeze({requestedModel: 'Highest live conversation model OpenAI has',
     model: 'gpt-live-1', reasoningEffort: null, api: 'live', transport: 'webrtc'}),
@@ -42,6 +48,13 @@ function positiveInteger(value) {
   return typeof value === 'string' && /^[1-9]\d{0,5}$/.test(value) ? Number(value) : null;
 }
 export function allowanceConfiguration(env = process.env) {
+  if (env.KORLIX_ESHA_AI_POLICY === ESHA_AI_ROLE_POLICY) {
+    const trial = ESHA_APPROVED_ALLOWANCES.trial.deepConsultations;
+    const monthly = ESHA_APPROVED_ALLOWANCES.monthly.deepConsultations;
+    const configured = (env.KORLIX_ESHA_TRIAL_CONSULTATIONS === undefined || env.KORLIX_ESHA_TRIAL_CONSULTATIONS === String(trial)) &&
+      (env.KORLIX_ESHA_MONTHLY_CONSULTATIONS === undefined || env.KORLIX_ESHA_MONTHLY_CONSULTATIONS === String(monthly));
+    return {configured, trial: configured ? trial : null, monthly: configured ? monthly : null};
+  }
   const trial = positiveInteger(env.KORLIX_ESHA_TRIAL_CONSULTATIONS);
   const monthly = positiveInteger(env.KORLIX_ESHA_MONTHLY_CONSULTATIONS);
   const configured = trial !== null && monthly !== null;

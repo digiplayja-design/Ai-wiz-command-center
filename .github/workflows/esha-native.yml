@@ -6,12 +6,30 @@ on:
     paths:
       - 'apps/esha/**'
       - 'scripts/esha/**'
+      - 'backend/esha/**'
+      - 'backend/test/esha*.mjs'
+      - 'backend/package.json'
+      - 'backend/package-lock.json'
+      - 'backend/server.js'
+      - 'backend/korlix_astra.cjs'
+      - 'backend/chat_quality.cjs'
+      - 'backend/resume_studio/policy.mjs'
+      - 'supabase/migrations/*_esha_*.sql'
       - '.github/workflows/esha-native.yml'
       - 'codemagic.yaml'
   pull_request:
     paths:
       - 'apps/esha/**'
       - 'scripts/esha/**'
+      - 'backend/esha/**'
+      - 'backend/test/esha*.mjs'
+      - 'backend/package.json'
+      - 'backend/package-lock.json'
+      - 'backend/server.js'
+      - 'backend/korlix_astra.cjs'
+      - 'backend/chat_quality.cjs'
+      - 'backend/resume_studio/policy.mjs'
+      - 'supabase/migrations/*_esha_*.sql'
       - '.github/workflows/esha-native.yml'
       - 'codemagic.yaml'
 
@@ -28,6 +46,31 @@ env:
   CI: 'true'
 
 jobs:
+  backend:
+    name: Esha backend and SQL checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Check out Esha source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Set up Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install locked backend dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+      - name: Verify Esha policy, voice lifecycle, and SQL accounting
+        run: |
+          node --check server.js
+          node --test test/esha*.test.mjs
+
   android:
     name: Analyze, test, and compile Android
     runs-on: ubuntu-24.04

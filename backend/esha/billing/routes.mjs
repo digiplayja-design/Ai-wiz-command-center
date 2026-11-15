@@ -1,4 +1,4 @@
-import {ESHA_BUNDLE, ESHA_PRODUCT, UUID, EshaBillingError, allowanceConfiguration, nativeAiConfiguration, nativeAiConfigured,
+import {ESHA_BUNDLE, ESHA_PRODUCT, ESHA_AI_ROLE_POLICY, UUID, EshaBillingError, allowanceConfiguration, nativeAiConfiguration, nativeAiConfigured,
   publicCatalog, productFor, eshaAccountId, digest, fail} from './catalog.mjs';
 import {eshaProviders} from './providers.mjs';
 import {loadEshaCatalog, consultationInput, consultationPrompt, consultationResult, ESHA_RESULT_FORMAT} from './consultation.mjs';
@@ -9,11 +9,13 @@ function statusCode(error) {
   return Number.isInteger(value) && value >= 400 && value < 600 ? value : 503;
 }
 export function createEshaBilling({database, requireUser, environment = process.env,
-  provider = eshaProviders(environment), store, generate, countInputTokens, catalog, autoStart = true} = {}) {
+  provider = eshaProviders(environment), store, generate, countInputTokens, catalog, autoStart = true,
+  aiRole, voiceReady = () => false} = {}) {
   let serverCatalog = catalog;
   if (!serverCatalog) { try { serverCatalog = loadEshaCatalog(); } catch { /* Fail closed in catalog and AI readiness. */ } }
   const storageReady = !!(store || database);
-  const aiReady = () => nativeAiConfigured(environment) && !!environment.OPENAI_API_KEY &&
+  // aiRole is a trusted server constructor option, never a request-body field.
+  const aiReady = () => nativeAiConfigured(environment, {role: aiRole}) && !!environment.OPENAI_API_KEY &&
     typeof generate === 'function' && typeof countInputTokens === 'function' && storageReady && !!serverCatalog;
   const call = store || async function(actor, action, data = {}) {
     if (!database) fail('Esha membership storage is temporarily unavailable.', 503, 'storage_unavailable');
@@ -30,7 +32,12 @@ export function createEshaBilling({database, requireUser, environment = process.
   function catalogFor(providerName) {
     const result = publicCatalog(providerName, environment, provider.ready(providerName));
     result.consultationEnabled = aiReady();
-    result.purchasesEnabled = result.purchasesEnabled && aiReady();
+    const combinedPolicy = environment.KORLIX_ESHA_AI_POLICY === ESHA_AI_ROLE_POLICY;
+    result.voiceEnabled = combinedPolicy && voiceReady() === true;
+    result.purchasesEnabled = combinedPolicy
+      ? environment.KORLIX_ESHA_BILLING_ENABLED === 'true' && result.storeConfigurationVerified &&
+        provider.ready(providerName) && aiReady() && result.voiceEnabled
+      : result.purchasesEnabled && aiReady();
     result.state = result.purchasesEnabled ? 'ready' : 'planned';
     return result;
   }
@@ -102,7 +109,7 @@ export function createEshaBilling({database, requireUser, environment = process.
     const reservation = await call(user.id, 'reserve', {request_id: input.requestId, input_hash: input.inputHash});
     if (reservation.replay) return {requestId: input.requestId, ...reservation.result,
       usage: (await call(user.id, 'snapshot')).allowance};
-    const configuration = nativeAiConfiguration(environment);
+    const configuration = nativeAiConfiguration(environment, {role: aiRole});
     try {
       const prompt = consultationPrompt(input.data, serverCatalog);
       const request = eshaResponseRequest(configuration, prompt, ESHA_RESULT_FORMAT);
@@ -212,5 +219,5 @@ export function createEshaBilling({database, requireUser, environment = process.
   }
   const timer = autoStart ? setInterval(() => void syncDue(), 60000) : null;
   timer?.unref();
-  return {register, catalog: catalogFor, snapshot, sync, refresh, consult, syncDue, stop() { clearInterval(timer); }};
+  return {register, ready: aiReady, catalog: catalogFor, snapshot, sync, refresh, consult, syncDue, stop() { clearInterval(timer); }};
 }

@@ -5,6 +5,7 @@ import '../models.dart';
 import '../services/vanity_sync.dart';
 import 'account.dart';
 import 'brand.dart';
+import 'voice.dart';
 
 export 'brand.dart' show eshaTheme;
 
@@ -49,16 +50,29 @@ class _EshaHomeState extends State<EshaHome> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // A permission dialog can be inactive without being backgrounded. Stop on
+    // hidden/paused/detached, then require an explicit user action to resume.
+    if (state != AppLifecycleState.inactive || !c.voice.requestingMicrophone) {
+      c.voice.setForeground(state == AppLifecycleState.resumed);
+    }
     c.purchases.setForeground(state == AppLifecycleState.resumed);
     if (state == AppLifecycleState.resumed && !c.initializing) {
       c.purchases.refresh();
     }
   }
 
-  void go(int index) => setState(() => selected = index);
-  void membership() => Navigator.of(context).push(
-    MaterialPageRoute<void>(builder: (_) => MembershipScreen(controller: c)),
-  );
+  void go(int index) {
+    if (selected == 1 && index != 1 && c.voice.canStop) c.voice.pause();
+    setState(() => selected = index);
+  }
+
+  void membership() {
+    if (c.voice.canStop) c.voice.pause();
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => MembershipScreen(controller: c)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: c,
@@ -81,11 +95,14 @@ class _EshaHomeState extends State<EshaHome> with WidgetsBindingObserver {
                     tooltip: c.session == null
                         ? 'Sign in and beauty profile'
                         : 'Account and beauty profile',
-                    onPressed: () => Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => AccountScreen(controller: c),
-                      ),
-                    ),
+                    onPressed: () {
+                      if (c.voice.canStop) c.voice.pause();
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => AccountScreen(controller: c),
+                        ),
+                      );
+                    },
                     icon: const Icon(Icons.person_outline),
                   ),
                 ),
@@ -369,6 +386,7 @@ class ConsultScreen extends StatefulWidget {
 
 class _ConsultScreenState extends State<ConsultScreen> {
   bool live = false;
+  bool voice = false;
   final question = TextEditingController();
   late int _questionEpoch;
   @override
@@ -384,6 +402,7 @@ class _ConsultScreenState extends State<ConsultScreen> {
       _questionEpoch = widget.controller.accountEpoch;
       question.clear();
       live = false;
+      voice = false;
     }
   }
 
@@ -410,20 +429,34 @@ class _ConsultScreenState extends State<ConsultScreen> {
           children: [
             ChoiceChip(
               label: const Text('Guided beauty edit'),
-              selected: !live,
-              onSelected: (_) => setState(() => live = false),
+              selected: !live && !voice,
+              onSelected: (_) => setState(() {
+                live = false;
+                voice = false;
+              }),
               padding: const EdgeInsets.all(10),
             ),
             ChoiceChip(
               label: const Text('Chat with Esha'),
-              selected: live,
-              onSelected: (_) => setState(() => live = true),
+              selected: live && !voice,
+              onSelected: (_) => setState(() {
+                live = true;
+                voice = false;
+              }),
+              padding: const EdgeInsets.all(10),
+            ),
+            ChoiceChip(
+              label: const Text('Voice with Esha'),
+              selected: voice,
+              onSelected: (_) => setState(() => voice = true),
               padding: const EdgeInsets.all(10),
             ),
           ],
         ),
         const SizedBox(height: 22),
-        if (live)
+        if (voice)
+          EshaVoicePanel(controller: c.voice)
+        else if (live)
           ..._liveChat(c)
         else ...[
           EshaPanel(

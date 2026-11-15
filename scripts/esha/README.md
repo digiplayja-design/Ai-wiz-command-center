@@ -78,15 +78,24 @@ activated membership billing.
 ## Automatic validation
 
 `.github/workflows/esha-native.yml` runs on pushes and pull requests changing
-Esha's app, its build scripts, its workflow, or `codemagic.yaml`. It also supports
-manual dispatch. It uses read-only repository permission and no signing or store
-credentials. The Linux job analyzes and tests the app, then compiles Android.
-The macOS job independently compiles iOS for the simulator.
+Esha's app, backend, tests, migrations, relevant dependency files, build scripts,
+workflow, or `codemagic.yaml`. It also supports manual dispatch. It uses read-only
+repository permission and no signing or store credentials. The prepared backend
+job uses Node 22, locked dependencies with lifecycle scripts disabled, a server
+syntax check and `node --test test/esha*.test.mjs`. The separate Linux native job
+analyzes and tests the app, then compiles Android. The macOS job independently
+compiles iOS for the simulator. Adding the backend job is not evidence that a
+new remote run has passed.
 
-The latest verified [GitHub run 43764794330](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43764794330)
-at source `b17af5ad3195fefb1092b7da67f7619bdba1a3da` completed successfully,
-confirmed by fresh GitHub API readback. This verifies that source only; no
-forthcoming commit or artifact hash is covered by that result.
+The latest verified [GitHub run 43766450852](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43766450852)
+at published source `43a327f8a89102423e053140c9eecfc5c7c26834` completed
+successfully. Independent GitHub connector reads matched that source to the
+feature branch and verified both Android validation/build and iOS Simulator
+jobs. The workflow was last updated at **22:02:52 UTC on November 15**.
+This covers that published source only; ongoing uncommitted AI/allowance changes
+require their own validation and **fresh signed native builds**. No artifact
+hash or signed store upload is inferred from this CI result. The earlier
+successful `b17af5a` run remains in the release index.
 
 The earlier [GitHub run 43762836653](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43762836653)
 at source `afce6caf8499b211fbd980295be6589034798ef2` completed successfully at
@@ -194,21 +203,22 @@ Three app-content declarations were saved with fresh success notices:
 | Government apps | No |
 | Financial features | My app doesn't provide any financial features |
 
-The financial form required no additional documentation. The health form was
-prepared with **“My app does not have any health features”** through the regional
-requirements step, but **Save was rejected by automatic approval review** because
-the exact declaration requires explicit user authorization. Source-code evidence
-did not supply that authorization. It remains **unsaved**, with no retry; this
-pending authorization is separate from the HTTPS website correction below.
-Saved declarations have not been submitted for review or published.
+The financial form required no additional documentation. Following the user's
+explicit approval, the health answer **“My app does not have any health features”**
+is now saved, with fresh readback of **“Change saved. Send for review in
+Publishing overview.”** The earlier blocked save is retained in the historical
+receipt. These saved declarations have not been submitted for review or published.
 
 Contact email **support@korlixdeveloper.com** and phone **+16148942317** are
-saved. Google normalized the website to **http://www.korlixdeveloper.com/support.html**.
-The correction to **https://www.korlixdeveloper.com/support.html** remains
-pending: automatic approval review rejected the write and one evidence-based
-retry for insufficient specific user approval. Read-only verification of the
-exact HTTPS page did not authorize the write. The saved URL remains **HTTP**;
-no further retry is planned without explicit authorization for that exact URL.
+preserved. After explicit approval of the exact URL,
+**https://www.korlixdeveloper.com/support.html** was saved successfully. Fresh
+readback after the settings modal closed confirmed HTTPS and the unchanged
+contact fields. The earlier HTTP normalization and rejected correction attempts
+remain historical. The [supplemental approval/application receipt](../../apps/esha/release/release-approval-application-20261115.json)
+records both successful saves and the support-settings screenshot proof.
+
+A fresh dashboard reload shows **6 of 11 complete**. This is setup progress;
+remaining assets, app-content requirements and release checks still apply.
 
 The [Play app-signing page](https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/keymanagement)
 shows Google-managed app signing in use for the exact package and **0%** install
@@ -621,16 +631,79 @@ back for version 1.0.0**, which remains **Prepare for Submission**. Existing dem
 access is tested. Agreement status and real-device StoreKit checks remain
 unverified even though both uploaded builds have processed successfully.
 
-The owner's updated direction is the highest live conversation model, now
-identified as **GPT-Live-1 (`gpt-live-1`)** through the **Live API**, with
-**`gpt-6.1-sol`** retained for deep thinking. The previous **10-trial /
-120-monthly** consultation proposal was not approved. Live voice transport,
-usage accounting and commercial allowances remain separate readiness work;
-this model selection does not activate service. See the separately maintained
-[inactive AI preparation](../../backend/esha/billing/AI_OPTION.md). The current
-Live/Sol preparation passed **51 targeted offline tests** and an independent
-code review. The earlier Sol/backend checkpoint passed **50 targeted tests**
-before this Live selection. Neither result establishes a working voice session.
+The owner's updated direction is **GPT-Live-1 (`gpt-live-1`)** through the
+**Live API**, with **`gpt-6.1-sol`** retained for deep thinking. The user has now
+approved **5 voice minutes plus 2 Sol deep-thinking consultations for the trial**
+and **30 voice minutes plus 10 Sol deep-thinking consultations per month**.
+See the [supplemental approval/application receipt](../../apps/esha/release/release-approval-application-20261115.json).
+The earlier 10-trial/120-monthly proposal was not approved. The native WebRTC
+client, authenticated Esha voice routes, server sideband, trusted Sol/high routing
+and durable seconds/delegation accounting are now implemented in prepared source.
+They are not deployed or activated. The direct WebSocket dependency is pinned
+to `ws` **8.23.0**; the shared OpenAI SDK remains locked at **6.39.0**.
+See the [inactive AI preparation](../../backend/esha/billing/AI_OPTION.md).
+
+The real voice configuration keeps paid creation disabled even when environment
+flags are set. Remaining gates include a verified provider-enforced duration
+bound for the selected WebRTC path, explicit input/output/attempt/session limits,
+review and application of the prepared database migrations, genuine device and
+store validation, and fresh signed artifacts. Commercial inclusion approval does
+not choose those engineering limits. The earlier **51-test** Live/Sol adapter
+and **50-test** Sol/backend checkpoints remain historical; neither validates
+the later transport and native implementation.
+
+### Prepared voice behavior and evidence
+
+Each call requires fresh audio-sharing consent and a separate optional choice
+for deep thinking. Pause, Stop, backgrounding and account changes turn off local
+audio and clear those choices. The device stores only account-bound request UUIDs
+for unfinished calls and bounded recent-call recovery; saved-answer reads cannot
+create another call or generate another answer. Fractional final voice duration
+is preserved, and silence/waiting time counts. The provider's 15-second startup
+exposure is reserved separately and is not invented as minimum user consumption.
+
+Server recovery retains uncertain holds, retries exact terminal evidence after
+transient storage failure and reattaches only to close an existing session.
+Observer attachment races and repeated close-error feedback are covered by
+offline regressions. Completed Sol answers remain available through the owning
+call's status, including answers that finish after audio ends. Historical answer
+retrieval must not replace the current membership period's allowance.
+
+The [release evidence index](../../apps/esha/release/build-verification.json)
+records the current preparation and its verification scope. Final local checks
+passed **109 backend tests** across nine Esha test files under Node **22.23.5**,
+after a clean 363-package locked install with lifecycle scripts disabled;
+`node --check server.js` also passed. That aggregate already includes the policy,
+SQL, Sol, transport and route suites; overlapping earlier counts are not added.
+Flutter **3.47.9** / Dart **3.13.7** analysis found no issues, and the full local
+native suite passed **76 tests**: 49 existing tests and 27 voice tests, including
+the renewal allowance correction. These are actual local executions, separate
+from physical audio and signed artifact verification.
+
+Remote CI for the new implementation remains **pending a new commit and run**.
+No new remote result or signed artifact is established by the preceding
+`43a327f8` run or the
+previously uploaded iOS build 2. Actual Live audio, provider billing and device
+behavior still require their own verification after the activation gates are
+resolved.
+
+
+### Optional-voice policy amendment — prepared, not deployed
+
+The local [policy routes](../../backend/esha/policies.mjs) now state that new
+membership purchases and live voice remain unavailable. They describe optional
+voice only when enabled: microphone audio and conversation transcripts go to
+Korlix and OpenAI after fresh consent for each call, with a separate optional
+choice for deep thinking. Pause/Stop turn off local audio while service closure
+and usage reconciliation may still be pending. The planned 5-minute/2-Sol trial
+and 30-minute/10-Sol monthly inclusions are conditional on enabled services and
+the actual purchase offer. Existing whole-app membership, offer, policy URLs,
+delete-account links and provider-retention qualification are preserved.
+
+The existing policy-route test passed **1 test** and `git diff --check` passed.
+This amendment has **not been deployed**; the earlier live-policy receipt does
+not verify the new voice wording. No provider no-training or zero-retention
+promise was added, and no purchase or voice feature was activated.
 
 ## Implementation references
 

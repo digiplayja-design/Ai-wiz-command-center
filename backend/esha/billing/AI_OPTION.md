@@ -4,10 +4,12 @@ The owner clarified the conversational requirement as **“the highest live
 conversation model OpenAI has”**, while retaining **Sol 6.1 for deep thinking**.
 Current official documentation resolves that voice role to **`gpt-live-1`**. This
 supersedes the earlier ambiguous “GPT 2.5 conversational” wording and inactive Luna
-proposal. Both model identities are resolved; the Live integration is unimplemented.
-The previous 10-trial/120-monthly consultation proposal was not approved. No
-commercial voice/consultation allowance or input/output/attempt budget is selected
-or defaulted by this change.
+proposal. Both model identities are resolved. The owner has now approved **five
+Live minutes plus two deep-thinking consultations during the trial**, and **30
+Live minutes plus ten deep-thinking consultations per month**: exactly 300/1800
+voice seconds and 2/10 successful consultations. The previous 10/120 consultation
+proposal was not approved and is superseded. Engineering input/output, provider
+attempt and per-session bounds remain explicit settings without approved defaults.
 No production environment was changed, no deployment or migration was applied,
 and no live model call was made during this preparation.
 
@@ -15,13 +17,13 @@ and no live model call was made during this preparation.
 
 | Role | Resolved model | API and transport selection |
 | --- | --- | --- |
-| `conversation` | `gpt-live-1` | `api: live`, `transport: webrtc`; resolved but unimplemented and disabled |
+| `conversation` | `gpt-live-1` | `api: live`, `transport: webrtc`; prepared and disabled |
 | `deep_thinking` | `gpt-6.1-sol` | `api: responses`, `transport: https`, explicit `reasoning.effort: high` |
 
 [GPT-Live-1](https://developers.openai.com/api/docs/models/gpt-live-1) is OpenAI's
 premier full-duplex conversational voice model. Its API is `/v1/live/sessions`;
 it does not support the Responses or Realtime endpoints. It does not provide
-Structured Outputs. This selection adds no voice session creation or audio code.
+Structured Outputs. Voice accounting preparation does not authorize paid sessions.
 
 [GPT-6.1 Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol) supports
 the Responses API and Structured Outputs. Its documented reasoning efforts are
@@ -36,36 +38,45 @@ prepared policy. `nativeAiConfiguration(environment, {role: 'deep_thinking'})`
 and `createEshaAi({environment, role: 'deep_thinking'})` prepare the Sol request
 and transport. A role must be an exact string supplied by trusted server routing.
 Omitting a role selects the resolved Live conversation role and fails closed
-because this code has no Live transport or duration ledger. Existing token and
-attempt settings cannot activate Live, even if all flags are present. Unknown policies/roles
+because the Responses adapter cannot serve Live. Existing token and attempt
+settings cannot activate Live, even if all flags are present. Unknown policies/roles
 and mixed legacy `KORLIX_ESHA_TEXT_MODEL` or `KORLIX_ESHA_REASONING_EFFORT`
 overrides also fail closed. A client's `role`, `mode`, or `model` field cannot
 select this adapter through the current consultation endpoint.
 
-**This is not a completed, activatable two-role integration.** The shipping route
-has no server role selection and remains disabled under the prepared policy. The
-existing provider-attempt table constraint and debit RPC permit only Astra/max or
-Luna/low, so they reject Sol/high before recording a debit. Both guards are
-unchanged. A follow-up ledger migration and trusted role routing are required;
-the adapter must never be used to bypass the committed debit.
+**The native and backend integration is implemented in prepared source and remains
+inactive.** Trusted server routing selects Sol/high for Esha's consultation
+adapter; the authenticated voice routes connect the Live transport to the
+durable voice ledger. The original provider-attempt migration admits only
+Astra/max and Luna/low. The additive
+`20261115220600_esha_sol_deep_attempts.sql` prepares Sol/high compatibility while
+retaining those legacy paths and all existing debit guards. Sol requires the
+approved 2/10 successful-consultation grants; voice-linked requests also recheck
+their consented, active session, original period and input hash at debit time.
+The migrations are applied only to offline PGlite test databases in this work;
+production activation remains blocked. No adapter may bypass the committed debit.
 
 ## Live session contract and spending blocker
 
-The proposed native path is WebRTC media plus an Esha-controlled server sideband.
+The implemented native path uses WebRTC media plus an Esha-controlled server sideband.
 The trusted server creates `/v1/live/sessions` with the native SDP offer, `store:
 false`, and `delegation: {type: 'client'}`; it keeps the API key off the device.
 The native peer uses the `oai-events` data channel, applies the returned SDP answer,
 and waits for `session.started`. Audio travels on WebRTC tracks. The sideband uses
-`wss://api.openai.com/v1/live/sessions/{session_id}/attach`. Frontend command
-permissions must be restricted explicitly because omission allows all commands.
-These are proposed integration requirements, not implemented behavior.
+`wss://api.openai.com/v1/live/sessions/{session_id}/attach`. The prepared request
+explicitly permits only `session.close` from the frontend data channel; the
+device cannot change models, instructions or delegation. Authenticated routes
+require a verified Korlix account and retain account/session ownership checks.
+Native audio sharing requires fresh consent before each call, with separate
+optional deep-thinking consent. Stop, pause, backgrounding and account changes
+stop local audio and clear those choices; resume does not reuse consent.
 
 Client delegation lets Esha apply its own token counting, reservation, durable
 attempt debit and result validation to every Sol call. The server accumulates
 transcript deltas, deduplicates `session.delegation.created` by session/delegation
 ID, then returns validated context with `session.commentary.append` carrying the
-matching delegation ID. Its 500-token content cap needs an explicit bounded spoken
-summary. Live may paraphrase that context; structured product cards remain based
+matching delegation ID. The spoken handoff is bounded to 384 UTF-8 bytes, below
+the provider's 500-token ceiling. Live may paraphrase that context; structured product cards remain based
 on the separately validated Sol result. See [delegation](https://developers.openai.com/api/docs/guides/live-delegation)
 and [WebRTC](https://developers.openai.com/api/docs/guides/voice-webrtc?api=live).
 
@@ -80,28 +91,97 @@ See [voice costs](https://developers.openai.com/api/docs/guides/voice-latency-co
 [create schema](https://developers.openai.com/api/reference/resources/live/methods/create)
 does not expose a caller-selected maximum duration or expiry. Session resources
 return a server-assigned `expires_at`, and `expired` is a documented close reason,
-but the inspected documentation does not state a numeric lifetime usable as an
-Esha budget guarantee. An in-process sideband timer cannot enforce a hard cap if
+but the inspected documentation does not establish a numeric lifetime usable as
+an Esha budget guarantee for the selected WebRTC path. The create reference's SIP
+ringing/connected-call limits are not treated as a verified WebRTC budget bound.
+An in-process sideband timer cannot enforce a hard cap if
 Esha crashes while native WebRTC remains connected. Before activation, establish
 a verified provider-side bound or another proven bounded primary-connection
 design, with durable reservations, independent closure and conservative recovery.
 Do not infer Live's lifetime from Realtime documentation. See [session lifecycle](https://developers.openai.com/api/docs/guides/live-conversations).
 
 The inspected backend SDK is OpenAI 6.39.0; offline inspection finds no `client.live`
-resource. The Flutter app has no WebRTC dependency, microphone permissions or audio
-controller. A future Esha-specific transport must address these gaps without
-silently upgrading shared app behavior. No voice-minute defaults are added here.
+resource. Esha therefore uses a fixed-host HTTP create request and a direct
+WebSocket transport with `ws` pinned to **8.23.0**, without upgrading the shared
+OpenAI SDK. Creation has no automatic retry. The real `voiceConfiguration()`
+returns `configured: false`, `voiceEnabled: false` and
+`hardDurationBoundVerified: false`; environment flags cannot override that
+provider-bound blocker. Enabled fixtures are injected only in offline tests.
+The approved commercial voice-minute defaults are not evidence that the provider
+lifetime is bounded.
+
+The retry watcher starts as soon as a provider session is known, including
+recovered stop requests. It can persist known identity and retry the exact final
+usage event after a transient storage failure without creating another session.
+An observer that disconnects before attachment finishes is rejected; close
+commands are bounded per observer to avoid an error/close feedback loop. A status
+read after a worker restart can reattach only to close the existing session and
+reconcile its usage. It cannot resume unmonitored media or authorize paid creation.
+
+## Durable voice reservation and settlement
+
+`20261115220519_esha_live_voice_ledger.sql` adds Esha-only period budgets, session
+records and immutable session/delegation-to-consultation mappings. Its RPC takes
+the same account row lock as membership refunds and consultation spending.
+`voice_ledger.mjs` wraps this RPC and cannot create a provider session.
+
+Reserve an explicit engineering duration bound before creation. A confirmed
+`begin.started: true` authorizes one creation attempt; a duplicate or lost debit
+reply cannot authorize another. At most one unfinished session per account is
+permitted, including uncertain requests across billing-period changes. The ledger
+stores request hashes and accounting metadata, without SDP, audio or transcripts.
+
+Immediately persist a returned provider session ID, even if expiry is not yet
+known. Identity-only attachment stays `starting`; verified startup expiry can
+later fill the null field once. Known expiry cannot be changed or erased, and no
+expiry is invented from local timing. Provider-finalization validation uses the
+terminal event and exact session identity, not a session object's status label.
+
+Cumulative usage is monotonic and stored in milliseconds, rounding reported
+fractions upward. Reserve at least 15 seconds for startup exposure, but settle
+customer voice minutes only from trusted terminal cumulative duration: 5.8 seconds
+settles as 5.8, and consistent zero usage remains zero. A final duration below an
+earlier observed total is inconsistent; it retains the hold for reconciliation.
+Final settlement records the reported amount once and returns unused customer
+allowance reservation. This does not assert a provider refund or a minimum billed
+duration for short sessions. Provider startup costs remain distinct from consumed
+customer minutes. An actual overshoot is recorded honestly, flags
+closure and prevents further overspending; it is never truncated to an allowance.
+
+Only cancellation before `begin` can confirm zero provider usage without a final
+provider event. After `begin`, a timer, mute, disconnected socket, missing response,
+pause, or stop acknowledgement cannot release the hold. Native pause/background
+requests closure; resume requires reconciliation and a fresh request ID. Missing
+finalization remains uncertain until trusted evidence resolves it. This retention
+is deliberately conservative and is not a substitute for the hard duration bound.
+
+Voice-triggered Sol requires `deepThinkingConsent: true` captured before that
+session starts; the default is false. The server binds each delegation to the
+validated consultation input hash and one durable consultation UUID. Retries reuse
+the mapping, and the Sol debit checks that its session is still active and
+consented. Missing consent or exhausted deep allowance cannot trigger generation.
+If an already authorized Sol response finishes after voice closes, its committed
+validated answer remains recoverable through that voice session's status. The
+`deepResults` list returns only the owning session's matching delegation/request
+hashes, newest first with a stable UUID tie-breaker, and at most ten results. It
+contains request IDs, answers and product IDs; it adds no transcript exposure.
+
+All new tables have RLS enabled with no public client policies. The RPC is
+security-invoker with an empty search path and service-role-only execution. Account
+deletion cascades to voice/delegation accounting records.
 
 ## Explicit limits and legacy compatibility
 
-All of these settings remain required; no values are chosen here:
+Engineering settings remain required without defaults. Under the exact new role
+policy, commercial counts default to the approved values; explicit conflicting
+commercial environment settings fail closed. Legacy no-policy behavior is unchanged.
 
 | Setting | Environment variable |
 | --- | --- |
 | Total counted request input | `KORLIX_ESHA_MAX_INPUT_TOKENS` |
 | Total generated output, including reasoning | `KORLIX_ESHA_MAX_OUTPUT_TOKENS` |
-| Successful consultations during a verified trial | `KORLIX_ESHA_TRIAL_CONSULTATIONS` |
-| Successful consultations per verified monthly period | `KORLIX_ESHA_MONTHLY_CONSULTATIONS` |
+| Successful consultations during a verified trial: approved 2 | `KORLIX_ESHA_TRIAL_CONSULTATIONS` (optional exact override under new policy) |
+| Successful consultations per verified monthly period: approved 10 | `KORLIX_ESHA_MONTHLY_CONSULTATIONS` (optional exact override under new policy) |
 | Provider generation attempts during a verified trial | `KORLIX_ESHA_TRIAL_PROVIDER_ATTEMPTS` |
 | Provider generation attempts per verified monthly period | `KORLIX_ESHA_MONTHLY_PROVIDER_ATTEMPTS` |
 
@@ -166,23 +246,26 @@ execution are restricted to `service_role`; the RPC is security-invoker with an
 empty search path. The ledger stores hashes, model/budget metadata and counts,
 without copying questions or answers. Account deletion cascades to these records.
 
-## Required integration before activation
+## Remaining verification and activation gates
 
-1. Implement the selected Live/WebRTC transport and authenticated Esha-only
-   voice route, with client delegation to the selected Sol/high backend. Both
-   model identities are settled; no model substitution is required.
-2. Choose the still-unapproved voice-minute and consultation allowances, plus
-   explicit input/output, provider-attempt and session limits. Establish the
-   independently enforceable duration bound described above. No previous proposal
-   or test fixture supplies owner approval for those values.
-3. Prepare and verify a narrowly scoped follow-up migration admitting Sol/high
-   in the provider-attempt table and debit RPC while preserving all account,
-   period, expiry, verification, idempotency, cap and irreversible-debit guards.
-4. Integrate trusted role selection into the consultation route without losing
-   input-token counting, reservation, debit-before-generation, replay and result
-   validation. Add a separate durable voice-duration ledger and native microphone,
-   playback, interruption and session-closure handling; existing consultation
-   counts cannot account for voice time. Validate the genuine flow on devices.
+1. Establish the independently enforceable duration bound described above. The
+   wired transport, local timers and approved commercial allowances do not prove
+   that bound; paid voice creation remains disabled in production configuration.
+2. Select and validate explicit input/output, provider-attempt and per-session
+   engineering limits. The approved commercial inclusions do not choose these
+   technical limits, and fixture values are not production settings.
+3. Review and apply the prepared additive voice and Sol migrations through the
+   authorized deployment process while preserving account, period, expiry,
+   verification, idempotency, cap and irreversible-debit guards.
+4. Verify the locally tested native source in its own Android/iOS CI builds, then test
+   genuine devices, microphone permission, interruption, pause/background,
+   consent resets, account changes and final usage recovery. Perform separately
+   authorized paid-provider and store sandbox validation only after the guards
+   and technical limits are ready. Offline mocks do not validate live audio,
+   provider billing, store purchases or a provider-enforced duration bound.
+5. Produce fresh signed native artifacts, verify the amended policy deployment
+   and update the applicable store disclosures and genuine screenshots. The
+   previously uploaded iOS build 2 does not contain this later voice work.
 
 Keep Esha generation disabled until the complete selected policy, limits,
 compatible serving code and database guards are ready. An older worker has no
@@ -190,26 +273,43 @@ provider-attempt guard. This file does not authorize deployment, activation or
 database changes. Store price, three-day trial and whole-app membership are
 unchanged.
 
-Offline tests use the real SQL in PGlite and mocked provider calls:
+Offline backend tests use the real SQL in PGlite and mocked provider calls:
 
 ```sh
 cd backend
-node --test test/esha_sol_preparation.test.mjs test/esha_ai_budget.test.mjs test/esha_native_billing.test.mjs
+node --test test/esha*.test.mjs
 ```
+
+At the November 15 local checkpoint, a clean locked install with lifecycle
+scripts disabled installed 363 packages. Node **22.23.5** passed
+`node --check server.js` and **109 tests across nine Esha files** (104 top-level
+and five nested, zero failures). This is the authoritative aggregate and already
+includes the policy, ledger, Sol, transport and route suites. Flutter **3.47.9** /
+Dart **3.13.7** separately passed analysis with no issues and **76 native tests**
+(49 existing plus 27 voice). Historical answer retrieval is covered by a
+regression ensuring it cannot replace renewed current-period allowance.
+Remote CI for this source, fresh signed artifacts, physical audio and real paid
+provider behavior remain unverified. These local results do not activate service.
 
 They cover Sol/high request preparation, resolved but inactive Live selection,
 rejection of Live by the Responses adapter even with forged ready flags,
 exact trusted role selection, unchanged legacy behavior, strict output format,
 count/generation context parity, real SDK retry suppression, and the shipping
-route's refusal to run a client-selected role. The real SQL also verifies that
-Sol remains blocked by the current ledger model guard without consuming a debit.
+route's refusal to run a client-selected role. The baseline-only SQL test verifies
+that Sol is blocked before its migration; the additive-migration tests verify
+Sol/high admission, irreversible attempts and rejection after voice closure.
+Voice tests exercise actual SQL reservation, replay, lost-commit replies,
+cumulative fractional settlement, startup exposure, overshoot, refunds, ownership,
+renewal, consent, delegation identity, post-closure answer recovery, permissions
+and account deletion.
 Existing ledger tests cover disabled configuration, retry suppression,
 per-period limits, concurrent debit requests, replay, ambiguous failures, timeouts,
 invalid output, refund races, cross-account access, RLS/RPC permissions and legacy
 migration behavior. PGlite serializes its local connection; the real PostgreSQL
 RPC's account row lock is the cross-worker serialization boundary.
 
-All numeric fixture values are test data, not production settings or approved
-allowances. Official references: [GPT-6.1 Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol),
+Commercial fixture quantities reflect the approved 300/1800 seconds and 2/10
+consultations. Engineering fixture values remain test data, not production
+settings or approved limits. Official references: [GPT-6.1 Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol),
 [GPT-6 compatibility](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-6.1-sol),
 and [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs).

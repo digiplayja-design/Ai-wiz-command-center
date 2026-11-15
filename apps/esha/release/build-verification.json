@@ -111,15 +111,35 @@
     }
   },
   "latest_cross_platform_native_validation": {
-    "source_commit": "b17af5ad3195fefb1092b7da67f7619bdba1a3da",
-    "workflow_run_id": 43764794330,
-    "workflow_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43764794330",
+    "source_commit": "43a327f8a89102423e053140c9eecfc5c7c26834",
+    "source_branch": "feature/esha-native-20261115",
+    "branch_head_verified_same_commit": true,
+    "workflow_run_id": 43766450852,
+    "workflow_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43766450852",
     "workflow_status": "completed",
     "workflow_conclusion": "success",
-    "recorded_at_utc": "2026-11-15T21:50:02Z",
-    "observation_method": "Coordinating agent fresh GitHub API readback of workflow status and source commit.",
+    "workflow_updated_at_utc": "2026-11-15T22:02:52Z",
+    "recorded_at_utc": "2026-11-15T22:04:11Z",
+    "observation_method": "Independent documentation-agent GitHub connector GET readbacks of branch commit, workflow collection and exact run jobs.",
+    "jobs": [
+      {
+        "id": 132972527266,
+        "name": "Analyze, test, and compile Android",
+        "conclusion": "success",
+        "completed_at_utc": "2026-11-15T22:02:51Z",
+        "source_validation_step": "success",
+        "android_debug_apk_and_unsigned_aab_step": "success"
+      },
+      {
+        "id": 132972527584,
+        "name": "Compile iOS Simulator application",
+        "conclusion": "success",
+        "completed_at_utc": "2026-11-15T22:00:50Z",
+        "simulator_compile_and_verify_step": "success"
+      }
+    ],
     "artifact_bytes_rehashed_by_this_update": false,
-    "scope": "Workflow-level success for b17af5a only. No per-job test count, downloaded artifact hash, signed store upload or success of a subsequent commit is inferred. The prior afce6caf success and bf4ff49 independently rehashed artifact checkpoint remain separate historical evidence."
+    "scope": "Current published 43a327f8 source only: Android validation/debug APK/unsigned AAB and iOS Simulator jobs succeeded. No exact test count, artifact rehash, signed store upload or validation of subsequent uncommitted AI/native changes is inferred. Prior CI/artifact checkpoints remain separate historical evidence."
   },
   "source_equivalence": {
     "validated_commit": "bf4ff498e3aa71eea07d4052d8789cd37ddba7c0",
@@ -175,12 +195,13 @@
   "remaining_release_work": [
     "Verify the prepared Apple subscription with real sandbox purchase/restore and reviewer access. The approved review contact is complete; preserved demo credentials have not been tested.",
     "Capture genuine native iPhone/iPad feature screenshots and a subscription review screenshot; complete required owner declarations and agreements before submission.",
-    "Complete Esha Play visual assets and remaining app-content declarations. Exact listing text is saved and independently reread; ads, government-app and financial-features declarations are saved. The no-health-features declaration remains prepared and unsaved after automatic approval review rejected Save; exact declaration authorization is pending. Separately, the saved website remains http://www.korlixdeveloper.com/support.html and its exact HTTPS correction also requires specific authorization.",
+    "Complete Esha Play visual assets and the remaining app-content/release requirements. Exact listing text, ads/government/financial/health declarations and the HTTPS support URL are saved; the fresh dashboard reports 6 of 11 setup tasks complete. No review or publication has occurred.",
     "Provide/import the dedicated Esha Android upload key, verify its certificate fingerprint, and complete Play subscription/base-plan/trial and signed-release setup.",
-    "Prepare the identified GPT-Live-1 Live API voice transport and seconds-based accounting, with Sol 6.1 retained for deep thinking; choose still-unapproved commercial allowances and provider limits. No 10/120 allowance approval or service activation exists.",
+    "Resolve the Live/WebRTC provider-duration bound, select explicit technical input/output/attempt/session limits and review/apply the prepared voice/Sol migrations. Native transport, trusted routing and durable accounting are implemented and locally tested; preserve disabled purchases and voice until complete service and store verification.",
     "Verify purchase/restore and same-account entitlement behavior before activation; the live catalog remains planned with purchases and consultations disabled.",
     "Assemble the app version, subscription and group in the same review submission only after remaining readiness work; build 2 is already selected on the editable app version.",
-    "Refresh prelaunch wording on the active member Discover screen when checkout is enabled; its current text still describes membership as being prepared."
+    "Refresh prelaunch wording on the active member Discover screen when checkout is enabled; its current text still describes membership as being prepared.",
+    "Verify remote Android/iOS CI and fresh signed native candidates for the locally tested voice implementation. Existing iOS build 2 and successful CI at 43a327f8 cover earlier source only."
   ],
   "earlier_verified_ios_upload": {
     "evidence_file": "ios-upload-build-1-20261115.json",
@@ -415,14 +436,19 @@
     "conversation_resolution": "identified_from_current_official_OpenAI_documentation_by_coordinating_agent",
     "deep_thinking_model_confirmed": "gpt-6.1-sol",
     "deep_thinking_api": "Responses API",
-    "targeted_offline_backend_tests_passed": 51,
+    "targeted_offline_backend_tests_passed": 109,
     "independent_code_review_completed": true,
     "paid_provider_calls_made": false,
     "prior_10_trial_120_monthly_allowance_approved": false,
-    "commercial_allowances_selected": false,
+    "commercial_allowances_selected": true,
     "activation_authorized_by_this_record": false,
     "preparation_document": "backend/esha/billing/AI_OPTION.md",
-    "scope": "Supersedes the earlier unresolved conversational-model request. The 51 targeted offline tests and independent code review cover the prepared role policy and adapter rejection guards. Voice transport, seconds-based usage accounting and commercial allowance selection remain prerequisites; no deployment, migration or activation is established by this record. The earlier 50-test Sol/backend checkpoint remains in earlier_owner_ai_direction."
+    "scope": "Model identities and commercial inclusions are approved. Native WebRTC, authenticated transport, trusted Sol role routing and durable accounting are implemented and locally verified in voice_implementation_preparation. Earlier 51-test role-policy evidence is historical. Production provider-duration bounds, explicit technical limits, migration/deployment, real device/store validation and fresh signed artifacts remain unresolved; remote CI for this source is pending.",
+    "approved_commercial_allowances_evidence_file": "release-approval-application-20261115.json",
+    "earlier_role_policy_backend_tests_passed": 51,
+    "voice_transport_implemented": true,
+    "durable_voice_and_sol_accounting_implemented": true,
+    "native_tests_passed": 76
   },
   "google_play_app_creation": {
     "evidence_file": "google-play-app-created-20261115.json",
@@ -465,17 +491,21 @@
     "contact": {
       "email": "support@korlixdeveloper.com",
       "phone": "+16148942317",
-      "website_url_saved": "http://www.korlixdeveloper.com/support.html",
+      "website_url_saved": "https://www.korlixdeveloper.com/support.html",
       "fields_saved": true,
-      "website_normalized_by_google": true,
+      "website_normalized_by_google": false,
       "https_correction": {
         "requested_url": "https://www.korlixdeveloper.com/support.html",
-        "status": "blocked_by_automatic_approval_review_pending_explicit_exact_url_authorization",
-        "write_succeeded": false,
+        "status": "saved_and_read_back_after_explicit_authorization",
+        "write_succeeded": true,
         "automatic_approval_rejections": 2,
         "https_target_verified_read_only": true,
         "further_retries_planned": false,
-        "scope": "The saved URL remains HTTP. A read-only HTTPS page check and existing repository usage did not satisfy automatic approval review for this specific write."
+        "scope": "Exact HTTPS support URL saved and read back after explicit user authorization. Email and phone preserved. The two earlier approval rejections remain historical evidence in the prior receipt.",
+        "explicit_user_authorization_received": true,
+        "approval_evidence_file": "release-approval-application-20261115.json",
+        "save_confirmation": "Change saved",
+        "current_evidence_file": "release-approval-application-20261115.json"
       }
     },
     "default_store_listing": {
@@ -547,18 +577,31 @@
         "page_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/app-content/health?source=dashboard",
         "selected_answer": "My app does not have any health features",
         "prepared_through_step": "regional_requirements",
-        "saved": false,
-        "status": "prepared_unsaved_automatic_approval_review_blocked",
-        "blocked_action": "Save the exact no-health-features declaration",
-        "approval_review_reason": "Specific user authorization is required for this legal-style declaration; source-code evidence does not authorize the submission.",
-        "explicit_exact_declaration_authorization_pending": true,
-        "retry_attempted": false,
-        "scope": "The form selection was prepared, but its save was rejected. No saved health declaration is established."
+        "saved": true,
+        "status": "saved_and_read_back_after_explicit_authorization",
+        "explicit_exact_declaration_authorization_pending": false,
+        "scope": "The exact no-health answer was saved and read back after explicit user authorization. The prior blocked save remains historical evidence; no review submission or publication.",
+        "explicit_user_authorization_received": true,
+        "approval_evidence_file": "release-approval-application-20261115.json",
+        "save_confirmation": "Change saved. Send for review in Publishing overview.",
+        "current_evidence_file": "release-approval-application-20261115.json",
+        "earlier_blocked_action": "Save the exact no-health-features declaration",
+        "earlier_approval_review_reason": "Specific user authorization is required for this legal-style declaration; source-code evidence does not authorize the submission.",
+        "earlier_retry_attempted": false
       },
       "review_submitted": false,
       "published": false,
-      "scope": "Three declarations are saved in the console; health remains prepared and unsaved. This does not complete the other app-content requirements or submit changes for review."
-    }
+      "scope": "Ads, government, financial and health declarations are saved. Health was applied after the later explicit authorization recorded in the supplemental receipt. Other app-content requirements remain incomplete; no review submission or publication."
+    },
+    "dashboard": {
+      "page_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/app-dashboard",
+      "fresh_reload_verified": true,
+      "setup_progress_displayed": "6 of 11 complete",
+      "completed_setup_tasks": 6,
+      "total_setup_tasks": 11,
+      "scope": "Dashboard setup progress only; not review submission, store readiness or publication."
+    },
+    "current_application_evidence_file": "release-approval-application-20261115.json"
   },
   "google_play_app_signing": {
     "page_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/keymanagement",
@@ -586,5 +629,188 @@
     "workflow_conclusion": "cancelled",
     "observation_method": "Coordinating agent GitHub API readback.",
     "scope": "Historical cancelled workflow, superseded for latest successful CI by the separate b17af5a run."
+  },
+  "latest_owner_approval": {
+    "evidence_file": "release-approval-application-20261115.json",
+    "recorded_at_utc": "2026-11-15T22:00:41Z",
+    "google_exact_https_url_approved": true,
+    "google_exact_no_health_answer_approved": true,
+    "google_application_status": "both_approved_changes_saved_and_read_back",
+    "commercial_allowances": {
+      "approved": true,
+      "approval_source": "User explicitly approved the prior final requests, as relayed by the coordinating agent in this session.",
+      "trial": {
+        "voice_minutes": 5,
+        "voice_seconds": 300,
+        "sol_deep_thinking_consultations": 2
+      },
+      "monthly": {
+        "voice_minutes": 30,
+        "voice_seconds": 1800,
+        "sol_deep_thinking_consultations": 10
+      },
+      "voice_model": "gpt-live-1",
+      "deep_thinking_model": "gpt-6.1-sol",
+      "prior_10_trial_120_monthly_proposal_approved": false,
+      "technical_input_output_attempt_session_limits_selected_by_this_receipt": false,
+      "production_applied": false,
+      "service_activated": false,
+      "scope": "Approved commercial inclusions only. Voice duration and Sol consultation counts require compatible implementation, durable accounting, actual store validation and verified deployment before service activation. Consultation inclusions are not an implicit provider-attempt or token budget."
+    },
+    "application_recorded_at_utc": "2026-11-15T22:04:11Z",
+    "google_dashboard_setup_progress": "6 of 11 complete"
+  },
+  "previous_successful_native_ci_b17af5a": {
+    "source_commit": "b17af5ad3195fefb1092b7da67f7619bdba1a3da",
+    "workflow_run_id": 43764794330,
+    "workflow_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43764794330",
+    "workflow_status": "completed",
+    "workflow_conclusion": "success",
+    "recorded_at_utc": "2026-11-15T21:50:02Z",
+    "observation_method": "Coordinating agent fresh GitHub API readback of workflow status and source commit.",
+    "artifact_bytes_rehashed_by_this_update": false,
+    "scope": "Workflow-level success for b17af5a only. No per-job test count, downloaded artifact hash, signed store upload or success of a subsequent commit is inferred. The prior afce6caf success and bf4ff49 independently rehashed artifact checkpoint remain separate historical evidence."
+  },
+  "voice_policy_amendment": {
+    "status": "prepared_and_tested_not_deployed",
+    "recorded_at_utc": "2026-11-15T22:11:41Z",
+    "source_file": "backend/esha/policies.mjs",
+    "source_sha256": "ebd922d7e8791ef256cdb1ada443fb08c45ac2ea404edd3dc7979dcf7ea09941",
+    "routes_preserved": [
+      "/esha/privacy",
+      "/esha/terms",
+      "/esha/privacy#deletion"
+    ],
+    "changes": [
+      "Current new-purchase and live-voice unavailability is explicit.",
+      "Optional enabled voice discloses microphone audio and transcripts processed by Korlix and OpenAI.",
+      "Audio sharing requires fresh consent for every call; deep thinking is a separate optional per-call choice.",
+      "Planned trial5-minute/2-Sol and monthly30-minute/10-Sol inclusions are conditional on enabled services and the actual offer.",
+      "Stale blanket no-microphone/no-voice claims removed; provider-retention qualification retained without new no-training or zero-retention promises."
+    ],
+    "validation": {
+      "command": "node --test test/esha_policy_routes.test.mjs",
+      "working_directory": "backend",
+      "tests_passed": 1,
+      "tests_failed": 0,
+      "diff_check_passed": true,
+      "scope": "Existing public policy-route test covers HTTP availability/security, consent and conditional allowance copy, preserved offer/deletion links and removal of stale voice claims."
+    },
+    "deployed": false,
+    "live_content_verified": false,
+    "billing_or_ai_activated": false,
+    "last_live_policy_evidence_file": "live-policy-check-20261115.json",
+    "scope": "Local policy amendment only. The earlier live policy receipt remains the production evidence and does not verify this amended content."
+  },
+  "voice_implementation_preparation": {
+    "status": "local_backend_and_native_validation_passed_remote_ci_pending",
+    "recorded_at_utc": "2026-11-15T22:20:56Z",
+    "source_scope": "Current prepared worktree source; commit and remote workflow result not yet assigned to this checkpoint.",
+    "source_commit": null,
+    "models": {
+      "conversation": {
+        "model": "gpt-live-1",
+        "api": "Live API",
+        "transport": "WebRTC with server sideband"
+      },
+      "deep_thinking": {
+        "model": "gpt-6.1-sol",
+        "api": "Responses API",
+        "reasoning_effort": "high",
+        "role_selected_by": "trusted server construction"
+      }
+    },
+    "commercial_allowances": {
+      "trial": {
+        "voice_seconds": 300,
+        "deep_consultations": 2
+      },
+      "monthly": {
+        "voice_seconds": 1800,
+        "deep_consultations": 10
+      },
+      "approval_evidence_file": "release-approval-application-20261115.json",
+      "production_applied": false
+    },
+    "implemented": [
+      "Native audio-only WebRTC, authenticated voice routes and fixed-host server transport; no provider key on the device.",
+      "Fresh per-call audio consent and separate optional deep-thinking consent; stop, pause, background and account changes clear consent and local audio.",
+      "Durable voice reservation, one-attempt creation authorization, cumulative fractional settlement and independent Sol consultation/provider-attempt accounting.",
+      "Recovery of known sessions only to request closure and reconcile trusted final usage, including attachment races and transient storage failure; no recovery create.",
+      "Account-bound pending request UUID and at most 20 recent call UUIDs; saved answers are retrieved without regeneration or local answer-text persistence.",
+      "Validated deepResults scoped to the owning account/session; historical result reads cannot replace current-period allowance."
+    ],
+    "dependencies": {
+      "direct_ws": "8.23.0",
+      "locked_openai_sdk": "6.39.0",
+      "shared_openai_sdk_upgraded": false
+    },
+    "verification": {
+      "backend": {
+        "command": "node --test test/esha*.test.mjs",
+        "working_directory": "backend",
+        "node_version": "22.23.5",
+        "dependency_install": "npm ci --ignore-scripts --no-audit --no-fund",
+        "locked_packages_installed": 363,
+        "server_syntax_check": "node --check server.js",
+        "server_syntax_check_passed": true,
+        "test_files": 9,
+        "tests_passed": 109,
+        "top_level_tests": 104,
+        "nested_tests": 5,
+        "tests_failed": 0,
+        "duration_ms": 6653.058209,
+        "log_sha256": "f1a7a42384b5afe3d38f71634a349feb6116ac96a668f48ffe0b3072f858ad41",
+        "scope": "Authoritative all-Esha aggregate executed by the CI agent; log totals independently read back. Includes policy, SQL, Sol, transport and route tests; overlapping 26/18/51/50-test checkpoints are not added to this total. Real SQL runs only in offline PGlite with mocked providers."
+      },
+      "native": {
+        "flutter_version": "3.47.9",
+        "dart_version": "3.13.7",
+        "analysis_command": "flutter analyze --no-pub",
+        "analysis_result": "No issues found",
+        "test_command": "flutter test --no-pub --reporter expanded",
+        "tests_passed": 76,
+        "existing_tests": 49,
+        "new_voice_tests": 27,
+        "tests_failed": 0,
+        "scope": "Native agent actually executed local analysis and tests after the historical-usage renewal correction, including real plugin method-channel audio-only permission denial. This does not verify Gradle/Xcode release artifacts or physical audio."
+      },
+      "independent_wire_contract_review_completed": true,
+      "remote_ci": {
+        "status": "pending_new_commit_and_run",
+        "source_commit": null,
+        "workflow_run_id": null,
+        "prior_success_commit": "43a327f8a89102423e053140c9eecfc5c7c26834",
+        "prior_success_run_id": 43766450852,
+        "scope": "The prior successful workflow does not validate this later voice implementation."
+      },
+      "physical_device_audio_verified": false,
+      "paid_provider_call_performed": false,
+      "new_signed_native_artifact_verified": false,
+      "new_store_upload_performed": false
+    },
+    "runtime_gates": {
+      "production_voice_configuration_enabled": false,
+      "production_voice_configuration_configured": false,
+      "hard_duration_bound_verified": false,
+      "environment_flags_can_override_voice_blocker": false,
+      "provider_bound_scope": "The selected Live/WebRTC path has no verified independent duration guarantee within the Esha budget; SIP limits are not assumed to establish one.",
+      "technical_input_output_attempt_and_session_limits_selected": false,
+      "prepared_migrations": [
+        "20261115220519_esha_live_voice_ledger.sql",
+        "20261115220600_esha_sol_deep_attempts.sql"
+      ],
+      "production_migrations_applied": false,
+      "production_deployed": false,
+      "service_activated": false
+    },
+    "remaining_gates": [
+      "Establish a verified independent provider duration bound and explicit technical limits.",
+      "Review and apply prepared database guards through an authorized deployment, then verify complete service configuration.",
+      "Verify this source in remote Android/iOS CI, produce fresh signed artifacts and perform physical permission/interruption/audio validation.",
+      "Complete separately authorized real provider and store sandbox verification before activation.",
+      "Deploy and read back the optional-voice policy amendment and finish applicable store disclosures and genuine screenshots."
+    ],
+    "scope": "Implemented and locally tested preparation only. Production voice, purchases, provider calls, migrations, deployment and fresh signed uploads are not established by this checkpoint."
   }
 }

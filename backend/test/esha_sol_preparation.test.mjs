@@ -7,10 +7,10 @@ import {createEshaBilling} from '../esha/billing/routes.mjs';
 import {consultationInput, consultationPrompt, loadEshaCatalog, ESHA_RESULT_FORMAT} from '../esha/billing/consultation.mjs';
 
 const role = 'deep_thinking';
-// Offline test values only: no commercial allowances or token budgets are defaults.
+// Commercial counts reflect the approved policy; engineering budgets are fixtures.
 const environment = {KORLIX_ESHA_AI_POLICY: ESHA_AI_ROLE_POLICY,
   KORLIX_ESHA_MAX_INPUT_TOKENS: '8192', KORLIX_ESHA_MAX_OUTPUT_TOKENS: '4096',
-  KORLIX_ESHA_TRIAL_CONSULTATIONS: '2', KORLIX_ESHA_MONTHLY_CONSULTATIONS: '4',
+  KORLIX_ESHA_TRIAL_CONSULTATIONS: '2', KORLIX_ESHA_MONTHLY_CONSULTATIONS: '10',
   KORLIX_ESHA_TRIAL_PROVIDER_ATTEMPTS: '3', KORLIX_ESHA_MONTHLY_PROVIDER_ATTEMPTS: '6',
   KORLIX_ESHA_NATIVE_AI_ENABLED: 'true', KORLIX_ESHA_BILLING_ENABLED: 'true',
   KORLIX_ESHA_APPLE_PRODUCTS_READY: 'true', KORLIX_ESHA_GOOGLE_PRODUCTS_READY: 'true',
@@ -81,13 +81,12 @@ test('unknown policies, unknown roles and conflicting legacy overrides cannot se
   }
 });
 
-test('Sol preparation chooses no allowances or budgets and requires every existing activation and cap setting', () => {
+test('Sol preparation requires every engineering budget and activation setting independently of approved allowances', () => {
   const empty = nativeAiConfiguration({KORLIX_ESHA_AI_POLICY: ESHA_AI_ROLE_POLICY}, {role});
   assert.equal(empty.model, 'gpt-6.1-sol'); assert.equal(empty.configured, false);
   for (const field of ['maxInputTokens', 'maxOutputTokens', 'trialAttempts', 'monthlyAttempts']) assert.equal(empty[field], null);
   for (const name of ['KORLIX_ESHA_MAX_INPUT_TOKENS', 'KORLIX_ESHA_MAX_OUTPUT_TOKENS',
-    'KORLIX_ESHA_TRIAL_PROVIDER_ATTEMPTS', 'KORLIX_ESHA_MONTHLY_PROVIDER_ATTEMPTS',
-    'KORLIX_ESHA_TRIAL_CONSULTATIONS', 'KORLIX_ESHA_MONTHLY_CONSULTATIONS', 'KORLIX_ESHA_NATIVE_AI_ENABLED']) {
+    'KORLIX_ESHA_TRIAL_PROVIDER_ATTEMPTS', 'KORLIX_ESHA_MONTHLY_PROVIDER_ATTEMPTS', 'KORLIX_ESHA_NATIVE_AI_ENABLED']) {
     const missing = {...environment}; delete missing[name];
     assert.equal(nativeAiConfigured(missing, {role}), false, name);
   }
