@@ -330,7 +330,7 @@ workflows:
 
   esha-apple-draft-listing:
     name: Esha by Korlix — synchronize existing Apple draft listing
-    instance_type: linux_x2
+    instance_type: mac_mini_m2
     max_build_duration: 15
     working_directory: apps/esha
     # Manual only, after repairing the existing Apple integration.
