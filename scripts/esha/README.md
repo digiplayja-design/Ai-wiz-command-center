@@ -69,8 +69,16 @@ or upload to a Google Play track.
 Workflow: `esha-ios-signing-setup`. Run it manually after `esha_release` contains
 `ESHA_APP_STORE_ID=6835184869` and the actual `ESHA_APPLE_TEAM_ID`.
 
-This job uses the existing **`Codemagic Korlix AI`** integration and imports only
-**`KORLIX_APP_STORE_CERT`**. It pins `codemagic-cli-tools` to **0.69.0**. Before
+This job uses the existing **`Codemagic Korlix AI`** integration and imports
+**`KORLIX_APP_STORE_CERT`** with **`KORLIX_APP_STORE_PROFILE`** as a bootstrap
+asset. Codemagic requires a provisioning profile in this environment section;
+the existing profile for `com.korlixdeveloper.korlixai` serves only to permit
+asset import. The setup job does not configure Xcode, build or sign an app, or
+modify any other app. It never exports a private key. The separate Esha candidate
+workflow continues to require **`ESHA_APP_STORE_PROFILE`** for Esha's exact
+bundle identifier.
+
+The setup job pins `codemagic-cli-tools` to **0.69.0**. Before
 creating anything, it verifies Apple's exact Esha record (app ID `6835184869`,
 bundle `com.korlixdeveloper.esha`, SKU `ESHA_IOS_001`), its registered Bundle ID,
 and a valid installed distribution identity for the configured team. The

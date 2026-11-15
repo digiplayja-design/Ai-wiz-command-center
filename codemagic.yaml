@@ -293,6 +293,10 @@ workflows:
       groups:
         - esha_release
       ios_signing:
+        # Bootstrap asset import only: Codemagic requires a profile here.
+        # This job never configures Xcode or builds/signs with the Korlix profile.
+        provisioning_profiles:
+          - KORLIX_APP_STORE_PROFILE
         certificates:
           - KORLIX_APP_STORE_CERT
     scripts:
