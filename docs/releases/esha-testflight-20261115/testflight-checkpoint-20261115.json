@@ -1,0 +1,208 @@
+{
+  "schema_version": 1,
+  "recorded_on": "2026-11-15",
+  "recorded_at_utc": "2026-11-15T23:07:49Z",
+  "status": "internal_test_group_created_compliance_unresolved_download_price_pending_approval",
+  "scope": "Observed App Store Connect setup and independently verified existing GitHub CI. No completed export declaration, eligible-build assignment, TestFlight installation, new signed upload or public release is established.",
+  "evidence_sources": {
+    "app_store_connect": "Live App Store Connect observations supplied by the coordinating agent; this receipt author performed no Apple account mutations.",
+    "github": "Independent documentation-agent GET readbacks of the exact workflow run, its jobs and artifacts, and its published Esha workflow file.",
+    "pricing_and_availability": "Coordinating-agent live readback of the prepared free-download price confirmation page and automatic approval-review rejection. No price schedule or app territory selection was saved."
+  },
+  "apple_app": {
+    "app_reference": "Esha",
+    "app_id": "6835184869",
+    "team_url_identifier": "f6169920-6326-4780-9d14-81013fac8eb0",
+    "team_identifier_scope": "Identifier in the observed App Store Connect team URL, not a claim about the separate Apple code-signing Team ID."
+  },
+  "internal_testing_group": {
+    "groups_observed_before_creation": 0,
+    "created": true,
+    "name": "Esha Internal Testers",
+    "group_id": "34951be9-1955-4e01-94da-778608de638f",
+    "canonical_url": "https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6835184869/testflight/groups/34951be9-1955-4e01-94da-778608de638f",
+    "automatic_distribution": {
+      "enabled_selected_before_create": false,
+      "observed_checked_value_before_create": 0,
+      "scope": "Automatic distribution was explicitly off before Create; no automatic build assignment or distribution is claimed."
+    },
+    "tester": {
+      "added_count": 1,
+      "name": "Ricardo Bailey",
+      "email": "d***@gmail.com",
+      "observed_role_labels": [
+        "Account Holder",
+        "Admin"
+      ],
+      "success_notice": "1 tester has been added",
+      "status_after_addition": "No Builds Available",
+      "matched_signed_in_owner": true
+    },
+    "group_readback": {
+      "type": "Internal Group",
+      "tester_count": 1,
+      "build_count": 0
+    },
+    "other_users_added": false,
+    "assigned_builds": [],
+    "eligible_build_assignment_verified": false,
+    "testflight_installation_verified": false
+  },
+  "observed_builds": [
+    {
+      "build_number": "1",
+      "compliance_status": "Missing Compliance",
+      "assigned_to_new_group": false
+    },
+    {
+      "build_number": "2",
+      "compliance_status": "Missing Compliance",
+      "assigned_to_new_group": false
+    }
+  ],
+  "build_2_export_compliance": {
+    "status": "unsaved_draft_pending_france_answer",
+    "standard_encryption_choice_selected_in_draft": true,
+    "technical_basis": "The coordinating agent reports that independent inspection of the exact IPA confirmed Flutter BoringSSL.",
+    "current_question_scope": "Whether the app will be available in France",
+    "france_answer": null,
+    "draft_saved": false,
+    "declaration_submitted": false,
+    "compliance_resolved": false,
+    "scope": "The selected draft answer and technical IPA observation do not establish a completed export declaration or an owner decision about app territories."
+  },
+  "app_distribution_setup": {
+    "canonical_url": "https://appstoreconnect.apple.com/apps/6835184869/distribution/pricing",
+    "availability": {
+      "observed_control": "Set Up Availability",
+      "configured_country_list_observed": false,
+      "france_or_worldwide_owner_intent_found": false,
+      "territory_changes_made": false
+    },
+    "initial_download_price": {
+      "status": "prepared_not_saved_confirmation_rejected",
+      "initial_observed_control": "Add Pricing",
+      "base_country_selected": "USA",
+      "currency": "USD",
+      "base_download_price_selected": "0.00",
+      "apple_generated_comparable_price_territory_count": 175,
+      "generated_comparable_prices_all_zero": true,
+      "final_confirmation_page_effective_condition": "Ready for Sale",
+      "confirm_action_approved": false,
+      "price_schedule_saved": false,
+      "automatic_approval_review": {
+        "result": "rejected",
+        "action": "Confirm the prepared initial download-price schedule",
+        "reason": "The exact download-price and 175-territory scope were not explicitly authorized."
+      },
+      "explicit_user_approval_still_required": true,
+      "scope": "Prepared zero-price schedule only. No initial download price was saved; generated comparable price territories do not establish configured app availability or answer the France question."
+    },
+    "subscription_scope_note": "The existing USA-only subscription draft does not establish the app's country-availability intent. The US $4.99 subscription offer is separate from the app's initial download price.",
+    "mac_or_vision_pro_default_changes_made": false,
+    "other_distribution_option_changes_made": false
+  },
+  "existing_ci_checkpoint": {
+    "source_commit": "538974f08f4c99ce1c4746f6f1d3a8fa6ef0b2be",
+    "source_branch": "feature/esha-native-20261115",
+    "workflow_run_id": 43770118788,
+    "workflow_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43770118788",
+    "status": "completed",
+    "conclusion": "success",
+    "updated_at_utc": "2026-11-15T22:41:43Z",
+    "jobs": [
+      {
+        "id": 132983916045,
+        "name": "Analyze, test, and compile Android",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at_utc": "2026-11-15T22:41:42Z"
+      },
+      {
+        "id": 132983916306,
+        "name": "Compile iOS Simulator application",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at_utc": "2026-11-15T22:41:19Z"
+      },
+      {
+        "id": 132983916321,
+        "name": "Esha backend and SQL checks",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at_utc": "2026-11-15T22:35:47Z"
+      }
+    ],
+    "artifacts": [
+      {
+        "id": 14184307047,
+        "name": "Esha-iOS-Simulator-only-538974f08f4c99ce1c4746f6f1d3a8fa6ef0b2be",
+        "api_size_in_bytes": 74768998,
+        "api_digest": "sha256:14afff8a02bbe52f37996651fd9eab5478d25f995d41b884637b23b9cf94f0bd",
+        "api_expired": false,
+        "source_commit": "538974f08f4c99ce1c4746f6f1d3a8fa6ef0b2be",
+        "independently_downloaded": false,
+        "independently_rehashed": false
+      },
+      {
+        "id": 14184222543,
+        "name": "Esha-Android-debug-and-unsigned-538974f08f4c99ce1c4746f6f1d3a8fa6ef0b2be",
+        "api_size_in_bytes": 176954517,
+        "api_digest": "sha256:bb6a42241ee336b9f8fd3a995ea785b67a3f227a0d0e0c82a5958bb81570dfd7",
+        "api_expired": false,
+        "source_commit": "538974f08f4c99ce1c4746f6f1d3a8fa6ef0b2be",
+        "independently_downloaded": false,
+        "independently_rehashed": false
+      }
+    ],
+    "scope": "Existing published source and GitHub job/API artifact metadata only. Android artifacts are debug/unsigned and the iOS artifact is Simulator-only; this is not a new signed TestFlight upload or installation.",
+    "source_code_changed_during_this_testflight_checkpoint": false
+  },
+  "ci_path_filter_review": {
+    "receipt_path": "docs/releases/esha-testflight-20261115/testflight-checkpoint-20261115.json",
+    "esha_workflow": ".github/workflows/esha-native.yml",
+    "esha_workflow_source_commit": "538974f08f4c99ce1c4746f6f1d3a8fa6ef0b2be",
+    "push_and_pull_request_paths": [
+      "apps/esha/**",
+      "scripts/esha/**",
+      "backend/esha/**",
+      "backend/test/esha*.mjs",
+      "backend/package.json",
+      "backend/package-lock.json",
+      "backend/server.js",
+      "backend/korlix_astra.cjs",
+      "backend/chat_quality.cjs",
+      "backend/resume_studio/policy.mjs",
+      "supabase/migrations/*_esha_*.sql",
+      ".github/workflows/esha-native.yml",
+      "codemagic.yaml"
+    ],
+    "receipt_matches_esha_automatic_paths": false,
+    "receipt_only_push_automatically_triggers_esha_native": false,
+    "workflow_dispatch_still_available": true,
+    "separate_repository_pr_workflow": {
+      "path": ".github/workflows/android-debug-apk.yml",
+      "pull_request_target_branch": "main",
+      "path_filters_present": false,
+      "may_run_for_documentation_only_pr_to_main": true,
+      "inspection_scope": "Read-only inspection of the existing local workflow; no workflow edits."
+    }
+  },
+  "remaining_testflight_work": [
+    "Resolve the Esha-specific France availability answer and complete the export-compliance declaration without inferring territory intent from the subscription draft.",
+    "Verify an eligible build and assign it to the internal group after compliance is resolved.",
+    "Verify TestFlight availability and installation on the intended physical device; one tester in a group with zero builds is not an installation.",
+    "Keep signed release/build evidence separate from existing debug, unsigned and Simulator CI artifacts."
+  ],
+  "separate_remaining_store_pricing_work": "Obtain explicit approval for the prepared USA USD0.00 download-price schedule and its 175-territory zero-price scope before confirming it. This is a separate App Store setup item, not a TestFlight eligibility prerequisite. The schedule remains unsaved and does not set app-country availability or resolve France compliance.",
+  "action_scope": {
+    "new_internal_group_created": true,
+    "one_existing_authorized_account_added": true,
+    "automatic_distribution_selected": false,
+    "new_build_uploaded": false,
+    "app_or_beta_review_submitted": false,
+    "public_release_performed": false,
+    "production_billing_or_ai_activated": false,
+    "receipt_committed_or_published_by_author": false
+  }
+}
