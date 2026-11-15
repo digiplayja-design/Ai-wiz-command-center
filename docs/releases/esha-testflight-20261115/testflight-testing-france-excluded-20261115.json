@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "recorded_on": "2026-11-15",
+  "recorded_at_utc": "2026-11-15T23:30:30Z",
+  "status": "build_2_testing_in_existing_internal_group_france_excluded",
+  "evidence_source": "Coordinating agent's completed live App Store Connect UI readbacks. This receipt author performed no browser or production actions.",
+  "scope": "The existing signed build 2 is now Testing in the existing internal group. The owner tester is Invited; no device installation or session activity has been verified. France is excluded from intended distribution, without changing the unconfigured app-country availability settings.",
+  "owner_direction": {
+    "literal_instruction": "I didn’t have one. Undo France selection and move on",
+    "france_excluded_from_intended_distribution": true,
+    "prior_france_yes_intent_superseded": true,
+    "french_filing_work_not_required_for_the_observed_no_france_asc_path": true,
+    "scope": "Supersedes the earlier France business intent and the French-document blocker for this observed App Store Connect path. It does not change the retained build-2 cryptographic facts."
+  },
+  "prior_checkpoints": [
+    {
+      "file": "testflight-checkpoint-20261115.json",
+      "sha256": "600d1b7b91a762d07ddd54c22100bdee104d7a1f38ac166243db80d252aa98f7",
+      "retained_unchanged": true
+    },
+    {
+      "file": "testflight-france-pricing-checkpoint-20261115.json",
+      "sha256": "908d6c91bd60559ab0ff73d6fe04ff688f33738dbca16fd0fbd009eac88b7350",
+      "retained_unchanged": true
+    }
+  ],
+  "app_and_existing_build": {
+    "app_id": "6835184869",
+    "bundle_id": "com.korlixdeveloper.esha",
+    "marketing_version": "1.0.0",
+    "build_number": "2",
+    "build_id": "50de7424-a350-42fb-9a9d-78eb17021ace",
+    "binary_source_commit": "fbfde79df731dea5a2e7fc65ee9d4308aebe80dd",
+    "scope": "Existing signed build 2; this checkpoint does not create or upload a new binary."
+  },
+  "app_information_wizard": {
+    "observed_step": {
+      "current": 3,
+      "total": 3
+    },
+    "prior_france_answer": "Yes",
+    "new_france_answer": "No",
+    "ui_indicated_no_documents_need_uploading": true,
+    "acknowledgement": "OK",
+    "wizard_closed": true,
+    "declaration_document_uploaded": false
+  },
+  "build_2_export_compliance": {
+    "entry_point": "TestFlight iOS > build 2 > Manage",
+    "selected_encryption_category": "Standard, industry-accepted encryption not limited to operating-system encryption",
+    "france_answer_saved": "No",
+    "save_completed": true,
+    "prior_build_list_status": "Missing Compliance",
+    "build_list_status_after_save": "Ready to Submit",
+    "french_document_uploaded": false,
+    "scope": "The build-specific answers were saved and the build-list status changed. The later group status below is the final testing observation."
+  },
+  "other_build": {
+    "build_number": "1",
+    "observed_status": "Missing Compliance",
+    "changed_this_checkpoint": false
+  },
+  "internal_group_assignment": {
+    "name": "Esha Internal Testers",
+    "group_id": "34951be9-1955-4e01-94da-778608de638f",
+    "canonical_builds_url": "https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6835184869/testflight/groups/34951be9-1955-4e01-94da-778608de638f/builds",
+    "add_group_control_used_for_build": "2",
+    "existing_group_selected": true,
+    "only_this_existing_group_selected": true,
+    "new_group_created": false,
+    "automatic_distribution_enabled": false,
+    "automatic_distribution_setting_changed": false,
+    "testers_page_readback": {
+      "group_type": "Internal Group",
+      "tester_count": 1,
+      "build_count": 1
+    },
+    "existing_tester": {
+      "name": "Ricardo Bailey",
+      "email_masked": "d***@gmail.com",
+      "owner_account": true,
+      "status": "Invited",
+      "invited_date": "2026-11-15"
+    },
+    "builds_page_readback": {
+      "marketing_version": "1.0.0",
+      "build_number": "2",
+      "status": "Testing",
+      "expires_displayed": "90 days",
+      "platform": "iOS"
+    },
+    "absolute_expiry_timestamp_inferred": false,
+    "installed_device_data_observed": false,
+    "session_activity_data_observed": false,
+    "testflight_installation_verified": false
+  },
+  "other_release_settings": {
+    "app_country_availability_configured": false,
+    "app_country_availability_changed_this_checkpoint": false,
+    "free_download_price_changed_this_checkpoint": false,
+    "membership_subscription_changed_this_checkpoint": false,
+    "scope": "The previously saved free-download pricing and existing subscription are unchanged. Price-table coverage is separate from the unset app-country availability configuration."
+  },
+  "technical_annex": {
+    "file": "build-2-encryption-technical-facts.md",
+    "dated_business_intent_note_added": true,
+    "generic_cryptographic_facts_changed": false,
+    "prior_france_worksheet_scope": "Retained as earlier business intent; superseded by the latest owner instruction and this receipt."
+  },
+  "actions_this_checkpoint": {
+    "application_code_changed": false,
+    "new_native_build_created": false,
+    "new_build_uploaded": false,
+    "app_store_review_submitted": false,
+    "beta_app_review_submitted": false,
+    "public_release_performed": false,
+    "production_deployed": false,
+    "billing_or_ai_activated": false,
+    "government_encryption_filing_submitted": false,
+    "declaration_document_uploaded": false,
+    "new_tester_added": false,
+    "testflight_installation_claimed": false
+  },
+  "remaining_verification": [
+    "The invited owner must accept or open the available TestFlight invitation on the intended device; verify installation separately.",
+    "Do not treat group Testing status or an invitation as evidence of a completed installation or test session.",
+    "App-country availability remains unconfigured. Any later distribution setup must respect the latest owner instruction excluding France.",
+    "Build 1 remains Missing Compliance and was not changed."
+  ],
+  "author_scope": {
+    "staged": false,
+    "committed": false,
+    "published": false
+  }
+}

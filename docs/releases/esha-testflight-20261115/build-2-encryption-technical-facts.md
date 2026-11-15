@@ -1,5 +1,9 @@
 # Esha build 2: encryption technical facts
 
+## Business intent update — 15 November 2026
+
+The owner's latest instruction, “I didn’t have one. Undo France selection and move on”, withdraws France from the intended distribution. The [new TestFlight checkpoint](testflight-testing-france-excluded-20261115.json) records the saved France **No** answer for build 2 and its **Testing** status in the existing internal group. The cryptographic facts below still describe exact build 2. The retained filing worksheet's earlier “including France” intent is superseded and must not be used as the current distribution instruction.
+
 Prepared 15 November 2026 for developer review. This is an engineering evidence note, not a signed declaration, an ANSSI attestation, a certificate, or an export-classification decision. No government filing or Apple encryption-document upload has been made by preparing this note.
 
 ## Exact artifact covered
