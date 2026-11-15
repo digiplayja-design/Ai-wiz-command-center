@@ -37,6 +37,31 @@ test('masked duplicate signup is not reported as a new account', async () => {
   assert.equal(r.profiles + r.sessions, 0);
 });
 
+test('Esha duplicate signup directs both explicit and masked existing accounts to shared sign-in', async () => {
+  for (const provider of [
+    {error: {status: 422, code: 'user_already_exists', message: 'User already registered'}},
+    {data: {user: {id: 'masked', identities: []}, session: null}},
+  ]) {
+    const result = await signup(provider, 'esha_by_korlix');
+    assert.equal(result.statusCode, 409); assert.equal(result.body.code, 'KORLIX_ACCOUNT_EXISTS');
+    assert.equal(result.profiles + result.sessions, 0);
+  }
+});
+
+test('Esha signup is throttled before reaching the provider', async () => {
+  let providerCalls = 0, throttleCalls = 0;
+  const handler = createKorlixSignupHandler({
+    supabaseAuth: {auth: {signUp: async () => { providerCalls++; return {}; }}},
+    consumeReceiptSignup: email => { throttleCalls++; assert.equal(email, 'esha@example.test'); throw Object.assign(new Error('Please retry later.'), {statusCode: 429}); },
+    getUserFacingError: error => error.message,
+  });
+  const res = {statusCode: 200, status(code) {this.statusCode = code; return this;}, json(body) {this.body = body; return this;}};
+  await handler({body: {client_app: 'esha_by_korlix', email: ' ESHA@example.test ', password: 'fixture-password',
+    signup_eligibility: {age_band: '18_plus', terms_accepted: true, privacy_acknowledged: true, policy_version: KORLIX_SIGNUP_POLICY_VERSION},
+  }}, res);
+  assert.equal(res.statusCode, 429); assert.equal(throttleCalls, 1); assert.equal(providerCalls, 0);
+});
+
 test('new email and pending confirmation keep the normal signup contract', async () => {
   const r = await signup({data: {user: {id: 'new-user', identities: [{provider: 'email'}]}, session: null}});
   assert.equal(r.statusCode, 200);

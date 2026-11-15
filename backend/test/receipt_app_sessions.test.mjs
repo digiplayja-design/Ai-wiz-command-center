@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import vm from 'node:vm';
 import {PGlite} from '@electric-sql/pglite';
 import {createReceiptAppSessions, requestsReceiptApp, receiptAppRouteAllowed, messengerAppRouteAllowed} from '../security/receipt_app_sessions.mjs';
+import {eshaAppRouteAllowed} from '../esha/auth.mjs';
 import {authenticatedDeveloperUser, hasUnlimitedAccess, UNLIMITED_COMPATIBILITY_LIMIT} from '../security/developer_access.mjs';
 import {createKorlixSignupHandler, KORLIX_SIGNUP_POLICY_VERSION} from '../korlix_signup_eligibility.mjs';
 
@@ -71,6 +72,7 @@ test.before(async () => {
   await db.exec(readFileSync(new URL('../../supabase/migrations/20261025014426_korlix_messenger_app_sessions.sql', import.meta.url), 'utf8'));
   await db.exec(readFileSync(new URL('../../supabase/migrations/20261027224536_korlix_auto_email_app_sessions.sql', import.meta.url), 'utf8'));
   await db.exec(readFileSync(new URL('../magic_camera/session_schema.sql', import.meta.url), 'utf8'));
+  await db.exec(readFileSync(new URL('../../supabase/migrations/20261115172408_esha_companion_app_sessions.sql', import.meta.url), 'utf8'));
 });
 test.after(async () => {await db?.close();});
 test.beforeEach(async () => {
@@ -86,7 +88,7 @@ test.beforeEach(async () => {
       admin: {signOut: async token => {revoked.add(tokens.get(token)?.sid); return {error: null};}},
     },
     async rpc(name, args) {
-      assert(['korlix_register_receipt_app_session','korlix_register_messenger_app_session','korlix_register_auto_email_app_session','korlix_register_magic_camera_app_session'].includes(name));
+      assert(['korlix_register_receipt_app_session','korlix_register_messenger_app_session','korlix_register_auto_email_app_session','korlix_register_magic_camera_app_session','korlix_register_esha_app_session'].includes(name));
       if (unavailable) return {error: new Error('private database details')};
       try {
         const result = await db.query(`select public.${name}($1,$2,$3,$4,$5) result`,
@@ -339,6 +341,8 @@ test('Companion registration RPCs remain unavailable to anonymous and authentica
     await assert.rejects(db.query('select public.korlix_register_messenger_app_session($1,$2,$3)',[userId,crypto.randomUUID(),'device']),/permission denied/);
     await assert.rejects(db.query('select public.korlix_register_auto_email_app_session($1,$2,$3)',[userId,crypto.randomUUID(),'device']),/permission denied/);
     await assert.rejects(db.query('select public.korlix_register_magic_camera_app_session($1,$2,$3)',[userId,crypto.randomUUID(),'device']),/permission denied/);
+    await assert.rejects(db.query('select public.korlix_register_esha_app_session($1,$2,$3)',[userId,crypto.randomUUID(),'device']),/permission denied/);
+    await assert.rejects(db.query("select public.korlix_register_companion_app_session('esha_by_korlix',$1,$2,$3)",[userId,crypto.randomUUID(),'device']),/permission denied/);
     await assert.rejects(db.query('select * from public.korlix_receipt_app_sessions'),/permission denied/);
     await db.exec('reset role');
   }
@@ -412,4 +416,124 @@ test('Magic Camera refresh and sign-out preserve the independent hub login', asy
   assert.equal(ended.statusCode,200);
   await assert.rejects(context.getAuthenticatedUser(request({session:rotated.body.session,app:null,device:'magic-phone',path:'/api/magic-camera'})),e=>e.statusCode===403);
   assert.equal((await context.getAuthenticatedUser(request({session:hub,app:'korlix_ai',device:'hub-phone',path:'/api/generate',method:'POST'}))).id,userId);
+});
+
+test('Esha and the hub coexist in either sign-in order without sharing device slots or paid entitlements', async () => {
+  for (const firstApp of ['esha_by_korlix', 'korlix_ai']) {
+    await db.exec('reset role; truncate korlix_receipt_app_sessions,device_sessions; set role service_role');
+    const secondApp = firstApp === 'esha_by_korlix' ? 'korlix_ai' : 'esha_by_korlix';
+    const first = await login({app: firstApp, device: firstApp + '-phone'});
+    const second = await login({app: secondApp, device: secondApp + '-phone'});
+    assert.equal(first.statusCode, 200); assert.equal(second.statusCode, 200);
+    assert.equal(first.body.profile.tier, 'basic'); assert.equal(second.body.profile.tier, 'basic');
+    assert.equal((await rows('device_sessions')).length, 1);
+    const bindings = await rows('korlix_receipt_app_sessions');
+    assert.equal(bindings.length, 1); assert.equal(bindings[0].client_app, 'esha_by_korlix');
+    const esha = firstApp === 'esha_by_korlix' ? first : second;
+    assert.equal((await context.getAuthenticatedUser(request({session: esha.body.session, app: 'esha_by_korlix',
+      device: 'esha_by_korlix-phone', path: '/api/me'}))).id, userId);
+  }
+});
+
+test('Esha scope is stored with the login and denies core, other apps, and store notifications despite forged headers', async () => {
+  const esha = (await login({app: 'esha_by_korlix', device: 'esha-phone'})).body.session;
+  for (const app of [null, 'korlix_ai', 'receipt_wiz', 'korlix_messenger', 'auto_email', 'magic_camera', 'esha_by_korlix']) {
+    for (const path of ['/api/generate', '/api/receipt-wiz', '/api/social/messages', '/api/magic-camera',
+      '/api/billing/apple/verify', '/api/esha/billing/apple/notifications', '/api/esha/billing/google/notifications']) {
+      await assert.rejects(context.getAuthenticatedUser(request({session: esha, app, device: 'esha-phone',
+        path, method: 'POST', body: {client_app: 'korlix_ai'}})), error => error.code === 'esha_app_scope');
+    }
+  }
+  for (const [method, path] of [['GET','/api/me'], ['GET','/api/esha/billing/status?provider=apple&refresh=1'],
+    ['POST','/api/esha/consult'], ['POST','/api/esha/billing/prepare'], ['POST','/api/esha/billing/verify'],
+    ['POST','/api/account/delete-request'], ['POST','/api/report-output']]) {
+    assert.equal((await context.getAuthenticatedUser(request({session: esha, app: null, device: 'esha-phone', path, method}))).id, userId);
+  }
+  const hub = (await login({app: 'korlix_ai', device: 'hub-phone'})).body.session;
+  await assert.rejects(context.getAuthenticatedUser(request({session: hub, app: 'esha_by_korlix', device: 'hub-phone', path: '/api/me'})),
+    error => error.statusCode === 401);
+});
+
+test('Esha device limit and installation binding apply independently of other companion apps', async () => {
+  const esha = (await login({app: 'esha_by_korlix', device: 'esha-one'})).body.session;
+  const denied = await login({app: 'esha_by_korlix', device: 'esha-two'});
+  assert.equal(denied.statusCode, 403); assert.match(denied.body.error, /Esha device limit/);
+  assert.equal(denied.body.session, undefined);
+  assert.equal((await login({app: 'receipt_wiz', device: 'esha-two'})).statusCode, 200);
+  for (const device of [null, 'wrong-phone']) {
+    await assert.rejects(context.getAuthenticatedUser(request({session: esha, app: 'esha_by_korlix', device, path: '/api/me'})),
+      error => error.statusCode === 403);
+  }
+  const stolen = issue(otherId, tokens.get(esha.access_token).sid);
+  await assert.rejects(context.getAuthenticatedUser(request({session: stolen, app: 'esha_by_korlix', device: 'esha-one', path: '/api/me'})),
+    error => error.statusCode === 403);
+});
+
+test('Esha refresh preserves binding across restart and signout cannot revoke the hub or revive its own JWT', async () => {
+  const hub = (await login({app: 'korlix_ai', device: 'hub-phone'})).body.session;
+  const esha = (await login({app: 'esha_by_korlix', device: 'esha-phone'})).body.session;
+  context.receiptAppSessions = createReceiptAppSessions({database});
+  const rotated = await refresh(esha, {app: 'korlix_ai', device: 'esha-phone'});
+  assert.equal(rotated.statusCode, 200);
+  assert.equal(rotated.body.deviceSession.client_app, 'esha_by_korlix');
+  await assert.rejects(context.getAuthenticatedUser(request({session: rotated.body.session, app: null,
+    device: 'esha-phone', path: '/api/generate', method: 'POST'})), error => error.code === 'esha_app_scope');
+  assert.equal((await signout(rotated.body.session, {app: 'esha_by_korlix', device: 'esha-phone'})).statusCode, 200);
+  assert.equal((await rows('korlix_receipt_app_sessions')).find(row => row.client_app === 'esha_by_korlix').status, 'revoked');
+  context.receiptAppSessions = createReceiptAppSessions({database});
+  for (const path of ['/api/me', '/api/esha/billing/status', '/api/generate']) {
+    await assert.rejects(context.getAuthenticatedUser(request({session: rotated.body.session, app: null, device: 'esha-phone', path})),
+      error => error.statusCode === 403);
+  }
+  assert.equal((await refresh(rotated.body.session, {app: null, device: 'esha-phone'})).statusCode, 401);
+  assert.equal((await context.getAuthenticatedUser(request({session: hub, app: 'korlix_ai', device: 'hub-phone', path: '/api/generate', method: 'POST'}))).id, userId);
+});
+
+test('Esha signup binds its immediate session to Esha without using the hub allowance', async () => {
+  await login({app: 'korlix_ai', device: 'hub-phone'});
+  const issued = issue(), profile = (await rows('user_profiles')).find(row => row.id === userId);
+  const handler = createKorlixSignupHandler({
+    supabaseAuth: {auth: {signUp: async () => ({data: {user: user(userId), session: issued}})}},
+    getRequestDeviceInfo: context.getRequestDeviceInfo, getOrCreateProfile: async () => profile,
+    registerDeviceSession: context.registerDeviceSession, getUserFacingError: error => error.message,
+  });
+  const req = request({app: 'esha_by_korlix', device: 'esha-phone', method: 'POST', path: '/api/auth/signup', body: {
+    email: 'esha@example.test', password: 'fixture-password', client_app: 'esha_by_korlix', signup_plan: 'basic',
+    signup_eligibility: {age_band: '18_plus', terms_accepted: true, privacy_acknowledged: true, policy_version: KORLIX_SIGNUP_POLICY_VERSION},
+  }}), res = response();
+  await handler(req, res);
+  assert.equal(res.statusCode, 200); assert.equal(res.body.deviceSession.client_app, 'esha_by_korlix');
+  assert.equal((await rows('device_sessions')).length, 1); assert.equal((await rows('korlix_receipt_app_sessions')).length, 1);
+});
+
+test('Esha exact route scope excludes encoded traversal, neighboring routes, and incorrect methods', () => {
+  for (const path of ['/api/me', '/api/esha/catalog', '/api/esha/billing/catalog', '/api/esha/billing/status']) {
+    for (const method of ['GET', 'HEAD']) assert.equal(eshaAppRouteAllowed({method, originalUrl: path + '?provider=apple'}), true);
+    assert.equal(eshaAppRouteAllowed({method: 'POST', originalUrl: path}), false);
+  }
+  for (const path of ['/api/auth/refresh', '/api/auth/signout', '/api/account/delete-request',
+    '/api/report-output', '/api/esha/billing/prepare', '/api/esha/billing/verify', '/api/esha/consult']) {
+    assert.equal(eshaAppRouteAllowed({method: 'POST', originalUrl: path}), true);
+    for (const method of ['GET', 'HEAD', 'PUT', 'DELETE']) assert.equal(eshaAppRouteAllowed({method, originalUrl: path}), false);
+  }
+  for (const path of ['/api/esha/../generate', '/api/esha/%2e%2e/generate', '/api/esha/billing/apple/notifications',
+    '/api/esha/billing/google/notifications', '/api/esha/consult/extra', '/api/esha/billing/status-admin', '/api/characters/select',
+    '/api/auth/signin', '/api/auth/signup', '/api/esha%2fconsult', '/api/report-output/recent',
+    '/api/report-output/health', '/api/report-output/report-id/image', '/api/reports/content', '/api/report', '/api/report-output/../recent']) {
+    for (const method of ['GET', 'HEAD', 'POST']) assert.equal(eshaAppRouteAllowed({method, originalUrl: path}), false, path);
+  }
+});
+
+test('Esha report submission scope grants no report list, image, alias, or admin route access', async () => {
+  const esha = (await login({app: 'esha_by_korlix', device: 'esha-phone'})).body.session;
+  assert.equal((await context.getAuthenticatedUser(request({session: esha, app: 'esha_by_korlix',
+    device: 'esha-phone', path: '/api/report-output', method: 'POST'}))).id, userId);
+  for (const app of [null, 'korlix_ai', 'esha_by_korlix']) {
+    for (const [method, path] of [['GET','/api/report-output'], ['GET','/api/report-output/recent'],
+      ['GET','/api/report-output/report-id/image'], ['POST','/api/report'], ['POST','/api/reports/content'],
+      ['POST','/api/report-output/recent'], ['POST','/api/report-output/report-id/image']]) {
+      await assert.rejects(context.getAuthenticatedUser(request({session: esha, app, device: 'esha-phone', path, method})),
+        error => error.code === 'esha_app_scope');
+    }
+  }
 });
