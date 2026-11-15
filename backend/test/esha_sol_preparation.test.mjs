@@ -22,16 +22,19 @@ function request(env = environment) {
     consultationPrompt(consultationInput(question).data, loadEshaCatalog()), ESHA_RESULT_FORMAT);
 }
 
-test('prepared policy resolves only Sol/high and never assigns the unresolved conversational role', () => {
+test('prepared policy resolves Live voice and Sol/high separately while Live stays disabled', () => {
   const conversation = nativeAiConfiguration(environment);
   assert.equal(conversation.role, 'conversation');
-  assert.equal(conversation.requestedModel, 'GPT 2.5 conversational');
-  assert.equal(conversation.model, null); assert.equal(conversation.reasoningEffort, null);
-  assert.equal(conversation.resolved, false); assert.equal(conversation.configured, false);
+  assert.equal(conversation.requestedModel, 'Highest live conversation model OpenAI has');
+  assert.equal(conversation.model, 'gpt-live-1'); assert.equal(conversation.reasoningEffort, null);
+  assert.equal(conversation.api, 'live'); assert.equal(conversation.transport, 'webrtc');
+  assert.equal(conversation.resolved, true); assert.equal(conversation.configured, false);
+  for (const field of ['maxInputTokens', 'maxOutputTokens', 'trialAttempts', 'monthlyAttempts']) assert.equal(conversation[field], null);
   assert.equal(nativeAiConfigured(environment), false);
   assert.throws(() => eshaResponseRequest(conversation, {}, ESHA_RESULT_FORMAT), {code: 'native_ai_not_configured'});
   const deep = nativeAiConfiguration(environment, {role});
   assert.equal(deep.model, 'gpt-6.1-sol'); assert.equal(deep.reasoningEffort, 'high');
+  assert.equal(deep.api, 'responses'); assert.equal(deep.transport, 'https');
   assert.equal(deep.resolved, true); assert.equal(deep.configured, true);
   assert.equal(nativeAiConfigured(environment, {role}), true);
   for (const provider of ['apple', 'google']) {
@@ -39,6 +42,25 @@ test('prepared policy resolves only Sol/high and never assigns the unresolved co
     assert.equal(catalog.consultationEnabled, false); assert.equal(catalog.purchasesEnabled, false);
     assert.equal(catalog.state, 'planned');
   }
+});
+
+test('Live can never be constructed or sent as a Responses request even with forged ready flags', async () => {
+  const conversation = nativeAiConfiguration(environment), deep = nativeAiConfiguration(environment, {role});
+  for (const configuration of [{...conversation, configured: true}, {...deep, model: 'gpt-live-1'},
+    {...deep, api: 'live'}, {...deep, transport: 'webrtc'}]) {
+    assert.throws(() => eshaResponseRequest(configuration, {}, ESHA_RESULT_FORMAT), {code: 'native_ai_not_configured'});
+  }
+  const legacy = {...environment, KORLIX_ESHA_TEXT_MODEL: 'gpt-live-1', KORLIX_ESHA_REASONING_EFFORT: 'high'};
+  delete legacy.KORLIX_ESHA_AI_POLICY;
+  let clients = 0;
+  const clientFactory = () => { clients++; throw Error('Live must not reach the Responses SDK'); };
+  for (const options of [{environment}, {environment, role: 'conversation'}, {environment, role}, {environment: legacy}]) {
+    const ai = createEshaAi({...options, clientFactory});
+    const body = {...request(), model: 'gpt-live-1'};
+    await assert.rejects(ai.countInputTokens(body), {code: 'native_ai_not_configured'});
+    await assert.rejects(ai.generate(body), {code: 'native_ai_not_configured'});
+  }
+  assert.equal(clients, 0);
 });
 
 test('unknown policies, unknown roles and conflicting legacy overrides cannot select a fallback', () => {
@@ -112,7 +134,7 @@ test('missing server role, disabled configuration and altered Sol request contra
     await assert.rejects(ai.generate(request()), {code: 'native_ai_not_configured'});
   }
   const ai = createEshaAi({environment, role, clientFactory});
-  for (const change of [{model: 'gpt-6-astra'}, {model: 'gpt-2.5'}, {reasoning: {effort: 'none'}},
+  for (const change of [{model: 'gpt-6-astra'}, {model: 'gpt-2.5'}, {model: 'gpt-live-1'}, {reasoning: {effort: 'none'}},
     {reasoning: {effort: 'max'}}, {max_output_tokens: 4097}, {store: true}, {truncation: 'auto'},
     {text: {format: {...ESHA_RESULT_FORMAT, strict: false}}}, {text: {format: {type: 'json_object'}}}]) {
     const altered = {...request(), ...change};
@@ -158,7 +180,7 @@ test('the shipping consultation route cannot activate the prepared role policy o
     generate: async () => { providerCalls++; },
   });
   for (const extra of [{}, {role: 'deep_thinking', model: 'gpt-6.1-sol', reasoningEffort: 'high'},
-    {mode: 'deep_thinking', policy: ESHA_AI_ROLE_POLICY}]) {
+    {mode: 'deep_thinking', policy: ESHA_AI_ROLE_POLICY}, {role: 'conversation', model: 'gpt-live-1', api: 'live'}]) {
     await assert.rejects(billing.consult({id: question.requestId}, {...question, ...extra}), {code: 'native_ai_not_configured'});
   }
   assert.equal(billing.catalog('apple').purchasesEnabled, false);

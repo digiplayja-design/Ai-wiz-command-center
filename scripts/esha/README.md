@@ -3,9 +3,10 @@
 These scripts operate only on `apps/esha`, with the separate Android package and
 iOS bundle identifier `com.korlixdeveloper.esha`. The exact Apple app record,
 signing identity and dedicated Esha App Store profile have now been verified.
-Two signed iPhone IPAs have been verified and uploaded to Apple. Google Play
-access is verified and Esha's creation form is prepared; its required declaration
-acknowledgments, app creation and signed Play upload remain incomplete.
+Two signed iPhone IPAs have been verified and uploaded to Apple. **Esha by
+Korlix** is now created in Google Play and its exact dashboard identity is
+verified. Android signing, store configuration and a signed Play upload remain
+incomplete.
 
 ## Verified Apple setup — November 15, 2026
 
@@ -82,7 +83,12 @@ manual dispatch. It uses read-only repository permission and no signing or store
 credentials. The Linux job analyzes and tests the app, then compiles Android.
 The macOS job independently compiles iOS for the simulator.
 
-[GitHub run 43762836653](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43762836653)
+The latest verified [GitHub run 43764794330](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43764794330)
+at source `b17af5ad3195fefb1092b7da67f7619bdba1a3da` completed successfully,
+confirmed by fresh GitHub API readback. This verifies that source only; no
+forthcoming commit or artifact hash is covered by that result.
+
+The earlier [GitHub run 43762836653](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43762836653)
 at source `afce6caf8499b211fbd980295be6589034798ef2` completed successfully at
 **21:25:11 UTC on November 15**, confirmed by GitHub API readback. This records
 workflow-level success; it does not assign earlier artifact hashes or test counts
@@ -150,22 +156,71 @@ the approved fingerprint and has not expired. This workflow creates an artifact
 for review. It does not configure Play App Signing, create a Play application,
 or upload to a Google Play track.
 
-## Google Play app preparation
+## Verified Google Play app creation — November 15, 2026
 
-After the user approved the exact redirect, sign-in succeeded to the **KORLIX**
-organization, developer **4772708594176030332**. Its home listed six other apps;
-an explicit Esha search returned **No results found**. The
-[prepared-app receipt](../../apps/esha/release/google-play-app-preparation-20261115.json)
-records the [creation form](https://play.google.com/console/u/0/developers/4772708594176030332/create-new-app):
-**Esha by Korlix**, package **`com.korlixdeveloper.esha`** checked available,
-default language **en-US**, **App**, **Free** download.
+After the user explicitly acknowledged **Developer Program Policies** and the
+**US export compliance/encryption declaration**, both required declarations
+were checked and **Create app** was submitted. A fresh dashboard verified
+**Esha by Korlix**, package **`com.korlixdeveloper.esha`**, under the **KORLIX**
+organization, developer **4772708594176030332**. Its Play app ID is
+**4972696331669549016**; see the
+[verified dashboard](https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/app-dashboard)
+and [creation receipt](../../apps/esha/release/google-play-app-created-20261115.json).
 
-Neither required declaration is checked, and **Create app was not submitted**.
-The remaining action-time acknowledgment covers **Developer Program Policies**
-and the **US export compliance/encryption declaration**. A prepared form and
-availability check do not create an app or register its package. The prior
-Android signing receipt still establishes that **`ESHA_ANDROID_UPLOAD_KEY` is
-missing**; no Esha key was imported or signed Android candidate started.
+The earlier [prepared-form receipt](../../apps/esha/release/google-play-app-preparation-20261115.json)
+remains unchanged as historical evidence. It records the **en-US**, **App**,
+**Free** form and the package availability check before creation; its
+unsubmitted-form and pending-declaration statuses have been superseded.
+
+The privacy URL **https://chee-chai-chee-backend.onrender.com/esha/privacy**
+and store category **Beauty** are saved. Each save displayed **“Change saved.
+Send for review in Publishing overview”**; the saved changes have not been
+sent for review.
+
+The [default store listing](https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/store-listings/default/edit)
+now has the exact existing name, short description and full description saved
+with **Save as draft**. Fresh readback matched all three values and displayed
+**“Your changes have been saved”**. A separately opened tab at the exact listing
+URL independently confirmed that all three values persisted before the original
+form was left. Their character counts are **14/30**, **76/80** and **2891/4000**
+respectively. The listing copy is unchanged; no visual assets were uploaded,
+the Review step is disabled, and nothing was submitted for review or published.
+
+Three app-content declarations were saved with fresh success notices:
+
+| Form | Saved answer |
+| --- | --- |
+| Ads | No, my app does not contain ads |
+| Government apps | No |
+| Financial features | My app doesn't provide any financial features |
+
+The financial form required no additional documentation. The health form was
+prepared with **“My app does not have any health features”** through the regional
+requirements step, but **Save was rejected by automatic approval review** because
+the exact declaration requires explicit user authorization. Source-code evidence
+did not supply that authorization. It remains **unsaved**, with no retry; this
+pending authorization is separate from the HTTPS website correction below.
+Saved declarations have not been submitted for review or published.
+
+Contact email **support@korlixdeveloper.com** and phone **+16148942317** are
+saved. Google normalized the website to **http://www.korlixdeveloper.com/support.html**.
+The correction to **https://www.korlixdeveloper.com/support.html** remains
+pending: automatic approval review rejected the write and one evidence-based
+retry for insufficient specific user approval. Read-only verification of the
+exact HTTPS page did not authorize the write. The saved URL remains **HTTP**;
+no further retry is planned without explicit authorization for that exact URL.
+
+The [Play app-signing page](https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/keymanagement)
+shows Google-managed app signing in use for the exact package and **0%** install
+base. Its public app-signing certificate SHA-256 is
+`8A:40:8B:66:51:01:B3:4C:86:D6:AD:DC:F4:D8:C7:D8:AC:42:35:39:E3:61:58:E8:6E:FA:F3:D1:EB:5D:98:3C`.
+No signing settings were changed. No upload-key section was shown; that does
+not establish whether a private upload key exists.
+
+The separate [Codemagic signing receipt](../../apps/esha/release/android-signing-prerequisites-20261115.json)
+recorded **`ESHA_ANDROID_UPLOAD_KEY` missing**. A signed bundle upload, Play
+subscription setup, remaining app-content declarations and a published release
+are still unverified.
 
 ## Manual iOS profile setup
 
@@ -566,12 +621,16 @@ back for version 1.0.0**, which remains **Prepare for Submission**. Existing dem
 access is tested. Agreement status and real-device StoreKit checks remain
 unverified even though both uploaded builds have processed successfully.
 
-The owner's current AI direction is literal **“GPT 2.5 conversational”**, whose
-API identity remains unresolved, and confirmed **`gpt-6.1-sol`** for deep
-thinking. The previous **10-trial / 120-monthly** consultation proposal was not
-approved. No allowances or activation are selected here. See the separately
-maintained [inactive AI preparation](../../backend/esha/billing/AI_OPTION.md);
-its targeted Sol/backend checks passed **50 tests** without activating service.
+The owner's updated direction is the highest live conversation model, now
+identified as **GPT-Live-1 (`gpt-live-1`)** through the **Live API**, with
+**`gpt-6.1-sol`** retained for deep thinking. The previous **10-trial /
+120-monthly** consultation proposal was not approved. Live voice transport,
+usage accounting and commercial allowances remain separate readiness work;
+this model selection does not activate service. See the separately maintained
+[inactive AI preparation](../../backend/esha/billing/AI_OPTION.md). The current
+Live/Sol preparation passed **51 targeted offline tests** and an independent
+code review. The earlier Sol/backend checkpoint passed **50 targeted tests**
+before this Live selection. Neither result establishes a working voice session.
 
 ## Implementation references
 

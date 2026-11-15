@@ -24,6 +24,8 @@ case "$ESHA_BUILD_MODE" in
       artifacts/android/Esha-unsigned-release.aab --output artifacts/android/Esha-unsigned-verification.json
     ;;
   signed)
+    # A failed rerun must not publish an earlier or unverified signed candidate.
+    rm -f artifacts/android/Esha-signed-candidate.aab artifacts/android/Esha-signed-verification.json
     : "${ESHA_ANDROID_STORE_FILE:?Configure the dedicated ESHA_ANDROID_UPLOAD_KEY in Codemagic}"
     : "${ESHA_ANDROID_STORE_PASSWORD:?Esha keystore password is required}"
     : "${ESHA_ANDROID_KEY_ALIAS:?Esha upload key alias is required}"
@@ -33,9 +35,10 @@ case "$ESHA_BUILD_MODE" in
     test ! -e android/key.properties
     flutter --suppress-analytics --no-version-check build appbundle --release --no-pub
     mkdir -p artifacts/android
-    cp build/app/outputs/bundle/release/app-release.aab artifacts/android/Esha-signed-candidate.aab
+    # Verify the original export before exposing it in the publishable path.
     python3 "$ESHA_REPO_ROOT/scripts/esha/verify_artifact.py" android-signed \
-      artifacts/android/Esha-signed-candidate.aab --output artifacts/android/Esha-signed-verification.json
+      build/app/outputs/bundle/release/app-release.aab --output artifacts/android/Esha-signed-verification.json
+    cp build/app/outputs/bundle/release/app-release.aab artifacts/android/Esha-signed-candidate.aab
     ;;
   *)
     printf '%s\n' 'Usage: build_android.sh unsigned|signed' >&2

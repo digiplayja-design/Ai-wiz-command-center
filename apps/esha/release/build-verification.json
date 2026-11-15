@@ -111,14 +111,15 @@
     }
   },
   "latest_cross_platform_native_validation": {
-    "source_commit": "afce6caf8499b211fbd980295be6589034798ef2",
-    "workflow_run_id": 43762836653,
-    "workflow_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43762836653",
+    "source_commit": "b17af5ad3195fefb1092b7da67f7619bdba1a3da",
+    "workflow_run_id": 43764794330,
+    "workflow_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43764794330",
+    "workflow_status": "completed",
     "workflow_conclusion": "success",
-    "workflow_completed_at_utc": "2026-11-15T21:25:11Z",
-    "observation_method": "Coordinating agent GitHub API readback of workflow status and source commit.",
+    "recorded_at_utc": "2026-11-15T21:50:02Z",
+    "observation_method": "Coordinating agent fresh GitHub API readback of workflow status and source commit.",
     "artifact_bytes_rehashed_by_this_update": false,
-    "scope": "Workflow-level success only. No per-job test count, downloaded artifact hash or signed store upload is inferred. The earlier bf4ff49 independently rehashed artifact checkpoint is preserved in earlier_cross_platform_native_validation."
+    "scope": "Workflow-level success for b17af5a only. No per-job test count, downloaded artifact hash, signed store upload or success of a subsequent commit is inferred. The prior afce6caf success and bf4ff49 independently rehashed artifact checkpoint remain separate historical evidence."
   },
   "source_equivalence": {
     "validated_commit": "bf4ff498e3aa71eea07d4052d8789cd37ddba7c0",
@@ -174,9 +175,9 @@
   "remaining_release_work": [
     "Verify the prepared Apple subscription with real sandbox purchase/restore and reviewer access. The approved review contact is complete; preserved demo credentials have not been tested.",
     "Capture genuine native iPhone/iPad feature screenshots and a subscription review screenshot; complete required owner declarations and agreements before submission.",
-    "Obtain action-time acknowledgment of the Google Developer Program Policies and US export compliance/encryption declaration, then create and verify the prepared Esha Play app record.",
+    "Complete Esha Play visual assets and remaining app-content declarations. Exact listing text is saved and independently reread; ads, government-app and financial-features declarations are saved. The no-health-features declaration remains prepared and unsaved after automatic approval review rejected Save; exact declaration authorization is pending. Separately, the saved website remains http://www.korlixdeveloper.com/support.html and its exact HTTPS correction also requires specific authorization.",
     "Provide/import the dedicated Esha Android upload key, verify its certificate fingerprint, and complete Play subscription/base-plan/trial and signed-release setup.",
-    "Resolve the exact conversational API model and choose still-unapproved commercial allowances and input/output/attempt limits. Sol 6.1 is confirmed for deep thinking; no 10/120 allowance approval exists.",
+    "Prepare the identified GPT-Live-1 Live API voice transport and seconds-based accounting, with Sol 6.1 retained for deep thinking; choose still-unapproved commercial allowances and provider limits. No 10/120 allowance approval or service activation exists.",
     "Verify purchase/restore and same-account entitlement behavior before activation; the live catalog remains planned with purchases and consultations disabled.",
     "Assemble the app version, subscription and group in the same review submission only after remaining readiness work; build 2 is already selected on the editable app version.",
     "Refresh prelaunch wording on the active member Discover screen when checkout is enabled; its current text still describes membership as being prepared."
@@ -248,7 +249,8 @@
     "expected_key_reference": "ESHA_ANDROID_UPLOAD_KEY",
     "dedicated_key_reference_present": false,
     "signed_android_candidate_verified": false,
-    "play_console_record_verified": false
+    "play_console_record_verified": false,
+    "scope": "Historical signing prerequisite observation. Its absent Play app record has been superseded by google_play_app_creation; no fresh key or signed-build verification is implied."
   },
   "earlier_apple_inventory": {
     "evidence_file": "apple-inventory-before-subscription-20261115.json",
@@ -402,9 +404,44 @@
     "app_record_created": false,
     "required_declarations_accepted": false,
     "action_time_user_acknowledgment_required": true,
-    "dedicated_android_upload_key_present": false
+    "dedicated_android_upload_key_present": false,
+    "scope": "Historical pre-creation observation only; the later google_play_app_creation receipt supersedes the unsubmitted form, pending declarations and absent app record. Its signing observation remains historical evidence."
   },
   "current_owner_ai_direction": {
+    "conversation_requested_literal": "I need the highest live conversation model OpenAI has",
+    "conversation_model_identified": "GPT-Live-1",
+    "conversation_api_identifier": "gpt-live-1",
+    "conversation_api": "Live API",
+    "conversation_resolution": "identified_from_current_official_OpenAI_documentation_by_coordinating_agent",
+    "deep_thinking_model_confirmed": "gpt-6.1-sol",
+    "deep_thinking_api": "Responses API",
+    "targeted_offline_backend_tests_passed": 51,
+    "independent_code_review_completed": true,
+    "paid_provider_calls_made": false,
+    "prior_10_trial_120_monthly_allowance_approved": false,
+    "commercial_allowances_selected": false,
+    "activation_authorized_by_this_record": false,
+    "preparation_document": "backend/esha/billing/AI_OPTION.md",
+    "scope": "Supersedes the earlier unresolved conversational-model request. The 51 targeted offline tests and independent code review cover the prepared role policy and adapter rejection guards. Voice transport, seconds-based usage accounting and commercial allowance selection remain prerequisites; no deployment, migration or activation is established by this record. The earlier 50-test Sol/backend checkpoint remains in earlier_owner_ai_direction."
+  },
+  "google_play_app_creation": {
+    "evidence_file": "google-play-app-created-20261115.json",
+    "recorded_at_utc": "2026-11-15T21:45:43Z",
+    "status": "app_created_dashboard_verified",
+    "developer_id": "4772708594176030332",
+    "organization": "KORLIX",
+    "app_id": "4972696331669549016",
+    "app_name": "Esha by Korlix",
+    "package_name": "com.korlixdeveloper.esha",
+    "dashboard_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/app-dashboard",
+    "explicit_action_time_user_acknowledgment_received": true,
+    "required_creation_declarations_accepted": true,
+    "create_app_submitted": true,
+    "app_record_created": true,
+    "fresh_dashboard_verified": true,
+    "scope": "App creation and identity only; no signed upload, Play billing configuration, completed app-content declarations or publication is established."
+  },
+  "earlier_owner_ai_direction": {
     "conversation_requested_literal": "GPT 2.5 conversational",
     "conversation_api_identifier": null,
     "conversation_resolution": "unresolved",
@@ -415,5 +452,139 @@
     "preparation_document": "backend/esha/billing/AI_OPTION.md",
     "targeted_offline_sol_backend_tests_passed": 50,
     "scope": "Current owner direction and inactive preparation test result. Historical native_ai_preparation facts remain intact; no deployment, migration, activation or numeric allowance is established."
+  },
+  "google_play_console_setup": {
+    "observation_source": "Coordinating agent live Google Play Console observations on 2026-11-15.",
+    "privacy_url": "https://chee-chai-chee-backend.onrender.com/esha/privacy",
+    "privacy_url_saved": true,
+    "category": "Beauty",
+    "category_saved": true,
+    "save_confirmation": "Change saved. Send for review in Publishing overview",
+    "changes_sent_for_review": false,
+    "scope": "Saved Play Console changes, not reviewed or publicly published changes.",
+    "contact": {
+      "email": "support@korlixdeveloper.com",
+      "phone": "+16148942317",
+      "website_url_saved": "http://www.korlixdeveloper.com/support.html",
+      "fields_saved": true,
+      "website_normalized_by_google": true,
+      "https_correction": {
+        "requested_url": "https://www.korlixdeveloper.com/support.html",
+        "status": "blocked_by_automatic_approval_review_pending_explicit_exact_url_authorization",
+        "write_succeeded": false,
+        "automatic_approval_rejections": 2,
+        "https_target_verified_read_only": true,
+        "further_retries_planned": false,
+        "scope": "The saved URL remains HTTP. A read-only HTTPS page check and existing repository usage did not satisfy automatic approval review for this specific write."
+      }
+    },
+    "default_store_listing": {
+      "status": "listing_text_saved_as_draft",
+      "recorded_at_utc": "2026-11-15T21:50:45Z",
+      "page_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/store-listings/default/edit",
+      "locale": "en-US",
+      "source_copy_file": "store-metadata.json",
+      "source_copy_object": "google_play",
+      "name_characters": 14,
+      "name_character_limit": 30,
+      "short_description_characters": 76,
+      "short_description_character_limit": 80,
+      "full_description_characters": 2891,
+      "full_description_character_limit": 4000,
+      "text_sha256": {
+        "name": "17497ca62316c1020539da8b2821ab189cb87caedae278e8a449b50de00962bc",
+        "short_description": "80574b2b624f0976886e9f38729049152263358c065abbf2e3c5fbdf292e4ce1",
+        "full_description": "23047a2cbd8e098a8e1f35d9a60168e3561cd01e79d78bc319ffaf0139cc4a05"
+      },
+      "save_action": "Save as draft",
+      "fresh_accessibility_readback_exact_text_matches": true,
+      "save_confirmation": "Your changes have been saved",
+      "original_listing_copy_changed": false,
+      "visual_assets_uploaded": false,
+      "review_step_enabled": false,
+      "review_submitted": false,
+      "published": false,
+      "observation_source": "Coordinating agent live browser save and fresh accessibility readback; no browser or account action by the documentation agent.",
+      "scope": "Exact existing name, short description and full description saved as a draft. No visual assets, review submission or publication are established.",
+      "independent_new_tab_persistence_readback": {
+        "recorded_at_utc": "2026-11-15T21:53:25Z",
+        "exact_default_listing_url_verified": true,
+        "all_three_text_values_match": true,
+        "character_counts": {
+          "name": 14,
+          "short_description": 76,
+          "full_description": 2891
+        },
+        "original_form_navigated_away_after_readback": true
+      }
+    },
+    "app_content_declarations": {
+      "recorded_at_utc": "2026-11-15T21:53:25Z",
+      "observation_source": "Coordinating agent live console actions followed by fresh selected-value and success-notice readback.",
+      "ads": {
+        "page_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/app-content/ads-declaration?source=dashboard",
+        "selected_answer": "No, my app does not contain ads",
+        "saved": true,
+        "fresh_selected_answer_verified": true,
+        "save_confirmation": "Change saved"
+      },
+      "government_apps": {
+        "page_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/app-content/government-apps?source=dashboard",
+        "selected_answer": "No",
+        "saved": true,
+        "fresh_selected_answer_verified": true,
+        "save_confirmation": "Change saved"
+      },
+      "financial_features": {
+        "page_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/app-content/finance",
+        "selected_answer": "My app doesn't provide any financial features",
+        "additional_documentation_required": false,
+        "saved": true,
+        "fresh_save_confirmation_verified": true,
+        "save_confirmation": "Change saved. Send for review in Publishing overview."
+      },
+      "health": {
+        "page_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/app-content/health?source=dashboard",
+        "selected_answer": "My app does not have any health features",
+        "prepared_through_step": "regional_requirements",
+        "saved": false,
+        "status": "prepared_unsaved_automatic_approval_review_blocked",
+        "blocked_action": "Save the exact no-health-features declaration",
+        "approval_review_reason": "Specific user authorization is required for this legal-style declaration; source-code evidence does not authorize the submission.",
+        "explicit_exact_declaration_authorization_pending": true,
+        "retry_attempted": false,
+        "scope": "The form selection was prepared, but its save was rejected. No saved health declaration is established."
+      },
+      "review_submitted": false,
+      "published": false,
+      "scope": "Three declarations are saved in the console; health remains prepared and unsaved. This does not complete the other app-content requirements or submit changes for review."
+    }
+  },
+  "google_play_app_signing": {
+    "page_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/keymanagement",
+    "package_name": "com.korlixdeveloper.esha",
+    "google_managed_app_signing_key_in_use": true,
+    "app_signing_certificate_sha256": "8A:40:8B:66:51:01:B3:4C:86:D6:AD:DC:F4:D8:C7:D8:AC:42:35:39:E3:61:58:E8:6E:FA:F3:D1:EB:5D:98:3C",
+    "install_base_percentage_displayed": "0%",
+    "upload_key_section_observed": false,
+    "signing_settings_changed": false,
+    "scope": "The page confirms the public app-signing certificate. An upload-key section was not shown; this is not proof that a private upload key does not exist. The Codemagic upload-key prerequisite remains separate."
+  },
+  "previous_successful_ci_checkpoint": {
+    "source_commit": "afce6caf8499b211fbd980295be6589034798ef2",
+    "workflow_run_id": 43762836653,
+    "workflow_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43762836653",
+    "workflow_conclusion": "success",
+    "workflow_completed_at_utc": "2026-11-15T21:25:11Z",
+    "observation_method": "Coordinating agent GitHub API readback of workflow status and source commit.",
+    "artifact_bytes_rehashed_by_this_update": false,
+    "scope": "Workflow-level success only. No per-job test count, downloaded artifact hash or signed store upload is inferred. The earlier bf4ff49 independently rehashed artifact checkpoint is preserved in earlier_cross_platform_native_validation."
+  },
+  "intermediate_cancelled_ci_workflow": {
+    "source_commit": "2f287d515a041e66c4a9679ba2b62cde21b5cd96",
+    "workflow_run_id": 43764121677,
+    "workflow_conclusion": "cancelled",
+    "observation_method": "Coordinating agent GitHub API readback.",
+    "scope": "Historical cancelled workflow, superseded for latest successful CI by the separate b17af5a run."
   }
 }

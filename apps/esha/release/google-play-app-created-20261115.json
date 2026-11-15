@@ -1,0 +1,129 @@
+{
+  "schema_version": 1,
+  "recorded_at_utc": "2026-11-15T21:45:43Z",
+  "evidence_type": "google_play_app_creation",
+  "source": "Coordinating agent live browser observations reported after creation; no browser or account actions performed by the documentation agent.",
+  "status": "app_created_dashboard_verified",
+  "final_dashboard_readback": {
+    "recorded_at_utc": "2026-11-15T21:54:57Z",
+    "completed_initial_setup_tasks": 5,
+    "total_initial_setup_tasks": 11,
+    "scope": "Privacy, ads, government, financial features, and category/contact are complete in the setup checklist. The saved text-only listing remains a draft; health is prepared but unsaved."
+  },
+  "app": {
+    "name": "Esha by Korlix",
+    "package_name": "com.korlixdeveloper.esha",
+    "app_id": "4972696331669549016",
+    "developer_id": "4772708594176030332",
+    "organization": "KORLIX",
+    "verified_dashboard_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/app-dashboard"
+  },
+  "creation": {
+    "explicit_action_time_user_acknowledgment_received": true,
+    "developer_program_policies_checked": true,
+    "us_export_compliance_and_encryption_checked": true,
+    "create_app_submitted": true,
+    "app_record_created": true,
+    "fresh_dashboard_verified": true,
+    "exact_creation_timestamp_recorded": false
+  },
+  "prior_prepared_form": {
+    "evidence_file": "google-play-app-preparation-20261115.json",
+    "default_language": "en-US",
+    "application_type": "App",
+    "download_pricing": "Free",
+    "package_availability_check": "available"
+  },
+  "supersedes": {
+    "evidence_file": "google-play-app-preparation-20261115.json",
+    "scope": "Its unsubmitted creation form, pending declaration acknowledgment and absent app record are historical. The original receipt remains unchanged."
+  },
+  "signing_evidence": {
+    "evidence_file": "android-signing-prerequisites-20261115.json",
+    "expected_reference": "ESHA_ANDROID_UPLOAD_KEY",
+    "status_at_prior_observation": "dedicated_key_reference_absent",
+    "fresh_signing_inventory_included": false
+  },
+  "scope_limit": "Confirms app creation, exact Play identity, persisted draft listing text and the separately recorded saved ads/government/financial declarations. Health remains prepared and unsaved. These facts do not establish signed bundle upload, Play subscription setup, all required app-content declarations, visual assets, release review or publication. The earlier Android signing observation is not superseded by this receipt.",
+  "store_listing_draft": {
+    "status": "listing_text_saved_as_draft",
+    "recorded_at_utc": "2026-11-15T21:50:45Z",
+    "page_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/store-listings/default/edit",
+    "locale": "en-US",
+    "source_copy_file": "store-metadata.json",
+    "source_copy_object": "google_play",
+    "name_characters": 14,
+    "name_character_limit": 30,
+    "short_description_characters": 76,
+    "short_description_character_limit": 80,
+    "full_description_characters": 2891,
+    "full_description_character_limit": 4000,
+    "text_sha256": {
+      "name": "17497ca62316c1020539da8b2821ab189cb87caedae278e8a449b50de00962bc",
+      "short_description": "80574b2b624f0976886e9f38729049152263358c065abbf2e3c5fbdf292e4ce1",
+      "full_description": "23047a2cbd8e098a8e1f35d9a60168e3561cd01e79d78bc319ffaf0139cc4a05"
+    },
+    "save_action": "Save as draft",
+    "fresh_accessibility_readback_exact_text_matches": true,
+    "save_confirmation": "Your changes have been saved",
+    "original_listing_copy_changed": false,
+    "visual_assets_uploaded": false,
+    "review_step_enabled": false,
+    "review_submitted": false,
+    "published": false,
+    "observation_source": "Coordinating agent live browser save and fresh accessibility readback; no browser or account action by the documentation agent.",
+    "scope": "Exact existing name, short description and full description saved as a draft. No visual assets, review submission or publication are established.",
+    "independent_new_tab_persistence_readback": {
+      "recorded_at_utc": "2026-11-15T21:53:25Z",
+      "exact_default_listing_url_verified": true,
+      "all_three_text_values_match": true,
+      "character_counts": {
+        "name": 14,
+        "short_description": 76,
+        "full_description": 2891
+      },
+      "original_form_navigated_away_after_readback": true
+    }
+  },
+  "app_content_declarations": {
+    "recorded_at_utc": "2026-11-15T21:53:25Z",
+    "observation_source": "Coordinating agent live console actions followed by fresh selected-value and success-notice readback.",
+    "ads": {
+      "page_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/app-content/ads-declaration?source=dashboard",
+      "selected_answer": "No, my app does not contain ads",
+      "saved": true,
+      "fresh_selected_answer_verified": true,
+      "save_confirmation": "Change saved"
+    },
+    "government_apps": {
+      "page_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/app-content/government-apps?source=dashboard",
+      "selected_answer": "No",
+      "saved": true,
+      "fresh_selected_answer_verified": true,
+      "save_confirmation": "Change saved"
+    },
+    "financial_features": {
+      "page_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/app-content/finance",
+      "selected_answer": "My app doesn't provide any financial features",
+      "additional_documentation_required": false,
+      "saved": true,
+      "fresh_save_confirmation_verified": true,
+      "save_confirmation": "Change saved. Send for review in Publishing overview."
+    },
+    "health": {
+      "page_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/app-content/health?source=dashboard",
+      "selected_answer": "My app does not have any health features",
+      "prepared_through_step": "regional_requirements",
+      "saved": false,
+      "status": "prepared_unsaved_automatic_approval_review_blocked",
+      "blocked_action": "Save the exact no-health-features declaration",
+      "approval_review_reason": "Specific user authorization is required for this legal-style declaration; source-code evidence does not authorize the submission.",
+      "explicit_exact_declaration_authorization_pending": true,
+      "retry_attempted": false,
+      "scope": "The form selection was prepared, but its save was rejected. No saved health declaration is established."
+    },
+    "review_submitted": false,
+    "published": false,
+    "scope": "Three declarations are saved in the console; health remains prepared and unsaved. This does not complete the other app-content requirements or submit changes for review."
+  }
+}

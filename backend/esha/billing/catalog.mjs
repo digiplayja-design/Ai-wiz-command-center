@@ -6,11 +6,13 @@ import astra from '../../korlix_astra.cjs';
 export const ESHA_BUNDLE = 'com.korlixdeveloper.esha';
 export const ESHA_CATALOG_VERSION = 'esha_monthly_v1';
 export const ESHA_AI_ROLE_POLICY = 'conversation_and_deep_thinking_v1';
-// Prepared owner direction. The conversational name has no verified API ID yet.
-// Do not resolve it to a sibling model or use deep thinking as its fallback.
+// Owner-selected roles use distinct APIs. Resolving Live's model does not make
+// its unimplemented voice transport or duration budget ready for activation.
 export const ESHA_AI_ROLES = Object.freeze({
-  conversation: Object.freeze({requestedModel: 'GPT 2.5 conversational', model: null, reasoningEffort: null}),
-  deep_thinking: Object.freeze({requestedModel: 'Sol 6.1', model: 'gpt-6.1-sol', reasoningEffort: 'high'}),
+  conversation: Object.freeze({requestedModel: 'Highest live conversation model OpenAI has',
+    model: 'gpt-live-1', reasoningEffort: null, api: 'live', transport: 'webrtc'}),
+  deep_thinking: Object.freeze({requestedModel: 'Sol 6.1', model: 'gpt-6.1-sol',
+    reasoningEffort: 'high', api: 'responses', transport: 'https'}),
 });
 export const ESHA_PRODUCT = Object.freeze({
   apple: 'com.korlixdeveloper.esha.monthly', google: 'esha_monthly',
@@ -53,7 +55,8 @@ function modelBudgetConfiguration(env, model, reasoningEffort, modelApproved) {
   const configured = modelApproved && maxInputTokens !== null && maxInputTokens <= 922000 &&
     maxOutputTokens !== null && maxOutputTokens >= (model === astra.TEXT_MODEL ? astra.TEXT_OUTPUT_TOKENS : 256) &&
     maxOutputTokens <= (model === astra.TEXT_MODEL ? 131072 : 128000) && trialAttempts !== null && monthlyAttempts !== null;
-  return {configured, model, reasoningEffort, maxInputTokens: configured ? maxInputTokens : null,
+  return {configured, model, reasoningEffort, api: 'responses', transport: 'https',
+    maxInputTokens: configured ? maxInputTokens : null,
     maxOutputTokens: configured ? maxOutputTokens : null,
     trialAttempts: configured ? trialAttempts : null, monthlyAttempts: configured ? monthlyAttempts : null};
 }
@@ -67,7 +70,8 @@ export function nativeAiConfiguration(env = process.env, {role} = {}) {
     return {policy: env.KORLIX_ESHA_AI_POLICY ?? null, role: selectedRole,
       requestedModel: target?.requestedModel ?? null, resolved: !!target?.model,
       ...modelBudgetConfiguration(env, target?.model ?? null, target?.reasoningEffort ?? null,
-        !!target?.model && !conflictingOverride)};
+        target?.api === 'responses' && !conflictingOverride),
+      api: target?.api ?? null, transport: target?.transport ?? null};
   }
   // Preserve the legacy configuration contract. Luna is historical compatibility,
   // not the owner's new conversational choice; no shared Astra policy is changed.

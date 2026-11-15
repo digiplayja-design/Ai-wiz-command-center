@@ -1,34 +1,43 @@
 # Esha AI model policy — prepared, inactive
 
-The owner's current direction is **“GPT 2.5 conversational and Sol 6.1 for deep
-thinking.”** This supersedes the previous inactive Luna proposal. The Sol portion
-is prepared below; the exact conversational API model remains unresolved. The
-previous 10-trial/120-monthly consultation proposal was not approved. No commercial
-allowance or input/output/attempt budget is selected or defaulted by this change.
+The owner clarified the conversational requirement as **“the highest live
+conversation model OpenAI has”**, while retaining **Sol 6.1 for deep thinking**.
+Current official documentation resolves that voice role to **`gpt-live-1`**. This
+supersedes the earlier ambiguous “GPT 2.5 conversational” wording and inactive Luna
+proposal. Both model identities are resolved; the Live integration is unimplemented.
+The previous 10-trial/120-monthly consultation proposal was not approved. No
+commercial voice/consultation allowance or input/output/attempt budget is selected
+or defaulted by this change.
 No production environment was changed, no deployment or migration was applied,
 and no live model call was made during this preparation.
 
 ## Prepared roles
 
-| Role | Requested model | Prepared API configuration |
+| Role | Resolved model | API and transport selection |
 | --- | --- | --- |
-| `conversation` | GPT 2.5 conversational | Unresolved: `model: null`, `reasoningEffort: null`; fails closed |
-| `deep_thinking` | Sol 6.1 | `gpt-6.1-sol`, explicit `reasoning.effort: high` |
+| `conversation` | `gpt-live-1` | `api: live`, `transport: webrtc`; resolved but unimplemented and disabled |
+| `deep_thinking` | `gpt-6.1-sol` | `api: responses`, `transport: https`, explicit `reasoning.effort: high` |
+
+[GPT-Live-1](https://developers.openai.com/api/docs/models/gpt-live-1) is OpenAI's
+premier full-duplex conversational voice model. Its API is `/v1/live/sessions`;
+it does not support the Responses or Realtime endpoints. It does not provide
+Structured Outputs. This selection adds no voice session creation or audio code.
 
 [GPT-6.1 Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol) supports
 the Responses API and Structured Outputs. Its documented reasoning efforts are
 `low`, `medium`, `high`, `xhigh`, and `max`; `none` is unsupported. The prepared
-deep-thinking role pins `high`. It does not replace Sol with Astra, choose another
-conversational model, or enable a Realtime/audio integration. The current official
-[model catalog](https://developers.openai.com/api/docs/models/all) did not resolve
-“GPT 2.5 conversational” or `gpt-realtime-2.5`; that identity needs clarification.
+deep-thinking role pins `high` and preserves strict structured result validation.
+The Responses adapter explicitly rejects Live before token counting or generation,
+even if a caller supplies a configuration marked ready. Model identity alone does
+not make an incompatible API or missing budget ready.
 
 `KORLIX_ESHA_AI_POLICY=conversation_and_deep_thinking_v1` selects this explicit
 prepared policy. `nativeAiConfiguration(environment, {role: 'deep_thinking'})`
 and `createEshaAi({environment, role: 'deep_thinking'})` prepare the Sol request
 and transport. A role must be an exact string supplied by trusted server routing.
-Omitting a role selects the unresolved conversation role and fails closed, even
-if all activation flags and budgets happen to be present. Unknown policies/roles
+Omitting a role selects the resolved Live conversation role and fails closed
+because this code has no Live transport or duration ledger. Existing token and
+attempt settings cannot activate Live, even if all flags are present. Unknown policies/roles
 and mixed legacy `KORLIX_ESHA_TEXT_MODEL` or `KORLIX_ESHA_REASONING_EFFORT`
 overrides also fail closed. A client's `role`, `mode`, or `model` field cannot
 select this adapter through the current consultation endpoint.
@@ -39,6 +48,49 @@ existing provider-attempt table constraint and debit RPC permit only Astra/max o
 Luna/low, so they reject Sol/high before recording a debit. Both guards are
 unchanged. A follow-up ledger migration and trusted role routing are required;
 the adapter must never be used to bypass the committed debit.
+
+## Live session contract and spending blocker
+
+The proposed native path is WebRTC media plus an Esha-controlled server sideband.
+The trusted server creates `/v1/live/sessions` with the native SDP offer, `store:
+false`, and `delegation: {type: 'client'}`; it keeps the API key off the device.
+The native peer uses the `oai-events` data channel, applies the returned SDP answer,
+and waits for `session.started`. Audio travels on WebRTC tracks. The sideband uses
+`wss://api.openai.com/v1/live/sessions/{session_id}/attach`. Frontend command
+permissions must be restricted explicitly because omission allows all commands.
+These are proposed integration requirements, not implemented behavior.
+
+Client delegation lets Esha apply its own token counting, reservation, durable
+attempt debit and result validation to every Sol call. The server accumulates
+transcript deltas, deduplicates `session.delegation.created` by session/delegation
+ID, then returns validated context with `session.commentary.append` carrying the
+matching delegation ID. Its 500-token content cap needs an explicit bounded spoken
+summary. Live may paraphrase that context; structured product cards remain based
+on the separately validated Sol result. See [delegation](https://developers.openai.com/api/docs/guides/live-delegation)
+and [WebRTC](https://developers.openai.com/api/docs/guides/voice-webrtc?api=live).
+
+As checked on 2026-11-15, Live costs **$0.05/minute, billed per second**, plus Sol
+usage. Silence and waiting for the backend remain billable. WebRTC creation
+charges 15 seconds, credited against a started session's duration. Usage updates
+are cumulative snapshots, not increments; final usage is confirmed by
+`session.closed`. Unconfirmed finalization must retain a conservative reservation.
+See [voice costs](https://developers.openai.com/api/docs/guides/voice-latency-cost?api=live).
+
+**A crash-safe duration cap is still an activation blocker.** The published
+[create schema](https://developers.openai.com/api/reference/resources/live/methods/create)
+does not expose a caller-selected maximum duration or expiry. Session resources
+return a server-assigned `expires_at`, and `expired` is a documented close reason,
+but the inspected documentation does not state a numeric lifetime usable as an
+Esha budget guarantee. An in-process sideband timer cannot enforce a hard cap if
+Esha crashes while native WebRTC remains connected. Before activation, establish
+a verified provider-side bound or another proven bounded primary-connection
+design, with durable reservations, independent closure and conservative recovery.
+Do not infer Live's lifetime from Realtime documentation. See [session lifecycle](https://developers.openai.com/api/docs/guides/live-conversations).
+
+The inspected backend SDK is OpenAI 6.39.0; offline inspection finds no `client.live`
+resource. The Flutter app has no WebRTC dependency, microphone permissions or audio
+controller. A future Esha-specific transport must address these gaps without
+silently upgrading shared app behavior. No voice-minute defaults are added here.
 
 ## Explicit limits and legacy compatibility
 
@@ -71,7 +123,7 @@ new Esha checkout unavailable; existing purchases remain restorable/verifiable.
 
 ## Enforcement
 
-The backend builds one complete Responses request. OpenAI's
+For deep thinking, the backend builds one complete Responses request. OpenAI's
 [input-token endpoint](https://developers.openai.com/api/docs/guides/token-counting)
 counts the actual model input, including the system instructions, full server
 catalog, selected conversation, optional shared preferences, reasoning settings,
@@ -116,18 +168,21 @@ without copying questions or answers. Account deletion cascades to these records
 
 ## Required integration before activation
 
-1. Resolve the exact conversational API model and define when the trusted server
-   chooses conversation versus deep thinking. Sol 6.1 is already the chosen
-   deep-thinking model; this is not a request to approve that identity again.
-2. Choose the still-unapproved commercial allowances and explicit input/output
-   and provider-attempt limits. No previous proposal or test fixture supplies
-   owner approval for those values.
+1. Implement the selected Live/WebRTC transport and authenticated Esha-only
+   voice route, with client delegation to the selected Sol/high backend. Both
+   model identities are settled; no model substitution is required.
+2. Choose the still-unapproved voice-minute and consultation allowances, plus
+   explicit input/output, provider-attempt and session limits. Establish the
+   independently enforceable duration bound described above. No previous proposal
+   or test fixture supplies owner approval for those values.
 3. Prepare and verify a narrowly scoped follow-up migration admitting Sol/high
    in the provider-attempt table and debit RPC while preserving all account,
    period, expiry, verification, idempotency, cap and irreversible-debit guards.
 4. Integrate trusted role selection into the consultation route without losing
    input-token counting, reservation, debit-before-generation, replay and result
-   validation. Any native mode control or Realtime feature is separate work.
+   validation. Add a separate durable voice-duration ledger and native microphone,
+   playback, interruption and session-closure handling; existing consultation
+   counts cannot account for voice time. Validate the genuine flow on devices.
 
 Keep Esha generation disabled until the complete selected policy, limits,
 compatible serving code and database guards are ready. An older worker has no
@@ -142,7 +197,8 @@ cd backend
 node --test test/esha_sol_preparation.test.mjs test/esha_ai_budget.test.mjs test/esha_native_billing.test.mjs
 ```
 
-They cover Sol/high request preparation, an unresolved conversational role,
+They cover Sol/high request preparation, resolved but inactive Live selection,
+rejection of Live by the Responses adapter even with forged ready flags,
 exact trusted role selection, unchanged legacy behavior, strict output format,
 count/generation context parity, real SDK retry suppression, and the shipping
 route's refusal to run a client-selected role. The real SQL also verifies that

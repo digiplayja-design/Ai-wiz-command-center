@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "status": "draft_apple_listing_subscription_and_signed_ios_build_2_prepared_not_review_submitted_or_published",
+  "status": "draft_apple_release_prepared_google_play_app_created_not_review_submitted_or_published",
   "prepared_on": "2026-11-15",
   "locale": "en-US",
   "source_commit": "d97cdda79f3e41be45ebeecd12718702e6b070dc",
@@ -136,6 +136,20 @@
       "contact_details_changed": false,
       "review_submitted": false,
       "published": false
+    },
+    "review_contact": {
+      "evidence_file": "apple-review-contact-updated-20261115.json",
+      "source_commit": "2f287d515a041e66c4a9679ba2b62cde21b5cd96",
+      "status": "review_contact_updated_and_read_back",
+      "completed_at_utc": "2026-11-15T21:34:42.709418+00:00",
+      "approved_contact_read_back": true,
+      "non_contact_attributes_unchanged": true,
+      "demo_credentials_unchanged": true,
+      "reviewer_login_verified": false,
+      "version_state": "PREPARE_FOR_SUBMISSION",
+      "request_count": 10,
+      "patch_attempts": 1,
+      "patch_retries": 0
     }
   },
   "google_play": {
@@ -147,18 +161,141 @@
       "subscription_product_id": "esha_monthly",
       "base_plan_id": "monthly",
       "trial_offer_id": "trial-3-days",
-      "play_console_app_record_id": null,
-      "developer_account_id": null,
-      "verification_status": "package_and_subscription_ids_configured_in_source_store_records_unverified"
+      "play_console_app_record_id": "4972696331669549016",
+      "developer_account_id": "4772708594176030332",
+      "verification_status": "exact_play_app_record_package_and_developer_verified_subscription_records_unverified"
     },
     "release_readiness": {
       "evidence_file": "android-signing-prerequisites-20261115.json",
       "dedicated_upload_key_reference_present": false,
       "expected_upload_key_reference": "ESHA_ANDROID_UPLOAD_KEY",
       "signed_android_candidate_verified": false,
-      "console_verification_status": "blocked_by_automatic_approval_review_of_redirected_google_play_origin",
+      "console_verification_status": "app_created_and_fresh_dashboard_verified",
       "app_review_submitted": false,
-      "publicly_published": false
+      "publicly_published": false,
+      "app_creation_evidence_file": "google-play-app-created-20261115.json",
+      "dashboard_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/app-dashboard",
+      "required_creation_declarations_accepted": true,
+      "signing_evidence_scope": "The dedicated Codemagic upload-key reference was absent at the prior inventory check. The Google-managed app-signing key below is a separate key; no fresh upload-key inventory or signed Android build is established.",
+      "default_store_listing_text_saved_as_draft": true,
+      "visual_assets_uploaded": false
+    },
+    "console_setup": {
+      "observation_source": "Coordinating agent live Google Play Console observations on 2026-11-15.",
+      "privacy_url": "https://chee-chai-chee-backend.onrender.com/esha/privacy",
+      "privacy_url_saved": true,
+      "category": "Beauty",
+      "category_saved": true,
+      "save_confirmation": "Change saved. Send for review in Publishing overview",
+      "changes_sent_for_review": false,
+      "scope": "Saved Play Console changes, not reviewed or publicly published changes.",
+      "contact": {
+        "email": "support@korlixdeveloper.com",
+        "phone": "+16148942317",
+        "website_url_saved": "http://www.korlixdeveloper.com/support.html",
+        "fields_saved": true,
+        "website_normalized_by_google": true,
+        "https_correction": {
+          "requested_url": "https://www.korlixdeveloper.com/support.html",
+          "status": "blocked_by_automatic_approval_review_pending_explicit_exact_url_authorization",
+          "write_succeeded": false,
+          "automatic_approval_rejections": 2,
+          "https_target_verified_read_only": true,
+          "further_retries_planned": false,
+          "scope": "The saved URL remains HTTP. A read-only HTTPS page check and existing repository usage did not satisfy automatic approval review for this specific write."
+        }
+      },
+      "default_store_listing": {
+        "status": "listing_text_saved_as_draft",
+        "recorded_at_utc": "2026-11-15T21:50:45Z",
+        "page_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/store-listings/default/edit",
+        "locale": "en-US",
+        "source_copy_file": "store-metadata.json",
+        "source_copy_object": "google_play",
+        "name_characters": 14,
+        "name_character_limit": 30,
+        "short_description_characters": 76,
+        "short_description_character_limit": 80,
+        "full_description_characters": 2891,
+        "full_description_character_limit": 4000,
+        "text_sha256": {
+          "name": "17497ca62316c1020539da8b2821ab189cb87caedae278e8a449b50de00962bc",
+          "short_description": "80574b2b624f0976886e9f38729049152263358c065abbf2e3c5fbdf292e4ce1",
+          "full_description": "23047a2cbd8e098a8e1f35d9a60168e3561cd01e79d78bc319ffaf0139cc4a05"
+        },
+        "save_action": "Save as draft",
+        "fresh_accessibility_readback_exact_text_matches": true,
+        "save_confirmation": "Your changes have been saved",
+        "original_listing_copy_changed": false,
+        "visual_assets_uploaded": false,
+        "review_step_enabled": false,
+        "review_submitted": false,
+        "published": false,
+        "observation_source": "Coordinating agent live browser save and fresh accessibility readback; no browser or account action by the documentation agent.",
+        "scope": "Exact existing name, short description and full description saved as a draft. No visual assets, review submission or publication are established.",
+        "independent_new_tab_persistence_readback": {
+          "recorded_at_utc": "2026-11-15T21:53:25Z",
+          "exact_default_listing_url_verified": true,
+          "all_three_text_values_match": true,
+          "character_counts": {
+            "name": 14,
+            "short_description": 76,
+            "full_description": 2891
+          },
+          "original_form_navigated_away_after_readback": true
+        }
+      },
+      "app_content_declarations": {
+        "recorded_at_utc": "2026-11-15T21:53:25Z",
+        "observation_source": "Coordinating agent live console actions followed by fresh selected-value and success-notice readback.",
+        "ads": {
+          "page_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/app-content/ads-declaration?source=dashboard",
+          "selected_answer": "No, my app does not contain ads",
+          "saved": true,
+          "fresh_selected_answer_verified": true,
+          "save_confirmation": "Change saved"
+        },
+        "government_apps": {
+          "page_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/app-content/government-apps?source=dashboard",
+          "selected_answer": "No",
+          "saved": true,
+          "fresh_selected_answer_verified": true,
+          "save_confirmation": "Change saved"
+        },
+        "financial_features": {
+          "page_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/app-content/finance",
+          "selected_answer": "My app doesn't provide any financial features",
+          "additional_documentation_required": false,
+          "saved": true,
+          "fresh_save_confirmation_verified": true,
+          "save_confirmation": "Change saved. Send for review in Publishing overview."
+        },
+        "health": {
+          "page_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/app-content/health?source=dashboard",
+          "selected_answer": "My app does not have any health features",
+          "prepared_through_step": "regional_requirements",
+          "saved": false,
+          "status": "prepared_unsaved_automatic_approval_review_blocked",
+          "blocked_action": "Save the exact no-health-features declaration",
+          "approval_review_reason": "Specific user authorization is required for this legal-style declaration; source-code evidence does not authorize the submission.",
+          "explicit_exact_declaration_authorization_pending": true,
+          "retry_attempted": false,
+          "scope": "The form selection was prepared, but its save was rejected. No saved health declaration is established."
+        },
+        "review_submitted": false,
+        "published": false,
+        "scope": "Three declarations are saved in the console; health remains prepared and unsaved. This does not complete the other app-content requirements or submit changes for review."
+      }
+    },
+    "app_signing": {
+      "page_url": "https://play.google.com/console/u/0/developers/4772708594176030332/app/4972696331669549016/keymanagement",
+      "package_name": "com.korlixdeveloper.esha",
+      "google_managed_app_signing_key_in_use": true,
+      "app_signing_certificate_sha256": "8A:40:8B:66:51:01:B3:4C:86:D6:AD:DC:F4:D8:C7:D8:AC:42:35:39:E3:61:58:E8:6E:FA:F3:D1:EB:5D:98:3C",
+      "install_base_percentage_displayed": "0%",
+      "upload_key_section_observed": false,
+      "signing_settings_changed": false,
+      "scope": "The page confirms the public app-signing certificate. An upload-key section was not shown; this is not proof that a private upload key does not exist. The Codemagic upload-key prerequisite remains separate."
     }
   },
   "links": {
@@ -206,15 +343,26 @@
     "account_legal_support_and_deletion_controls_require_subscription": false,
     "ai_model": null,
     "ai_max_output_tokens": null,
-    "ai_configuration_status": "inactive_esha_option_prepared_owner_choice_required_no_live_ai_claim",
+    "ai_configuration_status": "models_selected_inactive_live_transport_accounting_and_allowances_pending",
     "ai_preparation": {
       "source_commit": "e9415b73c0dc36d4474c2a2e2c6abbda7d126acd",
       "proposal_document": "backend/esha/billing/AI_OPTION.md",
-      "scope": "Esha-only adapter and durable provider-attempt budget prepared and tested; model, allowance and output-budget choice not approved.",
+      "scope": "Historical inactive adapter preparation checkpoint before the later Sol and Live model selections; not evidence of current model selection, commercial allowance approval or deployment.",
       "deployed": false,
       "migration_applied": false,
       "activated": false,
       "status_scope": "Inactive preparation checkpoint; this release continuation applies no AI migration, deployment or activation."
+    },
+    "current_owner_ai_direction": {
+      "conversation_model": "gpt-live-1",
+      "conversation_api": "Live API",
+      "deep_thinking_model": "gpt-6.1-sol",
+      "deep_thinking_api": "Responses API",
+      "voice_transport_implemented": false,
+      "commercial_allowances_approved": false,
+      "prior_10_trial_120_monthly_allowance_approved": false,
+      "service_activated": false,
+      "scope": "Models identified for the owner's updated direction. Listing copy is unchanged; model choice does not establish live voice implementation, deployment, commercial caps or activation."
     }
   },
   "owner_review": {
@@ -224,16 +372,18 @@
     "signed_release_artifacts_verified": false,
     "store_screenshots": [],
     "store_screenshots_status": "live_apple_inventory_has_no_screenshot_sets_genuine_member_ui_requires_sandbox_entitlement",
-    "store_disclosure_forms": "not_completed_requires_owner_review",
+    "store_disclosure_forms": "partially_saved_google_ads_government_financial_other_forms_incomplete",
     "legal_and_age_rating_attestations": "not_completed_requires_owner_review",
     "notes": [
       "This file remains a metadata draft for owner review. Allowlisted Apple draft fields were synchronized and reread. A separate signed build 2 upload succeeded. Neither operation submits the app for review or publishes it.",
-      "The exact Apple app, bundle, SKU and team identity is API-verified. The dedicated Esha App Store profile was created, imported into Codemagic and used by the signed build. Branded version 1.0.0 build 2 is independently hash/plist-verified and uploaded. Apple subscription group, exact monthly product, U.S. $4.99 price and eligible three-day trial are created and read back; Apple build 2 processing is VALID and unexpired in the later read-only inventory. The later build-selection receipt confirms build 2 attached to the existing editable version. Review submission remains incomplete. Google Play store identifiers remain unverified.",
+      "The exact Apple app, bundle, SKU and team identity is API-verified. The dedicated Esha App Store profile was created, imported into Codemagic and used by the signed build. Branded version 1.0.0 build 2 is independently hash/plist-verified and uploaded. Apple subscription group, exact monthly product, U.S. $4.99 price and eligible three-day trial are created and read back; Apple build 2 processing is VALID and unexpired in the later read-only inventory. The later build-selection receipt confirms build 2 attached to the existing editable version. Review submission remains incomplete. The exact Google Play app record, package and developer identity are now verified; Google subscription records and signed Android upload remain unverified.",
       "Earlier Esha Privacy and Terms pages returned HTTP 200 after deployment of commit 4bb80c1ce6fe1a314a31a23b60b70832c1045556 at the November 15, 2026 18:06:09 UTC checkpoint. The current whole-app membership wording is now deployed on live commit 5e2a4086b7c4a58e8614abfa3625270b05def152, Render deploy dep-dbt0l93l550s739n1p3g, and verified by the 20:47 UTC HTTP receipt. The current checks cover policy wording, the offer and deletion anchor; they do not activate purchases or AI.",
       "The native membership correction at bf4ff498e3aa71eea07d4052d8789cd37ddba7c0 passed 49 Flutter tests and successful Android and iOS Simulator compilation in GitHub Actions run 43754059868. It requires fresh same-account server verification for Discover, planner, vanity, studio and AI. Active members retain non-AI features at zero consultations. Account, recovery, restore/manage, legal, support and deletion controls remain accessible without an active subscription. The native build evidence is separate from signed-device release verification.",
-      "Trial and monthly consultation counts, the Esha-specific AI model and output budget are not approved or configured by this draft. Approve them, verify real store offers, and match the final build and active service before enabling purchases or submitting for review. Both current public billing catalogs still disable new purchases and consultations, report store and allowance configuration unverified, and return null consultation counts.",
-      "Owner review of legal entity, privacy and age-rating attestations, content rights, reviewer access and store screenshots remains outstanding. No owner attestation is inferred from this draft.",
-      "The dedicated ESHA_ANDROID_UPLOAD_KEY reference was absent from the live Codemagic Android keystore inventory. Google Play navigation redirected to google.play/business and was rejected by automatic approval review; no additional redirect attempts were made after that rejection."
+      "The owner selected the highest live conversational model, identified as GPT-Live-1 (gpt-live-1) through the Live API, and retained gpt-6.1-sol for deep thinking. Trial/monthly allowances and provider limits remain unapproved. Live voice transport and seconds-based accounting are not implemented. Neither this selection nor this unchanged listing draft activates service. The last live billing catalog receipt still reports purchases and consultations disabled, unverified store/allowance configuration and null consultation counts.",
+      "Owner review of remaining privacy, age-rating, content-rights and release declarations, reviewer access and store screenshots remains outstanding. The Google app-creation policy/export declarations were explicitly acknowledged and accepted; this does not complete the separate app-content or release forms. The Apple review contact is approved and read back, with existing demo credentials preserved but login untested.",
+      "The earlier Google redirect approval block was resolved by explicit user approval and successful KORLIX sign-in. The Esha Play app is created and dashboard-verified; its privacy URL and Beauty category are saved pending review. Google-managed app signing shows the exact public certificate and 0% install base, without any signing-setting change. The prior Codemagic inventory found ESHA_ANDROID_UPLOAD_KEY absent; the Play app-signing page did not show an upload-key section and cannot establish private-key absence.",
+      "Google Play contact email support@korlixdeveloper.com and phone +16148942317 are saved. Google normalized the website to http://www.korlixdeveloper.com/support.html. Correction to https://www.korlixdeveloper.com/support.html was rejected twice by automatic approval review for insufficient specific user approval, including after read-only verification of the exact HTTPS support page. The saved website remains HTTP; no further retry is planned without explicit exact-URL authorization.",
+      "Google Play ads (no ads), government-app status (No) and financial features (none) were saved with fresh success readback. The no-health-features form was prepared through regional requirements, but Save was rejected by automatic approval review because the exact declaration requires specific user authorization; no retry or saved health claim is made. This pending health authorization is separate from the exact HTTPS website correction. No app or changes were sent for review or published."
     ],
     "current_policy_scope_revision_deployed": true,
     "policy_verification_attribution": "Agent verified the live deployment and public HTTP responses recorded in live-policy-check-20261115.json. This factual verification does not supply owner approval of copy, legal declarations or subscription terms.",
@@ -242,8 +392,12 @@
     "signed_release_artifacts_verification_scope": "Signed iPhone IPA build 2 is verified and uploaded; a signed Android release remains blocked by the missing dedicated Esha upload key.",
     "apple_store_identity_and_offer_verified": true,
     "subscription_review_screenshot_status": "absent_in_live_inventory",
-    "review_contact_status": "all_four_contact_fields_absent_in_live_inventory",
-    "review_demo_credentials_status": "present_but_values_not_read_and_access_not_tested"
+    "review_contact_status": "approved_contact_updated_and_read_back",
+    "review_demo_credentials_status": "present_preserved_by_contact_update_access_not_tested",
+    "review_contact_evidence_file": "apple-review-contact-updated-20261115.json",
+    "google_play_app_identity_verified": true,
+    "google_play_creation_declarations_accepted": true,
+    "google_play_remaining_declarations_status": "creation_ads_government_financial_saved_health_prepared_unsaved_other_app_content_and_release_forms_incomplete"
   },
   "source_scope_note": "source_commit retains the historical d97cdda native-artifact checkpoint. Cross-platform membership validation, signed iPhone build 2, Apple profile/listing and live policy deployment each have exact source commits and receipts. Upload success is separate from Apple processing, draft build selection, review submission, public release and backend activation.",
   "source_commit_scope": "historical_native_artifact_checkpoint_only_not_current_app_validation_or_deployment",
@@ -298,5 +452,16 @@
     "launch_placeholder_replaced_with_existing_pink_logo": true,
     "launch_placeholder_warning_present": false,
     "apple_processing_evidence_file": "apple-inventory-after-subscription-20261115.json"
+  },
+  "latest_native_ci_workflow": {
+    "source_commit": "b17af5ad3195fefb1092b7da67f7619bdba1a3da",
+    "workflow_run_id": 43764794330,
+    "workflow_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43764794330",
+    "workflow_status": "completed",
+    "workflow_conclusion": "success",
+    "recorded_at_utc": "2026-11-15T21:50:02Z",
+    "observation_method": "Coordinating agent fresh GitHub API readback of workflow status and source commit.",
+    "artifact_bytes_rehashed_by_this_update": false,
+    "scope": "Workflow-level success for b17af5a only. No per-job test count, downloaded artifact hash, signed store upload or success of a subsequent commit is inferred. The prior afce6caf success and bf4ff49 independently rehashed artifact checkpoint remain separate historical evidence."
   }
 }
