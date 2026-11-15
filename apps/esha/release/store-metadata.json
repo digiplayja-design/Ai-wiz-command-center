@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "status": "draft_for_owner_review_not_submitted",
+  "prepared_on": "2026-11-15",
+  "locale": "en-US",
+  "source_commit": "d97cdda79f3e41be45ebeecd12718702e6b070dc",
+  "app": {
+    "display_name": "Esha by Korlix",
+    "source_version": "1.0.0",
+    "source_build_number": 1,
+    "icon": {
+      "source_path": "apps/esha/assets/esha-korlix-pink.png",
+      "description": "Existing pink Korlix icon used by the native Esha project.",
+      "status": "source_asset_only_store_artwork_not_verified"
+    }
+  },
+  "apple": {
+    "name": "Esha by Korlix",
+    "subtitle": "Beauty routines, made personal",
+    "promotional_text": "Explore beauty products, build a routine around your budget, and keep your favorites and illustrated looks together in Esha by Korlix.",
+    "description": "Make room for your own kind of beauty. Esha by Korlix brings product discovery, guided routines and a personal beauty collection together.\n\nDISCOVER YOUR NEXT FAVORITE\nExplore a starter catalog of makeup, lipstick, lip gloss, lashes, body wash and lotion. Search and filter categories, read sourced product details and open the manufacturer's page to check the current shade, size, price and availability.\n\nBUILD A ROUTINE AROUND YOUR BUDGET\nChoose your preferences and new-product budget to create a guided beauty edit. Include products you already own, review the estimated cost and save the routine for later. Product prices are dated estimates before tax and shipping. Items without a verified price show Check price. Unknown purchase prices never count as free in a new-product budget.\n\nKEEP YOUR VANITY TOGETHER\nSave favorites, mark products you own, and keep your routines and looks in one place. Explore with a guest collection on your device, or sign in to a shared Korlix account to sync an account collection.\n\nPLAY WITH AN ILLUSTRATED LOOK\nExplore lip colors, satin or gloss finishes and lash styles in the look studio, then save the combinations you like. The studio uses a stylized illustration and does not scan your face or provide a selfie try-on.\n\nOPTIONAL LIVE AI CONSULTATIONS\nWhen the service and store offer are available, an optional Esha membership adds live AI beauty consultations. Ask about makeup, lip pairings, lashes or body-care preferences. Before you send a question, Esha asks for permission to share your question and recent conversation with Korlix and OpenAI. Sharing saved beauty preferences is a separate choice. You can withdraw permission for future requests and report an answer in the app.\n\nMEMBERSHIP DETAILS\nWhen offered, eligible subscribers may receive 3 days free, then US $4.99 per month. The App Store shows your actual local price and eligible offer before purchase. The app shows the included consultation allowance before purchase; live consultations also require an active verified membership and available consultations. Membership renews automatically until canceled through your store account. Use Restore purchases or Manage subscription in Esha. Installing the app or creating an account does not start a trial. Cosmetics are purchased separately. Esha membership does not upgrade another Korlix plan.\n\nEsha offers cosmetic guidance. It does not diagnose conditions, provide medical treatment or guarantee an exact shade match. Check current product details before buying.\n\nPrivacy: https://chee-chai-chee-backend.onrender.com/esha/privacy\nTerms and membership: https://chee-chai-chee-backend.onrender.com/esha/terms\nApple standard EULA: https://www.apple.com/legal/internet-services/itunes/dev/stdeula/\nSupport: support@korlixdeveloper.com",
+    "candidate_identifiers": {
+      "bundle_id": "com.korlixdeveloper.esha",
+      "monthly_subscription_product_id": "com.korlixdeveloper.esha.monthly",
+      "app_store_connect_numeric_app_id": null,
+      "apple_developer_team_id": null,
+      "app_store_connect_sku": null,
+      "verification_status": "bundle_and_product_ids_configured_in_source_store_records_unverified"
+    }
+  },
+  "google_play": {
+    "name": "Esha by Korlix",
+    "short_description": "Explore beauty products, plan routines and save your favorite looks.",
+    "full_description": "Make room for your own kind of beauty. Esha by Korlix brings product discovery, guided routines and a personal beauty collection together.\n\nDiscover products\nExplore a starter catalog of makeup, lipstick, lip gloss, lashes, body wash and lotion. Search by name, filter categories, read sourced product details and open the manufacturer's page to check current shades, sizes, prices and availability.\n\nPlan a beauty routine\nChoose your preferences and new-product budget to create a guided beauty edit. Include products you already own, review the estimated cost and save a routine. Prices are dated estimates before tax and shipping. Products without a verified price show Check price. Unknown purchase prices never count as free in a new-product budget.\n\nKeep your own vanity\nSave favorites, mark products you own and organize saved routines and looks. Guest collections stay on your device. Sign in to a shared Korlix account to sync an account collection.\n\nExplore illustrated looks\nTry lip-color combinations, satin or gloss finishes and lash styles in a stylized illustration. Save your favorites for inspiration. This look studio does not scan your face or provide a camera-based try-on.\n\nOptional live AI consultations\nWhen the service and store offer are available, an optional Esha membership adds live AI beauty consultations about makeup, lip pairings, lashes and body-care preferences. Before sending a question, you choose whether Korlix and OpenAI may process your question and recent conversation. Sharing saved beauty preferences is optional and separate. You can withdraw permission for future requests and report an answer in the app.\n\nMembership details\nWhen offered, eligible subscribers may receive 3 days free, then US $4.99 per month. Google Play shows your actual local price and eligible offer before purchase. The app shows the included consultation allowance before purchase. Live consultations require an active verified Esha membership and available consultations. The subscription renews automatically until canceled through your Google Play account. Use Restore purchases or Manage subscription in Esha. Installing Esha or creating an account does not start a trial. Cosmetics are purchased separately, and Esha membership does not upgrade another Korlix plan.\n\nEsha provides cosmetic guidance, not diagnosis or medical treatment. Product suggestions do not guarantee an exact shade match. Check current product details before buying.\n\nPrivacy: https://chee-chai-chee-backend.onrender.com/esha/privacy\nTerms and membership: https://chee-chai-chee-backend.onrender.com/esha/terms\nAccount and data deletion requests: https://chee-chai-chee-backend.onrender.com/esha/privacy#deletion\nSupport: support@korlixdeveloper.com",
+    "candidate_identifiers": {
+      "application_id": "com.korlixdeveloper.esha",
+      "subscription_product_id": "esha_monthly",
+      "base_plan_id": "monthly",
+      "trial_offer_id": "trial-3-days",
+      "play_console_app_record_id": null,
+      "developer_account_id": null,
+      "verification_status": "package_and_subscription_ids_configured_in_source_store_records_unverified"
+    }
+  },
+  "links": {
+    "support_url": "https://www.korlixdeveloper.com/support.html",
+    "support_email": "support@korlixdeveloper.com",
+    "privacy_url": "https://chee-chai-chee-backend.onrender.com/esha/privacy",
+    "terms_url": "https://chee-chai-chee-backend.onrender.com/esha/terms",
+    "subscription_terms_url": "https://chee-chai-chee-backend.onrender.com/esha/terms#offer-heading",
+    "account_deletion_url": "https://chee-chai-chee-backend.onrender.com/esha/privacy#deletion",
+    "apple_standard_eula_url": "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
+    "esha_policy_route_status": "implemented_in_committed_backend_source_deployment_and_public_reachability_pending"
+  },
+  "membership_offer": {
+    "status": "intended_offer_store_setup_and_activation_unverified",
+    "trial_days_for_eligible_subscribers": 3,
+    "us_monthly_price": "4.99",
+    "currency": "USD",
+    "billing_period": "P1M",
+    "auto_renewing": true,
+    "trial_consultation_allowance": null,
+    "monthly_consultation_allowance": null,
+    "allowance_status": "owner_configuration_required_no_counts_invented",
+    "availability_note": "Live AI and new membership purchases remain subject to configured service availability, published consultation limits, verified store products, store eligibility and the actual localized offer shown before purchase."
+  },
+  "owner_review": {
+    "listing_copy_approved": false,
+    "store_identity_and_offer_verified": false,
+    "policy_urls_publicly_verified_for_this_release": false,
+    "signed_release_artifacts_verified": false,
+    "store_screenshots": [],
+    "store_screenshots_status": "not_supplied_in_this_metadata_draft",
+    "store_disclosure_forms": "not_completed_requires_owner_review",
+    "legal_and_age_rating_attestations": "not_completed_requires_owner_review",
+    "notes": [
+      "This file is a local metadata draft. It does not create a store record, submit an app, publish a listing or verify a signed build.",
+      "Numeric store and developer account identifiers are intentionally unset. Candidate bundle, package and subscription identifiers reflect the committed source only.",
+      "The Esha policy URLs use the exact committed backend routes. Confirm those pages are publicly accessible after the corresponding authorized backend deployment before using this listing for submission.",
+      "Confirm actual store offers and configure consultation limits before enabling purchases. Review the draft against the final build and active feature availability."
+    ]
+  }
+}

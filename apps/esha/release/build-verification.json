@@ -1,0 +1,50 @@
+{
+  "verified_on": "2026-11-15",
+  "source_commit": "d97cdda79f3e41be45ebeecd12718702e6b070dc",
+  "workflow_run_id": 43741827963,
+  "workflow_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43741827963",
+  "workflow_conclusion": "success",
+  "application_id": "com.korlixdeveloper.esha",
+  "version": "1.0.0",
+  "build_number": "1",
+  "validation": {
+    "backend_tests_passed": 121,
+    "flutter_tests_passed": 36,
+    "flutter_analysis": "no_issues",
+    "flutter_version": "3.47.9"
+  },
+  "artifacts": [
+    {
+      "file": "Esha-Android-debug-test-only-d97cdda.apk",
+      "bytes": 165885106,
+      "sha256": "be7bb8c2c4cd36ca2c0ac035355ecb0fe04359eb09d40ab5500d5964eb6a0e73",
+      "classification": "android_debug_test_only",
+      "store_uploadable": false
+    },
+    {
+      "file": "Esha-Android-unsigned-release-not-uploadable-d97cdda.aab",
+      "bytes": 56318279,
+      "sha256": "50c7ac57c113d47561d1be00fbf2a48277c216c8870dbf845e5acf10a7a163c4",
+      "classification": "android_unsigned_release",
+      "store_uploadable": false
+    },
+    {
+      "file": "Esha-iOS-Simulator-only-not-iPhone-IPA-d97cdda.zip",
+      "bytes": 58647181,
+      "sha256": "95bd72b93080272bd9d276840f42ab3118b974f5aa36d39e56cfe6cf2df7688b",
+      "classification": "ios_simulator_only",
+      "store_uploadable": false
+    }
+  ],
+  "backend": {
+    "prepared_commit": "4bb80c1ce6fe1a314a31a23b60b70832c1045556",
+    "deployment_status": "blocked_by_automatic_approval_review_pending_explicit_user_authorization",
+    "live_policy_routes_verified": false
+  },
+  "store_release": {
+    "signed_device_candidates_verified": false,
+    "store_records_and_products_verified": false,
+    "sandbox_purchase_lifecycle_verified": false,
+    "submitted": false
+  }
+}

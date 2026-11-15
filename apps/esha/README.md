@@ -78,8 +78,10 @@ bash scripts/esha/validate.sh
 
 This validates source configuration, resolves locked dependencies, checks Dart
 formatting, runs static analysis and executes Flutter tests. Backend billing,
-companion-session, signup, reporting, policy and surrounding-app checks passed **121 tests**
-at this checkpoint. Re-run native validation against the final source commit.
+companion-session, signup, reporting, policy and surrounding-app checks passed
+**121 tests**. The final native validation passed **36 tests**, checked formatting,
+and reported no static-analysis issues. SDK telemetry is explicitly suppressed
+by the Esha validation and build commands.
 
 See [the build and signing guide](../../scripts/esha/README.md) for Android debug
 and unsigned builds, iOS Simulator builds, and the separately configured signed
@@ -95,11 +97,35 @@ and service-only command permissions checked:
 | `20261115172402` | `esha_store_billing` |
 | `20261115172408` | `esha_companion_app_sessions` |
 
-At the time this checkpoint was written, persistence of the final new source,
-deployment of the corresponding backend, and compiled native artifacts from
-that final source had **not yet been verified**. The original native work has
-been recovered, and the account, billing, session-isolation and reporting changes
-are present for final integration and validation.
+The full native source is preserved at commit
+`d97cdda79f3e41be45ebeecd12718702e6b070dc` on
+`feature/esha-native-20261115`. [GitHub Actions run 43741827963](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43741827963)
+completed successfully for that exact commit, producing and verifying:
+
+| Artifact | Verified use |
+| --- | --- |
+| Android debug APK | Android test-device installation; debug signature |
+| Android release AAB | Release compilation; unsigned and not uploadable to Play |
+| iOS Simulator application ZIP | Simulator execution; not an iPhone IPA |
+
+Every artifact identifies `com.korlixdeveloper.esha`, version `1.0.0` build `1`.
+Downloaded bytes were independently checked against the embedded verification
+reports. Public source/build/hash details are recorded in
+[build-verification.json](release/build-verification.json).
+
+The backend-only source is prepared at commit
+`4bb80c1ce6fe1a314a31a23b60b70832c1045556` on
+`release/signup-plan-intent-20261021`. Automatic deployment is off. The requested
+manual Render deployment was rejected by automatic approval review because the
+current prompt did not explicitly authorize restarting the shared production
+service. No alternate deployment route was attempted. The new backend routes
+and Esha policy pages still require that authorized deployment and live checks;
+the applied database migrations do not establish that the new server is live.
+
+[Store metadata](release/store-metadata.json) is prepared as a draft, with source
+identifiers distinguished from unverified store records. Store login/verification
+and Google Play browser access remain unresolved. No app listing, subscription
+product, signing identity or store submission was created by this checkpoint.
 
 Signed Android/iPhone release builds, Esha's actual store app and subscription
 records, localized prices, eligible trial configuration, and real-device purchase,
