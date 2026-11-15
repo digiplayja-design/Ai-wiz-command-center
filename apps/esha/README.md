@@ -111,9 +111,16 @@ store-candidate workflows. Test artifacts are not store submissions.
 
 ## Release checkpoint — November 15, 2026
 
-**The app source and test builds are prepared. There is no signed iPhone IPA,
-store upload or review submission yet.** The current signing attempt stopped
-because the saved `Codemagic Korlix AI` Apple integration returned HTTP 401.
+**Esha's signed iPhone build 2, with the branded launch screen, has been verified,
+uploaded to Apple and selected for version 1.0.0.**
+The existing `Codemagic Korlix AI` integration authenticated successfully, Esha's
+dedicated provisioning profile is imported, and the Apple draft listing is
+synchronized. Apple reports **both builds 1 and 2 as VALID and not expired**.
+Version 1.0.0 remains **Prepare for Submission**. Review submission and customer
+availability are not established by these checkpoints. The exact USA $4.99
+monthly subscription draft and eligible three-day trial have also been created
+and read back in Apple; the product is still **MISSING_METADATA**, and customer
+purchases and AI remain disabled.
 
 ### Native builds
 
@@ -133,9 +140,11 @@ Downloaded bytes for all three artifacts were independently rehashed against the
 CI reports. Binary inspection confirms `com.korlixdeveloper.esha`, version
 `1.0.0`, build `1`, and the platform/signing classifications above. Exact hashes,
 artifact provenance, verification methods and the older checkpoint are recorded in
-[build-verification.json](release/build-verification.json). Later commits add
-release helpers, inactive backend preparation and checkpoint documentation; they
-do not imply a newer compiled native artifact.
+[build-verification.json](release/build-verification.json). These hashes describe
+the Android and Simulator artifacts at `bf4ff49`; the separate signed-device and
+upload receipts below record the later iPhone builds. Inactive backend preparation
+and documentation commits do not themselves establish a compiled or deployed
+artifact.
 
 ### Live backend and policies
 
@@ -174,26 +183,129 @@ Store verification and consultation allowances remain unset. The policy-only
 deployment did not enable billing, change a model or apply the new AI-budget
 migration.
 
-### Apple identity and signing blocker
+### Apple identity, signing and verified uploads
 
-The user-provided App Information screenshot confirms the created **Esha by
-Korlix** record: bundle `com.korlixdeveloper.esha`, SKU `ESHA_IOS_001`, numeric
-Apple ID `6835184869`, with iOS version `1.0` in **Prepare for Submission**. The
-Apple Developer screenshot shows team `FJKJ9MUDZ4`. These remain screenshot
-identity evidence until the Apple API can authenticate.
+The successful Apple API checks verified the exact **Esha by Korlix** record:
+bundle `com.korlixdeveloper.esha`, SKU `ESHA_IOS_001`, numeric Apple ID
+`6835184869` and team `FJKJ9MUDZ4`. These checks supplement the original
+user-provided App Information and Apple Developer screenshots.
 
-The `esha_release` Codemagic environment group now contains the app and team IDs.
-The existing production signing certificate reference is `KORLIX_APP_STORE_CERT`;
-no Esha App Store provisioning profile was found in the saved inventory.
+The earlier signing setup build `6afa092a90e83b09c4fab31e` was incorrectly
+labeled HTTP 401. Pinned Codemagic CLI 0.69.0 rejected retry limits of zero
+locally before an Apple request; the helper matched `unauthorized` in an option
+name and reported an authentication failure. Corrected CLI calls use one attempt
+with no retry and distinguish parser errors from actual Apple HTTP responses.
+The saved integration worked without credential replacement.
 
-[Signing setup build 6afa092a90e83b09c4fab31e](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa092a90e83b09c4fab31e)
-passed the workflow's configuration/import stages, then stopped at its first
-Apple inventory lookup with **HTTP 401**. The helper's credential-variable
-mapping matches pinned Codemagic CLI 0.69.0 and the documented integration.
-No Esha profile was created, no Apple identity was verified by API and no IPA was
-built or uploaded. The saved Apple integration must be repaired through
-[Codemagic integration settings](https://codemagic.io/teams/6a32158af7d33bf04e05cc9d)
-before retrying that job.
+[Signing setup build 6afa106590e83b09c4fab58f](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa106590e83b09c4fab58f),
+source `d1e592b901efe020a9df7c3f6fc33a31600671f4`, verified the existing
+`KORLIX_APP_STORE_CERT` identity and created Esha's App Store profile at
+**20:05:54 UTC**. Codemagic subsequently confirmed the import under
+**`ESHA_APP_STORE_PROFILE`**, with the exact Esha bundle and matching existing
+certificate. The `esha_release` environment group supplies the verified app and
+team IDs. The [signing receipt](release/ios-signing-20261115.json) distinguishes
+the API verification from the UI-confirmed profile import.
+
+[Draft-listing build 6afa194090e83b09c4fab8d4](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa194090e83b09c4fab8d4),
+source `80194affee0b971bcd1e67ac45ed5ee3dd528547`, synchronized and reread
+the allowlisted Apple draft fields at **20:43:54 UTC**. It aligned the existing
+editable iOS version from **1.0 to 1.0.0** and saved the subtitle, privacy links,
+categories, description, keywords, promotional text and support URL. The job ran
+on `mac_mini_m2`; the [draft-listing receipt](release/apple-draft-listing-20261115.json)
+records the verified operations separately from upload or submission.
+
+[Signed upload build 6afa19ff90e83b09c4fab91c](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa19ff90e83b09c4fab91c),
+source `494b070ecf423dd0440bb8b798c4c5ed826f080d`, passed all 49 native tests
+and verified the App Store distribution signature for **version 1.0.0, build 1**.
+Apple accepted the 25,194,089-byte IPA at **20:52:05 UTC** with delivery UUID
+`26b909f8-e0ab-4d4e-81c0-beab571214d0`. Its downloaded bytes were independently
+rehashed and its app plist checked against the build receipt. See the
+[first signed upload evidence](release/ios-upload-build-1-20261115.json).
+The subsequent [read-only Apple inventory](release/apple-inventory-before-subscription-20261115.json)
+at **20:56:56 UTC** reported build 1 as **VALID** and not expired. At that check,
+version 1.0.0 remained **Prepare for Submission** with no selected build, native
+screenshot sets or subscription groups. Existing reviewer demo-account fields
+were present, but the review contact fields were absent; field presence does not
+verify that the credentials work. The inventory preserves those credentials and reports only
+their presence.
+
+[Branded upload build 6afa1c8190e83b09c4faba0a](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa1c8190e83b09c4faba0a),
+source `fbfde79df731dea5a2e7fc65ee9d4308aebe80dd`, passed all **49 native
+tests** and verified App Store distribution signing for **version 1.0.0, build
+2**. It replaces the default launch image with Esha's existing pink Korlix logo.
+Apple accepted the **28,206,010-byte IPA at 21:02:06 UTC**, with delivery UUID
+`50de7424-a350-42fb-9a9d-78eb17021ace`. The downloaded IPA's size and SHA-256
+matched the Mac verification receipt; local inspection also confirmed the exact
+bundle, version/build and compiled launch storyboard. The launch-screen pixels
+were not rendered locally. See the immutable
+[build 2 upload evidence](release/ios-upload-build-2-20261115.json).
+The separate
+[post-subscription inventory](release/apple-inventory-after-subscription-20261115.json),
+[job 6afa1f8d90e83b09c4fabb26](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa1f8d90e83b09c4fabb26)
+from source `d62f76a8fc97eac812668e884ba0b57d7ba84ceb`, completed **19 GET
+requests at 21:10:34 UTC**. It verified build 2
+(`50de7424-a350-42fb-9a9d-78eb17021ace`) as **VALID** and not expired, and
+reconfirmed that state for build 1. The build's non-exempt encryption field is
+`null`, so that declaration remains unresolved. At this **21:10:34 UTC** check,
+version **1.0.0** was **Prepare for Submission** with **no selected build**.
+That historical selection observation is superseded by the successful selection
+below. The immutable upload
+receipt retains its original upload-only observations; this later inventory
+establishes processing. None of these actions submitted Esha for review.
+
+[Build-selection job 6afa207890e83b09c4fabb6a](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa207890e83b09c4fabb6a),
+source `8adf46d7587ced117e725f88a404913c0d2eb61b`, completed at **21:14:24 UTC**.
+The independently downloaded
+[selection receipt](release/apple-build-selected-20261115.json) records
+**`build_selected_and_read_back`**, **16 total requests**, **one PATCH** and
+**zero retries**. Existing version `ab8553e4-56d5-40a9-aa7a-8cfb447fca72`
+remains **Prepare for Submission**, now selecting exact build
+`50de7424-a350-42fb-9a9d-78eb17021ace`, **1.0.0 (2)**, **VALID** and not
+expired. The encryption field remains `null`; no declaration, review contact,
+review submission or publication was changed by selection.
+
+### Subscription draft preparation
+
+Source `d62f76a8fc97eac812668e884ba0b57d7ba84ceb` publishes
+`prepare_apple_subscription.py`, the exact
+[subscription draft specification](release/apple-subscription-draft.json), and
+separate manual plan/apply workflows. The default invocation makes **GET-only
+Apple requests** and writes a local plan. `--apply-draft` can create only absent
+components of Esha's **USA / USD 4.99 / ONE_MONTH / UPFRONT** subscription and
+eligible **three-day free trial**, including USA-only availability when absent.
+`UPFRONT` means payment in full for each one-month subscription period. Exact
+existing components are reused; conflicts or ambiguous state stop the operation.
+It performs no retries, review submission, publication, agreement changes or
+backend/AI activation.
+
+The implementation uses Apple's API 4.6 subscription/group versions and v2
+localizations, with v1 product, price and offer resources. Independent schema
+review found no contract mismatch. The
+[live plan receipt](release/apple-subscription-plan-20261115.json) records
+**two GET requests and no writes at 21:06:23 UTC**: the group/product were absent,
+and the plan identified nine dependent creation stages.
+
+[Subscription draft job 6afa1f0790e83b09c4fabaf9](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa1f0790e83b09c4fabaf9)
+completed at **21:08:56 UTC** from the same source. Its immutable
+[prepared-draft receipt](release/apple-subscription-prepared-20261115.json)
+records all **nine components created and read back**, **113 total requests**
+and **zero POST retries**. Apple group **22583130** and product **6835214491**
+(`com.korlixdeveloper.esha.monthly`) have the exact USA-only `UPFRONT`
+availability, USD 4.99 price point and `THREE_DAYS` / `FREE_TRIAL` offer. New
+territories are disabled. Agreement status and real-device purchases remain
+unverified; this draft operation did not activate billing or AI, change
+agreements, submit review or publish Esha. The
+[subscription workflow guide](../../scripts/esha/README.md#apple-subscription-draft)
+describes the exact scope and evidence requirements.
+
+The **21:10:34 UTC** inventory independently reread the product's en-US
+localization, **USD 4.99 / UPFRONT** price schedule and **FREE_TRIAL /
+THREE_DAYS / one period** offer, starting **2026-11-15** with no end date.
+Apple reports the product as **MISSING_METADATA**. Its subscription review
+screenshot is absent, and the app has no iPhone/iPad screenshot sets. Review
+contact fields are also absent. Existing reviewer credentials are preserved and
+reported only as present; their validity has not been tested. Price-schedule
+and offer readback do not verify StoreKit purchase behavior or trial eligibility.
 
 The following manual workflows are committed, with no automatic triggers:
 
@@ -203,13 +315,22 @@ The following manual workflows are committed, with no automatic triggers:
 | `esha-apple-draft-listing` | Apply only the allowlisted draft text, categories, policy URLs and pending version alignment |
 | `esha-ios-candidate` | Validate, compile and verify a signed candidate without publishing |
 | `esha-ios-upload` | Validate, compile, verify and upload; both review-submission flags remain false |
+| `esha-apple-release-inventory` | Read exact Esha release state; preserve reviewer credentials and report only their presence |
+| `esha-apple-select-build` | Associate only validated build 2 with the editable version; verify readback without answering declarations or submitting review |
+| `esha-apple-subscription-plan` | Read exact Esha subscription state and write a local change plan; no Apple writes |
+| `esha-apple-subscription-draft` | Create only absent components of the exact USA monthly subscription draft and trial |
 
-The draft-listing helper passed 18 tests; combined listing/signing helper tests
-passed 32 tests. The two new manual workflow structures were checked locally;
-they have not been run against Apple. The [listing guide](../../scripts/esha/APPLE_LISTING.md)
-and [signing/build guide](../../scripts/esha/README.md) record the guarded actions
-and required artifacts. Prepared [store metadata](release/store-metadata.json)
-has not yet been applied to the live listing.
+The initial draft-listing helper checkpoint passed 18 tests, and its combined
+listing/signing helper checkpoint passed 32 tests. The latest release automation
+suite with pinned CLI 0.69.0 passes **91 tests**, including **19 subscription**,
+**19 inventory** and **15 build-selection** tests. Live subscription draft
+creation is established by the separate prepared
+receipt; the offline suite does not verify customer checkout. The
+[listing guide](../../scripts/esha/APPLE_LISTING.md) and
+[signing/build guide](../../scripts/esha/README.md) describe the guarded actions
+and required artifacts. The allowlisted fields in
+[store metadata](release/store-metadata.json) have been applied to the existing
+Apple draft; this does not complete store declarations or publish the listing.
 
 ### Remaining release work
 
@@ -220,14 +341,31 @@ not been applied and the new adapter has not been deployed. Keep Esha AI disable
 until the owner chooses the model and limits, the migration is applied and every
 serving worker uses the guarded code.
 
-After Apple authentication is repaired, verify the exact app identity, create
-Esha's profile, apply the pending listing fields, configure the subscription and
-eligible three-day offer, and produce/upload the verified IPA. Real-device
-purchase, restore, renewal, cancellation/refund, account-switch and reviewer
-access checks remain necessary. Store privacy, age-rating and content-rights
-forms and native screenshots remain unfinished.
+Apple identity, profile setup, draft-listing synchronization, both signed IPA
+uploads and both builds' **VALID** processing states are verified. **Build 2 is
+selected and read back** for version 1.0.0, which remains **Prepare for
+Submission**. Complete the subscription's missing
+metadata and review screenshot, iPhone/iPad screenshots and review contact
+fields. Verify agreements and store sandbox purchases against the prepared
+subscription and eligible three-day offer. Real-device purchase, restore,
+renewal, cancellation/refund, account-switch and reviewer access checks remain
+necessary. Store privacy, age-rating, content-rights and export-compliance
+declarations remain unfinished; the inventory does not infer questionnaire
+completion from optional or nullable fields.
 
-Google Play account access, app record, subscription/base plan/trial offer and
-release signing also remain unverified. Neither store has a verified Esha upload
-or review submission. These test artifacts and the live policy pages do not
-establish a released store product.
+At **21:07:44 UTC**, the Codemagic Android keystore inventory confirmed that
+**`ESHA_ANDROID_UPLOAD_KEY` is absent**; only two other product keystores were
+visible. No Esha key was created/imported, its fingerprint value was not
+inspected, and no signed Android build was started. The manual candidate
+workflow now uses `mac_mini_m2`; the missing Esha key remains its prerequisite.
+See the
+[Android prerequisite receipt](release/android-signing-prerequisites-20261115.json).
+Google Play access could not be verified because automatic approval review
+rejected the redirect from `play.google.com` to `google.play/business/` as a
+mismatched or untrusted origin. The Play app record, upload-key registration,
+subscription/base plan/trial offer and signed release remain unverified.
+
+Apple has accepted Esha's first two IPA uploads. Neither store has a verified
+review submission or released Esha product. The
+upload, test artifacts and live policy pages do not activate customer checkout
+or native AI.

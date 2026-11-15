@@ -25,7 +25,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 
-from prepare_ios_profile import APP_ID, BUNDLE_ID, CLI_VERSION, SKU, SetupError, ToolRunner
+from prepare_ios_profile import APP_ID, BUNDLE_ID, CLI_VERSION, CLI_SINGLE_ATTEMPT, SKU, SetupError, ToolRunner
 
 
 API_ORIGIN = "https://api.appstoreconnect.apple.com"
@@ -237,7 +237,8 @@ class AppleClient:
             arguments = [self.cli.cli, command, "modify", operation.identifier]
             arguments.extend(f"--{flags[key]}={value}" for key, value in operation.after.items())
             arguments.extend(["--json", "--no-color", "--log-stream", "stderr", "--disable-jwt-cache",
-                              "--api-unauthorized-retries", "0", "--api-server-error-retries", "0"])
+                              "--api-unauthorized-retries", CLI_SINGLE_ATTEMPT,
+                              "--api-server-error-retries", CLI_SINGLE_ATTEMPT])
             try:
                 value = json.loads(self.cli.capture(arguments, "Apple draft listing update", apple=True))
             except SetupError as error:

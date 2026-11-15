@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "status": "build_selected_and_read_back",
+  "mode": "apply_draft",
+  "started_at_utc": "2026-11-15T21:14:19.253812+00:00",
+  "source_commit": "8adf46d7587ced117e725f88a404913c0d2eb61b",
+  "apple_app_id": "6835184869",
+  "bundle_id": "com.korlixdeveloper.esha",
+  "sku": "ESHA_IOS_001",
+  "target_version": "1.0.0",
+  "target_build_number": "2",
+  "target_apple_build_id": "50de7424-a350-42fb-9a9d-78eb17021ace",
+  "identity_verified": true,
+  "planned_operation": {
+    "method": "PATCH",
+    "path": "/v1/appStoreVersions/ab8553e4-56d5-40a9-aa7a-8cfb447fca72/relationships/build",
+    "body": {
+      "data": {
+        "type": "builds",
+        "id": "50de7424-a350-42fb-9a9d-78eb17021ace"
+      }
+    },
+    "body_sha256": "ea78a8db1fd481c43ee5a9d515804ef054b8389774ab0f14bc09b83abe66abdb"
+  },
+  "patch_attempts": 1,
+  "patch_retries": 0,
+  "association_changed_by_this_run": true,
+  "encryption_answers_changed": false,
+  "review_submitted": false,
+  "contact_details_changed": false,
+  "published": false,
+  "initial_observation": {
+    "version_id": "ab8553e4-56d5-40a9-aa7a-8cfb447fca72",
+    "version": "1.0.0",
+    "version_states": [
+      "PREPARE_FOR_SUBMISSION",
+      "PREPARE_FOR_SUBMISSION"
+    ],
+    "target_build_id": "50de7424-a350-42fb-9a9d-78eb17021ace",
+    "build_number": "2",
+    "processing_state": "VALID",
+    "expired": false,
+    "uses_non_exempt_encryption": null,
+    "pre_release_id": "ca4c6177-a710-4895-8d1a-4899b3373fde",
+    "pre_release_version": "1.0.0",
+    "platform": "IOS",
+    "selected_build_id": null
+  },
+  "intent": {
+    "recorded_at_utc": "2026-11-15T21:14:21.226863+00:00",
+    "observation_before_patch": {
+      "version_id": "ab8553e4-56d5-40a9-aa7a-8cfb447fca72",
+      "version": "1.0.0",
+      "version_states": [
+        "PREPARE_FOR_SUBMISSION",
+        "PREPARE_FOR_SUBMISSION"
+      ],
+      "target_build_id": "50de7424-a350-42fb-9a9d-78eb17021ace",
+      "build_number": "2",
+      "processing_state": "VALID",
+      "expired": false,
+      "uses_non_exempt_encryption": null,
+      "pre_release_id": "ca4c6177-a710-4895-8d1a-4899b3373fde",
+      "pre_release_version": "1.0.0",
+      "platform": "IOS",
+      "selected_build_id": null
+    },
+    "operation": {
+      "method": "PATCH",
+      "path": "/v1/appStoreVersions/ab8553e4-56d5-40a9-aa7a-8cfb447fca72/relationships/build",
+      "body": {
+        "data": {
+          "type": "builds",
+          "id": "50de7424-a350-42fb-9a9d-78eb17021ace"
+        }
+      },
+      "body_sha256": "ea78a8db1fd481c43ee5a9d515804ef054b8389774ab0f14bc09b83abe66abdb"
+    },
+    "outcome": "desired_build_selected_verified"
+  },
+  "final_observation": {
+    "version_id": "ab8553e4-56d5-40a9-aa7a-8cfb447fca72",
+    "version": "1.0.0",
+    "version_states": [
+      "PREPARE_FOR_SUBMISSION",
+      "PREPARE_FOR_SUBMISSION"
+    ],
+    "target_build_id": "50de7424-a350-42fb-9a9d-78eb17021ace",
+    "build_number": "2",
+    "processing_state": "VALID",
+    "expired": false,
+    "uses_non_exempt_encryption": null,
+    "pre_release_id": "ca4c6177-a710-4895-8d1a-4899b3373fde",
+    "pre_release_version": "1.0.0",
+    "platform": "IOS",
+    "selected_build_id": "50de7424-a350-42fb-9a9d-78eb17021ace"
+  },
+  "request_count": 16,
+  "completed_at_utc": "2026-11-15T21:14:24.429851+00:00"
+}

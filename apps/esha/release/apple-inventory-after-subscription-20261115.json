@@ -1,0 +1,262 @@
+{
+  "schema_version": 1,
+  "status": "inventory_complete",
+  "mode": "read_only_inventory",
+  "started_at_utc": "2026-11-15T21:10:30.754215+00:00",
+  "apple_app_id": "6835184869",
+  "bundle_id": "com.korlixdeveloper.esha",
+  "sku": "ESHA_IOS_001",
+  "source_commit": "d62f76a8fc97eac812668e884ba0b57d7ba84ceb",
+  "cli_version": "0.69.0",
+  "identity_verified": true,
+  "expected_offer": {
+    "product_id": "com.korlixdeveloper.esha.monthly",
+    "subscription_period": "ONE_MONTH",
+    "usa_monthly_price": "4.99",
+    "trial_duration": "THREE_DAYS"
+  },
+  "required_screenshot_families": [
+    "iphone",
+    "ipad"
+  ],
+  "apple_writes_performed": false,
+  "uploaded": false,
+  "submitted": false,
+  "limitations": [
+    "Presence does not verify reviewer credentials or StoreKit behavior.",
+    "Price schedules are observations, not a current-price approval.",
+    "Subscription period is recurrence; price plan type can describe an installment commitment.",
+    "HTTP 404 is unavailable, not proof that a field is unconfigured.",
+    "App privacy questionnaire and account agreements are not inventoried.",
+    "Optional age fields are not used to infer questionnaire completeness."
+  ],
+  "app_versions": {
+    "status": "observed",
+    "items": [
+      {
+        "id": "ab8553e4-56d5-40a9-aa7a-8cfb447fca72",
+        "version": "1.0.0",
+        "platform": "IOS",
+        "state": "PREPARE_FOR_SUBMISSION",
+        "selected_build": {
+          "status": "no_related_resource_returned"
+        },
+        "localizations": {
+          "status": "observed",
+          "items": [
+            {
+              "id": "bc06e7be-c0aa-4dbb-a23c-0b4ec207a34e",
+              "locale": "en-US",
+              "screenshot_sets": {
+                "status": "none_returned",
+                "items": []
+              }
+            }
+          ]
+        },
+        "review_access": {
+          "status": "observed",
+          "item": {
+            "contact_first_name_present": false,
+            "contact_last_name_present": false,
+            "contact_phone_present": false,
+            "contact_email_present": false,
+            "demo_account_name_present": true,
+            "demo_account_password_present": true,
+            "review_notes_present": false,
+            "contact_fields_present": false,
+            "demo_credentials_present": true,
+            "demo_account_required": true
+          }
+        }
+      }
+    ]
+  },
+  "uploaded_builds": {
+    "status": "observed",
+    "items": [
+      {
+        "id": "50de7424-a350-42fb-9a9d-78eb17021ace",
+        "build_number": "2",
+        "processing_state": "VALID",
+        "uploaded_at": "2026-11-15T13:02:49-08:00",
+        "expired": false,
+        "uses_non_exempt_encryption": null
+      },
+      {
+        "id": "26b909f8-e0ab-4d4e-81c0-beab571214d0",
+        "build_number": "1",
+        "processing_state": "VALID",
+        "uploaded_at": "2026-11-15T12:52:48-08:00",
+        "expired": false,
+        "uses_non_exempt_encryption": null
+      }
+    ]
+  },
+  "app_information": {
+    "status": "observed",
+    "items": [
+      {
+        "id": "8c5c551a-f21d-44e4-8fb4-ed288a86e553",
+        "state": "PREPARE_FOR_SUBMISSION",
+        "age_rating_declaration": {
+          "status": "observed",
+          "item": {
+            "id": "8c5c551a-f21d-44e4-8fb4-ed288a86e553",
+            "observed_answers": {
+              "advertising": null,
+              "ageAssurance": null,
+              "gambling": null,
+              "healthOrWellnessTopics": null,
+              "lootBox": null,
+              "messagingAndChat": null,
+              "parentalControls": null,
+              "socialMedia": null,
+              "socialMediaAgeRestricted": null,
+              "unrestrictedWebAccess": null,
+              "userGeneratedContent": null,
+              "ageRatingOverride": "NONE",
+              "ageRatingOverrideV2": "NONE",
+              "alcoholTobaccoOrDrugUseOrReferences": null,
+              "contests": null,
+              "gamblingSimulated": null,
+              "gunsOrOtherWeapons": null,
+              "horrorOrFearThemes": null,
+              "kidsAgeBand": null,
+              "koreaAgeRatingOverride": "NONE",
+              "matureOrSuggestiveThemes": null,
+              "medicalOrTreatmentInformation": null,
+              "profanityOrCrudeHumor": null,
+              "sexualContentGraphicAndNudity": null,
+              "sexualContentOrNudity": null,
+              "violenceCartoonOrFantasy": null,
+              "violenceRealistic": null,
+              "violenceRealisticProlongedGraphicOrSadistic": null
+            },
+            "developer_age_rating_info_url_present": false,
+            "questionnaire_completeness": "not_inferred_from_optional_or_nullable_fields"
+          }
+        }
+      }
+    ]
+  },
+  "subscription_groups": {
+    "status": "observed",
+    "items": [
+      {
+        "id": "22583130",
+        "reference_name": "Esha Membership",
+        "versions": {
+          "status": "observed",
+          "items": [
+            {
+              "id": "dc04c43e-ca9b-4d26-8713-699c31df7fa8",
+              "version": 1,
+              "state": "PREPARE_FOR_SUBMISSION",
+              "localizations": {
+                "status": "observed",
+                "items": [
+                  {
+                    "id": "e5af433b-085c-4823-ad36-0372bf9a43d3",
+                    "locale": "en-US",
+                    "name_present": true,
+                    "customAppName_present": false
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "products": {
+          "status": "observed",
+          "items": [
+            {
+              "id": "6835214491",
+              "name": "Esha Membership Monthly",
+              "product_id": "com.korlixdeveloper.esha.monthly",
+              "expected_esha_product": true,
+              "subscription_period": "ONE_MONTH",
+              "state": "MISSING_METADATA",
+              "family_sharable": false,
+              "versions": {
+                "status": "observed",
+                "items": [
+                  {
+                    "id": "771cbace-d968-4902-b269-0d9ded9d1155",
+                    "version": 1,
+                    "state": "PREPARE_FOR_SUBMISSION",
+                    "localizations": {
+                      "status": "observed",
+                      "items": [
+                        {
+                          "id": "76e14bed-e7a3-4276-81a7-f2aebba2ef52",
+                          "locale": "en-US",
+                          "name_present": true,
+                          "description_present": true
+                        }
+                      ]
+                    },
+                    "images": {
+                      "status": "none_returned",
+                      "summary": {
+                        "count": 0,
+                        "complete_count": 0,
+                        "delivery_state_counts": {}
+                      }
+                    }
+                  }
+                ]
+              },
+              "usa_prices": {
+                "status": "observed",
+                "items": [
+                  {
+                    "id": "eyJhIjoiNjgzNTIxNDQ5MSIsImMiOiJVUyIsImQiOjAsInAiOiIwIn0",
+                    "territory": "USA",
+                    "currency": "USD",
+                    "customer_price": "4.99",
+                    "start_date": null,
+                    "preserved": false,
+                    "plan_type": "UPFRONT",
+                    "matches_usa_4_99_amount": true,
+                    "current_new_subscriber_price": "not_inferred_from_schedule_rows"
+                  }
+                ]
+              },
+              "usa_introductory_offers": {
+                "status": "observed",
+                "items": [
+                  {
+                    "id": "eyJzIjoiNjgzNTIxNDQ5MSIsImQiOjE3OTQ3Mjk2MDAsImkiOiJVUyIsInQiOiIiLCJwIjoiMCJ9",
+                    "territory": "USA",
+                    "offer_mode": "FREE_TRIAL",
+                    "duration": "THREE_DAYS",
+                    "number_of_periods": 1,
+                    "start_date": "2026-11-15",
+                    "end_date": null,
+                    "target_subscription_plan_type": "UPFRONT",
+                    "matches_expected_trial_shape": true,
+                    "active_offer_and_storekit_eligibility": "requires_date_and_device_verification"
+                  }
+                ]
+              },
+              "review_screenshot": {
+                "status": "no_related_resource_returned"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "observation_counts": {
+    "target_ios_version": "1.0.0",
+    "target_ios_version_count": 1,
+    "uploaded_build_count": 2,
+    "expected_product_count": 1,
+    "unknown_counts_are_null": true
+  },
+  "unavailable_reads": [],
+  "request_count": 19,
+  "completed_at_utc": "2026-11-15T21:10:34.840226+00:00"
+}

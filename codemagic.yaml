@@ -205,7 +205,7 @@ workflows:
 
   esha-android-candidate:
     name: Esha by Korlix — signed Android candidate
-    instance_type: linux_x2
+    instance_type: mac_mini_m2
     max_build_duration: 60
     working_directory: apps/esha
     # Manual only. No Play upload or publication is configured.
@@ -330,7 +330,7 @@ workflows:
 
   esha-apple-draft-listing:
     name: Esha by Korlix — synchronize existing Apple draft listing
-    instance_type: linux_x2
+    instance_type: mac_mini_m2
     max_build_duration: 15
     working_directory: apps/esha
     # Manual only, after repairing the existing Apple integration.
@@ -353,6 +353,102 @@ workflows:
           "$CM_BUILD_DIR/.esha-apple-listing-tools/bin/python" "$CM_BUILD_DIR/scripts/esha/sync_apple_listing.py" --apply-draft
     artifacts:
       - $CM_BUILD_DIR/apps/esha/artifacts/apple-listing/Esha-Apple-draft-listing-verification.json
+
+  esha-apple-subscription-plan:
+    name: Esha by Korlix — plan Apple monthly subscription
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    working_directory: apps/esha
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    environment:
+      groups:
+        - esha_release
+    scripts:
+      - name: Install the pinned Apple subscription CLI
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.esha-apple-subscription-tools"
+          "$CM_BUILD_DIR/.esha-apple-subscription-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+      - name: Plan Esha's exact monthly subscription without changing Apple
+        script: |
+          set -euo pipefail
+          "$CM_BUILD_DIR/.esha-apple-subscription-tools/bin/python" "$CM_BUILD_DIR/scripts/esha/prepare_apple_subscription.py"
+    artifacts:
+      - $CM_BUILD_DIR/apps/esha/artifacts/apple-subscription/Esha-Apple-subscription-draft-verification.json
+
+  esha-apple-subscription-draft:
+    name: Esha by Korlix — prepare Apple monthly subscription draft
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    working_directory: apps/esha
+    # Manual create-missing draft only: USA, $4.99/month, eligible three-day trial.
+    # Rechecks exact app identity and records every write and scoped readback.
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    environment:
+      groups:
+        - esha_release
+    scripts:
+      - name: Install the pinned Apple subscription CLI
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.esha-apple-subscription-tools"
+          "$CM_BUILD_DIR/.esha-apple-subscription-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+      - name: Create and verify only Esha's missing monthly subscription draft
+        script: |
+          set -euo pipefail
+          "$CM_BUILD_DIR/.esha-apple-subscription-tools/bin/python" "$CM_BUILD_DIR/scripts/esha/prepare_apple_subscription.py" --apply-draft
+    artifacts:
+      - $CM_BUILD_DIR/apps/esha/artifacts/apple-subscription/Esha-Apple-subscription-draft-verification.json
+
+  esha-apple-select-build:
+    name: Esha by Korlix — select verified build 2 for draft
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    working_directory: apps/esha
+    # Manual linkage only. Does not answer encryption or submit for review.
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    environment:
+      groups:
+        - esha_release
+    scripts:
+      - name: Install the pinned Apple build-selection CLI
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.esha-apple-selection-tools"
+          "$CM_BUILD_DIR/.esha-apple-selection-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+      - name: Select only the verified Esha build on its empty draft version
+        script: |
+          set -euo pipefail
+          "$CM_BUILD_DIR/.esha-apple-selection-tools/bin/python" "$CM_BUILD_DIR/scripts/esha/select_apple_build.py" --apply-draft
+    artifacts:
+      - $CM_BUILD_DIR/apps/esha/artifacts/apple-build-selection/Esha-Apple-build-selection-verification.json
+
+  esha-apple-release-inventory:
+    name: Esha by Korlix — inspect Apple release readiness
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    working_directory: apps/esha
+    # Manual, GET-only inventory of records bound to Esha's verified app.
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    environment:
+      groups:
+        - esha_release
+    scripts:
+      - name: Install the pinned Apple inventory CLI
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.esha-apple-inventory-tools"
+          "$CM_BUILD_DIR/.esha-apple-inventory-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+      - name: Inspect Esha's Apple records without changing them
+        script: |
+          set -euo pipefail
+          "$CM_BUILD_DIR/.esha-apple-inventory-tools/bin/python" "$CM_BUILD_DIR/scripts/esha/inspect_apple_release.py"
+    artifacts:
+      - $CM_BUILD_DIR/apps/esha/artifacts/apple-inventory/Esha-Apple-release-inventory.json
 
   esha-ios-signing-setup:
     name: Esha by Korlix — verify and prepare iOS profile

@@ -1,0 +1,100 @@
+{
+  "checked_at_utc": "2026-11-15T20:47:00.366312+00:00",
+  "live_deployment": {
+    "provider": "Render",
+    "workspace_id": "tea-d8cskuf7f7vs73emq1p0",
+    "service_id": "srv-d8csvkkp3tds73emfikg",
+    "deploy_id": "dep-dbt0l93l550s739n1p3g",
+    "commit": "5e2a4086b7c4a58e8614abfa3625270b05def152",
+    "status": "live",
+    "finished_at_utc": "2026-11-15T19:41:04.000118Z"
+  },
+  "requests": [
+    {
+      "url": "https://chee-chai-chee-backend.onrender.com/api/health",
+      "http_status": 200,
+      "body_sha256": "d0bc4cccbcbb31b5a322e6e6fa01a2263e965624630ac956d42d421208df0e4d",
+      "bytes": 4114,
+      "selected_response_fields": {
+        "status": "Korlix AI backend is healthy"
+      },
+      "response_field_scope": "Only the public service health result is retained; unrelated app capabilities are excluded."
+    },
+    {
+      "url": "https://chee-chai-chee-backend.onrender.com/api/esha/billing/catalog?provider=apple",
+      "http_status": 200,
+      "body_sha256": "75c2063c0f7f8e1dea5b1749403e8513008ac906cd02ddb44999bb41513fdfad",
+      "bytes": 447,
+      "body": {
+        "catalogVersion": "esha_monthly_v1",
+        "provider": "apple",
+        "bundleId": "com.korlixdeveloper.esha",
+        "product": {
+          "productId": "com.korlixdeveloper.esha.monthly",
+          "billingPeriod": "P1M",
+          "trialDays": 3,
+          "monthlyPriceCents": 499,
+          "currency": "USD",
+          "basePlanId": null,
+          "offerId": null
+        },
+        "purchasesEnabled": false,
+        "storeConfigurationVerified": false,
+        "allowanceConfigured": false,
+        "consultationLimits": {
+          "trial": null,
+          "monthly": null
+        },
+        "consultationEnabled": false,
+        "state": "planned"
+      }
+    },
+    {
+      "url": "https://chee-chai-chee-backend.onrender.com/api/esha/billing/catalog?provider=google",
+      "http_status": 200,
+      "body_sha256": "417e4aa40b408b6063d83ce72a2ab989d3937e0d20f508921dc9764a04bff77c",
+      "bytes": 443,
+      "body": {
+        "catalogVersion": "esha_monthly_v1",
+        "provider": "google",
+        "bundleId": "com.korlixdeveloper.esha",
+        "product": {
+          "productId": "esha_monthly",
+          "billingPeriod": "P1M",
+          "trialDays": 3,
+          "monthlyPriceCents": 499,
+          "currency": "USD",
+          "basePlanId": "monthly",
+          "offerId": "trial-3-days"
+        },
+        "purchasesEnabled": false,
+        "storeConfigurationVerified": false,
+        "allowanceConfigured": false,
+        "consultationLimits": {
+          "trial": null,
+          "monthly": null
+        },
+        "consultationEnabled": false,
+        "state": "planned"
+      }
+    },
+    {
+      "url": "https://chee-chai-chee-backend.onrender.com/esha/privacy",
+      "http_status": 200,
+      "body_sha256": "02eec8bdb8429432dcdd5b54700d7957180041b0d4c96dfdfa7b8b52e175b829",
+      "bytes": 15372,
+      "membership_scope_verified": true,
+      "deletion_anchor_verified": true,
+      "offer_verified": null
+    },
+    {
+      "url": "https://chee-chai-chee-backend.onrender.com/esha/terms",
+      "http_status": 200,
+      "body_sha256": "234dc38abdcfc7ef88d1257725049dfd49c7e309f4445224001c2e5324de6613",
+      "bytes": 12896,
+      "membership_scope_verified": true,
+      "deletion_anchor_verified": null,
+      "offer_verified": true
+    }
+  ]
+}

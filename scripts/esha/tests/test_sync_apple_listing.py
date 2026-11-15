@@ -341,7 +341,7 @@ class TransportTests(unittest.TestCase):
         self.assertIn("--description=Prepared", arguments)
         self.assertNotIn("--whats-new", arguments)
         for flag in ["--api-unauthorized-retries", "--api-server-error-retries"]:
-            self.assertEqual(arguments[arguments.index(flag) + 1], "0")
+            self.assertEqual(arguments[arguments.index(flag) + 1], "1")
         self.assertFalse(Path(options["env"]["TMPDIR"]).exists())
 
     def test_cli_implicit_whats_new_environment_is_removed(self):

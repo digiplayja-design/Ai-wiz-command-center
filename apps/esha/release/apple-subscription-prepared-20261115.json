@@ -1,0 +1,644 @@
+{
+  "schema_version": 1,
+  "status": "subscription_draft_prepared",
+  "mode": "apply_draft",
+  "started_at_utc": "2026-11-15T21:08:00.863143+00:00",
+  "source_commit": "d62f76a8fc97eac812668e884ba0b57d7ba84ceb",
+  "app_id": "6835184869",
+  "bundle_id": "com.korlixdeveloper.esha",
+  "sku": "ESHA_IOS_001",
+  "product_id": "com.korlixdeveloper.esha.monthly",
+  "identity_verified": true,
+  "planned_operations": [
+    {
+      "stage": "group",
+      "method": "POST",
+      "path": "/v1/subscriptionGroups",
+      "body": {
+        "data": {
+          "type": "subscriptionGroups",
+          "relationships": {
+            "app": {
+              "data": {
+                "type": "apps",
+                "id": "6835184869"
+              }
+            }
+          },
+          "attributes": {
+            "referenceName": "Esha Membership"
+          }
+        }
+      },
+      "resolved": true,
+      "depends_on": null,
+      "price_point_lookup_required": false
+    },
+    {
+      "stage": "group_version",
+      "method": "POST",
+      "path": "/v1/subscriptionGroupVersions",
+      "body": {
+        "data": {
+          "type": "subscriptionGroupVersions",
+          "relationships": {
+            "subscriptionGroup": {
+              "data": {
+                "type": "subscriptionGroups",
+                "id": null
+              }
+            }
+          }
+        }
+      },
+      "resolved": false,
+      "depends_on": "group",
+      "price_point_lookup_required": false
+    },
+    {
+      "stage": "group_localization",
+      "method": "POST",
+      "path": "/v2/subscriptionGroupLocalizations",
+      "body": {
+        "data": {
+          "type": "subscriptionGroupLocalizations",
+          "relationships": {
+            "version": {
+              "data": {
+                "type": "subscriptionGroupVersions",
+                "id": null
+              }
+            }
+          },
+          "attributes": {
+            "locale": "en-US",
+            "name": "Esha Membership"
+          }
+        }
+      },
+      "resolved": false,
+      "depends_on": "group_version",
+      "price_point_lookup_required": false
+    },
+    {
+      "stage": "subscription",
+      "method": "POST",
+      "path": "/v1/subscriptions",
+      "body": {
+        "data": {
+          "type": "subscriptions",
+          "relationships": {
+            "group": {
+              "data": {
+                "type": "subscriptionGroups",
+                "id": null
+              }
+            }
+          },
+          "attributes": {
+            "name": "Esha Membership Monthly",
+            "productId": "com.korlixdeveloper.esha.monthly",
+            "subscriptionPeriod": "ONE_MONTH",
+            "familySharable": false,
+            "groupLevel": 1
+          }
+        }
+      },
+      "resolved": false,
+      "depends_on": "group",
+      "price_point_lookup_required": false
+    },
+    {
+      "stage": "subscription_version",
+      "method": "POST",
+      "path": "/v1/subscriptionVersions",
+      "body": {
+        "data": {
+          "type": "subscriptionVersions",
+          "relationships": {
+            "subscription": {
+              "data": {
+                "type": "subscriptions",
+                "id": null
+              }
+            }
+          }
+        }
+      },
+      "resolved": false,
+      "depends_on": "subscription",
+      "price_point_lookup_required": false
+    },
+    {
+      "stage": "subscription_localization",
+      "method": "POST",
+      "path": "/v2/subscriptionLocalizations",
+      "body": {
+        "data": {
+          "type": "subscriptionLocalizations",
+          "relationships": {
+            "version": {
+              "data": {
+                "type": "subscriptionVersions",
+                "id": null
+              }
+            }
+          },
+          "attributes": {
+            "locale": "en-US",
+            "name": "Esha Membership Monthly",
+            "description": "Monthly access to Esha beauty features."
+          }
+        }
+      },
+      "resolved": false,
+      "depends_on": "subscription_version",
+      "price_point_lookup_required": false
+    },
+    {
+      "stage": "usa_availability",
+      "method": "POST",
+      "path": "/v1/subscriptionPlanAvailabilities",
+      "body": {
+        "data": {
+          "type": "subscriptionPlanAvailabilities",
+          "attributes": {
+            "planType": "UPFRONT",
+            "availableInNewTerritories": false
+          },
+          "relationships": {
+            "subscription": {
+              "data": {
+                "type": "subscriptions",
+                "id": null
+              }
+            },
+            "availableTerritories": {
+              "data": [
+                {
+                  "type": "territories",
+                  "id": "USA"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "resolved": false,
+      "depends_on": "subscription",
+      "price_point_lookup_required": false
+    },
+    {
+      "stage": "usa_price",
+      "method": "POST",
+      "path": "/v1/subscriptionPrices",
+      "body": {
+        "data": {
+          "type": "subscriptionPrices",
+          "relationships": {
+            "subscription": {
+              "data": {
+                "type": "subscriptions",
+                "id": null
+              }
+            },
+            "subscriptionPricePoint": {
+              "data": {
+                "type": "subscriptionPricePoints",
+                "id": null
+              }
+            }
+          },
+          "attributes": {
+            "startDate": null,
+            "planType": "UPFRONT"
+          }
+        }
+      },
+      "resolved": false,
+      "depends_on": "subscription",
+      "price_point_lookup_required": true
+    },
+    {
+      "stage": "usa_trial",
+      "method": "POST",
+      "path": "/v1/subscriptionIntroductoryOffers",
+      "body": {
+        "data": {
+          "type": "subscriptionIntroductoryOffers",
+          "relationships": {
+            "subscription": {
+              "data": {
+                "type": "subscriptions",
+                "id": null
+              }
+            },
+            "territory": {
+              "data": {
+                "type": "territories",
+                "id": "USA"
+              }
+            }
+          },
+          "attributes": {
+            "duration": "THREE_DAYS",
+            "numberOfPeriods": 1,
+            "offerMode": "FREE_TRIAL",
+            "startDate": null,
+            "endDate": null,
+            "targetSubscriptionPlanType": "UPFRONT"
+          }
+        }
+      },
+      "resolved": false,
+      "depends_on": "subscription",
+      "price_point_lookup_required": false
+    }
+  ],
+  "operation_evidence": [
+    {
+      "stage": "group",
+      "request": {
+        "stage": "group",
+        "method": "POST",
+        "path": "/v1/subscriptionGroups",
+        "body": {
+          "data": {
+            "type": "subscriptionGroups",
+            "relationships": {
+              "app": {
+                "data": {
+                  "type": "apps",
+                  "id": "6835184869"
+                }
+              }
+            },
+            "attributes": {
+              "referenceName": "Esha Membership"
+            }
+          }
+        },
+        "resolved": true,
+        "depends_on": null,
+        "price_point_lookup_required": false
+      },
+      "request_sha256": "c9d1869dfc5c5e96ae98f13518e79d6606f881b3972fb437eac1832f246bcba3",
+      "attempted_at_utc": "2026-11-15T21:08:01.983291+00:00",
+      "outcome": "created_and_read_back",
+      "response_resource_id": "22583130",
+      "verified_resource_id": "22583130",
+      "created_by_this_run": true,
+      "verified_at_utc": "2026-11-15T21:08:04.036202+00:00"
+    },
+    {
+      "stage": "group_version",
+      "request": {
+        "stage": "group_version",
+        "method": "POST",
+        "path": "/v1/subscriptionGroupVersions",
+        "body": {
+          "data": {
+            "type": "subscriptionGroupVersions",
+            "relationships": {
+              "subscriptionGroup": {
+                "data": {
+                  "type": "subscriptionGroups",
+                  "id": "22583130"
+                }
+              }
+            }
+          }
+        },
+        "resolved": true,
+        "depends_on": "group",
+        "price_point_lookup_required": false
+      },
+      "request_sha256": "35710e49441580f429366ada51e59c199ea1e2f5cac66ca473c14d2d4fd677ed",
+      "attempted_at_utc": "2026-11-15T21:08:04.042055+00:00",
+      "outcome": "created_and_read_back",
+      "response_resource_id": "dc04c43e-ca9b-4d26-8713-699c31df7fa8",
+      "verified_resource_id": "dc04c43e-ca9b-4d26-8713-699c31df7fa8",
+      "created_by_this_run": true,
+      "verified_at_utc": "2026-11-15T21:08:06.047575+00:00"
+    },
+    {
+      "stage": "group_localization",
+      "request": {
+        "stage": "group_localization",
+        "method": "POST",
+        "path": "/v2/subscriptionGroupLocalizations",
+        "body": {
+          "data": {
+            "type": "subscriptionGroupLocalizations",
+            "relationships": {
+              "version": {
+                "data": {
+                  "type": "subscriptionGroupVersions",
+                  "id": "dc04c43e-ca9b-4d26-8713-699c31df7fa8"
+                }
+              }
+            },
+            "attributes": {
+              "locale": "en-US",
+              "name": "Esha Membership"
+            }
+          }
+        },
+        "resolved": true,
+        "depends_on": "group_version",
+        "price_point_lookup_required": false
+      },
+      "request_sha256": "ad5cdcf357f37f4d9022c253b95fa76c0217b7aa4b96ab552e65f016a63dbcd9",
+      "attempted_at_utc": "2026-11-15T21:08:06.053084+00:00",
+      "outcome": "created_and_read_back",
+      "response_resource_id": "e5af433b-085c-4823-ad36-0372bf9a43d3",
+      "verified_resource_id": "e5af433b-085c-4823-ad36-0372bf9a43d3",
+      "created_by_this_run": true,
+      "verified_at_utc": "2026-11-15T21:08:08.562636+00:00"
+    },
+    {
+      "stage": "subscription",
+      "request": {
+        "stage": "subscription",
+        "method": "POST",
+        "path": "/v1/subscriptions",
+        "body": {
+          "data": {
+            "type": "subscriptions",
+            "relationships": {
+              "group": {
+                "data": {
+                  "type": "subscriptionGroups",
+                  "id": "22583130"
+                }
+              }
+            },
+            "attributes": {
+              "name": "Esha Membership Monthly",
+              "productId": "com.korlixdeveloper.esha.monthly",
+              "subscriptionPeriod": "ONE_MONTH",
+              "familySharable": false,
+              "groupLevel": 1
+            }
+          }
+        },
+        "resolved": true,
+        "depends_on": "group",
+        "price_point_lookup_required": false
+      },
+      "request_sha256": "68eb5e5d96e485dac0e1082e4fce93cc90c38ece454adc8c2450a381000566fc",
+      "attempted_at_utc": "2026-11-15T21:08:08.568734+00:00",
+      "outcome": "created_and_read_back",
+      "response_resource_id": "6835214491",
+      "verified_resource_id": "6835214491",
+      "created_by_this_run": true,
+      "verified_at_utc": "2026-11-15T21:08:14.647055+00:00"
+    },
+    {
+      "stage": "subscription_version",
+      "request": {
+        "stage": "subscription_version",
+        "method": "POST",
+        "path": "/v1/subscriptionVersions",
+        "body": {
+          "data": {
+            "type": "subscriptionVersions",
+            "relationships": {
+              "subscription": {
+                "data": {
+                  "type": "subscriptions",
+                  "id": "6835214491"
+                }
+              }
+            }
+          }
+        },
+        "resolved": true,
+        "depends_on": "subscription",
+        "price_point_lookup_required": false
+      },
+      "request_sha256": "2c44b9a7e8275105fad80610cd4c25eb30f15397127796c5a7f00a19fee9b5fe",
+      "attempted_at_utc": "2026-11-15T21:08:14.653114+00:00",
+      "outcome": "created_and_read_back",
+      "response_resource_id": "771cbace-d968-4902-b269-0d9ded9d1155",
+      "verified_resource_id": "771cbace-d968-4902-b269-0d9ded9d1155",
+      "created_by_this_run": true,
+      "verified_at_utc": "2026-11-15T21:08:25.356249+00:00"
+    },
+    {
+      "stage": "subscription_localization",
+      "request": {
+        "stage": "subscription_localization",
+        "method": "POST",
+        "path": "/v2/subscriptionLocalizations",
+        "body": {
+          "data": {
+            "type": "subscriptionLocalizations",
+            "relationships": {
+              "version": {
+                "data": {
+                  "type": "subscriptionVersions",
+                  "id": "771cbace-d968-4902-b269-0d9ded9d1155"
+                }
+              }
+            },
+            "attributes": {
+              "locale": "en-US",
+              "name": "Esha Membership Monthly",
+              "description": "Monthly access to Esha beauty features."
+            }
+          }
+        },
+        "resolved": true,
+        "depends_on": "subscription_version",
+        "price_point_lookup_required": false
+      },
+      "request_sha256": "80a029df7997554a8bc1202fc75c10bc68a63950c4035de723248fc313d1d8e9",
+      "attempted_at_utc": "2026-11-15T21:08:25.362392+00:00",
+      "outcome": "created_and_read_back",
+      "response_resource_id": "76e14bed-e7a3-4276-81a7-f2aebba2ef52",
+      "verified_resource_id": "76e14bed-e7a3-4276-81a7-f2aebba2ef52",
+      "created_by_this_run": true,
+      "verified_at_utc": "2026-11-15T21:08:32.102950+00:00"
+    },
+    {
+      "stage": "usa_availability",
+      "request": {
+        "stage": "usa_availability",
+        "method": "POST",
+        "path": "/v1/subscriptionPlanAvailabilities",
+        "body": {
+          "data": {
+            "type": "subscriptionPlanAvailabilities",
+            "attributes": {
+              "planType": "UPFRONT",
+              "availableInNewTerritories": false
+            },
+            "relationships": {
+              "subscription": {
+                "data": {
+                  "type": "subscriptions",
+                  "id": "6835214491"
+                }
+              },
+              "availableTerritories": {
+                "data": [
+                  {
+                    "type": "territories",
+                    "id": "USA"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "resolved": true,
+        "depends_on": "subscription",
+        "price_point_lookup_required": false
+      },
+      "request_sha256": "3790c2cc3cd763624dbcb61ecd875aaa80cc1fa1eb08f05d539616f72e06cc96",
+      "attempted_at_utc": "2026-11-15T21:08:32.109602+00:00",
+      "outcome": "created_and_read_back",
+      "response_resource_id": "eyJhIjoiNjgzNTIxNDQ5MSIsInAiOiIwIn0",
+      "verified_resource_id": "eyJhIjoiNjgzNTIxNDQ5MSIsInAiOiIwIn0",
+      "created_by_this_run": true,
+      "verified_at_utc": "2026-11-15T21:08:40.970938+00:00"
+    },
+    {
+      "stage": "usa_price",
+      "request": {
+        "stage": "usa_price",
+        "method": "POST",
+        "path": "/v1/subscriptionPrices",
+        "body": {
+          "data": {
+            "type": "subscriptionPrices",
+            "relationships": {
+              "subscription": {
+                "data": {
+                  "type": "subscriptions",
+                  "id": "6835214491"
+                }
+              },
+              "subscriptionPricePoint": {
+                "data": {
+                  "type": "subscriptionPricePoints",
+                  "id": "eyJzIjoiNjgzNTIxNDQ5MSIsInQiOiJVU0EiLCJwIjoiMTAwNjIifQ"
+                }
+              }
+            },
+            "attributes": {
+              "startDate": null,
+              "planType": "UPFRONT"
+            }
+          }
+        },
+        "resolved": true,
+        "depends_on": "subscription",
+        "price_point_lookup_required": false
+      },
+      "request_sha256": "6c9aee7c06495c9047eee7806a4729f7da2234d284d1740d3f7e5ba3240cf4a0",
+      "attempted_at_utc": "2026-11-15T21:08:40.973829+00:00",
+      "outcome": "created_and_read_back",
+      "response_resource_id": "eyJhIjoiNjgzNTIxNDQ5MSIsImMiOiJVUyIsImQiOjAsInAiOiIwIn0",
+      "verified_resource_id": "eyJhIjoiNjgzNTIxNDQ5MSIsImMiOiJVUyIsImQiOjAsInAiOiIwIn0",
+      "created_by_this_run": true,
+      "verified_at_utc": "2026-11-15T21:08:49.176376+00:00"
+    },
+    {
+      "stage": "usa_trial",
+      "request": {
+        "stage": "usa_trial",
+        "method": "POST",
+        "path": "/v1/subscriptionIntroductoryOffers",
+        "body": {
+          "data": {
+            "type": "subscriptionIntroductoryOffers",
+            "relationships": {
+              "subscription": {
+                "data": {
+                  "type": "subscriptions",
+                  "id": "6835214491"
+                }
+              },
+              "territory": {
+                "data": {
+                  "type": "territories",
+                  "id": "USA"
+                }
+              }
+            },
+            "attributes": {
+              "duration": "THREE_DAYS",
+              "numberOfPeriods": 1,
+              "offerMode": "FREE_TRIAL",
+              "startDate": null,
+              "endDate": null,
+              "targetSubscriptionPlanType": "UPFRONT"
+            }
+          }
+        },
+        "resolved": true,
+        "depends_on": "subscription",
+        "price_point_lookup_required": false
+      },
+      "request_sha256": "d0dd26c58f1418f0bd5831f3e68af34b576e3e404294394275f6f9cb42ffa457",
+      "attempted_at_utc": "2026-11-15T21:08:49.183937+00:00",
+      "outcome": "created_and_read_back",
+      "response_resource_id": "eyJzIjoiNjgzNTIxNDQ5MSIsImQiOjE3OTQ3Mjk2MDAsImkiOiJVUyIsInQiOiIiLCJwIjoiMCJ9",
+      "verified_resource_id": "eyJzIjoiNjgzNTIxNDQ5MSIsImQiOjE3OTQ3Mjk2MDAsImkiOiJVUyIsInQiOiIiLCJwIjoiMCJ9",
+      "created_by_this_run": true,
+      "verified_at_utc": "2026-11-15T21:08:56.329556+00:00"
+    }
+  ],
+  "availability_changed": true,
+  "review_submitted": false,
+  "published": false,
+  "backend_activated": false,
+  "agreements_changed": false,
+  "post_retries": 0,
+  "spec_sha256": "0e0ca23f492db44738149fc3e95701483b4b376ed83a00060d2fc4a494a55c07",
+  "initial_observations": {
+    "resource_ids": {},
+    "usa_price_point_id": null,
+    "availability": {
+      "scope": "usa_upfront_only_no_new_territories",
+      "configured": false,
+      "plans": []
+    },
+    "real_device_purchase_verified": false,
+    "agreement_status": "not_inspected"
+  },
+  "final_observations": {
+    "resource_ids": {
+      "group": "22583130",
+      "group_version": "dc04c43e-ca9b-4d26-8713-699c31df7fa8",
+      "group_localization": "e5af433b-085c-4823-ad36-0372bf9a43d3",
+      "subscription": "6835214491",
+      "subscription_version": "771cbace-d968-4902-b269-0d9ded9d1155",
+      "subscription_localization": "76e14bed-e7a3-4276-81a7-f2aebba2ef52",
+      "usa_availability": "eyJhIjoiNjgzNTIxNDQ5MSIsInAiOiIwIn0",
+      "usa_price": "eyJhIjoiNjgzNTIxNDQ5MSIsImMiOiJVUyIsImQiOjAsInAiOiIwIn0",
+      "usa_trial": "eyJzIjoiNjgzNTIxNDQ5MSIsImQiOjE3OTQ3Mjk2MDAsImkiOiJVUyIsInQiOiIiLCJwIjoiMCJ9"
+    },
+    "usa_price_point_id": "eyJzIjoiNjgzNTIxNDQ5MSIsInQiOiJVU0EiLCJwIjoiMTAwNjIifQ",
+    "availability": {
+      "scope": "usa_upfront_only_no_new_territories",
+      "configured": true,
+      "plans": [
+        {
+          "id": "eyJhIjoiNjgzNTIxNDQ5MSIsInAiOiIwIn0",
+          "plan_type": "UPFRONT",
+          "available_in_new_territories": false,
+          "territories": [
+            "USA"
+          ]
+        }
+      ]
+    },
+    "real_device_purchase_verified": false,
+    "agreement_status": "not_inspected"
+  },
+  "request_count": 113,
+  "completed_at_utc": "2026-11-15T21:08:56.337251+00:00"
+}

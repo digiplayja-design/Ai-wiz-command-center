@@ -1,9 +1,9 @@
 {
   "schema_version": 1,
-  "status": "draft_for_owner_review_not_submitted",
+  "status": "draft_apple_listing_subscription_and_signed_ios_build_2_prepared_not_review_submitted_or_published",
   "prepared_on": "2026-11-15",
   "locale": "en-US",
-  "source_commit": "bf4ff498e3aa71eea07d4052d8789cd37ddba7c0",
+  "source_commit": "d97cdda79f3e41be45ebeecd12718702e6b070dc",
   "app": {
     "display_name": "Esha by Korlix",
     "source_version": "1.0.0",
@@ -14,7 +14,8 @@
       "status": "source_asset_only_store_artwork_not_verified"
     },
     "membership_scope": "catalog_routine_planner_vanity_look_studio_and_ai_require_fresh_same_account_server_verified_active_trial_or_paid_membership",
-    "scope_revision_status": "native_cloud_build_verified_policies_live_listing_not_applied_or_submitted"
+    "scope_revision_status": "native_membership_cloud_validated_current_policies_live_apple_draft_synchronized_not_store_submitted",
+    "latest_uploaded_ios_build_number": 2
   },
   "apple": {
     "name": "Esha by Korlix",
@@ -27,21 +28,52 @@
       "app_store_connect_numeric_app_id": "6835184869",
       "apple_developer_team_id": "FJKJ9MUDZ4",
       "app_store_connect_sku": "ESHA_IOS_001",
-      "verification_status": "app_record_and_team_id_observed_in_user_screenshots_subscription_product_unverified"
+      "verification_status": "app_identity_team_and_monthly_subscription_draft_offer_verified_by_apple_api"
     },
     "identity_evidence": {
-      "source": "user_provided_screenshots",
+      "source": "historical_user_screenshots_followed_by_successful_apple_api_signing_and_listing_receipts",
       "app_record_source": "App Store Connect App Information screenshot",
       "app_record_exists": true,
       "platform": "iOS",
-      "store_version": "1.0",
+      "store_version": "1.0.0",
       "store_status": "Prepare for Submission",
       "team_id_source": "Apple Developer Register an App ID screenshot",
-      "live_account_or_api_identity_check_performed": false,
-      "subscription_product_verified": false,
-      "signing_verified": false,
-      "build_upload_verified": false,
-      "review_submission_verified": false
+      "live_account_or_api_identity_check_performed": true,
+      "subscription_product_verified": true,
+      "signing_verified": true,
+      "build_upload_verified": true,
+      "review_submission_verified": false,
+      "store_status_verified_at_utc": "2026-11-15T20:43:54.700008+00:00",
+      "api_identity_evidence_file": "ios-signing-20261115.json",
+      "api_identity_job_url": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa106590e83b09c4fab58f",
+      "api_identity_source_commit": "d1e592b901efe020a9df7c3f6fc33a31600671f4",
+      "api_identity_verified_at_utc": "2026-11-15T20:05:54.325597+00:00",
+      "signing_verification_scope": "The Mac job verified App Store distribution signature, exact Esha bundle/team/profile and signed IPA. The downloaded IPA hash and plist independently match the build receipt.",
+      "signing_profile_verified": true,
+      "signing_profile_import_confirmed": true,
+      "codemagic_profile_reference": "ESHA_APP_STORE_PROFILE",
+      "profile_import_evidence_scope": "Live Codemagic UI confirmed the reference, exact Esha bundle, Korlix LLC team and existing certificate match. Expected profile UUID and SHA-256 are from the signing receipt, not UI hash readback.",
+      "signed_iphone_ipa_verified": true,
+      "draft_listing_synchronized": true,
+      "draft_listing_evidence_file": "apple-draft-listing-20261115.json",
+      "draft_listing_source_commit": "80194affee0b971bcd1e67ac45ed5ee3dd528547",
+      "draft_listing_completed_at_utc": "2026-11-15T20:43:54.700008+00:00",
+      "draft_listing_job_url": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa194090e83b09c4fab8d4",
+      "upload_status": "build_2_uploaded_processed_valid_and_selected_on_version_1_0_0_draft",
+      "signed_iphone_ipa_evidence_file": "ios-upload-build-2-20261115.json",
+      "signed_iphone_ipa_source_commit": "fbfde79df731dea5a2e7fc65ee9d4308aebe80dd",
+      "uploaded_ios_build_number": "2",
+      "uploaded_ios_version": "1.0.0",
+      "upload_completed_at_utc": "2026-11-15T21:02:06.076Z",
+      "upload_delivery_uuid": "50de7424-a350-42fb-9a9d-78eb17021ace",
+      "upload_job_url": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa1c8190e83b09c4faba0a",
+      "apple_processing_verified": true,
+      "apple_processing_evidence_file": "apple-inventory-after-subscription-20261115.json",
+      "apple_processing_checked_at_utc": "2026-11-15T21:10:34.840226+00:00",
+      "apple_build_id": "50de7424-a350-42fb-9a9d-78eb17021ace",
+      "apple_processing_state": "VALID",
+      "draft_build_selected": true,
+      "draft_build_selection_evidence_file": "apple-build-selected-20261115.json"
     },
     "version": "1.0.0",
     "keywords": "makeup,lipstick,lipgloss,lashes,lotion,bodywash,beauty,routine,vanity,cosmetics,skincare",
@@ -49,7 +81,62 @@
     "secondary_category": "SHOPPING",
     "support_url": "https://www.korlixdeveloper.com/support.html",
     "privacy_url": "https://chee-chai-chee-backend.onrender.com/esha/privacy",
-    "version_action_required": "Align the existing editable 1.0 App Store version with source version 1.0.0 before selecting the matching build; do not create a duplicate app record."
+    "version_action_required": "Existing Apple iOS version 1.0.0 has the verified VALID and unexpired branded build 2 selected. Complete review materials, declarations, approved service configuration and actual sandbox purchase testing before submission.",
+    "subscription_draft": {
+      "status": "subscription_draft_prepared",
+      "evidence_file": "apple-subscription-prepared-20261115.json",
+      "read_only_plan_evidence_file": "apple-subscription-plan-20261115.json",
+      "source_commit": "d62f76a8fc97eac812668e884ba0b57d7ba84ceb",
+      "completed_at_utc": "2026-11-15T21:08:56.337251+00:00",
+      "codemagic_build_id": "6afa1f0790e83b09c4fabaf9",
+      "codemagic_build_url": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa1f0790e83b09c4fabaf9",
+      "group_id": "22583130",
+      "subscription_id": "6835214491",
+      "product_id": "com.korlixdeveloper.esha.monthly",
+      "subscription_period": "ONE_MONTH",
+      "plan_type": "UPFRONT",
+      "territories": [
+        "USA"
+      ],
+      "available_in_new_territories": false,
+      "currency": "USD",
+      "renewal_price": "4.99",
+      "intro_offer": "FREE_TRIAL",
+      "intro_duration": "THREE_DAYS",
+      "family_sharable": false,
+      "created_and_read_back_operations": 9,
+      "post_retries": 0,
+      "review_submitted": false,
+      "sandbox_purchase_verified": false,
+      "agreement_status": "not_inspected",
+      "backend_activated": false,
+      "later_inventory_evidence_file": "apple-inventory-after-subscription-20261115.json",
+      "observed_product_state": "MISSING_METADATA",
+      "subscription_review_screenshot_present": false
+    },
+    "draft_build_selection": {
+      "evidence_file": "apple-build-selected-20261115.json",
+      "source_commit": "8adf46d7587ced117e725f88a404913c0d2eb61b",
+      "status": "build_selected_and_read_back",
+      "completed_at_utc": "2026-11-15T21:14:24.429851+00:00",
+      "codemagic_build_id": "6afa207890e83b09c4fabb6a",
+      "codemagic_build_url": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa207890e83b09c4fabb6a",
+      "version_id": "ab8553e4-56d5-40a9-aa7a-8cfb447fca72",
+      "version": "1.0.0",
+      "version_state": "PREPARE_FOR_SUBMISSION",
+      "selected_build_number": "2",
+      "selected_build_id": "50de7424-a350-42fb-9a9d-78eb17021ace",
+      "processing_state": "VALID",
+      "expired": false,
+      "patch_attempts": 1,
+      "patch_retries": 0,
+      "request_count": 16,
+      "uses_non_exempt_encryption": null,
+      "encryption_answers_changed": false,
+      "contact_details_changed": false,
+      "review_submitted": false,
+      "published": false
+    }
   },
   "google_play": {
     "name": "Esha by Korlix",
@@ -63,6 +150,15 @@
       "play_console_app_record_id": null,
       "developer_account_id": null,
       "verification_status": "package_and_subscription_ids_configured_in_source_store_records_unverified"
+    },
+    "release_readiness": {
+      "evidence_file": "android-signing-prerequisites-20261115.json",
+      "dedicated_upload_key_reference_present": false,
+      "expected_upload_key_reference": "ESHA_ANDROID_UPLOAD_KEY",
+      "signed_android_candidate_verified": false,
+      "console_verification_status": "blocked_by_automatic_approval_review_of_redirected_google_play_origin",
+      "app_review_submitted": false,
+      "publicly_published": false
     }
   },
   "links": {
@@ -73,15 +169,29 @@
     "subscription_terms_url": "https://chee-chai-chee-backend.onrender.com/esha/terms#offer-heading",
     "account_deletion_url": "https://chee-chai-chee-backend.onrender.com/esha/privacy#deletion",
     "apple_standard_eula_url": "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
-    "esha_policy_route_status": "current_whole_app_membership_policies_deployed_and_verified",
-    "esha_policy_verified_at_utc": "2026-11-15T19:41:54.144Z",
+    "esha_policy_route_status": "current_whole_app_membership_policy_copy_live_and_http_verified",
+    "esha_policy_verified_at_utc": "2026-11-15T20:47:00.366312+00:00",
     "esha_policy_deployed_commit": "5e2a4086b7c4a58e8614abfa3625270b05def152",
     "current_policy_copy_deployed": true,
-    "verification_scope_note": "The current whole-app membership Privacy and Terms HTML, response headers and deletion/offer anchors were verified after the policy-only deployment. Billing and live AI remain disabled.",
-    "esha_policy_deployment_id": "dep-dbt0l93l550s739n1p3g"
+    "verification_scope_note": "Agent verification of the exact live Render deployment plus HTTP 200 policy pages confirms whole-app membership wording, the Terms three-day/US$4.99 offer and the Privacy deletion anchor. This does not verify subscription products, activate checkout or approve owner attestations.",
+    "historical_policy_verification": {
+      "deployed_commit": "4bb80c1ce6fe1a314a31a23b60b70832c1045556",
+      "verified_at_utc": "2026-11-15T18:06:09.694445+00:00",
+      "scope": "Earlier policy content checkpoint retained for provenance; superseded for current membership wording by the live verification below."
+    },
+    "live_policy_evidence_file": "live-policy-check-20261115.json",
+    "live_deployment": {
+      "provider": "Render",
+      "workspace_id": "tea-d8cskuf7f7vs73emq1p0",
+      "service_id": "srv-d8csvkkp3tds73emfikg",
+      "deploy_id": "dep-dbt0l93l550s739n1p3g",
+      "commit": "5e2a4086b7c4a58e8614abfa3625270b05def152",
+      "status": "live",
+      "finished_at_utc": "2026-11-15T19:41:04.000118Z"
+    }
   },
   "membership_offer": {
-    "status": "intended_offer_store_setup_and_activation_unverified",
+    "status": "apple_usa_monthly_product_price_and_trial_draft_verified_backend_activation_and_google_setup_pending",
     "trial_days_for_eligible_subscribers": 3,
     "us_monthly_price": "4.99",
     "currency": "USD",
@@ -96,7 +206,16 @@
     "account_legal_support_and_deletion_controls_require_subscription": false,
     "ai_model": null,
     "ai_max_output_tokens": null,
-    "ai_configuration_status": "inactive_esha_option_prepared_owner_choice_required_no_live_ai_claim"
+    "ai_configuration_status": "inactive_esha_option_prepared_owner_choice_required_no_live_ai_claim",
+    "ai_preparation": {
+      "source_commit": "e9415b73c0dc36d4474c2a2e2c6abbda7d126acd",
+      "proposal_document": "backend/esha/billing/AI_OPTION.md",
+      "scope": "Esha-only adapter and durable provider-attempt budget prepared and tested; model, allowance and output-budget choice not approved.",
+      "deployed": false,
+      "migration_applied": false,
+      "activated": false,
+      "status_scope": "Inactive preparation checkpoint; this release continuation applies no AI migration, deployment or activation."
+    }
   },
   "owner_review": {
     "listing_copy_approved": false,
@@ -104,18 +223,80 @@
     "policy_urls_publicly_verified_for_this_release": true,
     "signed_release_artifacts_verified": false,
     "store_screenshots": [],
-    "store_screenshots_status": "not_supplied_in_this_metadata_draft",
+    "store_screenshots_status": "live_apple_inventory_has_no_screenshot_sets_genuine_member_ui_requires_sandbox_entitlement",
     "store_disclosure_forms": "not_completed_requires_owner_review",
     "legal_and_age_rating_attestations": "not_completed_requires_owner_review",
     "notes": [
-      "This file is a prepared metadata draft. It has not been applied to the Apple listing or submitted for review. The guarded draft-listing workflow is committed but remains unrun because Apple authentication failed.",
-      "The Apple app record, SKU, numeric Apple ID and team ID were observed in user-provided App Information and Register an App ID screenshots. These screenshots do not verify subscription products, signing, build upload or review submission. Google Play store identifiers remain unset, and subscription identifiers remain source candidates.",
-      "The current Esha Privacy and Terms pages returned HTTP 200 and exactly matched frozen source after policy-only deployment of commit 5e2a4086b7c4a58e8614abfa3625270b05def152. Public page headers and deletion/offer anchors were verified on November 15, 2026 at 19:41:54 UTC.",
-      "The native membership correction requires fresh same-account server verification for Discover, planner, vanity, studio and AI. Native cloud run 43754059868 at bf4ff498e3aa71eea07d4052d8789cd37ddba7c0 passed 49 tests and both platform compilation jobs. Active members retain non-AI features at zero consultations. Account, recovery, restore/manage, legal, support and deletion controls remain accessible without an active subscription.",
-      "Trial and monthly consultation counts, the Esha-specific model and token/attempt budgets have not been approved or activated. The inactive option and spending guard are prepared at e9415b73c0dc36d4474c2a2e2c6abbda7d126acd; its new migration is not applied and adapter is not deployed. Verify the selected configuration and real store offers, then match the listing to the final build and active service before enabling purchases or submitting for review.",
-      "Privacy and age-rating attestations, content-rights responses, reviewer access and native store screenshots remain unfinished. The existing Korlix Inc policy operator has been preserved; the Apple account name alone is not treated as evidence requiring an operator change."
+      "This file remains a metadata draft for owner review. Allowlisted Apple draft fields were synchronized and reread. A separate signed build 2 upload succeeded. Neither operation submits the app for review or publishes it.",
+      "The exact Apple app, bundle, SKU and team identity is API-verified. The dedicated Esha App Store profile was created, imported into Codemagic and used by the signed build. Branded version 1.0.0 build 2 is independently hash/plist-verified and uploaded. Apple subscription group, exact monthly product, U.S. $4.99 price and eligible three-day trial are created and read back; Apple build 2 processing is VALID and unexpired in the later read-only inventory. The later build-selection receipt confirms build 2 attached to the existing editable version. Review submission remains incomplete. Google Play store identifiers remain unverified.",
+      "Earlier Esha Privacy and Terms pages returned HTTP 200 after deployment of commit 4bb80c1ce6fe1a314a31a23b60b70832c1045556 at the November 15, 2026 18:06:09 UTC checkpoint. The current whole-app membership wording is now deployed on live commit 5e2a4086b7c4a58e8614abfa3625270b05def152, Render deploy dep-dbt0l93l550s739n1p3g, and verified by the 20:47 UTC HTTP receipt. The current checks cover policy wording, the offer and deletion anchor; they do not activate purchases or AI.",
+      "The native membership correction at bf4ff498e3aa71eea07d4052d8789cd37ddba7c0 passed 49 Flutter tests and successful Android and iOS Simulator compilation in GitHub Actions run 43754059868. It requires fresh same-account server verification for Discover, planner, vanity, studio and AI. Active members retain non-AI features at zero consultations. Account, recovery, restore/manage, legal, support and deletion controls remain accessible without an active subscription. The native build evidence is separate from signed-device release verification.",
+      "Trial and monthly consultation counts, the Esha-specific AI model and output budget are not approved or configured by this draft. Approve them, verify real store offers, and match the final build and active service before enabling purchases or submitting for review. Both current public billing catalogs still disable new purchases and consultations, report store and allowance configuration unverified, and return null consultation counts.",
+      "Owner review of legal entity, privacy and age-rating attestations, content rights, reviewer access and store screenshots remains outstanding. No owner attestation is inferred from this draft.",
+      "The dedicated ESHA_ANDROID_UPLOAD_KEY reference was absent from the live Codemagic Android keystore inventory. Google Play navigation redirected to google.play/business and was rejected by automatic approval review; no additional redirect attempts were made after that rejection."
     ],
-    "current_policy_scope_revision_deployed": true
+    "current_policy_scope_revision_deployed": true,
+    "policy_verification_attribution": "Agent verified the live deployment and public HTTP responses recorded in live-policy-check-20261115.json. This factual verification does not supply owner approval of copy, legal declarations or subscription terms.",
+    "signed_ios_release_artifact_verified": true,
+    "signed_android_release_artifact_verified": false,
+    "signed_release_artifacts_verification_scope": "Signed iPhone IPA build 2 is verified and uploaded; a signed Android release remains blocked by the missing dedicated Esha upload key.",
+    "apple_store_identity_and_offer_verified": true,
+    "subscription_review_screenshot_status": "absent_in_live_inventory",
+    "review_contact_status": "all_four_contact_fields_absent_in_live_inventory",
+    "review_demo_credentials_status": "present_but_values_not_read_and_access_not_tested"
   },
-  "source_scope_note": "source_commit identifies the current successful native cloud build. Later release helpers, inactive backend preparation and checkpoint commits are recorded separately in build-verification.json. No signed release artifact or submission is inferred."
+  "source_scope_note": "source_commit retains the historical d97cdda native-artifact checkpoint. Cross-platform membership validation, signed iPhone build 2, Apple profile/listing and live policy deployment each have exact source commits and receipts. Upload success is separate from Apple processing, draft build selection, review submission, public release and backend activation.",
+  "source_commit_scope": "historical_native_artifact_checkpoint_only_not_current_app_validation_or_deployment",
+  "current_native_validation_commit": "bf4ff498e3aa71eea07d4052d8789cd37ddba7c0",
+  "current_native_validation_evidence": {
+    "file": "membership-build-bf4ff49-20261115.json",
+    "workflow_run_id": 43754059868,
+    "workflow_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43754059868",
+    "conclusion": "success",
+    "flutter_tests_passed": 49,
+    "artifact_scope": "Android debug APK and unsigned AAB; iOS Simulator application. These artifacts do not verify a signed iPhone IPA or a store upload."
+  },
+  "live_billing_catalog_verification": {
+    "evidence_file": "live-policy-check-20261115.json",
+    "checked_at_utc": "2026-11-15T20:47:00.366312+00:00",
+    "scope": "Public backend catalog readiness only; not direct verification of Apple or Google subscription records.",
+    "providers": {
+      "apple": {
+        "purchasesEnabled": false,
+        "consultationEnabled": false,
+        "allowanceConfigured": false,
+        "storeConfigurationVerified": false,
+        "consultationLimits": {
+          "trial": null,
+          "monthly": null
+        },
+        "state": "planned"
+      },
+      "google": {
+        "purchasesEnabled": false,
+        "consultationEnabled": false,
+        "allowanceConfigured": false,
+        "storeConfigurationVerified": false,
+        "consultationLimits": {
+          "trial": null,
+          "monthly": null
+        },
+        "state": "planned"
+      }
+    }
+  },
+  "current_signed_ios_validation": {
+    "evidence_file": "ios-upload-build-2-20261115.json",
+    "source_commit": "fbfde79df731dea5a2e7fc65ee9d4308aebe80dd",
+    "flutter_tests_passed": 49,
+    "version": "1.0.0",
+    "build_number": "2",
+    "signing_verified": true,
+    "download_hash_and_plist_verified": true,
+    "upload_succeeded": true,
+    "apple_processing_verified": true,
+    "launch_placeholder_replaced_with_existing_pink_logo": true,
+    "launch_placeholder_warning_present": false,
+    "apple_processing_evidence_file": "apple-inventory-after-subscription-20261115.json"
+  }
 }

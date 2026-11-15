@@ -1,0 +1,149 @@
+{
+  "schema_version": 1,
+  "status": "inventory_complete",
+  "mode": "read_only_inventory",
+  "started_at_utc": "2026-11-15T20:56:54.756303+00:00",
+  "apple_app_id": "6835184869",
+  "bundle_id": "com.korlixdeveloper.esha",
+  "sku": "ESHA_IOS_001",
+  "source_commit": "fbfde79df731dea5a2e7fc65ee9d4308aebe80dd",
+  "cli_version": "0.69.0",
+  "identity_verified": true,
+  "expected_offer": {
+    "product_id": "com.korlixdeveloper.esha.monthly",
+    "subscription_period": "ONE_MONTH",
+    "usa_monthly_price": "4.99",
+    "trial_duration": "THREE_DAYS"
+  },
+  "required_screenshot_families": [
+    "iphone",
+    "ipad"
+  ],
+  "apple_writes_performed": false,
+  "uploaded": false,
+  "submitted": false,
+  "limitations": [
+    "Presence does not verify reviewer credentials or StoreKit behavior.",
+    "Price schedules are observations, not a current-price approval.",
+    "Subscription period is recurrence; price plan type can describe an installment commitment.",
+    "HTTP 404 is unavailable, not proof that a field is unconfigured.",
+    "App privacy questionnaire and account agreements are not inventoried.",
+    "Optional age fields are not used to infer questionnaire completeness."
+  ],
+  "app_versions": {
+    "status": "observed",
+    "items": [
+      {
+        "id": "ab8553e4-56d5-40a9-aa7a-8cfb447fca72",
+        "version": "1.0.0",
+        "platform": "IOS",
+        "state": "PREPARE_FOR_SUBMISSION",
+        "selected_build": {
+          "status": "no_related_resource_returned"
+        },
+        "localizations": {
+          "status": "observed",
+          "items": [
+            {
+              "id": "bc06e7be-c0aa-4dbb-a23c-0b4ec207a34e",
+              "locale": "en-US",
+              "screenshot_sets": {
+                "status": "none_returned",
+                "items": []
+              }
+            }
+          ]
+        },
+        "review_access": {
+          "status": "observed",
+          "item": {
+            "contact_first_name_present": false,
+            "contact_last_name_present": false,
+            "contact_phone_present": false,
+            "contact_email_present": false,
+            "demo_account_name_present": true,
+            "demo_account_password_present": true,
+            "review_notes_present": false,
+            "contact_fields_present": false,
+            "demo_credentials_present": true,
+            "demo_account_required": true
+          }
+        }
+      }
+    ]
+  },
+  "uploaded_builds": {
+    "status": "observed",
+    "items": [
+      {
+        "id": "26b909f8-e0ab-4d4e-81c0-beab571214d0",
+        "build_number": "1",
+        "processing_state": "VALID",
+        "uploaded_at": "2026-11-15T12:52:48-08:00",
+        "expired": false,
+        "uses_non_exempt_encryption": null
+      }
+    ]
+  },
+  "app_information": {
+    "status": "observed",
+    "items": [
+      {
+        "id": "8c5c551a-f21d-44e4-8fb4-ed288a86e553",
+        "state": "PREPARE_FOR_SUBMISSION",
+        "age_rating_declaration": {
+          "status": "observed",
+          "item": {
+            "id": "8c5c551a-f21d-44e4-8fb4-ed288a86e553",
+            "observed_answers": {
+              "advertising": null,
+              "ageAssurance": null,
+              "gambling": null,
+              "healthOrWellnessTopics": null,
+              "lootBox": null,
+              "messagingAndChat": null,
+              "parentalControls": null,
+              "socialMedia": null,
+              "socialMediaAgeRestricted": null,
+              "unrestrictedWebAccess": null,
+              "userGeneratedContent": null,
+              "ageRatingOverride": "NONE",
+              "ageRatingOverrideV2": "NONE",
+              "alcoholTobaccoOrDrugUseOrReferences": null,
+              "contests": null,
+              "gamblingSimulated": null,
+              "gunsOrOtherWeapons": null,
+              "horrorOrFearThemes": null,
+              "kidsAgeBand": null,
+              "koreaAgeRatingOverride": "NONE",
+              "matureOrSuggestiveThemes": null,
+              "medicalOrTreatmentInformation": null,
+              "profanityOrCrudeHumor": null,
+              "sexualContentGraphicAndNudity": null,
+              "sexualContentOrNudity": null,
+              "violenceCartoonOrFantasy": null,
+              "violenceRealistic": null,
+              "violenceRealisticProlongedGraphicOrSadistic": null
+            },
+            "developer_age_rating_info_url_present": false,
+            "questionnaire_completeness": "not_inferred_from_optional_or_nullable_fields"
+          }
+        }
+      }
+    ]
+  },
+  "subscription_groups": {
+    "status": "none_returned",
+    "items": []
+  },
+  "observation_counts": {
+    "target_ios_version": "1.0.0",
+    "target_ios_version_count": 1,
+    "uploaded_build_count": 1,
+    "expected_product_count": 0,
+    "unknown_counts_are_null": true
+  },
+  "unavailable_reads": [],
+  "request_count": 10,
+  "completed_at_utc": "2026-11-15T20:56:56.318593+00:00"
+}

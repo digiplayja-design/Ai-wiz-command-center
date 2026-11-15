@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "evidence_type": "codemagic_ui_android_signing_inventory",
+  "checked_at_utc": "2026-11-15T21:07:44.234292+00:00",
+  "source": "Live Codemagic personal account settings > Code signing identities > Android keystores",
+  "expected_reference": "ESHA_ANDROID_UPLOAD_KEY",
+  "expected_reference_present": false,
+  "visible_keystore_count": 2,
+  "expected_certificate_fingerprint_variable": "ESHA_ANDROID_UPLOAD_CERT_SHA256",
+  "fingerprint_variable_value_inspected": false,
+  "key_created_or_imported": false,
+  "signed_android_build_started": false,
+  "google_play_console_verified": false,
+  "google_console_block": {
+    "category": "automatic_approval_review_rejection",
+    "requested_origin": "https://play.google.com",
+    "redirected_origin": "https://google.play",
+    "redirected_url": "https://google.play/business/",
+    "stated_reason": "Redirected origin was rejected as mismatched or untrusted. No further attempts after the second rejection.",
+    "user_permission_for_redirect_required_to_continue": true
+  },
+  "remaining": "Provide or import the dedicated Esha upload keystore and verify its certificate fingerprint before the signed Android candidate workflow. Google Play record and upload-key registration remain unverified.",
+  "candidate_machine": "mac_mini_m2",
+  "candidate_machine_reason": "Matches the current Codemagic account-compatible Mac machine; linux_x2 was previously rejected before execution by the listing workflow."
+}

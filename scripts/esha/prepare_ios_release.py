@@ -6,19 +6,21 @@ import json
 import os
 import plistlib
 import re
-import subprocess
 from pathlib import Path
 
+from prepare_ios_profile import CLI_SINGLE_ATTEMPT, ToolRunner
 from verify_artifact import BUNDLE_ID, command, verify_profile
 
 
 def app_store(*arguments):
     # The existing Codemagic integration supplies credentials in the build
     # environment. Never serialize those credentials or put them in arguments.
-    return subprocess.run(
-        ["app-store-connect", *arguments], check=True,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
-    ).stdout
+    return ToolRunner("app-store-connect").capture(
+        ["app-store-connect", *arguments, "--no-color", "--log-stream", "stderr",
+         "--disable-jwt-cache", "--api-unauthorized-retries", CLI_SINGLE_ATTEMPT,
+         "--api-server-error-retries", CLI_SINGLE_ATTEMPT],
+        "Apple release inventory lookup", apple=True,
+    ).decode()
 
 
 def main():

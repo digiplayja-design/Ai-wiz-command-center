@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "app_id": "6835184869",
+  "bundle_id": "com.korlixdeveloper.esha",
+  "sku": "ESHA_IOS_001",
+  "group_reference_name": "Esha Membership",
+  "group_display_name": "Esha Membership",
+  "product_id": "com.korlixdeveloper.esha.monthly",
+  "subscription_reference_name": "Esha Membership Monthly",
+  "subscription_display_name": "Esha Membership Monthly",
+  "subscription_description": "Monthly access to Esha beauty features.",
+  "subscription_period": "ONE_MONTH",
+  "family_sharable": false,
+  "group_level": 1,
+  "locale": "en-US",
+  "territory": "USA",
+  "currency": "USD",
+  "customer_price": "4.99",
+  "payment_plan_type": "UPFRONT",
+  "offer_mode": "FREE_TRIAL",
+  "offer_duration": "THREE_DAYS",
+  "offer_number_of_periods": 1,
+  "offer_start_date": null,
+  "offer_end_date": null,
+  "availability_action": "create_usa_upfront_only_if_absent",
+  "availability_create_body": {
+    "data": {
+      "type": "subscriptionPlanAvailabilities",
+      "attributes": {
+        "planType": "UPFRONT",
+        "availableInNewTerritories": false
+      },
+      "relationships": {
+        "subscription": {
+          "data": {
+            "type": "subscriptions",
+            "id": "$subscription_id"
+          }
+        },
+        "availableTerritories": {
+          "data": [{"type": "territories", "id": "USA"}]
+        }
+      }
+    }
+  },
+  "review_submission": false,
+  "backend_activation": false,
+  "agreement_changes": false
+}

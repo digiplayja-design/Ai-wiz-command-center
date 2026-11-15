@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "evidence_type": "immutable_ios_upload_checkpoint",
+  "record_policy": "Bound to this exact job, signed artifact and observed upload. Later processing or validation evidence belongs in separate records.",
+  "job": {
+    "provider": "Codemagic",
+    "build_id": "6afa1c8190e83b09c4faba0a",
+    "workflow": "esha-ios-upload",
+    "url": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa1c8190e83b09c4faba0a?open-step=build-step-7%7Cbuild-step-8",
+    "source_commit": "fbfde79df731dea5a2e7fc65ee9d4308aebe80dd",
+    "flutter_tests_passed": 49,
+    "validation_log_test_count_recorded": true,
+    "validation_evidence": "Coordinating agent independently observed the Codemagic validation log: 00:04 +49: All tests passed!"
+  },
+  "signed_verification_receipt": {
+    "artifact": "Esha by Korlix.ipa",
+    "artifact_kind": "ios-signed",
+    "source_commit": "fbfde79df731dea5a2e7fc65ee9d4308aebe80dd",
+    "bytes": 28206010,
+    "sha256": "112d510755024646cdbad23b344e0e0fe2237ce7a065fc5ba3fd1fee54ace43b",
+    "application_id": "com.korlixdeveloper.esha",
+    "version_name": "1.0.0",
+    "version_code": "2",
+    "platform": "ios-device",
+    "signing": "verified-app-store-distribution",
+    "profile_type": "app_store",
+    "submitted_to_store": false
+  },
+  "receipt_bytes_sha256": "a12eacba6e07c049cc525b4493c43a3cdb7bbe52610b1734c941c7138c3bda7a",
+  "downloaded_receipt_archive": {
+    "sha256": "da7381d2b88e882cfaf88979d57079959fc90532744734b1538b974e311134cb",
+    "bytes": 786,
+    "verification_member": "artifacts/ios/Esha-signed-verification.json",
+    "verification_member_bytes": 472
+  },
+  "independent_download_check": {
+    "checked_at_utc": "2026-11-15T21:05:40.746737+00:00",
+    "bytes": 28206010,
+    "sha256": "112d510755024646cdbad23b344e0e0fe2237ce7a065fc5ba3fd1fee54ace43b",
+    "matches_build_receipt": true,
+    "ipa_plist": {
+      "CFBundleIdentifier": "com.korlixdeveloper.esha",
+      "CFBundleShortVersionString": "1.0.0",
+      "CFBundleVersion": "2",
+      "CFBundleDisplayName": "Esha by Korlix",
+      "CFBundleSupportedPlatforms": [
+        "iPhoneOS"
+      ],
+      "MinimumOSVersion": "15.0",
+      "UIDeviceFamily": [
+        1,
+        2
+      ],
+      "UILaunchStoryboardName": "LaunchScreen",
+      "ITSAppUsesNonExemptEncryption": null
+    },
+    "compiled_launch_storyboard_present": true,
+    "embedded_provisioning_profile_present": true,
+    "scope": "Downloaded IPA hash, size, main plist and compiled launch-storyboard presence verified locally. Cryptographic signature checks were performed by the Mac build verifier; launch-screen pixels were not rendered locally."
+  },
+  "build_log_observations": {
+    "version": "1.0.0",
+    "build_number": "2",
+    "app_settings_validation_passed": true,
+    "default_launch_placeholder_warning_observed": false,
+    "launch_change": "Default launch placeholder replaced with the existing Esha pink asset.",
+    "evidence_source": "Coordinating agent inspected the live Codemagic build log; the local IPA inspection independently confirms the version/build and compiled launch-storyboard presence."
+  },
+  "apple_upload": {
+    "status": "upload_succeeded",
+    "observed_success_at_utc": "2026-11-15T21:02:06.076Z",
+    "delivery_uuid": "50de7424-a350-42fb-9a9d-78eb17021ace",
+    "transferred_bytes": 28206010,
+    "evidence": "Coordinating agent observed Codemagic Publishing log: UPLOAD SUCCEEDED with no errors.",
+    "apple_processing_verified": false
+  },
+  "remaining": {
+    "review_submitted": false,
+    "publicly_published": false,
+    "billing_or_ai_activated": false,
+    "apple_processing": "not_yet_verified_in_this_checkpoint"
+  }
+}

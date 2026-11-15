@@ -308,9 +308,37 @@ class ToolRunnerTests(unittest.TestCase):
                 self.assertEqual(len(calls), 1)
                 arguments, options = calls[0]
                 for flag in ["--api-unauthorized-retries", "--api-server-error-retries"]:
-                    self.assertEqual(arguments[arguments.index(flag) + 1], "0")
+                    self.assertEqual(arguments[arguments.index(flag) + 1], "1")
                 self.assertIn("--disable-jwt-cache", arguments)
                 self.assertFalse(Path(options["env"]["TMPDIR"]).exists())
+
+    def test_parser_option_names_and_arbitrary_status_numbers_are_not_http_evidence(self):
+        cases = [
+            (2, b'usage: app-store-connect ...\nerror: argument --api-unauthorized-retries: Provided value "0" is not valid'),
+            (1, b'UNAUTHORIZED is an option description, not an HTTP result; fixture 401 403'),
+        ]
+        for returncode, diagnostic in cases:
+            with self.subTest(returncode=returncode):
+                runner = setup.ToolRunner("/fixture/app-store-connect", run=lambda args, **kwargs:
+                    subprocess.CompletedProcess(args, returncode, b"", diagnostic))
+                with self.assertRaises(setup.SetupError) as raised:
+                    runner.api("apps", "list")
+                message = str(raised.exception)
+                self.assertNotIn("(401)", message)
+                self.assertNotIn("(403)", message)
+                if returncode == 2:
+                    self.assertIn("local command validation", message)
+
+    def test_only_numeric_apple_http_error_is_reported_as_authentication_or_permission(self):
+        for status in [401, 403]:
+            runner = setup.ToolRunner("/fixture/app-store-connect", run=lambda args, **kwargs:
+                subprocess.CompletedProcess(args, 1, b"", (
+                    f"GET https://api.appstoreconnect.apple.com/v1/apps returned {status}: PRIVATE-CONTENT"
+                ).encode()))
+            with self.assertRaises(setup.SetupError) as raised:
+                runner.api("apps", "list")
+            self.assertIn(f"({status})", str(raised.exception))
+            self.assertNotIn("PRIVATE-CONTENT", str(raised.exception))
 
     def test_private_temp_logs_are_removed_and_unrelated_key_is_not_passed(self):
         def command(arguments, **kwargs):
