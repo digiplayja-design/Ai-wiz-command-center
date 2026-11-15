@@ -5,6 +5,8 @@ export FLUTTER_SUPPRESS_ANALYTICS=true
 
 ESHA_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ESHA_REPO_ROOT/apps/esha"
+# A failed rerun must not leave a prior IPA available to artifact publishing.
+rm -f artifacts/ios/Esha-signed-candidate.ipa artifacts/ios/Esha-signed-verification.json
 : "${ESHA_IOS_VERSION:?Run prepare_ios_release.py first}"
 : "${ESHA_IOS_BUILD_NUMBER:?Run prepare_ios_release.py first}"
 : "${ESHA_APPLE_TEAM_ID:?Configure the Apple Developer team ID for Esha}"
@@ -22,7 +24,8 @@ ESHA_IPA_FILES=(build/ios/ipa/*.ipa)
 test "${#ESHA_IPA_FILES[@]}" -eq 1
 test -s "${ESHA_IPA_FILES[0]}"
 mkdir -p artifacts/ios
-cp "${ESHA_IPA_FILES[0]}" artifacts/ios/Esha-signed-candidate.ipa
 python3 "$ESHA_REPO_ROOT/scripts/esha/verify_artifact.py" ios-signed \
-  artifacts/ios/Esha-signed-candidate.ipa --version "$ESHA_IOS_VERSION" \
+  "${ESHA_IPA_FILES[0]}" --version "$ESHA_IOS_VERSION" \
   --build "$ESHA_IOS_BUILD_NUMBER" --output artifacts/ios/Esha-signed-verification.json
+# Expose only a verified IPA at the path collected by Codemagic for publishing.
+cp "${ESHA_IPA_FILES[0]}" artifacts/ios/Esha-signed-candidate.ipa

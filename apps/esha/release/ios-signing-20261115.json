@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "evidence_type": "immutable_ios_signing_checkpoint",
+  "scope": "Esha by Korlix App Store provisioning profile preparation and verified Codemagic import",
+  "record_policy": "Historical evidence bound to the exact job, source commit and receipt digest; later release results belong in separate records.",
+  "signing_job": {
+    "provider": "Codemagic",
+    "app_id": "6a32198d2d0806059c3df062",
+    "workflow_id": "esha-ios-signing-setup",
+    "build_id": "6afa106590e83b09c4fab58f",
+    "build_url": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa106590e83b09c4fab58f",
+    "status": "finished_successfully",
+    "source_commit": "d1e592b901efe020a9df7c3f6fc33a31600671f4",
+    "integration_name": "Codemagic Korlix AI",
+    "authentication_verified": true,
+    "app_identity_verified_by_api": true,
+    "evidence_method": "Successful Codemagic job observed in the live UI; downloaded verification receipt independently parsed and checked against the expected app, bundle, SKU and source commit."
+  },
+  "verification_receipt": {
+    "artifact_filename": "Esha-iOS-signing-setup-verification.json",
+    "downloaded_bytes_sha256": "565c9b8194ba31d276251c820938a13bf60bd6e4977ce36fd438108baec63345",
+    "downloaded_bytes": 1353,
+    "contents": {
+      "verified_at_utc": "2026-11-15T20:05:54.325597+00:00",
+      "cli_version": "0.69.0",
+      "apple_app_id": "6835184869",
+      "bundle_id": "com.korlixdeveloper.esha",
+      "sku": "ESHA_IOS_001",
+      "apple_team_id": "FJKJ9MUDZ4",
+      "bundle_resource_id": "XY3JNH5J22",
+      "create_attempts": 1,
+      "certificate_created": false,
+      "permissions_changed": false,
+      "private_key_exported": false,
+      "app_uploaded": false,
+      "source_commit": "d1e592b901efe020a9df7c3f6fc33a31600671f4",
+      "certificate": {
+        "codemagic_reference": "KORLIX_APP_STORE_CERT",
+        "apple_resource_id": "4635LCY72R",
+        "sha1": "0343837D8B266AE8A8DFAE56CE49A89067963892",
+        "sha256": "8BC829FE7DD9265381356C9C037FFCF37F773337A051F176136104E58D35ADCB",
+        "expires_at_utc": "2027-06-23T01:29:02+00:00",
+        "installed_private_key_identity_verified": true,
+        "exact_api_certificate_match": true
+      },
+      "profile": {
+        "file": "Esha-App-Store.mobileprovision",
+        "codemagic_reference_to_import": "ESHA_APP_STORE_PROFILE",
+        "apple_resource_id": "3Y24Q759AY",
+        "uuid": "33FE7655-9C02-43B8-BC1D-28097F0AE302",
+        "type": "IOS_APP_STORE",
+        "state": "ACTIVE",
+        "app_identifier_prefix": "FJKJ9MUDZ4",
+        "expires_at_utc": "2027-06-23T01:29:02+00:00",
+        "sha256": "29f290001bd2dd8027c0dda25babd8622644f84f3c4616bef1d9530d017c8c74",
+        "created": true,
+        "reused": false
+      }
+    }
+  },
+  "codemagic_profile_import": {
+    "confirmed": true,
+    "reference": "ESHA_APP_STORE_PROFILE",
+    "bundle_id": "com.korlixdeveloper.esha",
+    "existing_certificate_reference": "KORLIX_APP_STORE_CERT",
+    "evidence_source": "Live Codemagic UI confirmed the imported reference, exact Esha bundle, Korlix LLC team and existing certificate match. The coordinating agent reverified these after browser recovery on November 15, 2026. UUID, SHA-256 and numeric Apple team ID above are expected values from the signing receipt, not UI readback.",
+    "exact_confirmation_time_recorded": false,
+    "expected_profile_uuid_from_signing_receipt": "33FE7655-9C02-43B8-BC1D-28097F0AE302",
+    "expected_profile_sha256_from_signing_receipt": "29f290001bd2dd8027c0dda25babd8622644f84f3c4616bef1d9530d017c8c74",
+    "expected_apple_team_id_from_signing_receipt": "FJKJ9MUDZ4",
+    "team_name_observed_in_ui": "Korlix LLC",
+    "existing_certificate_match_confirmed_in_ui": true,
+    "profile_selection_method": "Fetched the sole App Store profile matching Esha\u2019s exact bundle and profile name, then imported it under ESHA_APP_STORE_PROFILE.",
+    "profile_uuid_read_back_from_ui": false,
+    "profile_sha256_read_back_from_ui": false
+  },
+  "prior_failure_correction": {
+    "build_id": "6afa092a90e83b09c4fab31e",
+    "build_url": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa092a90e83b09c4fab31e",
+    "prior_reported_http_status": 401,
+    "prior_http_authentication_failure_established": false,
+    "verified_local_cause": "Pinned Codemagic CLI 0.69.0 rejects retry limits of zero before any Apple request. The helper incorrectly matched UNAUTHORIZED in the parser option name --api-unauthorized-retries and labeled that local error HTTP 401.",
+    "correction": "Use CLI retry limit 1 for exactly one request without retry; classify parser failures separately and require the CLI Apple request URL, method and numeric HTTP status before reporting an authentication failure.",
+    "resolution": "The corrected signing job authenticated successfully, verified the exact Esha app and existing signing identity, and created and verified one Esha App Store profile."
+  },
+  "release_limits": {
+    "signing_profile_verified": true,
+    "signing_profile_import_confirmed": true,
+    "iphone_ipa_built_by_this_job": false,
+    "app_uploaded_by_this_job": false,
+    "store_review_submitted_by_this_job": false,
+    "billing_activation_established_by_this_record": false,
+    "store_listing_completion_established_by_this_record": false
+  },
+  "sanitization": {
+    "public_metadata_and_hashes_only": true,
+    "private_key_or_api_token_included": false,
+    "full_provisioning_profile_included": false,
+    "credentials_changed": false
+  }
+}

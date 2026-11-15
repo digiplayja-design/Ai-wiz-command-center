@@ -1,0 +1,144 @@
+{
+  "status": "draft_listing_synchronized",
+  "mode": "apply_draft",
+  "started_at_utc": "2026-11-15T20:43:32.974239+00:00",
+  "apple_app_id": "6835184869",
+  "bundle_id": "com.korlixdeveloper.esha",
+  "sku": "ESHA_IOS_001",
+  "locale": "en-US",
+  "source_commit": "80194affee0b971bcd1e67ac45ed5ee3dd528547",
+  "cli_version": "0.69.0",
+  "planned_operations": [
+    {
+      "resource_type": "appStoreVersions",
+      "resource_id": "ab8553e4-56d5-40a9-aa7a-8cfb447fca72",
+      "fields": [
+        "versionString"
+      ],
+      "target_sha256": "16b79eb845a9a5e0d196f2db702a37cea33330f3929e3b821ce3b587b639062f"
+    },
+    {
+      "resource_type": "appInfoLocalizations",
+      "resource_id": "6640a0e9-3fc7-491a-bde9-47d76e25a11c",
+      "fields": [
+        "privacyChoicesUrl",
+        "privacyPolicyUrl",
+        "subtitle"
+      ],
+      "target_sha256": "32ba1af3edf7ecafd9dda09c4d66a2af1fcdec455d0e281c0f4b1f6e98343747"
+    },
+    {
+      "resource_type": "appInfos",
+      "resource_id": "8c5c551a-f21d-44e4-8fb4-ed288a86e553",
+      "fields": [
+        "primaryCategory",
+        "secondaryCategory"
+      ],
+      "target_sha256": "a881fee7107303a64ad7ad107bcf4ac4ca8ad567d36bbcc51ac498f1bf2feaf3"
+    },
+    {
+      "resource_type": "appStoreVersionLocalizations",
+      "resource_id": "bc06e7be-c0aa-4dbb-a23c-0b4ec207a34e",
+      "fields": [
+        "description",
+        "keywords",
+        "promotionalText",
+        "supportUrl"
+      ],
+      "target_sha256": "4fcb4bf2eae593842e338f7d02e0844dbb488f53adbfcbc3040468b27a0ccf11"
+    }
+  ],
+  "attempted_operations": [
+    {
+      "resource_type": "appStoreVersions",
+      "resource_id": "ab8553e4-56d5-40a9-aa7a-8cfb447fca72",
+      "fields": [
+        "versionString"
+      ],
+      "target_sha256": "16b79eb845a9a5e0d196f2db702a37cea33330f3929e3b821ce3b587b639062f"
+    },
+    {
+      "resource_type": "appInfoLocalizations",
+      "resource_id": "6640a0e9-3fc7-491a-bde9-47d76e25a11c",
+      "fields": [
+        "privacyChoicesUrl",
+        "privacyPolicyUrl",
+        "subtitle"
+      ],
+      "target_sha256": "32ba1af3edf7ecafd9dda09c4d66a2af1fcdec455d0e281c0f4b1f6e98343747"
+    },
+    {
+      "resource_type": "appInfos",
+      "resource_id": "8c5c551a-f21d-44e4-8fb4-ed288a86e553",
+      "fields": [
+        "primaryCategory",
+        "secondaryCategory"
+      ],
+      "target_sha256": "a881fee7107303a64ad7ad107bcf4ac4ca8ad567d36bbcc51ac498f1bf2feaf3"
+    },
+    {
+      "resource_type": "appStoreVersionLocalizations",
+      "resource_id": "bc06e7be-c0aa-4dbb-a23c-0b4ec207a34e",
+      "fields": [
+        "description",
+        "keywords",
+        "promotionalText",
+        "supportUrl"
+      ],
+      "target_sha256": "4fcb4bf2eae593842e338f7d02e0844dbb488f53adbfcbc3040468b27a0ccf11"
+    }
+  ],
+  "verified_operations": [
+    {
+      "resource_type": "appStoreVersions",
+      "resource_id": "ab8553e4-56d5-40a9-aa7a-8cfb447fca72",
+      "fields": [
+        "versionString"
+      ],
+      "target_sha256": "16b79eb845a9a5e0d196f2db702a37cea33330f3929e3b821ce3b587b639062f"
+    },
+    {
+      "resource_type": "appInfoLocalizations",
+      "resource_id": "6640a0e9-3fc7-491a-bde9-47d76e25a11c",
+      "fields": [
+        "privacyChoicesUrl",
+        "privacyPolicyUrl",
+        "subtitle"
+      ],
+      "target_sha256": "32ba1af3edf7ecafd9dda09c4d66a2af1fcdec455d0e281c0f4b1f6e98343747"
+    },
+    {
+      "resource_type": "appInfos",
+      "resource_id": "8c5c551a-f21d-44e4-8fb4-ed288a86e553",
+      "fields": [
+        "primaryCategory",
+        "secondaryCategory"
+      ],
+      "target_sha256": "a881fee7107303a64ad7ad107bcf4ac4ca8ad567d36bbcc51ac498f1bf2feaf3"
+    },
+    {
+      "resource_type": "appStoreVersionLocalizations",
+      "resource_id": "bc06e7be-c0aa-4dbb-a23c-0b4ec207a34e",
+      "fields": [
+        "description",
+        "keywords",
+        "promotionalText",
+        "supportUrl"
+      ],
+      "target_sha256": "4fcb4bf2eae593842e338f7d02e0844dbb488f53adbfcbc3040468b27a0ccf11"
+    }
+  ],
+  "uploaded": false,
+  "submitted": false,
+  "published": false,
+  "declarations_modified": false,
+  "access_changed": false,
+  "metadata_sha256": "fbda1f99f03b3fd856e904a1324d66c966f48723478718ab146c3368042a4fe1",
+  "resource_ids": {
+    "appInfos": "8c5c551a-f21d-44e4-8fb4-ed288a86e553",
+    "appStoreVersions": "ab8553e4-56d5-40a9-aa7a-8cfb447fca72",
+    "appInfoLocalizations": "6640a0e9-3fc7-491a-bde9-47d76e25a11c",
+    "appStoreVersionLocalizations": "bc06e7be-c0aa-4dbb-a23c-0b4ec207a34e"
+  },
+  "completed_at_utc": "2026-11-15T20:43:54.700008+00:00"
+}
