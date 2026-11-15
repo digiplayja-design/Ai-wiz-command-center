@@ -43,7 +43,14 @@ class AiFixture {
   final List<Json> questions = [], reports = [];
   Json get membership => {
     'consultationEnabled': true,
-    'membership': {'active': true, 'verificationFresh': true},
+    'membership': {
+      'active': true,
+      'verificationFresh': true,
+      'expiresAt': DateTime.now()
+          .toUtc()
+          .add(const Duration(days: 30))
+          .toIso8601String(),
+    },
     'allowance': {'configured': true, 'limit': 20, 'remaining': 18},
   };
   http.Response reply(Object value, [int status = 200]) =>
@@ -95,11 +102,16 @@ class AiFixture {
       purchases: EshaPurchases(api, store: UnusedStore()),
     );
     await controller.signIn('person@example.test', 'not-a-real-password');
-    controller.purchases.membership = MembershipStatus.fromJson(membership);
+    await controller.purchases.refresh();
     controller.initializing = false;
   }
 
-  void close() => controller.dispose();
+  bool _closed = false;
+  void close() {
+    if (_closed) return;
+    _closed = true;
+    controller.dispose();
+  }
 }
 
 Future<void> settle() async {
@@ -318,6 +330,7 @@ void main() {
       );
       expect(find.text('Send report'), findsNothing);
       await tester.pumpWidget(const SizedBox());
+      f.close();
     },
   );
 }

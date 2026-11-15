@@ -140,7 +140,14 @@ class BillingFixture {
       'basePlanId': 'monthly',
       'offerId': 'trial-3-days',
     },
-    'membership': {'active': active, 'verificationFresh': active},
+    'membership': {
+      'active': active,
+      'verificationFresh': active,
+      'expiresAt': DateTime.now()
+          .toUtc()
+          .add(const Duration(days: 30))
+          .toIso8601String(),
+    },
     'allowance': {
       'configured': active,
       'limit': active ? 20 : null,
@@ -338,6 +345,7 @@ void main() {
     expect(f.billing.canPurchase, isFalse);
     expect(f.billing.membership.active, isFalse);
     expect(f.verificationRequests, 0);
+    expect(f.billing.hasAppAccess, isFalse);
     expect(f.store.completed, 0);
     f.store.onRestore = () async => f.store.changes.add([]);
     await f.billing.restore();
@@ -355,12 +363,14 @@ void main() {
     f.store.changes.add([transaction()]);
     await settle();
     expect(f.billing.hasUnverifiedPurchase, isTrue);
+    expect(f.billing.hasAppAccess, isFalse);
     expect(f.billing.canPurchase, isFalse);
     expect(f.store.completed, 0);
     f.rejectVerification = false;
     await f.billing.retryVerification();
     expect(f.billing.hasUnverifiedPurchase, isFalse);
     expect(f.billing.membership.active, isTrue);
+    expect(f.billing.hasAppAccess, isTrue);
     expect(f.store.completed, 1);
   });
 

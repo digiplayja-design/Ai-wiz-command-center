@@ -188,6 +188,11 @@ class _AccountScreenState extends State<AccountScreen> {
                                 'Include your beauty preferences, selected edit and owned-product IDs with live questions. Off by default.',
                               ),
                             ),
+                            if (c.aiSharingConsented)
+                              TextButton(
+                                onPressed: () => c.setAiSharingConsent(false),
+                                child: const Text('Stop sharing with OpenAI'),
+                              ),
                           ],
                         ),
                       ),
@@ -206,7 +211,7 @@ class _AccountScreenState extends State<AccountScreen> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              c.purchases.membership.active
+                              c.hasAppAccess
                                   ? 'Your store membership is active.'
                                   : '3 days free for eligible subscribers, then US \$4.99 per month. Local price and eligibility come from your store.',
                             ),
@@ -237,7 +242,7 @@ class _AccountScreenState extends State<AccountScreen> {
                             ),
                             const SizedBox(height: 10),
                             const Text(
-                              'Guest collections are stored on this device. Signed-in collections sync to your Korlix account. Live consultation requests are processed by Korlix and its AI service. Requests and answers may be retained by the service for request replay and usage accounting. A pending question is saved securely on this device so a network retry can use the same request ID.',
+                              'Your saved collection stays on this device and signed-in collections sync to your Korlix account. An active Esha trial or subscription is required to use the beauty features. Live consultation requests are processed by Korlix and its AI service. Requests and answers may be retained for request replay and usage accounting. Pending questions are saved securely so a retry can use the same request ID.',
                             ),
                             const SizedBox(height: 10),
                             const Text(
@@ -649,19 +654,35 @@ class MembershipScreen extends StatelessWidget {
       final c = controller,
           store = controller.purchases,
           status = controller.purchases.membership;
+      final active = store.hasAppAccess;
       final price = store.localizedMonthlyPrice;
       final eligible = store.trialEligible == true;
-      final String headline = status.active
+      final String headline = active
           ? status.trial
                 ? 'Your Esha trial is active.'
                 : 'Your Esha membership.'
+          : store.needsVerification
+          ? 'Verify your Esha membership.'
           : store.catalogReady && price != null
           ? eligible
                 ? '3 days to make it yours.'
                 : 'Make Esha part of your routine.'
           : 'Your beauty companion, soon.';
       return Scaffold(
-        appBar: AppBar(title: const Text('Esha membership')),
+        appBar: AppBar(
+          title: const Text('Esha membership'),
+          actions: [
+            IconButton(
+              tooltip: 'Account, privacy and support',
+              icon: const Icon(Icons.person_outline),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => AccountScreen(controller: c),
+                ),
+              ),
+            ),
+          ],
+        ),
         body: SafeArea(
           child: SingleChildScrollView(
             child: Center(
@@ -698,7 +719,7 @@ class MembershipScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 16),
                             Text(
-                              status.active
+                              active
                                   ? status.trial
                                         ? 'Your trial is active.'
                                         : price == null
@@ -718,7 +739,7 @@ class MembershipScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 14),
                             Text(
-                              status.active
+                              active
                                   ? 'Review your renewal price and billing date in Manage subscription.'
                                   : price == null
                                   ? 'Available after the store offer and membership service are ready. No payment or trial starts here yet.'
@@ -734,9 +755,17 @@ class MembershipScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 24),
+                      if (!active) ...[
+                        Text(store.accessMessage),
+                        const SizedBox(height: 16),
+                      ],
                       const Text(
                         'A beauty space built around you',
                         style: TextStyle(fontFamily: 'Georgia', fontSize: 26),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'An active Esha trial or subscription unlocks product browsing, guided edits, your vanity and the look studio. Live AI consultations also use the allowance shown below.',
                       ),
                       const SizedBox(height: 16),
                       _feature(
@@ -765,7 +794,7 @@ class MembershipScreen extends StatelessWidget {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              status.active && status.allowanceLimit != null
+                              active && status.allowanceLimit != null
                                   ? '${status.remaining ?? 0} of ${status.allowanceLimit} consultations remaining this period.'
                                   : store.trialConsultationLimit != null &&
                                         store.monthlyConsultationLimit != null
@@ -791,7 +820,7 @@ class MembershipScreen extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                            if (status.active) ...[
+                            if (active) ...[
                               const SizedBox(height: 10),
                               Text(
                                 status.verificationFresh
@@ -853,17 +882,22 @@ class MembershipScreen extends StatelessWidget {
                                 builder: (_) => AccountScreen(controller: c),
                               ),
                             ),
-                            child: const Text('Sign in to Korlix'),
+                            child: const Text('Sign in or create an account'),
                           ),
                         )
-                      else if (!status.active)
+                      else if (!active)
                         SizedBox(
                           width: double.infinity,
                           child: FilledButton(
-                            onPressed: store.awaitingApproval
+                            onPressed:
+                                store.busy ||
+                                    store.loading ||
+                                    store.awaitingApproval
                                 ? null
                                 : store.hasUnverifiedPurchase && !store.busy
                                 ? store.retryVerification
+                                : store.needsVerification
+                                ? store.refresh
                                 : store.canPurchase
                                 ? store.purchase
                                 : null,
@@ -872,6 +906,8 @@ class MembershipScreen extends StatelessWidget {
                                   ? 'Awaiting store approval'
                                   : store.hasUnverifiedPurchase
                                   ? 'Verify existing purchase'
+                                  : store.needsVerification
+                                  ? 'Connect to verify membership'
                                   : store.canPurchase
                                   ? eligible
                                         ? 'Start 3-day free trial'

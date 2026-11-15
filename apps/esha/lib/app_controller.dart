@@ -88,6 +88,8 @@ class EshaController extends ChangeNotifier {
   int get accountEpoch => _accountEpoch;
   AuthSession? get session => api.session;
   Vanity get vanity => sync.value;
+  bool get hasAppAccess => purchases.hasAppAccess;
+  bool get canEditCollection => hasAppAccess && sync.canEdit;
   Recommendation get recommendation => recommend(catalog, vanity);
   bool get hasPendingQuestion => _pendingConsultation != null;
   String? get pendingQuestion => _pendingConsultation?['question'] as String?;
@@ -127,6 +129,17 @@ class EshaController extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
+  bool _requireAppAccess({bool consultation = false}) {
+    if (hasAppAccess) return true;
+    if (consultation) {
+      chatError = purchases.accessMessage;
+    } else {
+      notice = purchases.accessMessage;
+    }
+    _changed();
+    return false;
+  }
+
   Future<void> initialize() async {
     try {
       await sync.attach(null);
@@ -136,9 +149,7 @@ class EshaController extends ChangeNotifier {
         await _restorePending();
       }
     } catch (e) {
-      notice = e is EshaException
-          ? e.message
-          : 'Account access is unavailable. You can keep exploring as a guest.';
+      notice = e is EshaException ? e.message : 'Connect and sign in to verify your Esha membership. Your saved collection is kept.';
     }
     initializing = false;
     _changed();
@@ -289,6 +300,7 @@ class EshaController extends ChangeNotifier {
   }
 
   void toggleFavorite(Product product) {
+    if (!_requireAppAccess()) return;
     final values = [...vanity.favorites];
     values.contains(product.id)
         ? values.remove(product.id)
@@ -298,6 +310,7 @@ class EshaController extends ChangeNotifier {
   }
 
   void toggleOwned(Product product) {
+    if (!_requireAppAccess()) return;
     final values = [...vanity.owned];
     values.contains(product.id)
         ? values.remove(product.id)
@@ -306,14 +319,22 @@ class EshaController extends ChangeNotifier {
     sync.update(vanity.copyWith(owned: values));
   }
 
-  void setPreferences(BeautyPreferences prefs) =>
-      sync.update(vanity.copyWith(prefs: prefs));
+  void setPreferences(BeautyPreferences prefs) {
+    if (!_requireAppAccess()) return;
+    sync.update(vanity.copyWith(prefs: prefs));
+  }
+
   void setProfile(BeautyProfile profile) =>
       sync.update(vanity.copyWith(beautyProfile: profile));
-  void setStudio(StudioLook look) => sync.update(vanity.copyWith(studio: look));
-  void saveRoutine() {
+  void setStudio(StudioLook look) {
+    if (!_requireAppAccess()) return;
+    sync.update(vanity.copyWith(studio: look));
+  }
+
+  bool saveRoutine() {
+    if (!_requireAppAccess()) return false;
     final result = recommendation;
-    if (!result.complete || !sync.canEdit) return;
+    if (!result.complete || !sync.canEdit) return false;
     final saved = SavedRoutine(
       id: const Uuid().v4(),
       name: goals[vanity.prefs.goal]!.title,
@@ -337,24 +358,37 @@ class EshaController extends ChangeNotifier {
     sync.update(
       vanity.copyWith(routines: [saved, ...vanity.routines].take(30).toList()),
     );
+    return true;
   }
 
-  void deleteRoutine(String id) => sync.update(
-    vanity.copyWith(
-      routines: vanity.routines.where((r) => r.id != id).toList(),
-    ),
-  );
-  void saveLook() => sync.update(
-    vanity.copyWith(
-      looks: [
-        vanity.studio.copyWith(id: const Uuid().v4()),
-        ...vanity.looks,
-      ].take(50).toList(),
-    ),
-  );
-  void deleteLook(String id) => sync.update(
-    vanity.copyWith(looks: vanity.looks.where((l) => l.id != id).toList()),
-  );
+  void deleteRoutine(String id) {
+    if (!_requireAppAccess()) return;
+    sync.update(
+      vanity.copyWith(
+        routines: vanity.routines.where((r) => r.id != id).toList(),
+      ),
+    );
+  }
+
+  bool saveLook() {
+    if (!_requireAppAccess() || !sync.canEdit) return false;
+    sync.update(
+      vanity.copyWith(
+        looks: [
+          vanity.studio.copyWith(id: const Uuid().v4()),
+          ...vanity.looks,
+        ].take(50).toList(),
+      ),
+    );
+    return true;
+  }
+
+  void deleteLook(String id) {
+    if (!_requireAppAccess()) return;
+    sync.update(
+      vanity.copyWith(looks: vanity.looks.where((l) => l.id != id).toList()),
+    );
+  }
 
   Future<void> ask(String question) async {
     if (chatBusy) return;
@@ -371,7 +405,7 @@ class EshaController extends ChangeNotifier {
     if (!_maySendToAi()) return;
     final text = question.trim();
     if (text.isEmpty || text.length > 3000) return;
-    if (!purchases.membership.canConsult) {
+    if (!purchases.canConsult) {
       chatError = 'Check your Esha membership and available consultation allowance first.';
       _changed();
       return;
@@ -400,6 +434,9 @@ class EshaController extends ChangeNotifier {
 
   Future<void> retryQuestion() async {
     if (chatBusy || _pendingConsultation == null || api.session == null) return;
+    // A replay can retrieve a response already charged to the last available
+    // consultation. Require app entitlement, not a second remaining allowance.
+    if (!_requireAppAccess(consultation: true)) return;
     if (!_maySendToAi()) return;
     if (pendingUsesPreferences && !vanity.beautyProfile.shareWithEsha) {
       chatError = 'This saved question includes preferences you shared earlier. To retry its unchanged request, allow preference sharing in your profile first.';
@@ -420,6 +457,12 @@ class EshaController extends ChangeNotifier {
         jsonEncode(request),
       );
       api.verifyOwner(snapshot);
+      if (!hasAppAccess) {
+        throw EshaException(
+          'MEMBERSHIP_VERIFICATION_REQUIRED',
+          purchases.accessMessage,
+        );
+      }
       if (!aiSharingConsented) {
         throw const EshaException(
           'AI_CONSENT_REQUIRED',

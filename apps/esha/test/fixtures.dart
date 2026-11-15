@@ -60,6 +60,46 @@ Future<EshaController> guestController() async {
   )..initializing = false;
 }
 
+Future<EshaController> memberController() async {
+  final local = MemoryStore();
+  final api = KorlixApi(
+    config: fixtureConfig(),
+    secureStorage: MemoryStore(),
+    localStorage: local,
+    platform: 'unsupported',
+    client: MockClient((request) async {
+      if (request.url.path == '/api/auth/signin') {
+        return http.Response(jsonEncode(authPayload(accountA)), 200);
+      }
+      if (request.url.path.startsWith('/rest/v1/')) {
+        return http.Response('[]', 200);
+      }
+      return http.Response(
+        jsonEncode({
+          'membership': {
+            'active': true,
+            'verificationFresh': true,
+            'expiresAt': DateTime.now()
+                .toUtc()
+                .add(const Duration(days: 30))
+                .toIso8601String(),
+          },
+        }),
+        200,
+      );
+    }),
+  );
+  final controller = EshaController(
+    catalog: fixtureCatalog(),
+    api: api,
+    sync: VanitySync(gateway: api, storage: local),
+    purchases: EshaPurchases(api, store: NoNativeStore()),
+  );
+  await controller.signIn('member@example.test', 'not-a-real-password');
+  await controller.purchases.refresh();
+  return controller..initializing = false;
+}
+
 const accountA = '11111111-1111-4111-8111-111111111111';
 const accountB = '22222222-2222-4222-8222-222222222222';
 Json authPayload(String userId) => {

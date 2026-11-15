@@ -49,6 +49,7 @@ class _EshaHomeState extends State<EshaHome> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    c.purchases.setForeground(state == AppLifecycleState.resumed);
     if (state == AppLifecycleState.resumed && !c.initializing) {
       c.purchases.refresh();
     }
@@ -61,99 +62,104 @@ class _EshaHomeState extends State<EshaHome> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: c,
-    builder: (context, _) => Scaffold(
-      appBar: AppBar(
-        toolbarHeight: 83,
-        titleSpacing: 22,
-        title: const Wordmark(),
-        actions: [
-          IconButton(
-            tooltip: 'Esha membership',
-            onPressed: membership,
-            icon: const Icon(Icons.auto_awesome_outlined),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: IconButton(
-              tooltip: c.session == null
-                  ? 'Sign in and beauty profile'
-                  : 'Account and beauty profile',
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => AccountScreen(controller: c),
+    builder: (context, _) => !c.initializing && !c.hasAppAccess
+        ? MembershipScreen(controller: c)
+        : Scaffold(
+            appBar: AppBar(
+              toolbarHeight: 83,
+              titleSpacing: 22,
+              title: const Wordmark(),
+              actions: [
+                IconButton(
+                  tooltip: 'Esha membership',
+                  onPressed: membership,
+                  icon: const Icon(Icons.auto_awesome_outlined),
                 ),
-              ),
-              icon: const Icon(Icons.person_outline),
+                Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: IconButton(
+                    tooltip: c.session == null
+                        ? 'Sign in and beauty profile'
+                        : 'Account and beauty profile',
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => AccountScreen(controller: c),
+                      ),
+                    ),
+                    icon: const Icon(Icons.person_outline),
+                  ),
+                ),
+              ],
+            ),
+            body: SafeArea(
+              top: false,
+              child: c.initializing
+                  ? const Center(child: CircularProgressIndicator())
+                  : Column(
+                      children: [
+                        if (c.notice != null)
+                          MaterialBanner(
+                            content: Text(c.notice!),
+                            actions: [
+                              TextButton(
+                                onPressed: c.clearNotice,
+                                child: const Text('Dismiss'),
+                              ),
+                            ],
+                          ),
+                        Expanded(
+                          child: IndexedStack(
+                            index: selected,
+                            children: [
+                              DiscoverScreen(
+                                controller: c,
+                                onConsult: () => go(1),
+                                onMembership: membership,
+                              ),
+                              ConsultScreen(
+                                controller: c,
+                                onMembership: membership,
+                              ),
+                              StudioScreen(controller: c),
+                              VanityScreen(
+                                controller: c,
+                                onDiscover: () => go(0),
+                                onConsult: () => go(1),
+                                onStudio: () => go(2),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
+            bottomNavigationBar: NavigationBar(
+              selectedIndex: selected,
+              onDestinationSelected: go,
+              destinations: const [
+                NavigationDestination(
+                  icon: Icon(Icons.grid_view_outlined),
+                  selectedIcon: Icon(Icons.grid_view_rounded),
+                  label: 'Discover',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.auto_awesome_outlined),
+                  selectedIcon: Icon(Icons.auto_awesome),
+                  label: 'Ask Esha',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.face_retouching_natural_outlined),
+                  selectedIcon: Icon(Icons.face_retouching_natural),
+                  label: 'Try a Look',
+                ),
+                NavigationDestination(
+                  icon: Icon(Icons.favorite_border),
+                  selectedIcon: Icon(Icons.favorite),
+                  label: 'My Vanity',
+                ),
+              ],
             ),
           ),
-        ],
-      ),
-      body: SafeArea(
-        top: false,
-        child: c.initializing
-            ? const Center(child: CircularProgressIndicator())
-            : Column(
-                children: [
-                  if (c.notice != null)
-                    MaterialBanner(
-                      content: Text(c.notice!),
-                      actions: [
-                        TextButton(
-                          onPressed: c.clearNotice,
-                          child: const Text('Dismiss'),
-                        ),
-                      ],
-                    ),
-                  Expanded(
-                    child: IndexedStack(
-                      index: selected,
-                      children: [
-                        DiscoverScreen(
-                          controller: c,
-                          onConsult: () => go(1),
-                          onMembership: membership,
-                        ),
-                        ConsultScreen(controller: c, onMembership: membership),
-                        StudioScreen(controller: c),
-                        VanityScreen(
-                          controller: c,
-                          onDiscover: () => go(0),
-                          onConsult: () => go(1),
-                          onStudio: () => go(2),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: selected,
-        onDestinationSelected: go,
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.grid_view_outlined),
-            selectedIcon: Icon(Icons.grid_view_rounded),
-            label: 'Discover',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.auto_awesome_outlined),
-            selectedIcon: Icon(Icons.auto_awesome),
-            label: 'Ask Esha',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.face_retouching_natural_outlined),
-            selectedIcon: Icon(Icons.face_retouching_natural),
-            label: 'Try a Look',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.favorite_border),
-            selectedIcon: Icon(Icons.favorite),
-            label: 'My Vanity',
-          ),
-        ],
-      ),
-    ),
   );
 }
 
@@ -193,7 +199,9 @@ class DiscoverScreen extends StatefulWidget {
 class _DiscoverScreenState extends State<DiscoverScreen> {
   String category = 'All', query = '';
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      EntitledContent(controller: widget.controller, builder: _buildContent);
+  Widget _buildContent(BuildContext context) {
     final c = widget.controller;
     final products = c.catalog.products
         .where(
@@ -386,7 +394,9 @@ class _ConsultScreenState extends State<ConsultScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      EntitledContent(controller: widget.controller, builder: _buildContent);
+  Widget _buildContent(BuildContext context) {
     final c = widget.controller, prefs = widget.controller.vanity.prefs;
     return PageBody(
       children: [
@@ -429,7 +439,7 @@ class _ConsultScreenState extends State<ConsultScreen> {
                     'lashes': 'Lash edit',
                   },
                   value: prefs.goal,
-                  onChanged: c.sync.canEdit
+                  onChanged: c.canEditCollection
                       ? (v) => c.setPreferences(prefs.copyWith(goal: v))
                       : null,
                 ),
@@ -445,7 +455,7 @@ class _ConsultScreenState extends State<ConsultScreen> {
                   divisions: 90,
                   label: usd(prefs.budget * 100),
                   semanticFormatterCallback: (v) => '${v.round()} US dollars',
-                  onChanged: c.sync.canEdit
+                  onChanged: c.canEditCollection
                       ? (v) =>
                             c.setPreferences(prefs.copyWith(budget: v.round()))
                       : null,
@@ -463,7 +473,7 @@ class _ConsultScreenState extends State<ConsultScreen> {
                       'any': 'Open to fragrance',
                     },
                     value: prefs.fragrance,
-                    onChanged: c.sync.canEdit
+                    onChanged: c.canEditCollection
                         ? (v) => c.setPreferences(prefs.copyWith(fragrance: v))
                         : null,
                   ),
@@ -476,7 +486,7 @@ class _ConsultScreenState extends State<ConsultScreen> {
                       'any': 'Any texture',
                     },
                     value: prefs.bodyTexture,
-                    onChanged: c.sync.canEdit
+                    onChanged: c.canEditCollection
                         ? (v) =>
                               c.setPreferences(prefs.copyWith(bodyTexture: v))
                         : null,
@@ -492,7 +502,7 @@ class _ConsultScreenState extends State<ConsultScreen> {
                       'any': 'Any finish',
                     },
                     value: prefs.finish,
-                    onChanged: c.sync.canEdit
+                    onChanged: c.canEditCollection
                         ? (v) => c.setPreferences(prefs.copyWith(finish: v))
                         : null,
                   ),
@@ -504,7 +514,7 @@ class _ConsultScreenState extends State<ConsultScreen> {
                     'Owned products add no new purchase cost.',
                   ),
                   value: prefs.useOwned,
-                  onChanged: c.sync.canEdit
+                  onChanged: c.canEditCollection
                       ? (v) => c.setPreferences(prefs.copyWith(useOwned: v))
                       : null,
                 ),
@@ -616,7 +626,8 @@ class _ConsultScreenState extends State<ConsultScreen> {
                         ),
                       ),
                       TextButton(
-                        onPressed: () => showProduct(context, result.items[i]),
+                        onPressed: () =>
+                            showProduct(context, result.items[i], c),
                         style: TextButton.styleFrom(
                           padding: EdgeInsets.zero,
                           alignment: Alignment.centerLeft,
@@ -643,13 +654,14 @@ class _ConsultScreenState extends State<ConsultScreen> {
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
-              onPressed: c.sync.canEdit
+              onPressed: c.canEditCollection
                   ? () {
-                      c.saveRoutine();
-                      showMessage(
-                        context,
-                        'Saved this exact edit to My Vanity.',
-                      );
+                      if (c.saveRoutine()) {
+                        showMessage(
+                          context,
+                          'Saved this exact edit to My Vanity.',
+                        );
+                      }
                     }
                   : null,
               icon: const Icon(Icons.bookmark_border),
@@ -721,7 +733,7 @@ class _ConsultScreenState extends State<ConsultScreen> {
               style: const TextStyle(fontWeight: FontWeight.w600),
             ),
           ],
-          if (!c.purchases.membership.canConsult)
+          if (!c.purchases.canConsult)
             TextButton(
               onPressed: widget.onMembership,
               child: Text(
@@ -796,7 +808,9 @@ class _ConsultScreenState extends State<ConsultScreen> {
             c.chatBusy
                 ? const LinearProgressIndicator()
                 : OutlinedButton.icon(
-                    onPressed: c.aiSharingConsented ? c.retryQuestion : null,
+                    onPressed: c.hasAppAccess && c.aiSharingConsented
+                        ? c.retryQuestion
+                        : null,
                     icon: const Icon(Icons.refresh),
                     label: const Text('Retry this question'),
                   ),
@@ -825,9 +839,7 @@ class _ConsultScreenState extends State<ConsultScreen> {
         width: double.infinity,
         child: FilledButton.icon(
           onPressed:
-              c.aiSharingConsented &&
-                  c.purchases.membership.canConsult &&
-                  !c.chatBusy
+              c.aiSharingConsented && c.purchases.canConsult && !c.chatBusy
               ? () {
                   final text = question.text;
                   c.ask(text);
@@ -1029,7 +1041,9 @@ class StudioScreen extends StatelessWidget {
   const StudioScreen({super.key, required this.controller});
   final EshaController controller;
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      EntitledContent(controller: controller, builder: _buildContent);
+  Widget _buildContent(BuildContext context) {
     final c = controller, look = controller.vanity.studio;
     return PageBody(
       children: [
@@ -1087,7 +1101,7 @@ class StudioScreen extends StatelessWidget {
                     label: '${lookNames[i]} lip color',
                     button: true,
                     child: InkWell(
-                      onTap: c.sync.canEdit
+                      onTap: c.canEditCollection
                           ? () => c.setStudio(look.copyWith(shade: i))
                           : null,
                       borderRadius: BorderRadius.circular(16),
@@ -1133,7 +1147,7 @@ class StudioScreen extends StatelessWidget {
                 label: 'Lip finish',
                 options: const {'Satin': 'Satin', 'Gloss': 'Gloss'},
                 value: look.finish,
-                onChanged: c.sync.canEdit
+                onChanged: c.canEditCollection
                     ? (v) => c.setStudio(look.copyWith(finish: v))
                     : null,
               ),
@@ -1146,7 +1160,7 @@ class StudioScreen extends StatelessWidget {
                   'Bold': 'Bold',
                 },
                 value: look.lashes,
-                onChanged: c.sync.canEdit
+                onChanged: c.canEditCollection
                     ? (v) => c.setStudio(look.copyWith(lashes: v))
                     : null,
               ),
@@ -1154,10 +1168,11 @@ class StudioScreen extends StatelessWidget {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: c.sync.canEdit
+                  onPressed: c.canEditCollection
                       ? () {
-                          c.saveLook();
-                          showMessage(context, 'Look saved to My Vanity.');
+                          if (c.saveLook()) {
+                            showMessage(context, 'Look saved to My Vanity.');
+                          }
                         }
                       : null,
                   icon: const Icon(Icons.favorite_border),
@@ -1194,7 +1209,9 @@ class VanityScreen extends StatefulWidget {
 class _VanityScreenState extends State<VanityScreen> {
   String tab = 'favorites';
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) =>
+      EntitledContent(controller: widget.controller, builder: _buildContent);
+  Widget _buildContent(BuildContext context) {
     final c = widget.controller;
     final products = c.catalog.products
         .where(
@@ -1355,44 +1372,50 @@ class _VanityScreenState extends State<VanityScreen> {
         ),
       );
   void _openRoutine(SavedRoutine routine) {
+    if (!widget.controller.hasAppAccess) return;
+    final ownerId = widget.controller.session!.userId;
     showModalBottomSheet<void>(
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
       backgroundColor: ivory,
-      builder: (context) => SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                routine.name,
-                style: const TextStyle(fontFamily: 'Georgia', fontSize: 28),
-              ),
-              const SizedBox(height: 10),
-              const Text(
-                'This is the exact saved selection. Its prices and owned-product choices reflect the time it was saved.',
-                style: TextStyle(color: muted),
-              ),
-              const SizedBox(height: 18),
-              for (final id in routine.ids) _savedItem(routine, id),
-              const Divider(height: 26),
-              Text(
-                'Saved new-product estimate: ${usd(routine.costCents)} USD',
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 20),
-              OutlinedButton(
-                onPressed: () {
-                  widget.controller.setPreferences(routine.prefs);
-                  Navigator.pop(context);
-                  widget.onConsult();
-                },
-                child: const Text('Create a new edit with these preferences'),
-              ),
-            ],
+      builder: (context) => EntitledContent(
+        controller: widget.controller,
+        ownerId: ownerId,
+        builder: (context) => SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  routine.name,
+                  style: const TextStyle(fontFamily: 'Georgia', fontSize: 28),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'This is the exact saved selection. Its prices and owned-product choices reflect the time it was saved.',
+                  style: TextStyle(color: muted),
+                ),
+                const SizedBox(height: 18),
+                for (final id in routine.ids) _savedItem(routine, id),
+                const Divider(height: 26),
+                Text(
+                  'Saved new-product estimate: ${usd(routine.costCents)} USD',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 20),
+                OutlinedButton(
+                  onPressed: () {
+                    widget.controller.setPreferences(routine.prefs);
+                    Navigator.pop(context);
+                    widget.onConsult();
+                  },
+                  child: const Text('Create a new edit with these preferences'),
+                ),
+              ],
+            ),
           ),
         ),
       ),

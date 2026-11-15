@@ -246,6 +246,62 @@ Future<void> openSource(BuildContext context, String url) async {
   }
 }
 
+/// Used by feature surfaces and their separate modal routes. Losing access
+/// replaces their content even when the route was opened while entitled.
+class EntitledContent extends StatelessWidget {
+  const EntitledContent({
+    super.key,
+    required this.controller,
+    required this.builder,
+    this.ownerId,
+  });
+  final EshaController controller;
+  final WidgetBuilder builder;
+  final String? ownerId;
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: controller,
+    builder: (context, _) {
+      if (controller.hasAppAccess &&
+          (ownerId == null || ownerId == controller.session?.userId)) {
+        return builder(context);
+      }
+      return SafeArea(
+        child: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: EshaPanel(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Esha membership',
+                    style: TextStyle(fontFamily: 'Georgia', fontSize: 26),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    ownerId != null && ownerId != controller.session?.userId
+                        ? 'This view belongs to a different signed-in account. Close it to continue.'
+                        : controller.purchases.accessMessage,
+                  ),
+                  if (Navigator.of(context).canPop()) ...[
+                    const SizedBox(height: 16),
+                    TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Close this view'),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
+
 class ProductCard extends StatelessWidget {
   const ProductCard({
     super.key,
@@ -290,7 +346,7 @@ class ProductCard extends StatelessWidget {
                     tooltip: favorite
                         ? 'Remove ${product.name} from favorites'
                         : 'Favorite ${product.name}',
-                    onPressed: controller.sync.canEdit
+                    onPressed: controller.canEditCollection
                         ? () => controller.toggleFavorite(product)
                         : null,
                     icon: Icon(
@@ -351,7 +407,7 @@ class ProductCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 TextButton(
-                  onPressed: () => showProduct(context, product),
+                  onPressed: () => showProduct(context, product, controller),
                   style: TextButton.styleFrom(
                     padding: EdgeInsets.zero,
                     alignment: Alignment.centerLeft,
@@ -365,7 +421,7 @@ class ProductCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: TextButton.icon(
-              onPressed: controller.sync.canEdit
+              onPressed: controller.canEditCollection
                   ? () => controller.toggleOwned(product)
                   : null,
               icon: Icon(
@@ -384,68 +440,78 @@ class ProductCard extends StatelessWidget {
   }
 }
 
-void showProduct(BuildContext context, Product product) {
+void showProduct(
+  BuildContext context,
+  Product product,
+  EshaController controller,
+) {
+  if (!controller.hasAppAccess) return;
+  final ownerId = controller.session!.userId;
   showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
     showDragHandle: true,
     backgroundColor: ivory,
-    builder: (context) => SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              product.brand.toUpperCase(),
-              style: const TextStyle(
-                color: pink,
-                letterSpacing: 1.4,
-                fontWeight: FontWeight.w700,
-                fontSize: 12,
+    builder: (context) => EntitledContent(
+      controller: controller,
+      ownerId: ownerId,
+      builder: (context) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                product.brand.toUpperCase(),
+                style: const TextStyle(
+                  color: pink,
+                  letterSpacing: 1.4,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              product.name,
-              style: const TextStyle(fontFamily: 'Georgia', fontSize: 28),
-            ),
-            const SizedBox(height: 12),
-            Text(product.description),
-            if (product.shadeNames.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                product.name,
+                style: const TextStyle(fontFamily: 'Georgia', fontSize: 28),
+              ),
               const SizedBox(height: 12),
-              Text('Documented variant: ${product.shadeNames.join(', ')}'),
+              Text(product.description),
+              if (product.shadeNames.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text('Documented variant: ${product.shadeNames.join(', ')}'),
+              ],
+              const SizedBox(height: 16),
+              Text(
+                product.priceLabel,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: pink,
+                  fontSize: 20,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Price snapshot checked ${product.priceCheckedAt}. Product cost only, before tax and shipping. Availability is not live verified.',
+                style: const TextStyle(fontSize: 12, color: muted),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Choose your shade and check the current ingredient list, package size and stock on the manufacturer’s page. Preferences are not an allergy-safety or exact shade-match guarantee.',
+                style: TextStyle(fontSize: 12, color: muted),
+              ),
+              const SizedBox(height: 22),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: () => openSource(context, product.sourceUrl),
+                  icon: const Icon(Icons.open_in_new, size: 18),
+                  label: const Text('Open manufacturer page'),
+                ),
+              ),
             ],
-            const SizedBox(height: 16),
-            Text(
-              product.priceLabel,
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                color: pink,
-                fontSize: 20,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Price snapshot checked ${product.priceCheckedAt}. Product cost only, before tax and shipping. Availability is not live verified.',
-              style: const TextStyle(fontSize: 12, color: muted),
-            ),
-            const SizedBox(height: 14),
-            const Text(
-              'Choose your shade and check the current ingredient list, package size and stock on the manufacturer’s page. Preferences are not an allergy-safety or exact shade-match guarantee.',
-              style: TextStyle(fontSize: 12, color: muted),
-            ),
-            const SizedBox(height: 22),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton.icon(
-                onPressed: () => openSource(context, product.sourceUrl),
-                icon: const Icon(Icons.open_in_new, size: 18),
-                label: const Text('Open manufacturer page'),
-              ),
-            ),
-          ],
+          ),
         ),
       ),
     ),

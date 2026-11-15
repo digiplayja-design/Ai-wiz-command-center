@@ -11,8 +11,15 @@ void main() {
   ) async {
     await tester.binding.setSurfaceSize(const Size(320, 720));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    final controller = await guestController();
-    addTearDown(controller.dispose);
+    final controller = await memberController();
+    var disposed = false;
+    void close() {
+      if (disposed) return;
+      disposed = true;
+      controller.dispose();
+    }
+
+    addTearDown(close);
     await tester.pumpWidget(
       MaterialApp(
         theme: eshaTheme,
@@ -67,5 +74,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
+    close();
   });
 }

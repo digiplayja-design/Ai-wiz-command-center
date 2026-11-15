@@ -33,7 +33,9 @@ class MembershipStatus {
       active: membership['active'] == true,
       trial: membership['trial'] == true,
       verificationFresh: membership['verificationFresh'] == true,
-      expiresAt: membership['expiresAt'] as String?,
+      expiresAt: membership['expiresAt'] is String
+          ? membership['expiresAt'] as String
+          : null,
       allowanceLimit: allowance['limit'] is int
           ? allowance['limit'] as int
           : null,
@@ -51,9 +53,12 @@ class MembershipStatus {
   final int? allowanceLimit, remaining;
   final int used, reserved;
   final String? expiresAt, periodEndsAt, warning;
+  DateTime? get expiry =>
+      expiresAt == null ? null : DateTime.tryParse(expiresAt!)?.toUtc();
+  bool isCurrentAt(DateTime now) =>
+      active && verificationFresh && expiry != null && expiry!.isAfter(now);
   bool get canConsult =>
-      active &&
-      verificationFresh &&
+      isCurrentAt(DateTime.now().toUtc()) &&
       catalog['consultationEnabled'] == true &&
       allowanceLimit != null &&
       remaining != null &&
@@ -68,18 +73,113 @@ bool mayCompleteVerifiedPurchase(Json response, {required bool sameAccount}) =>
     response['completePurchase'] == true;
 
 class EshaPurchases extends ChangeNotifier {
-  EshaPurchases(this.api, {InAppPurchase? store})
-    : _store = store ?? InAppPurchase.instance;
+  EshaPurchases(this.api, {InAppPurchase? store, DateTime Function()? now})
+    : _store = store ?? InAppPurchase.instance,
+      _now = now ?? DateTime.now;
   final KorlixApi api;
   final InAppPurchase _store;
+  final DateTime Function() _now;
   StreamSubscription<List<PurchaseDetails>>? _subscription;
+  Timer? _accessTimer, _refreshTimer;
+  OwnerSnapshot? _membershipOwner;
+  DateTime? _checkedAt;
+  static const freshnessWindow = Duration(minutes: 15);
+  static const refreshInterval = Duration(minutes: 10);
+  bool _needsVerification = true;
+  bool _foreground = true;
   final Map<String, PurchaseDetails> _pendingVerification = {};
   final Set<String> _verifying = {};
   bool _disposed = false;
   int _refreshEpoch = 0;
   int _membershipRevision = 0;
+  int _verificationRevision = 0;
   Json catalog = {};
-  MembershipStatus membership = const MembershipStatus();
+  MembershipStatus _membership = const MembershipStatus();
+  MembershipStatus get membership => _membership;
+  bool get hasCurrentStatus =>
+      _membershipOwner != null &&
+      api.isOwner(_membershipOwner!) &&
+      !_needsVerification &&
+      _checkedAt != null &&
+      !_now().toUtc().isBefore(_checkedAt!) &&
+      _now().toUtc().difference(_checkedAt!) < freshnessWindow;
+  bool get hasAppAccess =>
+      hasCurrentStatus && membership.isCurrentAt(_now().toUtc());
+  bool get canConsult =>
+      hasAppAccess &&
+      membership.catalog['consultationEnabled'] == true &&
+      membership.allowanceLimit != null &&
+      (membership.remaining ?? 0) > 0;
+  bool get needsVerification =>
+      api.session != null &&
+      (!hasCurrentStatus ||
+          (membership.active && !membership.isCurrentAt(_now().toUtc())));
+  String get accessMessage {
+    if (api.session == null) {
+      return 'Sign in to start or restore your Esha membership. An eligible 3-day trial begins only after store confirmation.';
+    }
+    if (loading && !hasAppAccess) return 'Checking your Esha membership…';
+    if (needsVerification) {
+      return 'Connect to verify your Esha membership. Your saved collection is kept while access is paused.';
+    }
+    if (!hasAppAccess) {
+      return 'An active Esha trial or subscription is required to explore products, build edits and use your vanity and look studio.';
+    }
+    return membership.trial
+        ? 'Your store-verified Esha trial is active.'
+        : 'Your store-verified Esha membership is active.';
+  }
+
+  void setForeground(bool value) {
+    _foreground = value;
+    if (!value) _refreshTimer?.cancel();
+  }
+
+  void _clearAccess() {
+    _accessTimer?.cancel();
+    _refreshTimer?.cancel();
+    _accessTimer = null;
+    _membershipOwner = null;
+    _checkedAt = null;
+    _needsVerification = true;
+    _membership = const MembershipStatus();
+  }
+
+  void _acceptStatus(Json status, OwnerSnapshot owner) {
+    if (!api.isOwner(owner)) return;
+    ++_verificationRevision;
+    _accessTimer?.cancel();
+    _refreshTimer?.cancel();
+    _membership = MembershipStatus.fromJson(status);
+    _membershipOwner = owner;
+    _checkedAt = _now().toUtc();
+    _needsVerification =
+        object(status['membership'])['active'] is! bool ||
+        (status['warning'] is String &&
+            (status['warning'] as String).trim().isNotEmpty);
+    if (!hasCurrentStatus) return;
+    final untilExpiry = hasAppAccess
+        ? membership.expiry!.difference(_checkedAt!)
+        : freshnessWindow;
+    // Quietly refresh before the in-memory verification lease ends. Neither
+    // interval starts or extends a trial, which comes only from the store.
+    _accessTimer = Timer(
+      untilExpiry < freshnessWindow ? untilExpiry : freshnessWindow,
+      () {
+        if (_disposed || !api.isOwner(owner)) return;
+        _needsVerification = true;
+        _notify();
+        if (_foreground) unawaited(refresh(requireVerification: true));
+      },
+    );
+    if (_foreground && hasAppAccess && untilExpiry > refreshInterval) {
+      _refreshTimer = Timer(refreshInterval, () {
+        if (!_disposed && _foreground && api.isOwner(owner))
+          unawaited(refresh());
+      });
+    }
+  }
+
   ProductDetails? product;
   String? offerToken, localizedMonthlyPrice, error, message;
   bool? trialEligible;
@@ -107,6 +207,7 @@ class EshaPurchases extends ChangeNotifier {
   bool get canPurchase =>
       supported &&
       api.session != null &&
+      hasCurrentStatus &&
       catalogReady &&
       storeAvailable &&
       storeTermsVerified &&
@@ -136,7 +237,7 @@ class EshaPurchases extends ChangeNotifier {
 
   void applyAllowance(Json allowance) {
     ++_membershipRevision;
-    membership = MembershipStatus.fromJson({
+    _membership = MembershipStatus.fromJson({
       ...membership.catalog,
       'allowance': allowance,
     });
@@ -164,7 +265,7 @@ class EshaPurchases extends ChangeNotifier {
   void accountChanged() {
     ++_refreshEpoch;
     ++_membershipRevision;
-    membership = const MembershipStatus();
+    _clearAccess();
     busy = false;
     loading = false;
     error = null;
@@ -174,16 +275,22 @@ class EshaPurchases extends ChangeNotifier {
     unawaited(refresh());
   }
 
-  Future<void> refresh() async {
+  Future<void> refresh({bool requireVerification = false}) async {
     final epoch = ++_refreshEpoch,
         authEpoch = api.epoch,
         user = api.session?.userId,
-        membershipRevision = _membershipRevision;
+        membershipRevision = _membershipRevision,
+        verificationRevision = _verificationRevision;
     bool current() =>
         !_disposed &&
         epoch == _refreshEpoch &&
         authEpoch == api.epoch &&
         user == api.session?.userId;
+    if (requireVerification) {
+      _accessTimer?.cancel();
+      _refreshTimer?.cancel();
+      _needsVerification = true;
+    }
     loading = true;
     error = null;
     _notify();
@@ -194,9 +301,19 @@ class EshaPurchases extends ChangeNotifier {
       if (!current()) return;
       catalog = remote;
       if (membershipRevision == _membershipRevision) {
-        membership = user == null
-            ? const MembershipStatus()
-            : MembershipStatus.fromJson(remote);
+        if (user == null) {
+          _clearAccess();
+        } else {
+          _acceptStatus(remote, OwnerSnapshot(authEpoch, user));
+        }
+      } else if (verificationRevision == _verificationRevision &&
+          user != null) {
+        // An in-flight consultation can update its allowance while a mandatory
+        // check runs. Keep that usage update without losing the new entitlement.
+        _acceptStatus({
+          ...remote,
+          'allowance': membership.catalog['allowance'],
+        }, OwnerSnapshot(authEpoch, user));
       }
       _clearStoreTerms();
       if (supported) {
@@ -236,8 +353,8 @@ class EshaPurchases extends ChangeNotifier {
           ? e.message
           : 'Membership could not be checked. Please try again.';
       // An old local status can never authorize a new live consultation.
-      if (membershipRevision == _membershipRevision) {
-        membership = const MembershipStatus();
+      if (verificationRevision == _verificationRevision) {
+        _clearAccess();
         catalog = {};
       }
       _clearStoreTerms();
@@ -513,15 +630,17 @@ class EshaPurchases extends ChangeNotifier {
       }
       ++_membershipRevision;
       catalog = object(response['status']);
-      membership = MembershipStatus.fromJson(catalog);
+      _acceptStatus(catalog, snapshot);
       if (purchase.pendingCompletePurchase) {
         await _store.completePurchase(purchase);
       }
       if (!api.isOwner(snapshot)) return;
       _pendingVerification.remove(key);
       error = null;
-      message = membership.active
+      message = hasAppAccess
           ? 'Your Esha membership is verified.'
+          : needsVerification
+          ? accessMessage
           : 'Purchase checked. This membership is not currently active.';
     } catch (e) {
       if (api.isOwner(snapshot)) error = e is EshaException ? e.message : 'Your purchase could not be verified yet. Use Retry verification or Restore purchases. No local purchase status grants access.';
@@ -569,7 +688,7 @@ class EshaPurchases extends ChangeNotifier {
       if (!api.isOwner(snapshot)) return;
       message = awaitingApproval
           ? 'This purchase is still awaiting store approval. No membership has been activated.'
-          : membership.active
+          : hasAppAccess
           ? 'Your Esha membership is verified.'
           : 'Restore requested. Store results will be verified as they arrive.';
     } catch (e) {
@@ -601,6 +720,8 @@ class EshaPurchases extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     ++_refreshEpoch;
+    _accessTimer?.cancel();
+    _refreshTimer?.cancel();
     _subscription?.cancel();
     super.dispose();
   }
