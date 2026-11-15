@@ -279,6 +279,81 @@ workflows:
     # Deliberately no publishing section: review the candidate before any
     # separately authorized TestFlight, App Store, or public store submission.
 
+  esha-ios-upload:
+    name: Esha by Korlix — build and upload verified iOS build
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    working_directory: apps/esha
+    # Manual upload after Esha's dedicated profile and Apple connection work.
+    # No beta-review submission, tester invitations, or App Store review request.
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    environment:
+      flutter: 3.47.9
+      xcode: 26.6
+      cocoapods: default
+      groups:
+        - esha_release
+      ios_signing:
+        provisioning_profiles:
+          - profile: ESHA_APP_STORE_PROFILE
+            environment_variable: ESHA_APP_STORE_PROFILE_PATH
+        certificates:
+          - KORLIX_APP_STORE_CERT
+    scripts:
+      - name: Install the verified Apple release CLI
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.esha-ios-tools"
+          "$CM_BUILD_DIR/.esha-ios-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+          printf 'PATH=%s/.esha-ios-tools/bin:%s\n' "$CM_BUILD_DIR" "$PATH" >> "$CM_ENV"
+      - name: Verify Esha's own Apple app record and profile
+        script: |
+          set -euo pipefail
+          : "${ESHA_APP_STORE_ID:?Set the actual Esha Apple app ID in esha_release}"
+          : "${ESHA_APPLE_TEAM_ID:?Set the Esha Apple Developer team ID in esha_release}"
+          python3 "$CM_BUILD_DIR/scripts/esha/prepare_ios_release.py" --environment-file "$CM_ENV"
+      - name: Validate locked Esha source and behavior
+        script: bash "$CM_BUILD_DIR/scripts/esha/validate.sh"
+      - name: Build and verify Esha's signed IPA before upload
+        script: bash "$CM_BUILD_DIR/scripts/esha/build_ios_candidate.sh"
+    artifacts:
+      - $CM_BUILD_DIR/apps/esha/artifacts/ios/Esha-signed-candidate.ipa
+      - $CM_BUILD_DIR/apps/esha/artifacts/ios/Esha-signed-verification.json
+      - $CM_BUILD_DIR/apps/esha/build/ios/archive/Runner.xcarchive/dSYMs/*.dSYM
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: false
+        submit_to_app_store: false
+
+  esha-apple-draft-listing:
+    name: Esha by Korlix — synchronize existing Apple draft listing
+    instance_type: linux_x2
+    max_build_duration: 15
+    working_directory: apps/esha
+    # Manual only, after repairing the existing Apple integration.
+    # Revalidates Esha identity and editable state before each allowlisted write.
+    # No app creation, upload, review submission, declarations or access changes.
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    environment:
+      groups:
+        - esha_release
+    scripts:
+      - name: Install the pinned Apple listing CLI
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.esha-apple-listing-tools"
+          "$CM_BUILD_DIR/.esha-apple-listing-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+      - name: Synchronize and verify Esha's existing draft fields
+        script: |
+          set -euo pipefail
+          "$CM_BUILD_DIR/.esha-apple-listing-tools/bin/python" "$CM_BUILD_DIR/scripts/esha/sync_apple_listing.py" --apply-draft
+    artifacts:
+      - $CM_BUILD_DIR/apps/esha/artifacts/apple-listing/Esha-Apple-draft-listing-verification.json
+
   esha-ios-signing-setup:
     name: Esha by Korlix — verify and prepare iOS profile
     instance_type: mac_mini_m2

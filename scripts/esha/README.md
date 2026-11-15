@@ -142,10 +142,36 @@ an Apple app record or provisioning profile.
 
 After export, `Esha-signed-candidate.ipa` must pass checks of its device platform,
 bundle identifier, version/build, profile, team, signed entitlements, and code
-signature. Review it before any separate store upload. Esha workflows contain
-**no publishing section**, so they neither upload to TestFlight nor submit to
-App Review. The existing non-Esha workflows are preserved unchanged, including
-their prior publishing behavior.
+signature. Review it before any separate store upload. The signed candidate
+workflow contains **no publishing section**. The existing non-Esha workflows
+are preserved unchanged, including their prior publishing behavior.
+
+## Separate manual iOS upload
+
+The separate `esha-ios-upload` workflow uses the same verified Esha signing and
+build pipeline, then uploads the signed IPA with the existing App Store Connect
+integration. Its publishing settings explicitly set `submit_to_testflight:
+false` and `submit_to_app_store: false`. It configures no tester groups or
+notifications. Upload success requires Apple's processing and separate review
+of any later distribution or submission steps. The candidate workflow remains
+available for artifact review without uploading.
+
+The existing Apple integration must authenticate successfully and the verified
+Esha profile must be imported before running either signed workflow. The
+observed HTTP 401 from the signing setup has not been resolved by these scripts.
+
+## Apple draft listing
+
+Manual workflow: `esha-apple-draft-listing`. It applies the prepared draft fields
+using the existing integration after authentication has been repaired.
+
+`sync_apple_listing.py` reads `apps/esha/release/store-metadata.json` and verifies
+Esha's exact Apple identity and editable pending records. Its default mode
+produces a read-only change plan. `--apply-draft` synchronizes only the approved
+listing text, categories, version number and privacy links, then reads them back.
+It has no upload, submission, publication or questionnaire operations. See
+[Apple draft listing synchronization](APPLE_LISTING.md) for invocation, the exact
+field allowlist, authentication prerequisites and partial-progress reporting.
 
 ## Membership release gate
 
