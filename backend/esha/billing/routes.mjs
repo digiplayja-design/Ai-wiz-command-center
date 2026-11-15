@@ -2,21 +2,24 @@ import {ESHA_BUNDLE, ESHA_PRODUCT, UUID, EshaBillingError, allowanceConfiguratio
   publicCatalog, productFor, eshaAccountId, digest, fail} from './catalog.mjs';
 import {eshaProviders} from './providers.mjs';
 import {loadEshaCatalog, consultationInput, consultationPrompt, consultationResult, ESHA_RESULT_FORMAT} from './consultation.mjs';
+import {eshaResponseRequest} from './ai.mjs';
 
 function statusCode(error) {
   const value = error?.statusCode ?? error?.status;
   return Number.isInteger(value) && value >= 400 && value < 600 ? value : 503;
 }
 export function createEshaBilling({database, requireUser, environment = process.env,
-  provider = eshaProviders(environment), store, generate, catalog, autoStart = true} = {}) {
+  provider = eshaProviders(environment), store, generate, countInputTokens, catalog, autoStart = true} = {}) {
   let serverCatalog = catalog;
   if (!serverCatalog) { try { serverCatalog = loadEshaCatalog(); } catch { /* Fail closed in catalog and AI readiness. */ } }
   const storageReady = !!(store || database);
   const aiReady = () => nativeAiConfigured(environment) && !!environment.OPENAI_API_KEY &&
-    typeof generate === 'function' && storageReady && !!serverCatalog;
+    typeof generate === 'function' && typeof countInputTokens === 'function' && storageReady && !!serverCatalog;
   const call = store || async function(actor, action, data = {}) {
     if (!database) fail('Esha membership storage is temporarily unavailable.', 503, 'storage_unavailable');
-    const result = await database.rpc('korlix_esha_billing_command', {p_actor: actor || null, p_action: action, p: data});
+    const result = action === 'begin_provider_attempt'
+      ? await database.rpc('korlix_esha_begin_provider_attempt', {p_actor: actor || null, p: data})
+      : await database.rpc('korlix_esha_billing_command', {p_actor: actor || null, p_action: action, p: data});
     if (result.error) {
       const known = /ESHA(\d{3}):([a-z_]+):([^\n]+)/.exec(result.error.message || '');
       fail(known ? known[3] : 'Esha membership storage is temporarily unavailable.', known ? Number(known[1]) : 503,
@@ -102,8 +105,23 @@ export function createEshaBilling({database, requireUser, environment = process.
     const configuration = nativeAiConfiguration(environment);
     try {
       const prompt = consultationPrompt(input.data, serverCatalog);
-      const response = await generate({...prompt, maxOutputTokens: configuration.maxOutputTokens,
-        textFormat: ESHA_RESULT_FORMAT, signal: AbortSignal.timeout(180000)});
+      const request = eshaResponseRequest(configuration, prompt, ESHA_RESULT_FORMAT);
+      const inputTokens = await countInputTokens(request, {signal: AbortSignal.timeout(30000)});
+      if (!Number.isSafeInteger(inputTokens) || inputTokens <= 0) {
+        fail('Esha could not verify this request’s size. Please try again.', 503, 'token_count_unavailable');
+      }
+      if (inputTokens > configuration.maxInputTokens) {
+        fail('This consultation is too long. Start a new conversation with a shorter question or less shared context.', 413, 'consultation_input_too_long');
+      }
+      // A committed debit is required before the single paid network attempt.
+      // An ambiguous database response fails closed; the UUID cannot run twice.
+      const attempt = await call(user.id, 'begin_provider_attempt', {request_id: input.requestId, input_hash: input.inputHash,
+        request_hash: digest(JSON.stringify(request)), model: configuration.model, reasoning_effort: configuration.reasoningEffort,
+        input_tokens: inputTokens, max_input_tokens: configuration.maxInputTokens, max_output_tokens: configuration.maxOutputTokens,
+        trial_limit: configuration.trialAttempts, monthly_limit: configuration.monthlyAttempts});
+      if (attempt?.exhausted) fail('Esha has reached the AI processing limit for this billing period. Your app membership remains active.', 429, 'provider_attempts_exhausted');
+      if (attempt?.started !== true) fail('This consultation has already been sent. Retry the same request to recover a completed answer.', 409, 'provider_attempt_already_started');
+      const response = await generate(request, {signal: AbortSignal.timeout(180000)});
       const result = consultationResult(response, serverCatalog);
       const committed = await call(user.id, 'commit', {request_id: input.requestId, input_hash: input.inputHash, result});
       return {requestId: input.requestId, ...committed.result, usage: (await call(user.id, 'snapshot')).allowance};

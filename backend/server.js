@@ -1,6 +1,7 @@
 import {brainRuntimeContext} from './brain_voice/context.mjs';
 import {createBrainBilling} from './brain_voice/billing/routes.mjs';
 import {createEshaBilling} from './esha/billing/routes.mjs';
+import {createEshaAi} from './esha/billing/ai.mjs';
 import {registerEshaPolicyRoutes} from './esha/policies.mjs';
 import {checkBrainModelAccess} from './brain_voice/model_access.mjs';
 import {createBrainVoice, brainSpeechConfig, isBrainVoice, brainProfile, BRAIN_PROFILES, BRAIN_MODEL, BRAIN_EFFORT, BRAIN_PROTOCOL} from './brain_voice/core.mjs';
@@ -357,12 +358,7 @@ brainBilling.register(app);
 const eshaBilling = createEshaBilling({
   database: supabaseAdmin,
   requireUser,
-  generate: async ({instructions, input, maxOutputTokens, textFormat, signal}) =>
-    createTextResponse(
-      new OpenAI({apiKey:process.env.OPENAI_API_KEY, maxRetries:0, timeout:180000}),
-      {instructions, input, max_output_tokens:maxOutputTokens, text:{format:textFormat}, store:false},
-      {signal, timeout:180000, maxRetries:0},
-    ),
+  ...createEshaAi(),
 });
 eshaBilling.register(app);
 registerAutoEmailOutboxRoutes(app,{requireUser,database:supabaseAdmin,loadAgentProfile:korlixAgentLoadProfileV1});

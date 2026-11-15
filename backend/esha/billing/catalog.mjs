@@ -39,9 +39,22 @@ export function allowanceConfiguration(env = process.env) {
   return {configured, trial: configured ? trial : null, monthly: configured ? monthly : null};
 }
 export function nativeAiConfiguration(env = process.env) {
+  // Astra/max stays the default. Selecting the economical option is a separate,
+  // explicit owner decision; merely adding its code must never activate it.
+  const model = env.KORLIX_ESHA_TEXT_MODEL ?? astra.TEXT_MODEL;
+  const reasoningEffort = env.KORLIX_ESHA_REASONING_EFFORT ?? (model === astra.TEXT_MODEL ? astra.TEXT_EFFORT : null);
+  const modelApproved = model === astra.TEXT_MODEL && reasoningEffort === astra.TEXT_EFFORT ||
+    model === 'gpt-6-luna' && reasoningEffort === 'low' && env.KORLIX_ESHA_ECONOMICAL_AI_APPROVED === 'true';
+  const maxInputTokens = positiveInteger(env.KORLIX_ESHA_MAX_INPUT_TOKENS);
   const maxOutputTokens = positiveInteger(env.KORLIX_ESHA_MAX_OUTPUT_TOKENS);
-  const configured = maxOutputTokens !== null && maxOutputTokens >= astra.TEXT_OUTPUT_TOKENS && maxOutputTokens <= 131072;
-  return {configured, maxOutputTokens: configured ? maxOutputTokens : null, model: astra.TEXT_MODEL, reasoningEffort: astra.TEXT_EFFORT};
+  const trialAttempts = positiveInteger(env.KORLIX_ESHA_TRIAL_PROVIDER_ATTEMPTS);
+  const monthlyAttempts = positiveInteger(env.KORLIX_ESHA_MONTHLY_PROVIDER_ATTEMPTS);
+  const configured = modelApproved && maxInputTokens !== null && maxInputTokens <= 922000 &&
+    maxOutputTokens !== null && maxOutputTokens >= (model === astra.TEXT_MODEL ? astra.TEXT_OUTPUT_TOKENS : 256) &&
+    maxOutputTokens <= (model === astra.TEXT_MODEL ? 131072 : 128000) && trialAttempts !== null && monthlyAttempts !== null;
+  return {configured, model, reasoningEffort, maxInputTokens: configured ? maxInputTokens : null,
+    maxOutputTokens: configured ? maxOutputTokens : null,
+    trialAttempts: configured ? trialAttempts : null, monthlyAttempts: configured ? monthlyAttempts : null};
 }
 export function nativeAiConfigured(env = process.env) {
   return allowanceConfiguration(env).configured && nativeAiConfiguration(env).configured && env.KORLIX_ESHA_NATIVE_AI_ENABLED === 'true';
