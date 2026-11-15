@@ -154,18 +154,28 @@ saved App Store profiles for other Korlix apps with the same team and expiry.
 The existing `Codemagic Korlix AI` App Store Connect integration successfully
 fetched six profiles, including Brain Voice and Receipt Wiz. This integration
 returned no profile for Esha's `com.korlixdeveloper.esha` bundle.
-No profile was imported or generated, and no
-certificate or private key was downloaded. Esha's numeric App Store ID and the
-Apple Developer team ID remain unverified. Interactive Apple sign-in is awaiting
-two-factor verification.
+No profile was imported or generated, and no certificate or private key was
+downloaded during that inspection. The app and team IDs were not verified in
+that Codemagic check; interactive Apple sign-in was awaiting two-factor
+verification.
+
+A subsequent user-provided App Store Connect **App Information** screenshot
+shows the created **Esha by Korlix** app record, with iOS version **1.0** in
+**Prepare for Submission** status, bundle `com.korlixdeveloper.esha`, SKU
+`ESHA_IOS_001` and numeric Apple ID `6835184869`. The user-provided Apple Developer
+**Register an App ID** screenshot shows team ID `FJKJ9MUDZ4`. These identities
+are recorded with their screenshot evidence source; a live account/API identity
+check, subscription products, Esha signing, build upload and review submission
+remain unverified.
 
 [Store metadata](release/store-metadata.json) is prepared as a draft, with source
-identifiers distinguished from unverified store records. Store login/verification
-and Google Play browser access remain unresolved. No app listing, subscription
-product, signing identity or store submission was created by this checkpoint.
+subscription identifiers distinguished from the Apple app identity observed in
+the screenshots. Live store verification and Google Play browser access remain
+unresolved. No subscription product, signing identity or store submission was
+created by this checkpoint.
 
-Signed Android/iPhone release builds, Esha's actual store app and subscription
-records, localized prices, eligible trial configuration, consultation allowances,
-and real-device purchase, restore, cancellation, refund and account-switch checks
-remain pending. The backend deployment and these test artifacts do not establish
-a live store release.
+Signed Android/iPhone release builds, Esha's Google Play app record and both
+stores' subscription records, localized prices, eligible trial configuration,
+consultation allowances, and real-device purchase, restore, cancellation, refund
+and account-switch checks remain pending. The backend deployment and these test
+artifacts do not establish a live store release.

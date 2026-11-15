@@ -278,3 +278,33 @@ workflows:
       - /tmp/xcodebuild_logs/*.log
     # Deliberately no publishing section: review the candidate before any
     # separately authorized TestFlight, App Store, or public store submission.
+
+  esha-ios-signing-setup:
+    name: Esha by Korlix — verify and prepare iOS profile
+    instance_type: mac_mini_m2
+    max_build_duration: 15
+    working_directory: apps/esha
+    # Manual only. Reuse the existing identity; create at most one Esha profile.
+    # No certificate/key creation, capability changes, builds, or uploading.
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    environment:
+      xcode: 26.6
+      groups:
+        - esha_release
+      ios_signing:
+        certificates:
+          - KORLIX_APP_STORE_CERT
+    scripts:
+      - name: Install the pinned Apple signing CLI
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.esha-ios-profile-tools"
+          "$CM_BUILD_DIR/.esha-ios-profile-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+      - name: Verify the existing identity and prepare only Esha's profile
+        script: |
+          set -euo pipefail
+          "$CM_BUILD_DIR/.esha-ios-profile-tools/bin/python" "$CM_BUILD_DIR/scripts/esha/prepare_ios_profile.py"
+    artifacts:
+      - $CM_BUILD_DIR/apps/esha/artifacts/ios-signing/Esha-App-Store.mobileprovision
+      - $CM_BUILD_DIR/apps/esha/artifacts/ios-signing/Esha-iOS-signing-setup-verification.json

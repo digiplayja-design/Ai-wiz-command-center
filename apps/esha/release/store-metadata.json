@@ -22,10 +22,24 @@
     "candidate_identifiers": {
       "bundle_id": "com.korlixdeveloper.esha",
       "monthly_subscription_product_id": "com.korlixdeveloper.esha.monthly",
-      "app_store_connect_numeric_app_id": null,
-      "apple_developer_team_id": null,
-      "app_store_connect_sku": null,
-      "verification_status": "bundle_and_product_ids_configured_in_source_store_records_unverified"
+      "app_store_connect_numeric_app_id": "6835184869",
+      "apple_developer_team_id": "FJKJ9MUDZ4",
+      "app_store_connect_sku": "ESHA_IOS_001",
+      "verification_status": "app_record_and_team_id_observed_in_user_screenshots_subscription_product_unverified"
+    },
+    "identity_evidence": {
+      "source": "user_provided_screenshots",
+      "app_record_source": "App Store Connect App Information screenshot",
+      "app_record_exists": true,
+      "platform": "iOS",
+      "store_version": "1.0",
+      "store_status": "Prepare for Submission",
+      "team_id_source": "Apple Developer Register an App ID screenshot",
+      "live_account_or_api_identity_check_performed": false,
+      "subscription_product_verified": false,
+      "signing_verified": false,
+      "build_upload_verified": false,
+      "review_submission_verified": false
     }
   },
   "google_play": {
@@ -77,7 +91,7 @@
     "legal_and_age_rating_attestations": "not_completed_requires_owner_review",
     "notes": [
       "This file is a local metadata draft. It does not create a store record, submit an app, publish a listing or verify a signed build.",
-      "Numeric store and developer account identifiers are intentionally unset. Candidate bundle, package and subscription identifiers reflect the committed source only.",
+      "The Apple app record, SKU, numeric Apple ID and team ID were observed in user-provided App Information and Register an App ID screenshots. These screenshots do not verify subscription products, signing, build upload or review submission. Google Play store identifiers remain unset, and subscription identifiers remain source candidates.",
       "The Esha Privacy and Terms pages returned HTTP 200 after the authorized backend deployment of commit 4bb80c1ce6fe1a314a31a23b60b70832c1045556. Public page content, headers and the deletion/offer anchors were verified on November 15, 2026 at 18:06:09 UTC. Store setup, signing and membership activation remain unresolved.",
       "Confirm actual store offers and configure consultation limits before enabling purchases. Review the draft against the final build and active feature availability."
     ]

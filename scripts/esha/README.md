@@ -64,6 +64,47 @@ the approved fingerprint and has not expired. This workflow creates an artifact
 for review. It does not configure Play App Signing, create a Play application,
 or upload to a Google Play track.
 
+## Manual iOS profile setup
+
+Workflow: `esha-ios-signing-setup`. Run it manually after `esha_release` contains
+`ESHA_APP_STORE_ID=6835184869` and the actual `ESHA_APPLE_TEAM_ID`.
+
+This job uses the existing **`Codemagic Korlix AI`** integration and imports only
+**`KORLIX_APP_STORE_CERT`**. It pins `codemagic-cli-tools` to **0.69.0**. Before
+creating anything, it verifies Apple's exact Esha record (app ID `6835184869`,
+bundle `com.korlixdeveloper.esha`, SKU `ESHA_IOS_001`), its registered Bundle ID,
+and a valid installed distribution identity for the configured team. The
+keychain certificate must have a corresponding valid private-key identity and
+match an existing Apple API certificate byte for byte. No key is exported.
+
+The script reuses a fully verified active iOS App Store profile. Only a complete
+successful lookup with no active profiles permits one profile-creation attempt,
+using the observed Esha Bundle ID and verified existing certificate resource IDs.
+A mismatched or malformed active profile stops the job for review. Authorization
+failures, timeouts, incomplete responses, and ambiguous identities also stop it;
+creation is never retried automatically. A subsequent manual run inventories
+Apple again before deciding whether anything is missing.
+
+The returned profile is decoded and checked for the exact bundle, team, App ID
+prefix, certificate, UUID, validity, and App Store distribution constraints. Only
+then are these two artifacts written under `apps/esha/artifacts/ios-signing/`:
+
+- `Esha-App-Store.mobileprovision` — the verified public provisioning profile.
+- `Esha-iOS-signing-setup-verification.json` — source revision, public resource
+  IDs, certificate/profile fingerprints, expiry dates, and created/reused result.
+
+Import the verified profile into Codemagic under reference
+**`ESHA_APP_STORE_PROFILE`** before starting the separate candidate workflow.
+The setup job does not create a certificate, change permissions or capabilities,
+build an app, or upload anything to Apple. Its artifact allowlist excludes raw
+API responses, logs, private keys, and environment variables.
+
+Fixture checks, without macOS keychain access or Apple requests:
+
+```sh
+python3 -m unittest discover -s scripts/esha/tests -v
+```
+
 ## Manual signed iOS candidate
 
 Workflow: `esha-ios-candidate`.

@@ -141,6 +141,25 @@
     }
   },
   "store_release": {
+    "apple_identity_screenshot_evidence": {
+      "source": "user_provided_screenshots",
+      "app_record_source": "App Store Connect App Information screenshot",
+      "app_record_exists": true,
+      "name": "Esha by Korlix",
+      "bundle_id": "com.korlixdeveloper.esha",
+      "sku": "ESHA_IOS_001",
+      "app_store_connect_numeric_app_id": "6835184869",
+      "platform": "iOS",
+      "store_version": "1.0",
+      "store_status": "Prepare for Submission",
+      "apple_developer_team_id": "FJKJ9MUDZ4",
+      "team_id_source": "Apple Developer Register an App ID screenshot",
+      "live_account_or_api_identity_check_performed": false,
+      "subscription_product_verified": false,
+      "signing_verified": false,
+      "build_upload_verified": false,
+      "review_submission_verified": false
+    },
     "codemagic_read_only_check": {
       "verified_on": "2026-11-15",
       "account_scope": "Personal Account",
