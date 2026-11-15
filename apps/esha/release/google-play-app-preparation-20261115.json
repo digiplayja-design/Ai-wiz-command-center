@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "recorded_on": "2026-11-15",
+  "evidence_type": "google_play_app_creation_form_preparation",
+  "source": "Coordinating agent live browser observations; no browser or account actions performed by the documentation agent.",
+  "status": "form_prepared_creation_not_submitted",
+  "access": {
+    "exact_redirect_approved_by_user": true,
+    "sign_in_succeeded": true,
+    "organization": "KORLIX",
+    "developer_id": "4772708594176030332"
+  },
+  "existing_app_search": {
+    "visible_other_app_count": 6,
+    "query": "Esha",
+    "result": "No results found",
+    "scope": "The signed-in KORLIX developer account app listing at this observation."
+  },
+  "prepared_form": {
+    "url": "https://play.google.com/console/u/0/developers/4772708594176030332/create-new-app",
+    "app_name": "Esha by Korlix",
+    "package_name": "com.korlixdeveloper.esha",
+    "package_availability_check": "available",
+    "default_language": "en-US",
+    "application_type": "App",
+    "download_pricing": "Free"
+  },
+  "required_declarations": {
+    "developer_program_policies_checked": false,
+    "us_export_compliance_and_encryption_checked": false,
+    "action_time_user_acknowledgment_required": true,
+    "declarations_accepted": false
+  },
+  "creation": {
+    "create_app_submitted": false,
+    "app_record_created": false,
+    "package_registration_established": false
+  },
+  "android_signing": {
+    "evidence_file": "android-signing-prerequisites-20261115.json",
+    "expected_reference": "ESHA_ANDROID_UPLOAD_KEY",
+    "dedicated_key_reference_present_at_prior_check": false,
+    "key_created_or_imported": false,
+    "signed_android_build_started": false
+  },
+  "supersedes": {
+    "evidence_file": "android-signing-prerequisites-20261115.json",
+    "scope": "The earlier Google redirect/access block only. Its Android signing observations remain unchanged."
+  },
+  "remaining": [
+    "Obtain the action-time acknowledgment of the two required declarations before submitting Create app.",
+    "Create and verify the exact Esha Play app record after that acknowledgment.",
+    "Provide/import the dedicated Esha Android upload key and verify its certificate fingerprint before a signed Android candidate.",
+    "Configure and verify Play subscription, base plan and trial; complete release declarations and sandbox purchase checks."
+  ],
+  "scope_limit": "A prepared form and available package check do not create an app, reserve/register the package, upload a bundle, activate billing or publish a release."
+}

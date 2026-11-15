@@ -181,8 +181,9 @@ The later inventory independently confirms the expected en-US localization,
 USD 4.99 `UPFRONT` price schedule and `FREE_TRIAL` / `THREE_DAYS` / one-period
 offer starting **2026-11-15**, with no end date. Apple still reports the product
 as **MISSING_METADATA** and returns no subscription review screenshot. The app's
-iPhone/iPad screenshot sets and review contact fields are also absent. Existing
-demo-account fields are present but untested; their values are preserved and
+iPhone/iPad screenshot sets were also absent. Contact fields were absent in that
+historical inventory; the verified contact update below supersedes that result.
+Existing demo-account fields are present but untested; their values are preserved and
 excluded from the receipt. Required owner declarations remain unfinished.
 Price/offer readback does not verify customer purchase behavior or eligibility.
 
@@ -219,6 +220,25 @@ build encryption field remains `null`. This supersedes the earlier inventory's
 empty relationship without changing declarations, contacts, review or
 publication. See the [build-selection guide](README.md#apple-draft-build-selection).
 
+## Separate review-contact update
+
+The manual `esha-apple-review-contact` workflow and
+`prepare_apple_review_contact.py` were published at source
+`2f287d515a041e66c4a9679ba2b62cde21b5cd96`.
+[Job 6afa253f90e83b09c4fabd16](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa253f90e83b09c4fabd16?open-step=build-step-3)
+completed at **21:34:42 UTC** with **10 requests, one PATCH and zero retries**.
+The [contact receipt](../../apps/esha/release/apple-review-contact-updated-20261115.json)
+verifies **Ricardo Bailey / support@korlixdeveloper.com / +16148942317** on the
+existing version 1.0.0 review-details record, with every non-contact attribute
+and the existing demo credentials preserved. Version 1.0.0 remains **Prepare for
+Submission**; reviewer login is untested.
+
+The helper defaults to a GET-only plan; explicit `--apply-draft` fills only empty
+approved contact fields and stops conflicting existing values. It does not
+replace credentials or notes, answer declarations, submit review or publish.
+**18 focused contact tests passed**. This separate operation leaves the listing
+helper's original allowlist unchanged.
+
 ## Fixture validation
 
 ```sh
@@ -229,7 +249,7 @@ The fixtures do not call Apple, load credentials or execute a real CLI. They
 cover identity/state/version/build guards, locale/category selection,
 concurrent edits, strict pagination and URL boundaries, payload allowlists,
 authentication failure without retries, partial progress and idempotent reuse.
-The full release automation checkpoint with pinned CLI 0.69.0 passes **91 offline
+The release automation checkpoint at `8adf46d` with pinned CLI 0.69.0 passed **91 offline
 tests**, including **19 subscription**, **19 inventory** and **15 build-selection**
 tests. Live draft creation is established
 by the separate prepared-draft receipt; the fixtures do not verify customer checkout.

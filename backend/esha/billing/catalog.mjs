@@ -5,6 +5,13 @@ import astra from '../../korlix_astra.cjs';
 // Setting a product-ready flag means an operator has checked the actual store record.
 export const ESHA_BUNDLE = 'com.korlixdeveloper.esha';
 export const ESHA_CATALOG_VERSION = 'esha_monthly_v1';
+export const ESHA_AI_ROLE_POLICY = 'conversation_and_deep_thinking_v1';
+// Prepared owner direction. The conversational name has no verified API ID yet.
+// Do not resolve it to a sibling model or use deep thinking as its fallback.
+export const ESHA_AI_ROLES = Object.freeze({
+  conversation: Object.freeze({requestedModel: 'GPT 2.5 conversational', model: null, reasoningEffort: null}),
+  deep_thinking: Object.freeze({requestedModel: 'Sol 6.1', model: 'gpt-6.1-sol', reasoningEffort: 'high'}),
+});
 export const ESHA_PRODUCT = Object.freeze({
   apple: 'com.korlixdeveloper.esha.monthly', google: 'esha_monthly',
   basePlanId: 'monthly', offerId: 'trial-3-days', billingPeriod: 'P1M',
@@ -38,13 +45,7 @@ export function allowanceConfiguration(env = process.env) {
   const configured = trial !== null && monthly !== null;
   return {configured, trial: configured ? trial : null, monthly: configured ? monthly : null};
 }
-export function nativeAiConfiguration(env = process.env) {
-  // Astra/max stays the default. Selecting the economical option is a separate,
-  // explicit owner decision; merely adding its code must never activate it.
-  const model = env.KORLIX_ESHA_TEXT_MODEL ?? astra.TEXT_MODEL;
-  const reasoningEffort = env.KORLIX_ESHA_REASONING_EFFORT ?? (model === astra.TEXT_MODEL ? astra.TEXT_EFFORT : null);
-  const modelApproved = model === astra.TEXT_MODEL && reasoningEffort === astra.TEXT_EFFORT ||
-    model === 'gpt-6-luna' && reasoningEffort === 'low' && env.KORLIX_ESHA_ECONOMICAL_AI_APPROVED === 'true';
+function modelBudgetConfiguration(env, model, reasoningEffort, modelApproved) {
   const maxInputTokens = positiveInteger(env.KORLIX_ESHA_MAX_INPUT_TOKENS);
   const maxOutputTokens = positiveInteger(env.KORLIX_ESHA_MAX_OUTPUT_TOKENS);
   const trialAttempts = positiveInteger(env.KORLIX_ESHA_TRIAL_PROVIDER_ATTEMPTS);
@@ -56,8 +57,28 @@ export function nativeAiConfiguration(env = process.env) {
     maxOutputTokens: configured ? maxOutputTokens : null,
     trialAttempts: configured ? trialAttempts : null, monthlyAttempts: configured ? monthlyAttempts : null};
 }
-export function nativeAiConfigured(env = process.env) {
-  return allowanceConfiguration(env).configured && nativeAiConfiguration(env).configured && env.KORLIX_ESHA_NATIVE_AI_ENABLED === 'true';
+export function nativeAiConfiguration(env = process.env, {role} = {}) {
+  if (env.KORLIX_ESHA_AI_POLICY !== undefined || role !== undefined) {
+    const selectedRole = role ?? 'conversation';
+    const target = env.KORLIX_ESHA_AI_POLICY === ESHA_AI_ROLE_POLICY && typeof selectedRole === 'string' && Object.hasOwn(ESHA_AI_ROLES, selectedRole)
+      ? ESHA_AI_ROLES[selectedRole] : null;
+    // Single-model overrides cannot silently reinterpret a two-role policy.
+    const conflictingOverride = env.KORLIX_ESHA_TEXT_MODEL !== undefined || env.KORLIX_ESHA_REASONING_EFFORT !== undefined;
+    return {policy: env.KORLIX_ESHA_AI_POLICY ?? null, role: selectedRole,
+      requestedModel: target?.requestedModel ?? null, resolved: !!target?.model,
+      ...modelBudgetConfiguration(env, target?.model ?? null, target?.reasoningEffort ?? null,
+        !!target?.model && !conflictingOverride)};
+  }
+  // Preserve the legacy configuration contract. Luna is historical compatibility,
+  // not the owner's new conversational choice; no shared Astra policy is changed.
+  const model = env.KORLIX_ESHA_TEXT_MODEL ?? astra.TEXT_MODEL;
+  const reasoningEffort = env.KORLIX_ESHA_REASONING_EFFORT ?? (model === astra.TEXT_MODEL ? astra.TEXT_EFFORT : null);
+  const modelApproved = model === astra.TEXT_MODEL && reasoningEffort === astra.TEXT_EFFORT ||
+    model === 'gpt-6-luna' && reasoningEffort === 'low' && env.KORLIX_ESHA_ECONOMICAL_AI_APPROVED === 'true';
+  return modelBudgetConfiguration(env, model, reasoningEffort, modelApproved);
+}
+export function nativeAiConfigured(env = process.env, options) {
+  return allowanceConfiguration(env).configured && nativeAiConfiguration(env, options).configured && env.KORLIX_ESHA_NATIVE_AI_ENABLED === 'true';
 }
 export function publicCatalog(provider, env = process.env, storeReady = false) {
   const product = productFor(provider);

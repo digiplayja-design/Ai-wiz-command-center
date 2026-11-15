@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "status": "review_contact_updated_and_read_back",
+  "mode": "apply_draft",
+  "started_at_utc": "2026-11-15T21:34:39.898789+00:00",
+  "source_commit": "2f287d515a041e66c4a9679ba2b62cde21b5cd96",
+  "apple_app_id": "6835184869",
+  "bundle_id": "com.korlixdeveloper.esha",
+  "sku": "ESHA_IOS_001",
+  "target_version": "1.0.0",
+  "identity_verified": true,
+  "planned_operation": {
+    "method": "PATCH",
+    "path": "/v1/appStoreReviewDetails/47bdb2a6-cafe-4e90-a8d0-8b637aa104e4",
+    "body": {
+      "data": {
+        "type": "appStoreReviewDetails",
+        "id": "47bdb2a6-cafe-4e90-a8d0-8b637aa104e4",
+        "attributes": {
+          "contactFirstName": "Ricardo",
+          "contactLastName": "Bailey",
+          "contactEmail": "support@korlixdeveloper.com",
+          "contactPhone": "+16148942317"
+        }
+      }
+    }
+  },
+  "patch_attempts": 1,
+  "patch_retries": 0,
+  "contact_changed_by_this_run": true,
+  "non_contact_attributes_unchanged": true,
+  "demo_credentials_unchanged": true,
+  "review_submitted": false,
+  "published": false,
+  "initial_observation": {
+    "version_id": "ab8553e4-56d5-40a9-aa7a-8cfb447fca72",
+    "version": "1.0.0",
+    "version_states": [
+      "PREPARE_FOR_SUBMISSION",
+      "PREPARE_FOR_SUBMISSION"
+    ],
+    "review_detail_id": "47bdb2a6-cafe-4e90-a8d0-8b637aa104e4",
+    "contact_field_states": {
+      "contactFirstName": "empty",
+      "contactLastName": "empty",
+      "contactEmail": "empty",
+      "contactPhone": "empty"
+    },
+    "demo_account_name_present": true,
+    "demo_account_password_present": true,
+    "review_notes_present": false
+  },
+  "intent": {
+    "recorded_at_utc": "2026-11-15T21:34:40.982689+00:00",
+    "observation_before_patch": {
+      "version_id": "ab8553e4-56d5-40a9-aa7a-8cfb447fca72",
+      "version": "1.0.0",
+      "version_states": [
+        "PREPARE_FOR_SUBMISSION",
+        "PREPARE_FOR_SUBMISSION"
+      ],
+      "review_detail_id": "47bdb2a6-cafe-4e90-a8d0-8b637aa104e4",
+      "contact_field_states": {
+        "contactFirstName": "empty",
+        "contactLastName": "empty",
+        "contactEmail": "empty",
+        "contactPhone": "empty"
+      },
+      "demo_account_name_present": true,
+      "demo_account_password_present": true,
+      "review_notes_present": false
+    },
+    "operation": {
+      "method": "PATCH",
+      "path": "/v1/appStoreReviewDetails/47bdb2a6-cafe-4e90-a8d0-8b637aa104e4",
+      "body": {
+        "data": {
+          "type": "appStoreReviewDetails",
+          "id": "47bdb2a6-cafe-4e90-a8d0-8b637aa104e4",
+          "attributes": {
+            "contactFirstName": "Ricardo",
+            "contactLastName": "Bailey",
+            "contactEmail": "support@korlixdeveloper.com",
+            "contactPhone": "+16148942317"
+          }
+        }
+      }
+    },
+    "outcome": "approved_contact_and_preserved_attributes_verified"
+  },
+  "final_observation": {
+    "version_id": "ab8553e4-56d5-40a9-aa7a-8cfb447fca72",
+    "version": "1.0.0",
+    "version_states": [
+      "PREPARE_FOR_SUBMISSION",
+      "PREPARE_FOR_SUBMISSION"
+    ],
+    "review_detail_id": "47bdb2a6-cafe-4e90-a8d0-8b637aa104e4",
+    "contact_field_states": {
+      "contactFirstName": "approved",
+      "contactLastName": "approved",
+      "contactEmail": "approved",
+      "contactPhone": "approved"
+    },
+    "demo_account_name_present": true,
+    "demo_account_password_present": true,
+    "review_notes_present": false
+  },
+  "request_count": 10,
+  "completed_at_utc": "2026-11-15T21:34:42.709418+00:00"
+}

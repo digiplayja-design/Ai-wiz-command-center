@@ -464,6 +464,14 @@ test('attempt authorization cannot cross accounts or alter a reserved question o
   assert.equal((await db.query('select used from korlix_esha_provider_budgets')).rows[0].used, 1);
 });
 
+test('prepared Sol cannot pass the existing ledger model guard or consume an attempt before its follow-up migration', async () => {
+  await call(owner, 'apply', facts()); await call(owner, 'reserve', storedRequest);
+  await assert.rejects(call(owner, 'begin_provider_attempt', attemptData({model: 'gpt-6.1-sol', reasoning_effort: 'high',
+    max_output_tokens: 4096})), {code: 'provider_budget_unconfigured'});
+  assert.equal((await db.query('select count(*)::int count from korlix_esha_provider_attempts')).rows[0].count, 0);
+  assert.equal((await db.query('select count(*)::int count from korlix_esha_provider_budgets')).rows[0].count, 0);
+});
+
 test('the new migration conservatively preserves pre-existing period spending instead of granting a fresh cap', async () => {
   const legacy = new PGlite();
   try {

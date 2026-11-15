@@ -1,35 +1,73 @@
-# Esha AI option — prepared, inactive
+# Esha AI model policy — prepared, inactive
 
-The existing default remains **GPT-6 Astra with max reasoning**. The economical
-option is implemented for review but has not been approved or activated. No
-production environment was changed, no commercial allowance was chosen, no
-migration was applied to a service, and no live model call was made during this
-preparation.
+The owner's current direction is **“GPT 2.5 conversational and Sol 6.1 for deep
+thinking.”** This supersedes the previous inactive Luna proposal. The Sol portion
+is prepared below; the exact conversational API model remains unresolved. The
+previous 10-trial/120-monthly consultation proposal was not approved. No commercial
+allowance or input/output/attempt budget is selected or defaulted by this change.
+No production environment was changed, no deployment or migration was applied,
+and no live model call was made during this preparation.
 
-The candidate owner decision is:
+## Prepared roles
 
-| Setting | Inactive proposal | Environment variable |
+| Role | Requested model | Prepared API configuration |
 | --- | --- | --- |
-| Model | `gpt-6-luna` | `KORLIX_ESHA_TEXT_MODEL` |
-| Reasoning | `low` | `KORLIX_ESHA_REASONING_EFFORT` |
-| Total request input | 8,192 actual tokens | `KORLIX_ESHA_MAX_INPUT_TOKENS` |
-| Total generated output, including reasoning | 4,096 tokens | `KORLIX_ESHA_MAX_OUTPUT_TOKENS` |
-| Successful consultations during a verified trial | 10 | `KORLIX_ESHA_TRIAL_CONSULTATIONS` |
-| Successful consultations per verified monthly period | 120 | `KORLIX_ESHA_MONTHLY_CONSULTATIONS` |
-| Provider generation attempts during a verified trial | 20 | `KORLIX_ESHA_TRIAL_PROVIDER_ATTEMPTS` |
-| Provider generation attempts per verified monthly period | 240 | `KORLIX_ESHA_MONTHLY_PROVIDER_ATTEMPTS` |
+| `conversation` | GPT 2.5 conversational | Unresolved: `model: null`, `reasoningEffort: null`; fails closed |
+| `deep_thinking` | Sol 6.1 | `gpt-6.1-sol`, explicit `reasoning.effort: high` |
 
-These numbers are **not defaults**. The Luna branch additionally requires
-`KORLIX_ESHA_ECONOMICAL_AI_APPROVED` to be explicitly set to `true`. Existing
-`KORLIX_ESHA_NATIVE_AI_ENABLED` and the store billing/product readiness gates
-still apply. Selecting an unknown model, another effort, missing limits, or
-unapproved Luna configuration fails closed. There is no automatic model fallback.
+[GPT-6.1 Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol) supports
+the Responses API and Structured Outputs. Its documented reasoning efforts are
+`low`, `medium`, `high`, `xhigh`, and `max`; `none` is unsupported. The prepared
+deep-thinking role pins `high`. It does not replace Sol with Astra, choose another
+conversational model, or enable a Realtime/audio integration. The current official
+[model catalog](https://developers.openai.com/api/docs/models/all) did not resolve
+“GPT 2.5 conversational” or `gpt-realtime-2.5`; that identity needs clarification.
 
-The Astra default also requires explicit input/output/attempt limits before new
-Esha generation can be enabled. It retains the shared Astra/max policy and its
-32,768 minimum output budget. `backend/korlix_astra.cjs` and all other apps are
-unchanged. Unconfigured AI keeps new Esha checkout unavailable; existing purchases
-can still be restored and verified.
+`KORLIX_ESHA_AI_POLICY=conversation_and_deep_thinking_v1` selects this explicit
+prepared policy. `nativeAiConfiguration(environment, {role: 'deep_thinking'})`
+and `createEshaAi({environment, role: 'deep_thinking'})` prepare the Sol request
+and transport. A role must be an exact string supplied by trusted server routing.
+Omitting a role selects the unresolved conversation role and fails closed, even
+if all activation flags and budgets happen to be present. Unknown policies/roles
+and mixed legacy `KORLIX_ESHA_TEXT_MODEL` or `KORLIX_ESHA_REASONING_EFFORT`
+overrides also fail closed. A client's `role`, `mode`, or `model` field cannot
+select this adapter through the current consultation endpoint.
+
+**This is not a completed, activatable two-role integration.** The shipping route
+has no server role selection and remains disabled under the prepared policy. The
+existing provider-attempt table constraint and debit RPC permit only Astra/max or
+Luna/low, so they reject Sol/high before recording a debit. Both guards are
+unchanged. A follow-up ledger migration and trusted role routing are required;
+the adapter must never be used to bypass the committed debit.
+
+## Explicit limits and legacy compatibility
+
+All of these settings remain required; no values are chosen here:
+
+| Setting | Environment variable |
+| --- | --- |
+| Total counted request input | `KORLIX_ESHA_MAX_INPUT_TOKENS` |
+| Total generated output, including reasoning | `KORLIX_ESHA_MAX_OUTPUT_TOKENS` |
+| Successful consultations during a verified trial | `KORLIX_ESHA_TRIAL_CONSULTATIONS` |
+| Successful consultations per verified monthly period | `KORLIX_ESHA_MONTHLY_CONSULTATIONS` |
+| Provider generation attempts during a verified trial | `KORLIX_ESHA_TRIAL_PROVIDER_ATTEMPTS` |
+| Provider generation attempts per verified monthly period | `KORLIX_ESHA_MONTHLY_PROVIDER_ATTEMPTS` |
+
+Sol input is capped at no more than its documented 922,000 maximum input tokens;
+output cannot exceed 128,000 tokens. The inherited minimum valid non-Astra output
+cap is 256 tokens, not a recommendation for a usable high-reasoning answer.
+Selected production limits must be explicit and evaluated with the actual task.
+`KORLIX_ESHA_NATIVE_AI_ENABLED`, allowance, billing, provider and store-product
+readiness gates continue to apply. This preparation sets none of them.
+
+With no role policy selected and no server role supplied, the prior single-model
+contract remains compatible: Astra/max is the default; legacy Luna/low still
+requires `KORLIX_ESHA_ECONOMICAL_AI_APPROVED=true`. Legacy Luna support is not
+the current owner choice. Setting Sol in the old single-model variable fails
+closed rather than relabeling every conversation as deep thinking. Astra retains
+its existing 32,768 minimum output budget and shared max-reasoning policy.
+`backend/korlix_astra.cjs` and other apps are unchanged. Unconfigured AI keeps
+new Esha checkout unavailable; existing purchases remain restorable/verifiable.
 
 ## Enforcement
 
@@ -44,7 +82,7 @@ oversized request blocks generation and returns the successful-consultation hold
 The documented output cap covers the total generated output, including reasoning;
 it is not only a visible-answer length limit.
 
-The new Esha-only migration adds a provider budget per verified store billing
+The existing prepared Esha-only migration adds a provider budget per verified store billing
 period and an append-only provider-attempt ledger. Its RPC uses the same account
 row lock as the existing successful-consultation ledger and receipt/refund logic.
 It rechecks the reserved UUID, account ownership, active current period, expiry,
@@ -76,26 +114,46 @@ execution are restricted to `service_role`; the RPC is security-invoker with an
 empty search path. The ledger stores hashes, model/budget metadata and counts,
 without copying questions or answers. Account deletion cascades to these records.
 
-## Before activation
+## Required integration before activation
 
-An owner must choose and approve the model/allowances, review the proposed cost
-and quality tradeoff, apply the new migration, and explicitly configure the
-limits. Keep Esha generation disabled until every serving worker uses the new
-code and the new migration is present; an older worker has no provider-attempt
-guard. This file does not authorize those actions. Store prices, the three-day
-trial and the whole-app membership boundary are unchanged.
+1. Resolve the exact conversational API model and define when the trusted server
+   chooses conversation versus deep thinking. Sol 6.1 is already the chosen
+   deep-thinking model; this is not a request to approve that identity again.
+2. Choose the still-unapproved commercial allowances and explicit input/output
+   and provider-attempt limits. No previous proposal or test fixture supplies
+   owner approval for those values.
+3. Prepare and verify a narrowly scoped follow-up migration admitting Sol/high
+   in the provider-attempt table and debit RPC while preserving all account,
+   period, expiry, verification, idempotency, cap and irreversible-debit guards.
+4. Integrate trusted role selection into the consultation route without losing
+   input-token counting, reservation, debit-before-generation, replay and result
+   validation. Any native mode control or Realtime feature is separate work.
+
+Keep Esha generation disabled until the complete selected policy, limits,
+compatible serving code and database guards are ready. An older worker has no
+provider-attempt guard. This file does not authorize deployment, activation or
+database changes. Store price, three-day trial and whole-app membership are
+unchanged.
 
 Offline tests use the real SQL in PGlite and mocked provider calls:
 
 ```sh
 cd backend
-node --test test/esha_ai_budget.test.mjs test/esha_native_billing.test.mjs
+node --test test/esha_sol_preparation.test.mjs test/esha_ai_budget.test.mjs test/esha_native_billing.test.mjs
 ```
 
-They cover request counting parity, disabled configuration, retry suppression,
+They cover Sol/high request preparation, an unresolved conversational role,
+exact trusted role selection, unchanged legacy behavior, strict output format,
+count/generation context parity, real SDK retry suppression, and the shipping
+route's refusal to run a client-selected role. The real SQL also verifies that
+Sol remains blocked by the current ledger model guard without consuming a debit.
+Existing ledger tests cover disabled configuration, retry suppression,
 per-period limits, concurrent debit requests, replay, ambiguous failures, timeouts,
 invalid output, refund races, cross-account access, RLS/RPC permissions and legacy
 migration behavior. PGlite serializes its local connection; the real PostgreSQL
 RPC's account row lock is the cross-worker serialization boundary.
 
-Official model reference: [GPT-6 Luna](https://developers.openai.com/api/docs/models/gpt-6-luna).
+All numeric fixture values are test data, not production settings or approved
+allowances. Official references: [GPT-6.1 Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol),
+[GPT-6 compatibility](https://developers.openai.com/api/docs/guides/latest-model?model=gpt-6.1-sol),
+and [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs).

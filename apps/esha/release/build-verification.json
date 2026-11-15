@@ -31,7 +31,7 @@
     },
     "review_credentials_tested": false,
     "age_rating_observation": "Content answer fields were null; optional override values were NONE. No age-rating attestation or completeness inference is made.",
-    "scope_limit": "Post-subscription/pre-selection observation. Its empty selected-build relationship is superseded only by apple_draft_build_selection; remaining questionnaire/screenshot/contact observations still apply.",
+    "scope_limit": "Historical post-subscription/pre-selection/pre-contact observation. Its empty selected-build relationship is superseded by apple_draft_build_selection and its missing contact fields by apple_review_contact. Screenshot, questionnaire and untested reviewer-login observations are not changed by those actions.",
     "subscription_state": "MISSING_METADATA",
     "subscription_review_screenshot_status": "no_related_resource_returned",
     "codemagic_build_id": "6afa1f8d90e83b09c4fabb26",
@@ -111,36 +111,14 @@
     }
   },
   "latest_cross_platform_native_validation": {
-    "source_commit": "bf4ff498e3aa71eea07d4052d8789cd37ddba7c0",
-    "workflow_run_id": 43754059868,
-    "workflow_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43754059868",
+    "source_commit": "afce6caf8499b211fbd980295be6589034798ef2",
+    "workflow_run_id": 43762836653,
+    "workflow_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43762836653",
     "workflow_conclusion": "success",
-    "workflow_completed_at_utc": "2026-11-15T19:51:18Z",
-    "application_id": "com.korlixdeveloper.esha",
-    "flutter_version": "3.47.9",
-    "flutter_tests_passed": 49,
-    "flutter_analysis": "no_issues",
-    "artifact_classifications": [
-      "android_debug_test_only",
-      "android_unsigned_release",
-      "ios_simulator_only"
-    ],
-    "signed_store_candidate_verified": false,
-    "scope": "Successful Android and iOS Simulator membership validation, separate from the later signed device upload.",
-    "cloud_log_evidence_file": "membership-build-bf4ff49-20261115.json",
-    "cloud_log_evidence_method": "GitHub connector run/job/artifact metadata and the verifier JSON printed in successful cloud job logs; exact-commit verifier/build source inspected. No artifact binaries or archive manifest downloaded, and no local binary rehash performed.",
-    "independent_download_rehash_evidence": {
-      "file": "history/build-verification-pre-apple-4f678d9-20261115.json",
-      "json_sections": [
-        "artifacts",
-        "cloud_artifact_archives",
-        "latest_native_source_validation"
-      ],
-      "verified_artifact_count_recorded": 3,
-      "verified_archive_count_recorded": 2,
-      "artifact_bytes_rehashed_by_this_consolidation": false,
-      "scope": "Preserves the feature checkpoint independently downloaded/rehashed APK, AAB and Simulator ZIP evidence; the earlier cloud-log-only receipt remains unchanged."
-    }
+    "workflow_completed_at_utc": "2026-11-15T21:25:11Z",
+    "observation_method": "Coordinating agent GitHub API readback of workflow status and source commit.",
+    "artifact_bytes_rehashed_by_this_update": false,
+    "scope": "Workflow-level success only. No per-job test count, downloaded artifact hash or signed store upload is inferred. The earlier bf4ff49 independently rehashed artifact checkpoint is preserved in earlier_cross_platform_native_validation."
   },
   "source_equivalence": {
     "validated_commit": "bf4ff498e3aa71eea07d4052d8789cd37ddba7c0",
@@ -194,8 +172,11 @@
     }
   ],
   "remaining_release_work": [
-    "Verify the newly prepared Apple subscription offer with a real sandbox purchase/restore; backend allowances and AI configuration still require the owner choice.",
-    "Capture genuine native iPhone/iPad feature screenshots and a subscription review screenshot after sandbox entitlement verification; complete review contact details/declarations and test reviewer access.",
+    "Verify the prepared Apple subscription with real sandbox purchase/restore and reviewer access. The approved review contact is complete; preserved demo credentials have not been tested.",
+    "Capture genuine native iPhone/iPad feature screenshots and a subscription review screenshot; complete required owner declarations and agreements before submission.",
+    "Obtain action-time acknowledgment of the Google Developer Program Policies and US export compliance/encryption declaration, then create and verify the prepared Esha Play app record.",
+    "Provide/import the dedicated Esha Android upload key, verify its certificate fingerprint, and complete Play subscription/base-plan/trial and signed-release setup.",
+    "Resolve the exact conversational API model and choose still-unapproved commercial allowances and input/output/attempt limits. Sol 6.1 is confirmed for deep thinking; no 10/120 allowance approval exists.",
     "Verify purchase/restore and same-account entitlement behavior before activation; the live catalog remains planned with purchases and consultations disabled.",
     "Assemble the app version, subscription and group in the same review submission only after remaining readiness work; build 2 is already selected on the editable app version.",
     "Refresh prelaunch wording on the active member Discover screen when checkout is enabled; its current text still describes membership as being prepared."
@@ -347,5 +328,92 @@
     "contact_details_changed": false,
     "review_submitted": false,
     "published": false
+  },
+  "earlier_cross_platform_native_validation": {
+    "source_commit": "bf4ff498e3aa71eea07d4052d8789cd37ddba7c0",
+    "workflow_run_id": 43754059868,
+    "workflow_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43754059868",
+    "workflow_conclusion": "success",
+    "workflow_completed_at_utc": "2026-11-15T19:51:18Z",
+    "application_id": "com.korlixdeveloper.esha",
+    "flutter_version": "3.47.9",
+    "flutter_tests_passed": 49,
+    "flutter_analysis": "no_issues",
+    "artifact_classifications": [
+      "android_debug_test_only",
+      "android_unsigned_release",
+      "ios_simulator_only"
+    ],
+    "signed_store_candidate_verified": false,
+    "scope": "Successful Android and iOS Simulator membership validation, separate from the later signed device upload.",
+    "cloud_log_evidence_file": "membership-build-bf4ff49-20261115.json",
+    "cloud_log_evidence_method": "GitHub connector run/job/artifact metadata and the verifier JSON printed in successful cloud job logs; exact-commit verifier/build source inspected. No artifact binaries or archive manifest downloaded, and no local binary rehash performed.",
+    "independent_download_rehash_evidence": {
+      "file": "history/build-verification-pre-apple-4f678d9-20261115.json",
+      "json_sections": [
+        "artifacts",
+        "cloud_artifact_archives",
+        "latest_native_source_validation"
+      ],
+      "verified_artifact_count_recorded": 3,
+      "verified_archive_count_recorded": 2,
+      "artifact_bytes_rehashed_by_this_consolidation": false,
+      "scope": "Preserves the feature checkpoint independently downloaded/rehashed APK, AAB and Simulator ZIP evidence; the earlier cloud-log-only receipt remains unchanged."
+    }
+  },
+  "apple_review_contact": {
+    "evidence_file": "apple-review-contact-updated-20261115.json",
+    "source_commit": "2f287d515a041e66c4a9679ba2b62cde21b5cd96",
+    "status": "review_contact_updated_and_read_back",
+    "completed_at_utc": "2026-11-15T21:34:42.709418+00:00",
+    "codemagic_build_id": "6afa253f90e83b09c4fabd16",
+    "codemagic_build_url": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa253f90e83b09c4fabd16?open-step=build-step-3",
+    "version_id": "ab8553e4-56d5-40a9-aa7a-8cfb447fca72",
+    "version": "1.0.0",
+    "version_state": "PREPARE_FOR_SUBMISSION",
+    "review_detail_id": "47bdb2a6-cafe-4e90-a8d0-8b637aa104e4",
+    "approved_contact_fields_verified": true,
+    "contact_field_states": {
+      "contactFirstName": "approved",
+      "contactLastName": "approved",
+      "contactEmail": "approved",
+      "contactPhone": "approved"
+    },
+    "request_count": 10,
+    "patch_attempts": 1,
+    "patch_retries": 0,
+    "non_contact_attributes_unchanged": true,
+    "demo_credentials_unchanged": true,
+    "review_credentials_tested": false,
+    "review_submitted": false,
+    "published": false,
+    "offline_contact_tests_passed": 18,
+    "scope": "Supersedes historical empty contact-field observations only; preserves demo credentials/notes and does not establish reviewer login, declarations, submission or release."
+  },
+  "google_play_app_preparation": {
+    "evidence_file": "google-play-app-preparation-20261115.json",
+    "status": "form_prepared_creation_not_submitted",
+    "developer_id": "4772708594176030332",
+    "organization": "KORLIX",
+    "sign_in_verified": true,
+    "esha_search_result": "No results found",
+    "package_availability_check": "available",
+    "create_app_submitted": false,
+    "app_record_created": false,
+    "required_declarations_accepted": false,
+    "action_time_user_acknowledgment_required": true,
+    "dedicated_android_upload_key_present": false
+  },
+  "current_owner_ai_direction": {
+    "conversation_requested_literal": "GPT 2.5 conversational",
+    "conversation_api_identifier": null,
+    "conversation_resolution": "unresolved",
+    "deep_thinking_model_confirmed": "gpt-6.1-sol",
+    "prior_10_trial_120_monthly_allowance_approved": false,
+    "commercial_allowances_selected": false,
+    "activation_authorized_by_this_record": false,
+    "preparation_document": "backend/esha/billing/AI_OPTION.md",
+    "targeted_offline_sol_backend_tests_passed": 50,
+    "scope": "Current owner direction and inactive preparation test result. Historical native_ai_preparation facts remain intact; no deployment, migration, activation or numeric allowance is established."
   }
 }

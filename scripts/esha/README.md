@@ -3,8 +3,9 @@
 These scripts operate only on `apps/esha`, with the separate Android package and
 iOS bundle identifier `com.korlixdeveloper.esha`. The exact Apple app record,
 signing identity and dedicated Esha App Store profile have now been verified.
-Two signed iPhone IPAs have been verified and uploaded to Apple. The Google Play
-record and signed Play upload remain unverified.
+Two signed iPhone IPAs have been verified and uploaded to Apple. Google Play
+access is verified and Esha's creation form is prepared; its required declaration
+acknowledgments, app creation and signed Play upload remain incomplete.
 
 ## Verified Apple setup — November 15, 2026
 
@@ -81,6 +82,13 @@ manual dispatch. It uses read-only repository permission and no signing or store
 credentials. The Linux job analyzes and tests the app, then compiles Android.
 The macOS job independently compiles iOS for the simulator.
 
+[GitHub run 43762836653](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43762836653)
+at source `afce6caf8499b211fbd980295be6589034798ef2` completed successfully at
+**21:25:11 UTC on November 15**, confirmed by GitHub API readback. This records
+workflow-level success; it does not assign earlier artifact hashes or test counts
+to this newer source. The [release evidence index](../../apps/esha/release/build-verification.json)
+preserves the earlier independently rehashed `bf4ff49` artifacts separately.
+
 | Artifact | Purpose | Signing status |
 | --- | --- | --- |
 | `Esha-debug.apk` | Install on an Android test device | Debug test signature; not a Play release |
@@ -116,11 +124,10 @@ The [Android signing prerequisite receipt](../../apps/esha/release/android-signi
 records the live Codemagic keystore check at **21:07:44 UTC on November 15**:
 **`ESHA_ANDROID_UPLOAD_KEY` was absent**, with only two other product keystores
 visible. No Esha key was created/imported and no signed Android build was
-started. The public fingerprint variable's value was not inspected. Google
-Play access also remains unverified: automatic approval review rejected the
-redirect from `play.google.com` to `google.play/business/` as a mismatched or
-untrusted origin. The receipt records that block without claiming a Play app
-record or registered upload key.
+started. The public fingerprint variable's value was not inspected. That receipt
+also records an earlier Google redirect approval-review block; the later
+user-approved sign-in below supersedes that access block, while the Esha upload
+key remains missing.
 
 Before starting it, configure the existing Codemagic app with an upload identity
 specifically designated for Esha under reference **`ESHA_ANDROID_UPLOAD_KEY`**.
@@ -142,6 +149,23 @@ verifies without unsigned entries, and its public signing certificate matches
 the approved fingerprint and has not expired. This workflow creates an artifact
 for review. It does not configure Play App Signing, create a Play application,
 or upload to a Google Play track.
+
+## Google Play app preparation
+
+After the user approved the exact redirect, sign-in succeeded to the **KORLIX**
+organization, developer **4772708594176030332**. Its home listed six other apps;
+an explicit Esha search returned **No results found**. The
+[prepared-app receipt](../../apps/esha/release/google-play-app-preparation-20261115.json)
+records the [creation form](https://play.google.com/console/u/0/developers/4772708594176030332/create-new-app):
+**Esha by Korlix**, package **`com.korlixdeveloper.esha`** checked available,
+default language **en-US**, **App**, **Free** download.
+
+Neither required declaration is checked, and **Create app was not submitted**.
+The remaining action-time acknowledgment covers **Developer Program Policies**
+and the **US export compliance/encryption declaration**. A prepared form and
+availability check do not create an app or register its package. The prior
+Android signing receipt still establishes that **`ESHA_ANDROID_UPLOAD_KEY` is
+missing**; no Esha key was imported or signed Android candidate started.
 
 ## Manual iOS profile setup
 
@@ -295,8 +319,8 @@ The **20:56:56 UTC** inventory linked above found version **1.0.0** in
 **Prepare for Submission**, no selected build, no native screenshot sets and
 no subscription groups. Demo-account credential fields were present, while
 review contact fields were absent. Presence does not verify that reviewer login
-works. Preserve the existing credentials while completing the missing contact
-information and testing reviewer access.
+works. Those contact observations are historical: the successful review-contact
+update below supersedes them. Reviewer access still needs testing.
 
 The subsequent
 [post-subscription inventory](../../apps/esha/release/apple-inventory-after-subscription-20261115.json)
@@ -386,6 +410,27 @@ contacts, submit review or publish the app. If Apple rejects the association
 for a compliance requirement, it records the rejection and stops; no declaration
 is supplied automatically. Selecting a build does not activate billing or AI
 or complete the release checks below.
+
+## Apple review contact
+
+Source `2f287d515a041e66c4a9679ba2b62cde21b5cd96` publishes
+`prepare_apple_review_contact.py` and manual `esha-apple-review-contact`.
+[Job 6afa253f90e83b09c4fabd16](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa253f90e83b09c4fabd16?open-step=build-step-3)
+completed at **21:34:42 UTC**. The
+[verified contact receipt](../../apps/esha/release/apple-review-contact-updated-20261115.json)
+records **10 requests, one PATCH and zero retries**, with all four approved
+contact fields read back: **Ricardo Bailey**, **support@korlixdeveloper.com**,
+**+16148942317**. Version **1.0.0** remains **Prepare for Submission**.
+
+The default CLI invocation is GET-only. The manual workflow uses `--apply-draft`
+to fill only empty approved contact fields on the existing Esha review-details
+record; conflicting nonempty contact values stop it. The helper compares every
+non-contact attribute privately before and after the write. The successful
+receipt verifies that existing demo credentials and notes were preserved; their
+values are not exported. It does not test login, answer declarations, submit
+review or publish. **18 focused contact tests passed**, separately from the
+earlier 91-test release checkpoint. Its artifact is
+`apps/esha/artifacts/apple-review-contact/Esha-Apple-review-contact-verification.json`.
 
 ## Apple subscription draft
 
@@ -483,7 +528,7 @@ backend activation or AI activation operations**. It does not select a build
 or change store declarations. A prepared subscription draft still requires the
 release checks below.
 
-The full release automation suite with pinned CLI 0.69.0 passes **91 offline
+The release automation checkpoint at `8adf46d` with pinned CLI 0.69.0 passed **91 offline
 tests**, including **19 subscription**, **19 inventory** and **15 build-selection**
 tests. These validate guarded behavior and
 API request shapes. The separate prepared-draft receipt establishes live draft
@@ -514,11 +559,19 @@ gates remain blockers to customer checkout and consultations even though the
 policy pages, Apple signing setup and draft listing are complete.
 
 Apple's subscription product remains **MISSING_METADATA**. The subscription
-review screenshot, iPhone/iPad app screenshots, review contact fields and
-required owner declarations remain unfinished. **Build 2 is selected and read
+review screenshot, iPhone/iPad app screenshots and required owner declarations
+remain unfinished. **Review contact details are complete and verified**;
+reviewer login remains untested. **Build 2 is selected and read
 back for version 1.0.0**, which remains **Prepare for Submission**. Existing demo credentials must be preserved while reviewer
 access is tested. Agreement status and real-device StoreKit checks remain
 unverified even though both uploaded builds have processed successfully.
+
+The owner's current AI direction is literal **“GPT 2.5 conversational”**, whose
+API identity remains unresolved, and confirmed **`gpt-6.1-sol`** for deep
+thinking. The previous **10-trial / 120-monthly** consultation proposal was not
+approved. No allowances or activation are selected here. See the separately
+maintained [inactive AI preparation](../../backend/esha/billing/AI_OPTION.md);
+its targeted Sol/backend checks passed **50 tests** without activating service.
 
 ## Implementation references
 

@@ -3,7 +3,10 @@ import astra from '../../korlix_astra.cjs';
 import {fail, nativeAiConfiguration, nativeAiConfigured} from './catalog.mjs';
 
 export function eshaResponseRequest(configuration, prompt, textFormat) {
-  if (!configuration.configured) fail('Esha consultations are being configured.', 503, 'native_ai_not_configured');
+  if (!configuration.configured || configuration.role === 'deep_thinking' &&
+      (textFormat?.type !== 'json_schema' || textFormat.strict !== true)) {
+    fail('Esha consultations are being configured.', 503, 'native_ai_not_configured');
+  }
   return {model: configuration.model, reasoning: {effort: configuration.reasoningEffort},
     instructions: prompt.instructions, input: prompt.input, text: {format: textFormat},
     truncation: 'disabled', max_output_tokens: configuration.maxOutputTokens, store: false};
@@ -13,11 +16,16 @@ export function eshaResponseRequest(configuration, prompt, textFormat) {
 // https://developers.openai.com/api/docs/guides/token-counting
 // Count all context-bearing fields, including the server catalog and JSON schema.
 // max_output_tokens/store are creation-only fields and do not add input context.
-export function createEshaAi({environment = process.env, clientFactory = options => new OpenAI(options)} = {}) {
+// A role is chosen only by trusted server routing, never by a client request body.
+// The shipping route supplies no role, so the prepared two-role policy remains
+// blocked on its unresolved conversation target. This adapter does not replace
+// the route's committed provider-attempt debit or its membership/allowance checks.
+export function createEshaAi({environment = process.env, role, clientFactory = options => new OpenAI(options)} = {}) {
   function check(request) {
-    const config = nativeAiConfiguration(environment);
-    if (!nativeAiConfigured(environment) || request.model !== config.model || request.reasoning?.effort !== config.reasoningEffort ||
-        request.max_output_tokens !== config.maxOutputTokens || request.store !== false || request.truncation !== 'disabled') {
+    const config = nativeAiConfiguration(environment, {role});
+    if (!nativeAiConfigured(environment, {role}) || request.model !== config.model || request.reasoning?.effort !== config.reasoningEffort ||
+        request.max_output_tokens !== config.maxOutputTokens || request.store !== false || request.truncation !== 'disabled' ||
+        config.role === 'deep_thinking' && (request.text?.format?.type !== 'json_schema' || request.text.format.strict !== true)) {
       fail('Esha consultations are being configured.', 503, 'native_ai_not_configured');
     }
   }
@@ -38,8 +46,8 @@ export function createEshaAi({environment = process.env, clientFactory = options
     async generate(request, {signal} = {}) {
       check(request);
       const api = client(180000), options = {signal, timeout: 180000, maxRetries: 0};
-      // Keep the existing Astra/max behavior exactly; the explicitly approved
-      // Luna branch has no escalation, fallback, repair request or hidden retry.
+      // Keep shared Astra/max behavior exactly. Esha's other explicit models
+      // have no escalation, fallback, repair request or hidden retry.
       if (request.model === astra.TEXT_MODEL) return astra.createTextResponse(api, request, options);
       const response = await api.responses.create(request, options);
       if (response?.status !== 'completed') fail('Esha could not complete this consultation. Please try again.', 502, 'invalid_ai_response');
