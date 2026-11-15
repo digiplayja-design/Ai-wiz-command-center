@@ -1,5 +1,7 @@
 import {brainRuntimeContext} from './brain_voice/context.mjs';
 import {createBrainBilling} from './brain_voice/billing/routes.mjs';
+import {createEshaBilling} from './esha/billing/routes.mjs';
+import {registerEshaPolicyRoutes} from './esha/policies.mjs';
 import {checkBrainModelAccess} from './brain_voice/model_access.mjs';
 import {createBrainVoice, brainSpeechConfig, isBrainVoice, brainProfile, BRAIN_PROFILES, BRAIN_MODEL, BRAIN_EFFORT, BRAIN_PROTOCOL} from './brain_voice/core.mjs';
 import {streamBrainTurn} from './brain_voice/stream.mjs';
@@ -271,6 +273,7 @@ async function korlixSendSupportReport(payload) {
 const port = process.env.PORT || 8787;
 
 app.use(cors());
+registerEshaPolicyRoutes(app);
 app.use('/api/onboarding/events', express.json({limit: '8kb'}));
 app.use('/api/brain-projection', express.json({limit: '8kb'}));
 app.use(express.json({
@@ -351,6 +354,17 @@ registerAutoEmailMailboxRoutes(app,{requireUser,database:supabaseAdmin});
 const automatedSupport = createAutomatedSupportRuntime({app,requireUser,database:supabaseAdmin});
 const brainBilling = createBrainBilling({database:supabaseAdmin,requireUser});
 brainBilling.register(app);
+const eshaBilling = createEshaBilling({
+  database: supabaseAdmin,
+  requireUser,
+  generate: async ({instructions, input, maxOutputTokens, textFormat, signal}) =>
+    createTextResponse(
+      new OpenAI({apiKey:process.env.OPENAI_API_KEY, maxRetries:0, timeout:180000}),
+      {instructions, input, max_output_tokens:maxOutputTokens, text:{format:textFormat}, store:false},
+      {signal, timeout:180000, maxRetries:0},
+    ),
+});
+eshaBilling.register(app);
 registerAutoEmailOutboxRoutes(app,{requireUser,database:supabaseAdmin,loadAgentProfile:korlixAgentLoadProfileV1});
 
 const videoAccess = createVideoAccess({database:supabaseAdmin});
@@ -899,7 +913,7 @@ function getRequestDeviceInfo(req) {
     platform,
     explicitDeviceId: Boolean(rawDeviceId),
     clientApp: requestsReceiptApp(req)
-      ? (['auto_email', 'korlix_messenger', 'magic_camera'].find(app => req.body?.client_app === app || req.headers?.['x-korlix-app'] === app) || 'receipt_wiz') : 'korlix_ai',
+      ? (['auto_email', 'korlix_messenger', 'magic_camera', 'esha_by_korlix'].find(app => req.body?.client_app === app || req.headers?.['x-korlix-app'] === app) || 'receipt_wiz') : 'korlix_ai',
   };
 }
 
@@ -943,7 +957,7 @@ async function registerDeviceSession({
   session,
 }) {
   assertAccountEnabled(profile);
-  if (['receipt_wiz', 'korlix_messenger', 'auto_email', 'magic_camera'].includes(deviceInfo.clientApp)) {
+  if (['receipt_wiz', 'korlix_messenger', 'auto_email', 'magic_camera', 'esha_by_korlix'].includes(deviceInfo.clientApp)) {
     return receiptAppSessions.register({userId, session, deviceInfo});
   }
   if (!supabaseAdmin) {

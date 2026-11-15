@@ -1,0 +1,94 @@
+name: Esha native validation
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'apps/esha/**'
+      - 'scripts/esha/**'
+      - '.github/workflows/esha-native.yml'
+      - 'codemagic.yaml'
+  pull_request:
+    paths:
+      - 'apps/esha/**'
+      - 'scripts/esha/**'
+      - '.github/workflows/esha-native.yml'
+      - 'codemagic.yaml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: esha-native-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: '3.47.9'
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
+  CI: 'true'
+
+jobs:
+  android:
+    name: Analyze, test, and compile Android
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out Esha source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Set up the pinned Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - name: Validate Esha source and behavior
+        run: bash scripts/esha/validate.sh
+      - name: Compile debug APK and unsigned release AAB
+        run: bash scripts/esha/build_android.sh unsigned
+      - name: Save verified Android test artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Esha-Android-debug-and-unsigned-${{ github.sha }}
+          path: apps/esha/artifacts/android/*
+          if-no-files-found: error
+          retention-days: 14
+
+  ios-simulator:
+    name: Compile iOS Simulator application
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out Esha source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up the pinned Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - name: Verify source identity and locked dependencies
+        run: |
+          python3 scripts/esha/check_source.py
+          cd apps/esha
+          flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
+      - name: Compile and verify the simulator application
+        run: bash scripts/esha/build_ios_simulator.sh
+      - name: Save simulator-only test artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: Esha-iOS-Simulator-only-${{ github.sha }}
+          path: apps/esha/artifacts/ios/*
+          if-no-files-found: error
+          retention-days: 14
+
+# This workflow has no release credentials, store uploads, or subscription
+# provisioning. Signed candidates use the separate manual Codemagic workflows.

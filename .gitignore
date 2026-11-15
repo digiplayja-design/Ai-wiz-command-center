@@ -67,7 +67,9 @@ GoogleService-Info.plist
 *.pem
 *.p12
 # Local scripts and temporary AAB prep files
-scripts/
+scripts/*
+!scripts/esha/
+supabase/.temp/
 android/java_pid*.hprof
 allow_basic_upload_image_voice.sh
 # Local experimental media/backups

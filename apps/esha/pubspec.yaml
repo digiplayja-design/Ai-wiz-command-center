@@ -1,0 +1,44 @@
+name: esha_by_korlix
+description: Native beauty consultant and personal vanity from Korlix.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.13.7 <4.0.0'
+  flutter: '>=3.47.9'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: 1.6.0
+  shared_preferences: 2.5.5
+  flutter_secure_storage: 10.0.0
+  in_app_purchase: 3.3.0
+  in_app_purchase_android: 0.5.5
+  in_app_purchase_storekit: 0.4.17
+  url_launcher: 6.3.2
+  uuid: 4.5.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: 6.0.0
+  flutter_launcher_icons: 0.14.4
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/catalog.json
+    - assets/service-config.json
+    - assets/esha-korlix-pink.png
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/esha-korlix-pink.png
+  remove_alpha_ios: true
+  background_color_ios: '#E43188'
+  min_sdk_android: 24
+  adaptive_icon_background: '#E43188'
+  adaptive_icon_foreground: assets/esha-korlix-pink.png
+  adaptive_icon_foreground_inset: 16
