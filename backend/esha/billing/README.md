@@ -14,33 +14,23 @@ The native client must show the actual store-localized price and eligible offer 
 
 ## Server integration
 
-Register this module using the existing authenticated user function, Supabase service-role client, and Astra text adapter:
+Register this module using the existing authenticated user function, Supabase service-role client, and Esha AI adapter. The adapter retains Astra/max as its default and supplies both input-token counting and generation:
 
 ```js
 import {createEshaBilling} from './esha/billing/routes.mjs';
+import {createEshaAi} from './esha/billing/ai.mjs';
 
 const eshaBilling = createEshaBilling({
   database: supabaseAdmin,
   requireUser,
-  generate: ({instructions, input, maxOutputTokens, textFormat, signal}) =>
-    korlixAstra.createTextResponse(new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-      maxRetries: 0,
-      timeout: 180000,
-    }), {
-      instructions,
-      input,
-      max_output_tokens: maxOutputTokens,
-      text: {format: textFormat},
-      store: false,
-    }, {signal, timeout: 180000, maxRetries: 0}),
+  ...createEshaAi(),
 });
 eshaBilling.register(app);
 ```
 
 The existing `requireUser` verifies the bearer token, disabled-account state and supplied device identity. Keep these checks. The dedicated `/api/esha/consult` path uses the Esha ledger. Do not route it through core credit deduction, developer unlimited access, or core tier upgrades. Existing Esha web requests to `/api/generate` keep their current Korlix credit behavior. No changes to that route or the shared model adapter are required.
 
-Apply `supabase/migrations/20261115172402_esha_store_billing.sql` through the normal migration process before serving the endpoints. This creates five Esha-only tables and one service-only command function. All tables have RLS enabled; `public`, `anon`, and `authenticated` cannot read receipts or invoke the command. Tokens and response-cache rows are never returned by the billing APIs. Raw purchase tokens are kept only in the private purchases table for store refresh. Completed consultation answers are retained privately to replay a lost response without another generation; deleting the owning account cascades its consultation data. Hash-only confirmed refund tombstones persist independently of an account so an unbound refund cannot later become an entitlement.
+Before any separately authorized activation, deployment must include `supabase/migrations/20261115172402_esha_store_billing.sql` and `supabase/migrations/20261115194040_esha_provider_attempt_budget.sql`. Together they create seven Esha-only tables and two service-only command functions. Keep generation disabled until every serving worker uses the current adapter and both migrations are present. All tables have RLS enabled; `public`, `anon`, and `authenticated` cannot read receipts or invoke the commands. Tokens and response-cache rows are never returned by the billing APIs. Raw purchase tokens are kept only in the private purchases table for store refresh. Completed consultation answers are retained privately to replay a lost response without another generation; deleting the owning account cascades its consultation and provider-attempt data. Hash-only confirmed refund tombstones persist independently of an account so an unbound refund cannot later become an entitlement.
 
 ## Configuration and safe defaults
 
@@ -50,7 +40,13 @@ New sales and native AI are off by default. There is no unlimited entitlement an
 | --- | --- |
 | `KORLIX_ESHA_TRIAL_CONSULTATIONS` | Explicit positive count for one verified trial period; required, no default. |
 | `KORLIX_ESHA_MONTHLY_CONSULTATIONS` | Explicit positive count for one verified paid billing period; required, no default. |
-| `KORLIX_ESHA_MAX_OUTPUT_TOKENS` | Explicit provider output budget; must be compatible with the existing Astra adapter. |
+| `KORLIX_ESHA_TEXT_MODEL` | Defaults to `gpt-6-astra`. The separate `gpt-6-luna` option requires explicit owner approval and configuration. |
+| `KORLIX_ESHA_REASONING_EFFORT` | Defaults to `max` for Astra. The optional Luna path requires an explicit `low` value. |
+| `KORLIX_ESHA_ECONOMICAL_AI_APPROVED` | Must explicitly equal `true` before the Luna option can run; unset by default. This documentation does not grant approval. |
+| `KORLIX_ESHA_MAX_INPUT_TOKENS` | Required positive cap on the actual full-request input-token count; no default. |
+| `KORLIX_ESHA_MAX_OUTPUT_TOKENS` | Required total generated-token cap, including reasoning; no default. Astra/max requires at least 32,768. |
+| `KORLIX_ESHA_TRIAL_PROVIDER_ATTEMPTS` | Required positive generation-attempt cap for a verified trial period, separate from successful consultations; no default. |
+| `KORLIX_ESHA_MONTHLY_PROVIDER_ATTEMPTS` | Required positive generation-attempt cap for a verified paid period, separate from successful consultations; no default. |
 | `KORLIX_ESHA_NATIVE_AI_ENABLED` | Must equal `true` to serve new native consultations. |
 | `KORLIX_ESHA_BILLING_ENABLED` | Must equal `true` to prepare new store purchases. |
 | `KORLIX_ESHA_APPLE_PRODUCTS_READY` | Set `true` only after the Esha app, monthly product, US$4.99 price, three-day intro offer, server notification URL and device purchase flow have actually been checked in Apple systems. |
@@ -63,9 +59,11 @@ New sales and native AI are off by default. There is no unlimited entitlement an
 
 The existing `KORLIX_APPLE_ISSUER_ID`, `KORLIX_APPLE_KEY_ID`, `KORLIX_APPLE_PRIVATE_KEY` or `KORLIX_APPLE_PRIVATE_KEY_BASE64`, and `KORLIX_GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` credentials are reused only on the server. The credential must have access to the actual Esha app. `OPENAI_API_KEY` stays on the server. Nothing in this module requires exposing or rotating these existing secrets.
 
-The current repository adapter fixes text to `gpt-6-astra`, reasoning `max`, and raises output limits to at least 32,768 tokens. Therefore an Esha output budget below 32,768 is rejected as incompatible; it would not actually constrain this adapter. The explicit cap is passed unchanged to `createTextResponse`, with a 180-second provider timeout, cancellation signal, and no automatic generation retries. Counts and this cap must be chosen to fit the approved $4.99 offer before activation. This implementation does not assert that any particular allowance is commercially viable. Other apps' model choices and limits are unchanged.
+The default Esha path retains the shared `gpt-6-astra`, reasoning `max` policy and rejects an output budget below 32,768; its configured cap is passed unchanged to `createTextResponse`. A separate economical option is prepared but inactive, as described in [AI_OPTION.md](AI_OPTION.md). Selecting Luna alone does not activate it: approval, exact model/effort, all token and attempt limits, successful-consultation counts, and the native-AI flag are required. Missing or invalid configuration fails closed. This README chooses no new counts, model, or production settings and does not authorize activation. Other apps' model choices and limits are unchanged.
 
-Membership can be stored and restored while new sales are paused. AI must have real allowance configuration, output budget, provider credentials, server catalog, and its explicit activation flag. Removing a sales flag does not stop refund/expiry reconciliation.
+The Esha adapter counts the complete provider input, including instructions, server catalog, selected history, optional preferences and JSON schema, before generation. A failed count or input above the configured cap blocks generation. It then records an irreversible provider-attempt debit under the account lock before a single paid call. Token counting has a 30-second timeout and generation has a 180-second timeout, with cancellation signals and SDK retries disabled. There is no fallback model or automatic repair generation. The output cap includes non-visible reasoning tokens. Counts and budgets still need an owner decision appropriate to the approved $4.99 offer; this implementation does not establish commercial viability or approve the inactive proposal.
+
+Membership can be stored and restored while new sales are paused. AI must have real successful-consultation counts, input/output budgets, provider-attempt caps, provider credentials, server catalog, and its explicit activation flag. Unconfigured AI also keeps new checkout unavailable. Removing a sales flag does not stop refund/expiry reconciliation.
 
 ## Native API v1
 
@@ -90,9 +88,9 @@ For Apple checkout, `accountId` is the signed-in Korlix UUID and must be supplie
 
 Consultation questions are limited to 3,000 characters. Optional preferences are limited to 6,000 serialized characters and primitive/string-list values. The server keeps at most ten selected history turns of 1,500 characters each. System-role history is discarded. Client catalog data are ignored; the server loads `backend/esha/catalog.json`. Product recommendation IDs must be from that catalog, and generated external product links are checked against its manufacturer URLs. Unknown prices are not treated as zero or included in a claimed within-budget shopping total. No photo analysis, external action, web search or core-chat memory is available to this endpoint.
 
-Reuse the same request UUID and same body after a network interruption. A committed result is replayed without another generation or charge. Reusing that ID with different normalized input returns `409 idempotency_mismatch`. `409 request_in_progress` means keep the ID and retry later. `409 request_finished` means that a failed/timed-out attempt has ended; use a fresh ID only when the user explicitly retries. Provider failure releases a reserved allowance exactly once. The ten-minute reservation lease survives process restarts and outlasts the provider timeout. One account can have only one active consultation reservation.
+Reuse the same request UUID and same body after a network interruption. A committed result is replayed without another token count, generation, or allowance debit. Reusing that ID with different normalized input returns `409 idempotency_mismatch`. `409 request_in_progress` means keep the ID and retry later. `409 request_finished` means that a failed/timed-out attempt has ended; use a fresh ID only when the user explicitly retries. Provider failure releases the successful-consultation hold exactly once, but never returns a committed provider-attempt debit. Timeouts, invalid output and ambiguous failures consume an attempt independently of success. Attempt caps are fixed at first use for the verified period; restores or raised settings cannot refill them. The ten-minute reservation lease survives process restarts and outlasts counting plus generation timeouts. One account can have only one active consultation reservation.
 
-Errors contain `{error,code}`: `401` authentication required, `403` email/test access, `409` pending purchase/ownership/duplicate or in-progress request, `402` missing membership or exhausted allowance, and `503` unconfigured services, failed refresh or unavailable provider. A result cannot be committed after its billing period is revoked.
+Errors contain `{error,code}`: `401` authentication required, `403` email/test access, `409` pending purchase/ownership/duplicate or in-progress request, `402` missing membership or exhausted successful-consultation allowance, `413 consultation_input_too_long`, `429 provider_attempts_exhausted` or rate limiting, and `503` unconfigured services, failed refresh or unavailable provider. Provider-attempt exhaustion does not revoke app membership. A result cannot be committed after its billing period is revoked.
 
 ## Store lifecycle and notifications
 
@@ -111,7 +109,7 @@ One verified transaction/order creates one allowance for that period. Restore/co
 Run from `backend/`:
 
 ```sh
-node --test test/esha_native_billing.test.mjs
+node --test test/esha_native_billing.test.mjs test/esha_ai_budget.test.mjs
 ```
 
-Tests execute the actual migration using PGlite and exercise service-role commands, RLS denial, ownership, no core-tier changes, expiry, stale verification, permanent refunds, pre-binding refunds, idempotency, allowance exhaustion, provider failure, the real 12-product catalog, server-only catalog grounding, Google notification identity, and HTTP activation guards. They use offline fixtures and never call a real store or AI provider. These tests do not establish that a real store product, approved app, receipt, offer or production credential works. Signed device checkout, restore, cancellation, expiration, refund, account-switch and store-notification tests remain release prerequisites.
+Tests execute the actual migrations using PGlite and exercise service-role commands, RLS denial, ownership, no core-tier changes, expiry, stale verification, permanent refunds, pre-binding refunds, idempotency, separate success/attempt limits, failed-provider debits, counting/generation payload parity, SDK retry suppression, inactive model configuration, the real 12-product catalog, server-only catalog grounding, Google notification identity, and HTTP activation guards. They use offline fixtures and never call a real store or AI provider. These tests do not establish that a real store product, approved app, receipt, offer or production credential works. Signed device checkout, restore, cancellation, expiration, refund, account-switch and store-notification tests remain release prerequisites.

@@ -73,15 +73,18 @@ account. Stale or unavailable verification pauses feature access while keeping
 saved collections; account and membership controls remain reachable.
 
 **No trial or monthly consultation counts, Esha-specific AI model choice or
-output budget have been approved.** The backend has no default or unlimited
+token/attempt budgets have been approved.** The backend has no default or unlimited
 allowance. Its configured counts must be disclosed before purchase. Missing
-counts, output budget, explicit activation or verified store configuration keep
+counts, token/attempt limits, explicit activation or verified store configuration keep
 new purchases and native consultations unavailable. Purchase restoration remains
 available separately from opening new sales; restored feature access still
 requires fresh verification of an active same-account entitlement.
 
 See [the native billing contract](../../backend/esha/billing/README.md) for
 verification, entitlement accounting, refund handling and configuration.
+The [inactive AI option](../../backend/esha/billing/AI_OPTION.md) documents the
+prepared Esha-only model adapter and provider-attempt budget. It has not changed
+the shared Astra/max default or activated a production model.
 
 ## Validation and builds
 
@@ -93,12 +96,13 @@ bash scripts/esha/validate.sh
 ```
 
 This validates source configuration, resolves locked dependencies, checks Dart
-formatting, runs static analysis and executes Flutter tests. At the earlier
-build checkpoint below, backend billing, companion-session, signup, reporting,
-policy and surrounding-app checks passed **121 tests**, and native validation
-passed **36 tests**, checked formatting and reported no static-analysis issues.
-The subsequent local app-wide membership correction passed **49 native tests**.
-Those later source changes are not represented by the older artifact hashes.
+formatting, runs static analysis and executes Flutter tests. The current native
+source passed **49 tests**, formatting and static analysis locally and in the
+successful cloud build at commit `bf4ff498e3aa71eea07d4052d8789cd37ddba7c0`.
+The inactive AI preparation passed **55 scoped backend tests**, with its six
+adapter tests passing again after the final activation guard. An earlier broader
+backend checkpoint passed 121 tests; that earlier count is not presented as a
+rerun of the later AI preparation.
 SDK telemetry is explicitly suppressed by the Esha validation and build commands.
 
 See [the build and signing guide](../../scripts/esha/README.md) for Android debug
@@ -107,28 +111,17 @@ store-candidate workflows. Test artifacts are not store submissions.
 
 ## Release checkpoint — November 15, 2026
 
-**Current source revision:** app-wide membership gating and the corresponding
-listing/policy corrections are local release work. The policy wording in
-`backend/esha/policies.mjs` has not been deployed as part of this correction, and
-the updated listing is not published or submitted. AI model/budget approval,
-consultation allowances, store configuration and activation remain unfinished;
-these edits do not establish live AI or a released membership product.
+**The app source and test builds are prepared. There is no signed iPhone IPA,
+store upload or review submission yet.** The current signing attempt stopped
+because the saved `Codemagic Korlix AI` Apple integration returned HTTP 401.
 
-The deployment, build and URL results below describe the **earlier checkpoint**,
-not verification of these later membership-scope changes.
+### Native builds
 
-The following database migrations have been applied and their row-level security
-and service-only command permissions checked:
-
-| Version | Migration |
-| --- | --- |
-| `20261115172402` | `esha_store_billing` |
-| `20261115172408` | `esha_companion_app_sessions` |
-
-The full native source is preserved at commit
-`d97cdda79f3e41be45ebeecd12718702e6b070dc` on
-`feature/esha-native-20261115`. [GitHub Actions run 43741827963](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43741827963)
-completed successfully for that exact commit, producing and verifying:
+[GitHub Actions run 43754059868](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43754059868)
+completed successfully at source commit
+`bf4ff498e3aa71eea07d4052d8789cd37ddba7c0` on
+`feature/esha-native-20261115`. Both the Android and iOS Simulator jobs succeeded.
+The Android validation passed all 49 native tests, formatting and analysis.
 
 | Artifact | Verified use |
 | --- | --- |
@@ -136,75 +129,105 @@ completed successfully for that exact commit, producing and verifying:
 | Android release AAB | Release compilation; unsigned and not uploadable to Play |
 | iOS Simulator application ZIP | Simulator execution; not an iPhone IPA |
 
-Every artifact identifies `com.korlixdeveloper.esha`, version `1.0.0` build `1`.
-Downloaded bytes were independently checked against the embedded verification
-reports. Public source/build/hash details are recorded in
-[build-verification.json](release/build-verification.json).
+Downloaded bytes for all three artifacts were independently rehashed against the
+CI reports. Binary inspection confirms `com.korlixdeveloper.esha`, version
+`1.0.0`, build `1`, and the platform/signing classifications above. Exact hashes,
+artifact provenance, verification methods and the older checkpoint are recorded in
+[build-verification.json](release/build-verification.json). Later commits add
+release helpers, inactive backend preparation and checkpoint documentation; they
+do not imply a newer compiled native artifact.
 
-With explicit user authorization, Render deployment
-`dep-dbsv84psrm7s739ov350` went **live on November 15, 2026 at 18:04:37 UTC**
-for the exact backend commit `4bb80c1ce6fe1a314a31a23b60b70832c1045556` on
-`release/signup-plan-intent-20261021`. Automatic deployment remains off. The
-commit identity was verified from Render's live deployment metadata; the health
-endpoint does not report a commit identifier.
+### Live backend and policies
 
-All **nine GET-only post-deployment checks passed at 18:06:09 UTC**. Health
-returned HTTP 200, and the live catalog exactly matched the local catalog's 12
-products, including one unknown price. The Apple and Google billing catalogs
-returned the intended 3-day / US $4.99 monthly offer while retaining
-`purchasesEnabled: false`, `consultationEnabled: false`,
-`storeConfigurationVerified: false` and `allowanceConfigured: false`. Both
-consultation limits remain unset and the membership state remains `planned`.
-An invalid billing provider returned HTTP 400, and unauthenticated billing-status
-and account requests returned HTTP 401. No account, purchase or consultation was
-created by these checks. Render's application error-log query since this
-deployment returned no errors.
+The following database migrations have been applied, with row-level security
+and service-only command permissions checked:
 
-The following public policy URLs were verified at the earlier deployment. The Privacy and Terms pages
-returned HTTP 200 with the expected Esha content and restrictive CSP, `nosniff`,
-`no-store` and `no-referrer` headers; the linked deletion and offer anchors were
-checked in those pages. That check predates the app-wide membership wording now
-in source; deploy and recheck the revised content before submission.
+| Version | Migration |
+| --- | --- |
+| `20261115172402` | `esha_store_billing` |
+| `20261115172408` | `esha_companion_app_sessions` |
+
+Render deployment `dep-dbt0l93l550s739n1p3g` went **live on November 15, 2026 at
+19:41:04 UTC**, using backend commit
+`5e2a4086b7c4a58e8614abfa3625270b05def152` on
+`release/signup-plan-intent-20261021`. This revision changes only the Esha policy
+wording to match whole-app membership. Automatic deployment remains off. The
+commit identity comes from Render deployment metadata; the public health
+endpoint does not expose a commit identifier.
+
+At 19:41:54 UTC, health, both policy pages and both provider billing catalogs
+returned HTTP 200. The deployed Privacy and Terms HTML exactly matched the
+frozen source, including the deletion and offer anchors. Restrictive CSP,
+`nosniff`, `no-store` and `no-referrer` headers were verified. No application
+errors were returned by the Render log query since deployment.
 
 | Public URL | Verified content |
 | --- | --- |
 | [Esha Privacy Policy](https://chee-chai-chee-backend.onrender.com/esha/privacy) | Esha data handling and AI-provider disclosure |
-| [Esha Terms & Membership](https://chee-chai-chee-backend.onrender.com/esha/terms) | Service and intended membership offer |
+| [Esha Terms & Membership](https://chee-chai-chee-backend.onrender.com/esha/terms) | Whole-app membership, service and renewal terms |
 | [Account/data deletion](https://chee-chai-chee-backend.onrender.com/esha/privacy#deletion) | Outside-app deletion-request instructions |
-| [Subscription terms](https://chee-chai-chee-backend.onrender.com/esha/terms#offer-heading) | Trial, pricing and renewal disclosures |
+| [Subscription terms](https://chee-chai-chee-backend.onrender.com/esha/terms#offer-heading) | Three-day trial, pricing and renewal disclosures |
 
-The deployment identity and public HTTP results are recorded alongside the
-unchanged native artifact hashes in
-[build-verification.json](release/build-verification.json).
+Both provider catalogs still report `planned` membership, the intended three-day
+trial / US $4.99 monthly offer, and disabled new purchases and consultations.
+Store verification and consultation allowances remain unset. The policy-only
+deployment did not enable billing, change a model or apply the new AI-budget
+migration.
 
-A read-only Codemagic Personal Account inspection showed the existing production
-certificate `KORLIX_APP_STORE_CERT` for Korlix LLC, expiring June 22, 2027, and four
-saved App Store profiles for other Korlix apps with the same team and expiry.
-The existing `Codemagic Korlix AI` App Store Connect integration successfully
-fetched six profiles, including Brain Voice and Receipt Wiz. This integration
-returned no profile for Esha's `com.korlixdeveloper.esha` bundle.
-No profile was imported or generated, and no certificate or private key was
-downloaded during that inspection. The app and team IDs were not verified in
-that Codemagic check; interactive Apple sign-in was awaiting two-factor
-verification.
+### Apple identity and signing blocker
 
-A subsequent user-provided App Store Connect **App Information** screenshot
-shows the created **Esha by Korlix** app record, with iOS version **1.0** in
-**Prepare for Submission** status, bundle `com.korlixdeveloper.esha`, SKU
-`ESHA_IOS_001` and numeric Apple ID `6835184869`. The user-provided Apple Developer
-**Register an App ID** screenshot shows team ID `FJKJ9MUDZ4`. These identities
-are recorded with their screenshot evidence source; a live account/API identity
-check, subscription products, Esha signing, build upload and review submission
-remain unverified.
+The user-provided App Information screenshot confirms the created **Esha by
+Korlix** record: bundle `com.korlixdeveloper.esha`, SKU `ESHA_IOS_001`, numeric
+Apple ID `6835184869`, with iOS version `1.0` in **Prepare for Submission**. The
+Apple Developer screenshot shows team `FJKJ9MUDZ4`. These remain screenshot
+identity evidence until the Apple API can authenticate.
 
-[Store metadata](release/store-metadata.json) is prepared as a draft, with source
-subscription identifiers distinguished from the Apple app identity observed in
-the screenshots. Live store verification and Google Play browser access remain
-unresolved. No subscription product, signing identity or store submission was
-created by this checkpoint.
+The `esha_release` Codemagic environment group now contains the app and team IDs.
+The existing production signing certificate reference is `KORLIX_APP_STORE_CERT`;
+no Esha App Store provisioning profile was found in the saved inventory.
 
-Signed Android/iPhone release builds, Esha's Google Play app record and both
-stores' subscription records, localized prices, eligible trial configuration,
-consultation allowances, and real-device purchase, restore, cancellation, refund
-and account-switch checks remain pending. The backend deployment and these test
-artifacts do not establish a live store release.
+[Signing setup build 6afa092a90e83b09c4fab31e](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa092a90e83b09c4fab31e)
+passed the workflow's configuration/import stages, then stopped at its first
+Apple inventory lookup with **HTTP 401**. The helper's credential-variable
+mapping matches pinned Codemagic CLI 0.69.0 and the documented integration.
+No Esha profile was created, no Apple identity was verified by API and no IPA was
+built or uploaded. The saved Apple integration must be repaired through
+[Codemagic integration settings](https://codemagic.io/teams/6a32158af7d33bf04e05cc9d)
+before retrying that job.
+
+The following manual workflows are committed, with no automatic triggers:
+
+| Workflow | Purpose |
+| --- | --- |
+| `esha-ios-signing-setup` | Verify exact app/team/certificate identity and create or reuse only Esha's profile |
+| `esha-apple-draft-listing` | Apply only the allowlisted draft text, categories, policy URLs and pending version alignment |
+| `esha-ios-candidate` | Validate, compile and verify a signed candidate without publishing |
+| `esha-ios-upload` | Validate, compile, verify and upload; both review-submission flags remain false |
+
+The draft-listing helper passed 18 tests; combined listing/signing helper tests
+passed 32 tests. The two new manual workflow structures were checked locally;
+they have not been run against Apple. The [listing guide](../../scripts/esha/APPLE_LISTING.md)
+and [signing/build guide](../../scripts/esha/README.md) record the guarded actions
+and required artifacts. Prepared [store metadata](release/store-metadata.json)
+has not yet been applied to the live listing.
+
+### Remaining release work
+
+The economical AI option and its durable provider-attempt ledger are preserved
+at commit `e9415b73c0dc36d4474c2a2e2c6abbda7d126acd`. Its model/allowance proposal
+is inactive. The migration `20261115194040_esha_provider_attempt_budget.sql` has
+not been applied and the new adapter has not been deployed. Keep Esha AI disabled
+until the owner chooses the model and limits, the migration is applied and every
+serving worker uses the guarded code.
+
+After Apple authentication is repaired, verify the exact app identity, create
+Esha's profile, apply the pending listing fields, configure the subscription and
+eligible three-day offer, and produce/upload the verified IPA. Real-device
+purchase, restore, renewal, cancellation/refund, account-switch and reviewer
+access checks remain necessary. Store privacy, age-rating and content-rights
+forms and native screenshots remain unfinished.
+
+Google Play account access, app record, subscription/base plan/trial offer and
+release signing also remain unverified. Neither store has a verified Esha upload
+or review submission. These test artifacts and the live policy pages do not
+establish a released store product.

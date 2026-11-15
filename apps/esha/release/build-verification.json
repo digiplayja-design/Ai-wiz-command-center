@@ -1,53 +1,81 @@
 {
   "verified_on": "2026-11-15",
-  "source_commit": "d97cdda79f3e41be45ebeecd12718702e6b070dc",
-  "workflow_run_id": 43741827963,
-  "workflow_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43741827963",
+  "source_commit": "bf4ff498e3aa71eea07d4052d8789cd37ddba7c0",
+  "workflow_run_id": 43754059868,
+  "workflow_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43754059868",
   "workflow_conclusion": "success",
   "application_id": "com.korlixdeveloper.esha",
   "version": "1.0.0",
   "build_number": "1",
   "validation": {
-    "backend_tests_passed": 121,
-    "flutter_tests_passed": 36,
+    "flutter_tests_passed": 49,
     "flutter_analysis": "no_issues",
-    "flutter_version": "3.47.9"
+    "dart_format_check": "passed",
+    "flutter_version": "3.47.9",
+    "exact_source_validation_command": "bash scripts/esha/validate.sh",
+    "validation_environments": [
+      "local_pinned_toolchain",
+      "github_actions_android_job"
+    ]
   },
   "artifacts": [
     {
-      "file": "Esha-Android-debug-test-only-d97cdda.apk",
-      "bytes": 165885106,
-      "sha256": "be7bb8c2c4cd36ca2c0ac035355ecb0fe04359eb09d40ab5500d5964eb6a0e73",
+      "file": "Esha-bf4ff49-Android-debug-test-only.apk",
+      "ci_file": "Esha-debug.apk",
+      "bytes": 165902534,
+      "sha256": "315cc028c75124afca544a54bee7c2fbc8d62c9428e65dd8d90112ee355b8082",
       "classification": "android_debug_test_only",
-      "store_uploadable": false
+      "store_uploadable": false,
+      "application_id": "com.korlixdeveloper.esha",
+      "source_commit": "bf4ff498e3aa71eea07d4052d8789cd37ddba7c0",
+      "verification_basis": "Downloaded bytes independently matched embedded CI report size and SHA-256; platform identity/classification inspected in the binary.",
+      "independent_download_rehash_verified": true,
+      "version_name": "1.0.0",
+      "version_code": "1"
     },
     {
-      "file": "Esha-Android-unsigned-release-not-uploadable-d97cdda.aab",
-      "bytes": 56318279,
-      "sha256": "50c7ac57c113d47561d1be00fbf2a48277c216c8870dbf845e5acf10a7a163c4",
+      "file": "Esha-bf4ff49-Android-unsigned-not-uploadable.aab",
+      "ci_file": "Esha-unsigned-release.aab",
+      "bytes": 56352945,
+      "sha256": "32f53120605c7c237880d46cb3f6fab06a9256072830438abac8ee73bf1f2d41",
       "classification": "android_unsigned_release",
-      "store_uploadable": false
+      "store_uploadable": false,
+      "application_id": "com.korlixdeveloper.esha",
+      "source_commit": "bf4ff498e3aa71eea07d4052d8789cd37ddba7c0",
+      "verification_basis": "Downloaded bytes independently matched embedded CI report size and SHA-256; platform identity/classification inspected in the binary.",
+      "independent_download_rehash_verified": true,
+      "version_name": "1.0.0",
+      "version_code": "1"
     },
     {
-      "file": "Esha-iOS-Simulator-only-not-iPhone-IPA-d97cdda.zip",
-      "bytes": 58647181,
-      "sha256": "95bd72b93080272bd9d276840f42ab3118b974f5aa36d39e56cfe6cf2df7688b",
+      "file": "Esha-bf4ff49-iOS-Simulator-only.zip",
+      "ci_file": "Esha-iOS-Simulator.zip",
+      "bytes": 58659140,
+      "sha256": "2ed6bbefab169b40aaa80ee7ad91eaa6397dde14a233d7b9f4ba13e4296e4e76",
       "classification": "ios_simulator_only",
-      "store_uploadable": false
+      "store_uploadable": false,
+      "application_id": "com.korlixdeveloper.esha",
+      "source_commit": "bf4ff498e3aa71eea07d4052d8789cd37ddba7c0",
+      "verification_basis": "Downloaded bytes independently matched embedded CI report size and SHA-256; platform identity/classification inspected in the binary.",
+      "independent_download_rehash_verified": true,
+      "version_name": "1.0.0",
+      "version_code": "1"
     }
   ],
   "backend": {
-    "deployed_commit": "4bb80c1ce6fe1a314a31a23b60b70832c1045556",
-    "deployment_id": "dep-dbsv84psrm7s739ov350",
+    "deployed_commit": "5e2a4086b7c4a58e8614abfa3625270b05def152",
+    "deployment_id": "dep-dbt0l93l550s739n1p3g",
     "deployment_status": "live",
-    "deployment_finished_at_utc": "2026-11-15T18:04:37.313863Z",
+    "deployment_finished_at_utc": "2026-11-15T19:41:04.000118Z",
     "origin": "https://chee-chai-chee-backend.onrender.com",
     "commit_identity_source": "Render live deployment metadata; the HTTP health endpoint does not expose a commit identifier.",
+    "revision_scope": "only backend/esha/policies.mjs; whole-app membership wording",
+    "automatic_deployment_enabled": false,
     "live_policy_routes_verified": true,
     "post_deployment_checks": {
-      "checked_at_utc": "2026-11-15T18:06:09.694445+00:00",
+      "checked_at_utc": "2026-11-15T19:41:54.144Z",
       "all_passed": true,
-      "request_count": 9,
+      "request_count": 5,
       "mutating_requests": 0,
       "requests": [
         {
@@ -58,7 +86,13 @@
         },
         {
           "method": "GET",
-          "path": "/api/esha/catalog",
+          "path": "/esha/privacy",
+          "status": 200,
+          "passed": true
+        },
+        {
+          "method": "GET",
+          "path": "/esha/terms",
           "status": 200,
           "passed": true
         },
@@ -73,44 +107,8 @@
           "path": "/api/esha/billing/catalog?provider=google",
           "status": 200,
           "passed": true
-        },
-        {
-          "method": "GET",
-          "path": "/api/esha/billing/catalog?provider=invalid",
-          "status": 400,
-          "passed": true
-        },
-        {
-          "method": "GET",
-          "path": "/api/esha/billing/status?provider=apple",
-          "status": 401,
-          "passed": true
-        },
-        {
-          "method": "GET",
-          "path": "/api/me",
-          "status": 401,
-          "passed": true
-        },
-        {
-          "method": "GET",
-          "path": "/esha/privacy",
-          "status": 200,
-          "passed": true
-        },
-        {
-          "method": "GET",
-          "path": "/esha/terms",
-          "status": 200,
-          "passed": true
         }
       ],
-      "catalog": {
-        "product_count": 12,
-        "unknown_price_count": 1,
-        "exact_local_catalog_match": true,
-        "catalog_sha256": "e094962299ffe512daa1b5f81f02a3c0755f746ea076a03b5210cb1d9f6592a2"
-      },
       "membership_state_observed_for_both_providers": {
         "state": "planned",
         "purchases_enabled": false,
@@ -132,24 +130,133 @@
         "content_security_policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
         "cache_control": "no-store",
         "x_content_type_options": "nosniff",
-        "referrer_policy": "no-referrer"
+        "referrer_policy": "no-referrer",
+        "exact_frozen_source_match": true,
+        "source_sha256": "c00d51a83bd8ca93f703e45c6f020e4f0be23352e793de2bab79031872e3d4df",
+        "privacy_html_sha256": "02eec8bdb8429432dcdd5b54700d7957180041b0d4c96dfdfa7b8b52e175b829",
+        "terms_html_sha256": "234dc38abdcfc7ef88d1257725049dfd49c7e309f4445224001c2e5324de6613"
       }
     },
     "application_error_log_check": {
       "source": "Render application error-log query since this deployment",
       "errors_returned": 0
+    },
+    "earlier_deployment_evidence": {
+      "deployed_commit": "4bb80c1ce6fe1a314a31a23b60b70832c1045556",
+      "deployment_id": "dep-dbsv84psrm7s739ov350",
+      "deployment_status": "live",
+      "deployment_finished_at_utc": "2026-11-15T18:04:37.313863Z",
+      "origin": "https://chee-chai-chee-backend.onrender.com",
+      "commit_identity_source": "Render live deployment metadata; the HTTP health endpoint does not expose a commit identifier.",
+      "live_policy_routes_verified": true,
+      "post_deployment_checks": {
+        "checked_at_utc": "2026-11-15T18:06:09.694445+00:00",
+        "all_passed": true,
+        "request_count": 9,
+        "mutating_requests": 0,
+        "requests": [
+          {
+            "method": "GET",
+            "path": "/api/health",
+            "status": 200,
+            "passed": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/esha/catalog",
+            "status": 200,
+            "passed": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/esha/billing/catalog?provider=apple",
+            "status": 200,
+            "passed": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/esha/billing/catalog?provider=google",
+            "status": 200,
+            "passed": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/esha/billing/catalog?provider=invalid",
+            "status": 400,
+            "passed": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/esha/billing/status?provider=apple",
+            "status": 401,
+            "passed": true
+          },
+          {
+            "method": "GET",
+            "path": "/api/me",
+            "status": 401,
+            "passed": true
+          },
+          {
+            "method": "GET",
+            "path": "/esha/privacy",
+            "status": 200,
+            "passed": true
+          },
+          {
+            "method": "GET",
+            "path": "/esha/terms",
+            "status": 200,
+            "passed": true
+          }
+        ],
+        "catalog": {
+          "product_count": 12,
+          "unknown_price_count": 1,
+          "exact_local_catalog_match": true,
+          "catalog_sha256": "e094962299ffe512daa1b5f81f02a3c0755f746ea076a03b5210cb1d9f6592a2"
+        },
+        "membership_state_observed_for_both_providers": {
+          "state": "planned",
+          "purchases_enabled": false,
+          "consultation_enabled": false,
+          "store_configuration_verified": false,
+          "allowance_configured": false,
+          "trial_consultation_limit": null,
+          "monthly_consultation_limit": null,
+          "trial_days": 3,
+          "monthly_price_cents": 499,
+          "currency": "USD",
+          "billing_period": "P1M"
+        },
+        "public_policy_pages": {
+          "privacy_url": "https://chee-chai-chee-backend.onrender.com/esha/privacy",
+          "terms_url": "https://chee-chai-chee-backend.onrender.com/esha/terms",
+          "deletion_anchor_verified": true,
+          "offer_anchor_verified": true,
+          "content_security_policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+          "cache_control": "no-store",
+          "x_content_type_options": "nosniff",
+          "referrer_policy": "no-referrer"
+        }
+      },
+      "application_error_log_check": {
+        "source": "Render application error-log query since this deployment",
+        "errors_returned": 0
+      }
     }
   },
   "latest_native_source_validation": {
-    "source_commit": "6f9d4acc74df8617e6ac05f95fc378cb7d7c4ed1",
+    "source_commit": "bf4ff498e3aa71eea07d4052d8789cd37ddba7c0",
     "flutter_tests_passed": 49,
     "new_membership_boundary_tests": 13,
     "flutter_analysis": "no_issues",
     "dart_format_check": "passed",
     "membership_scope": "all_beauty_features_require_fresh_same_account_verified_active_trial_or_paid_entitlement",
     "core_access_at_zero_ai_allowance": true,
-    "device_or_simulator_artifacts_from_this_revision_verified": false,
-    "note": "The artifact hashes above remain evidence for the earlier d97cdda build only."
+    "device_or_simulator_artifacts_from_this_revision_verified": true,
+    "note": "Current native artifacts were independently downloaded, rehashed and inspected for platform identity/classification. Historical d97cdda artifacts are retained separately.",
+    "binary_identity_and_version_verified": true
   },
   "store_release": {
     "apple_identity_screenshot_evidence": {
@@ -243,6 +350,127 @@
     "signed_device_candidates_verified": false,
     "store_records_and_products_verified": false,
     "sandbox_purchase_lifecycle_verified": false,
-    "submitted": false
+    "submitted": false,
+    "prepared_manual_workflows": {
+      "source_commit": "44756156dbf2bf2475efb345edab1d3b4de98f74",
+      "names": [
+        "esha-ios-signing-setup",
+        "esha-apple-draft-listing",
+        "esha-ios-candidate",
+        "esha-ios-upload"
+      ],
+      "listing_helper_tests_passed": 18,
+      "combined_listing_signing_helper_tests_passed": 32,
+      "draft_listing_applied": false,
+      "upload_workflow_run": false,
+      "new_workflow_structure_validation": "local YAML and parity checks only; no successful Apple run",
+      "upload_publishing": {
+        "submit_to_testflight": false,
+        "submit_to_app_store": false
+      }
+    }
+  },
+  "previous_native_builds": [
+    {
+      "verified_on": "2026-11-15",
+      "source_commit": "d97cdda79f3e41be45ebeecd12718702e6b070dc",
+      "workflow_run_id": 43741827963,
+      "workflow_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43741827963",
+      "workflow_conclusion": "success",
+      "application_id": "com.korlixdeveloper.esha",
+      "version": "1.0.0",
+      "build_number": "1",
+      "validation": {
+        "backend_tests_passed": 121,
+        "flutter_tests_passed": 36,
+        "flutter_analysis": "no_issues",
+        "flutter_version": "3.47.9"
+      },
+      "artifacts": [
+        {
+          "file": "Esha-Android-debug-test-only-d97cdda.apk",
+          "bytes": 165885106,
+          "sha256": "be7bb8c2c4cd36ca2c0ac035355ecb0fe04359eb09d40ab5500d5964eb6a0e73",
+          "classification": "android_debug_test_only",
+          "store_uploadable": false
+        },
+        {
+          "file": "Esha-Android-unsigned-release-not-uploadable-d97cdda.aab",
+          "bytes": 56318279,
+          "sha256": "50c7ac57c113d47561d1be00fbf2a48277c216c8870dbf845e5acf10a7a163c4",
+          "classification": "android_unsigned_release",
+          "store_uploadable": false
+        },
+        {
+          "file": "Esha-iOS-Simulator-only-not-iPhone-IPA-d97cdda.zip",
+          "bytes": 58647181,
+          "sha256": "95bd72b93080272bd9d276840f42ab3118b974f5aa36d39e56cfe6cf2df7688b",
+          "classification": "ios_simulator_only",
+          "store_uploadable": false
+        }
+      ]
+    }
+  ],
+  "cloud_artifact_archives": [
+    {
+      "id": 14177961689,
+      "name": "Esha-iOS-Simulator-only-bf4ff498e3aa71eea07d4052d8789cd37ddba7c0",
+      "bytes": 58224880,
+      "sha256": "5395f68a1d528a6396ce798cddc195c909d7c2957fb264c83de6c3a57defeed1",
+      "expires_at_utc": "2026-11-29T19:47:22Z",
+      "url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43754059868/artifacts/14177961689",
+      "reported_file_count": 2,
+      "independent_download_rehash_verified": true
+    },
+    {
+      "id": 14177527286,
+      "name": "Esha-Android-debug-and-unsigned-bf4ff498e3aa71eea07d4052d8789cd37ddba7c0",
+      "bytes": 140735130,
+      "sha256": "0b56c544ef843028c85dd5a701d1e8f0f4a63e51cdad5b4834f354a0b2cfbfd5",
+      "expires_at_utc": "2026-11-29T19:51:08Z",
+      "url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43754059868/artifacts/14177527286",
+      "reported_file_count": 4,
+      "independent_download_rehash_verified": true
+    }
+  ],
+  "cloud_jobs": [
+    {
+      "id": 132934274890,
+      "name": "Analyze, test, and compile Android",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-15T19:44:29Z",
+      "completed_at": "2026-11-15T19:51:17Z",
+      "head_sha": "bf4ff498e3aa71eea07d4052d8789cd37ddba7c0",
+      "labels": [
+        "ubuntu-24.04"
+      ]
+    },
+    {
+      "id": 132934275227,
+      "name": "Compile iOS Simulator application",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-15T19:44:30Z",
+      "completed_at": "2026-11-15T19:47:32Z",
+      "head_sha": "bf4ff498e3aa71eea07d4052d8789cd37ddba7c0",
+      "labels": [
+        "macos-latest"
+      ]
+    }
+  ],
+  "native_ai_preparation": {
+    "source_commit": "e9415b73c0dc36d4474c2a2e2c6abbda7d126acd",
+    "scope": "Esha-only adapter and durable per-period provider-attempt budget; shared Astra default unchanged",
+    "scoped_offline_tests_passed": 55,
+    "adapter_tests_after_final_activation_guard_passed": 6,
+    "independent_review": "no concrete defect identified in spending caps, retry/replay, ownership, service permissions or shared-model preservation",
+    "migration": "20261115194040_esha_provider_attempt_budget.sql",
+    "migration_applied": false,
+    "deployed": false,
+    "activated": false,
+    "live_model_calls_performed": false,
+    "owner_model_and_allowance_choice_recorded": false,
+    "proposal_document": "backend/esha/billing/AI_OPTION.md"
   }
 }

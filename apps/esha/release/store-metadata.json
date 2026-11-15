@@ -3,7 +3,7 @@
   "status": "draft_for_owner_review_not_submitted",
   "prepared_on": "2026-11-15",
   "locale": "en-US",
-  "source_commit": "d97cdda79f3e41be45ebeecd12718702e6b070dc",
+  "source_commit": "bf4ff498e3aa71eea07d4052d8789cd37ddba7c0",
   "app": {
     "display_name": "Esha by Korlix",
     "source_version": "1.0.0",
@@ -14,7 +14,7 @@
       "status": "source_asset_only_store_artwork_not_verified"
     },
     "membership_scope": "catalog_routine_planner_vanity_look_studio_and_ai_require_fresh_same_account_server_verified_active_trial_or_paid_membership",
-    "scope_revision_status": "local_source_correction_not_store_submitted_or_policy_deployed"
+    "scope_revision_status": "native_cloud_build_verified_policies_live_listing_not_applied_or_submitted"
   },
   "apple": {
     "name": "Esha by Korlix",
@@ -73,11 +73,12 @@
     "subscription_terms_url": "https://chee-chai-chee-backend.onrender.com/esha/terms#offer-heading",
     "account_deletion_url": "https://chee-chai-chee-backend.onrender.com/esha/privacy#deletion",
     "apple_standard_eula_url": "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/",
-    "esha_policy_route_status": "earlier_deployment_verified_current_membership_scope_revision_not_deployed",
-    "esha_policy_verified_at_utc": "2026-11-15T18:06:09.694445+00:00",
-    "esha_policy_deployed_commit": "4bb80c1ce6fe1a314a31a23b60b70832c1045556",
-    "current_policy_copy_deployed": false,
-    "verification_scope_note": "The recorded HTTP verification applies to the earlier deployed policy content. Recheck public content after deployment of the current app-wide membership correction."
+    "esha_policy_route_status": "current_whole_app_membership_policies_deployed_and_verified",
+    "esha_policy_verified_at_utc": "2026-11-15T19:41:54.144Z",
+    "esha_policy_deployed_commit": "5e2a4086b7c4a58e8614abfa3625270b05def152",
+    "current_policy_copy_deployed": true,
+    "verification_scope_note": "The current whole-app membership Privacy and Terms HTML, response headers and deletion/offer anchors were verified after the policy-only deployment. Billing and live AI remain disabled.",
+    "esha_policy_deployment_id": "dep-dbt0l93l550s739n1p3g"
   },
   "membership_offer": {
     "status": "intended_offer_store_setup_and_activation_unverified",
@@ -95,26 +96,26 @@
     "account_legal_support_and_deletion_controls_require_subscription": false,
     "ai_model": null,
     "ai_max_output_tokens": null,
-    "ai_configuration_status": "esha_specific_model_and_output_budget_unapproved_no_live_ai_claim"
+    "ai_configuration_status": "inactive_esha_option_prepared_owner_choice_required_no_live_ai_claim"
   },
   "owner_review": {
     "listing_copy_approved": false,
     "store_identity_and_offer_verified": false,
-    "policy_urls_publicly_verified_for_this_release": false,
+    "policy_urls_publicly_verified_for_this_release": true,
     "signed_release_artifacts_verified": false,
     "store_screenshots": [],
     "store_screenshots_status": "not_supplied_in_this_metadata_draft",
     "store_disclosure_forms": "not_completed_requires_owner_review",
     "legal_and_age_rating_attestations": "not_completed_requires_owner_review",
     "notes": [
-      "This file is a local metadata draft. It does not create a store record, submit an app, publish a listing or verify a signed build.",
+      "This file is a prepared metadata draft. It has not been applied to the Apple listing or submitted for review. The guarded draft-listing workflow is committed but remains unrun because Apple authentication failed.",
       "The Apple app record, SKU, numeric Apple ID and team ID were observed in user-provided App Information and Register an App ID screenshots. These screenshots do not verify subscription products, signing, build upload or review submission. Google Play store identifiers remain unset, and subscription identifiers remain source candidates.",
-      "The earlier Esha Privacy and Terms pages returned HTTP 200 after deployment of commit 4bb80c1ce6fe1a314a31a23b60b70832c1045556. Public page headers and deletion/offer anchors were verified on November 15, 2026 at 18:06:09 UTC. That verification does not cover the current app-wide membership wording, which is local source work and has not been deployed.",
-      "The local native membership correction requires fresh same-account server verification for Discover, planner, vanity, studio and AI; the native correction passed 49 tests. Active members retain non-AI features at zero consultations. Account, recovery, restore/manage, legal, support and deletion controls remain accessible without an active subscription.",
-      "Trial and monthly consultation counts, the Esha-specific AI model and output budget are not approved or configured by this draft. Approve them, verify real store offers, deploy and verify the revised policies, and match the listing to the final build and active service before enabling purchases or submitting for review.",
-      "Owner review of legal entity, privacy and age-rating attestations, content rights, reviewer access and store screenshots remains outstanding. No owner attestation is inferred from this draft."
+      "The current Esha Privacy and Terms pages returned HTTP 200 and exactly matched frozen source after policy-only deployment of commit 5e2a4086b7c4a58e8614abfa3625270b05def152. Public page headers and deletion/offer anchors were verified on November 15, 2026 at 19:41:54 UTC.",
+      "The native membership correction requires fresh same-account server verification for Discover, planner, vanity, studio and AI. Native cloud run 43754059868 at bf4ff498e3aa71eea07d4052d8789cd37ddba7c0 passed 49 tests and both platform compilation jobs. Active members retain non-AI features at zero consultations. Account, recovery, restore/manage, legal, support and deletion controls remain accessible without an active subscription.",
+      "Trial and monthly consultation counts, the Esha-specific model and token/attempt budgets have not been approved or activated. The inactive option and spending guard are prepared at e9415b73c0dc36d4474c2a2e2c6abbda7d126acd; its new migration is not applied and adapter is not deployed. Verify the selected configuration and real store offers, then match the listing to the final build and active service before enabling purchases or submitting for review.",
+      "Privacy and age-rating attestations, content-rights responses, reviewer access and native store screenshots remain unfinished. The existing Korlix Inc policy operator has been preserved; the Apple account name alone is not treated as evidence requiring an operator change."
     ],
-    "current_policy_scope_revision_deployed": false
+    "current_policy_scope_revision_deployed": true
   },
-  "source_scope_note": "source_commit identifies the earlier built artifact checkpoint; the current app-wide membership and listing/policy corrections are local changes not represented by those artifact hashes."
+  "source_scope_note": "source_commit identifies the current successful native cloud build. Later release helpers, inactive backend preparation and checkpoint commits are recorded separately in build-verification.json. No signed release artifact or submission is inferred."
 }
