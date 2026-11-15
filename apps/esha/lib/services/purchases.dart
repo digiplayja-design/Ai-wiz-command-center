@@ -174,8 +174,9 @@ class EshaPurchases extends ChangeNotifier {
     );
     if (_foreground && hasAppAccess && untilExpiry > refreshInterval) {
       _refreshTimer = Timer(refreshInterval, () {
-        if (!_disposed && _foreground && api.isOwner(owner))
+        if (!_disposed && _foreground && api.isOwner(owner)) {
           unawaited(refresh());
+        }
       });
     }
   }
