@@ -354,6 +354,30 @@ workflows:
     artifacts:
       - $CM_BUILD_DIR/apps/esha/artifacts/apple-listing/Esha-Apple-draft-listing-verification.json
 
+  esha-apple-release-inventory:
+    name: Esha by Korlix — inspect Apple release readiness
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    working_directory: apps/esha
+    # Manual, GET-only inventory of records bound to Esha's verified app.
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    environment:
+      groups:
+        - esha_release
+    scripts:
+      - name: Install the pinned Apple inventory CLI
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.esha-apple-inventory-tools"
+          "$CM_BUILD_DIR/.esha-apple-inventory-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+      - name: Inspect Esha's Apple records without changing them
+        script: |
+          set -euo pipefail
+          "$CM_BUILD_DIR/.esha-apple-inventory-tools/bin/python" "$CM_BUILD_DIR/scripts/esha/inspect_apple_release.py"
+    artifacts:
+      - $CM_BUILD_DIR/apps/esha/artifacts/apple-inventory/Esha-Apple-release-inventory.json
+
   esha-ios-signing-setup:
     name: Esha by Korlix — verify and prepare iOS profile
     instance_type: mac_mini_m2
