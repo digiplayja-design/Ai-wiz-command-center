@@ -2,6 +2,7 @@ import {ESHA_BUNDLE, ESHA_PRODUCT, UUID, EshaBillingError, allowanceConfiguratio
   publicCatalog, productFor, eshaAccountId, digest, fail} from './catalog.mjs';
 import {eshaProviders} from './providers.mjs';
 import {loadEshaCatalog, consultationInput, consultationPrompt, consultationResult, ESHA_RESULT_FORMAT} from './consultation.mjs';
+import {hasUnlimitedAccess} from '../../security/developer_access.mjs';
 
 function statusCode(error) {
   const value = error?.statusCode ?? error?.status;
@@ -31,14 +32,20 @@ export function createEshaBilling({database, requireUser, environment = process.
     result.state = result.purchasesEnabled ? 'ready' : 'planned';
     return result;
   }
-  async function snapshot(userId, providerName, warning = null) {
+  async function snapshot(userId, providerName, warning = null, {authenticatedUser} = {}) {
     const result = await call(userId, 'snapshot');
     const configured = allowanceConfiguration(environment).configured;
     const allowance = {...result.allowance, configured: configured && result.allowance.configured};
     if (!configured) { allowance.limit = null; allowance.remaining = null; }
-    return {...catalogFor(providerName), membership: result.membership, allowance, warning};
+    // Developer access comes only from the server-owned grant attached by
+    // requireUser. It is separate from store membership and paid AI allowance.
+    const developer = authenticatedUser?.id === userId && hasUnlimitedAccess(authenticatedUser);
+    const member = result.membership.active === true && result.membership.verificationFresh === true &&
+      Date.parse(result.membership.expiresAt) > Date.now();
+    const appAccess = {active: developer || member, source: developer ? 'developer' : member ? 'store' : null};
+    return {...catalogFor(providerName), membership: result.membership, appAccess, allowance, warning};
   }
-  async function sync(userId, details, {voidedOrderId} = {}) {
+  async function sync(userId, details, {voidedOrderId, authenticatedUser} = {}) {
     if (typeof details.productId !== 'string') fail('Choose the Esha monthly membership.', 400, 'invalid_product');
     productFor(details.provider, details.productId);
     let facts = await provider.verify(details.provider, {userId, productId: details.productId,
@@ -54,7 +61,7 @@ export function createEshaBilling({database, requireUser, environment = process.
     const applied = await call(userId, 'apply', {...facts, allowance: config.configured ? (facts.trial ? config.trial : config.monthly) : null});
     // Persist entitlement idempotently before acknowledging with Google or finishing in native StoreKit.
     await provider.finish({...facts, active: facts.active && applied.membership.active});
-    const status = await snapshot(userId, details.provider);
+    const status = await snapshot(userId, details.provider, null, {authenticatedUser});
     return {verified: true, completePurchase: true, active: status.membership.active, status};
   }
   async function refresh(userId) {
@@ -128,12 +135,13 @@ export function createEshaBilling({database, requireUser, environment = process.
     app.get('/api/esha/billing/status', protectedRoute(async (req, res, user) => {
       productFor(req.query.provider);
       const warning = req.query.refresh === '1' ? await refresh(user.id) : null;
-      res.json(await snapshot(user.id, req.query.provider, warning));
+      res.json(await snapshot(user.id, req.query.provider, warning, {authenticatedUser: user}));
     }));
     app.post('/api/esha/billing/prepare', protectedRoute(async (req, res, user) => {
       const {provider: providerName, productId} = req.body || {};
       if (typeof productId !== 'string') fail('Choose the Esha monthly membership.', 400, 'invalid_product');
       const product = productFor(providerName, productId);
+      if (hasUnlimitedAccess(user)) fail('Your developer access is already active. Open Esha to continue.', 409, 'developer_access_active');
       if (!catalogFor(providerName).purchasesEnabled) fail('Esha store membership is being set up. Please try again later.', 503, 'purchases_disabled');
       const warning = await refresh(user.id);
       if (warning) fail(warning, 503, 'store_unavailable');
@@ -143,7 +151,7 @@ export function createEshaBilling({database, requireUser, environment = process.
     }));
     app.post('/api/esha/billing/verify', protectedRoute(async (req, res, user) => {
       // Existing purchases remain restorable when new sales or AI are paused.
-      res.json(await sync(user.id, req.body || {}));
+      res.json(await sync(user.id, req.body || {}, {authenticatedUser: user}));
     }));
     app.post('/api/esha/consult', protectedRoute(async (req, res, user) => res.json(await consult(user, req.body || {}))));
     app.post('/api/esha/billing/apple/notifications', async (req, res) => {
