@@ -231,6 +231,14 @@ def verify_ios(path, kind, version=None, build=None):
         if not any(name.endswith("/Flutter.framework/Flutter") for name in names):
             raise ValueError("The iOS artifact is missing its native Flutter engine")
         app_root = str(PurePosixPath(infos[0]).parent) + "/"
+        # The local selfie picker is app functionality from build 5 onward;
+        # its native plugin can be statically linked, so framework presence
+        # alone cannot establish whether this usage string is required.
+        build_code = str(info.get("CFBundleVersion", ""))
+        if build_code.isdigit() and int(build_code) >= 5:
+            purpose = info.get("NSPhotoLibraryUsageDescription")
+            if not isinstance(purpose, str) or not purpose.strip():
+                raise ValueError("Esha selfie selection requires a nonempty NSPhotoLibraryUsageDescription")
         if app_root + "Frameworks/WebRTC.framework/WebRTC" in names:
             # Apple checks SDK camera references even when Esha requests audio
             # only. Validate the finished bundle before exposing it for upload.

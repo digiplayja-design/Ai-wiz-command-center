@@ -1,7 +1,7 @@
 name: esha_by_korlix
 description: Native beauty consultant and personal vanity from Korlix.
 publish_to: none
-version: 1.0.0+4
+version: 1.0.0+5
 
 environment:
   sdk: '>=3.13.7 <4.0.0'
@@ -11,6 +11,7 @@ dependencies:
   flutter:
     sdk: flutter
   http: 1.6.0
+  image_picker: 1.2.4
   shared_preferences: 2.5.5
   flutter_secure_storage: 10.0.0
   flutter_webrtc: 1.6.3

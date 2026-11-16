@@ -65,3 +65,8 @@ kotlin {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Bundled model: face landmarks work without downloading a model after installation.
+    implementation("com.google.mlkit:face-detection:16.1.7")
+}

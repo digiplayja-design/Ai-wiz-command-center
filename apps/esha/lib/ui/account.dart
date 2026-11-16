@@ -811,7 +811,7 @@ class MembershipScreen extends StatelessWidget {
                       _feature(
                         Icons.favorite_border,
                         'A vanity to come back to',
-                        'Keep favorites, saved routines and illustrated looks together.',
+                        'Keep favorites, saved routines and your look settings together.',
                       ),
                       const SizedBox(height: 16),
                       EshaPanel(

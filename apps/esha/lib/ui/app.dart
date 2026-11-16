@@ -5,6 +5,7 @@ import '../models.dart';
 import '../services/vanity_sync.dart';
 import 'account.dart';
 import 'brand.dart';
+import 'selfie_studio.dart';
 import 'voice.dart';
 
 export 'brand.dart' show eshaTheme;
@@ -1082,38 +1083,10 @@ class StudioScreen extends StatelessWidget {
       children: [
         const PageHeading(
           'THE LOOK STUDIO',
-          'Play with a little color.',
-          'Explore a lip finish and lash mood, then save the combination you love.',
+          'See your look, on you.',
+          'Upload a selfie to explore lip color and lashes, then save your favorite settings.',
         ),
-        EshaPanel(
-          color: blush,
-          padding: EdgeInsets.zero,
-          child: Column(
-            children: [
-              Semantics(
-                label:
-                    'Stylized beauty illustration with ${lookNames[look.shade]} lips, ${look.finish.toLowerCase()} finish and ${look.lashes.toLowerCase()} lashes',
-                child: SizedBox(
-                  height: 340,
-                  width: double.infinity,
-                  child: CustomPaint(painter: LookPainter(look)),
-                ),
-              ),
-              const Padding(
-                padding: EdgeInsets.fromLTRB(20, 0, 20, 18),
-                child: Text(
-                  'ILLUSTRATIVE COLOR STUDY · NOT A SELFIE TRY-ON',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 9,
-                    letterSpacing: 1.1,
-                    color: muted,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+        SelfiePreviewCard(controller: c.selfie, look: look),
         const SizedBox(height: 24),
         EshaPanel(
           child: Column(
@@ -1204,7 +1177,10 @@ class StudioScreen extends StatelessWidget {
                   onPressed: c.canEditCollection
                       ? () {
                           if (c.saveLook()) {
-                            showMessage(context, 'Look saved to My Vanity.');
+                            showMessage(
+                              context,
+                              'Look settings saved to My Vanity. Your photo is not saved.',
+                            );
                           }
                         }
                       : null,
@@ -1217,7 +1193,7 @@ class StudioScreen extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         const Text(
-          'Colors are illustrative and are not tied to a product shade. Results do not predict how makeup will look on your face or skin tone.',
+          'This is an approximate cosmetic preview, not an exact product-shade match. Lighting and screens affect color. Saving keeps only the shade, finish and lash settings; your photo is not synced.',
           style: TextStyle(color: muted, fontSize: 12),
         ),
       ],
@@ -1337,7 +1313,7 @@ class _VanityScreenState extends State<VanityScreen> {
           if (c.vanity.looks.isEmpty)
             _empty(
               'A mood worth saving.',
-              'Play with an illustrative lip color, finish and lash combination.',
+              'Try lip color and lashes on a selfie, then save the combination. Your photo is not saved with the look.',
               'Open the look studio',
               widget.onStudio,
             )
@@ -1357,7 +1333,7 @@ class _VanityScreenState extends State<VanityScreen> {
                         ),
                       ),
                       Text(
-                        '${look.lashes} lashes · illustrative color study',
+                        '${look.lashes} lashes · saved settings, no photo',
                         style: const TextStyle(color: muted),
                       ),
                       Wrap(

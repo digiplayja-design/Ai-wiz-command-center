@@ -30,6 +30,8 @@
 	<string>Esha’s voice conversations use only your microphone. Esha does not use your camera.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Esha uses your microphone when you start a voice conversation. Korlix and OpenAI process your audio and conversation to answer you.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Choose a selfie to preview lip colors and lashes on your device. Esha does not upload your selfie.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

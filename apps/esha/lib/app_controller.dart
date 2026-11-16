@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import 'models.dart';
 import 'services/korlix_api.dart';
 import 'services/purchases.dart';
+import 'services/selfie.dart';
 import 'services/vanity_sync.dart';
 import 'voice_controller.dart';
 
@@ -65,7 +66,10 @@ class EshaController extends ChangeNotifier {
     required this.sync,
     required this.purchases,
     EshaVoiceController? voiceController,
+    SelfiePhotoService? selfieService,
   }) {
+    selfie = SelfieStudioController(service: selfieService);
+    selfie.addListener(_selfieChanged);
     voice =
         voiceController ?? EshaVoiceController(api: api, purchases: purchases);
     voice.addListener(_changed);
@@ -80,6 +84,7 @@ class EshaController extends ChangeNotifier {
   final VanitySync sync;
   final EshaPurchases purchases;
   late final EshaVoiceController voice;
+  late final SelfieStudioController selfie;
   bool initializing = true,
       authBusy = false,
       chatBusy = false,
@@ -118,6 +123,7 @@ class EshaController extends ChangeNotifier {
   }
 
   void _resetAccountPrivacy() {
+    selfie.removePhoto();
     voice.setAudioConsent(false);
     _aiConsentUser = null;
     _reporting.clear();
@@ -132,8 +138,19 @@ class EshaController extends ChangeNotifier {
   }
 
   String _pendingKey(String userId) => 'esha.consultation.pending.$userId';
-  void _changed() {
+  void _selfieChanged() {
     if (!_disposed) notifyListeners();
+  }
+
+  void _changed() {
+    if (!_disposed) {
+      selfie.updateAccess(
+        ownerId: session?.userId,
+        accountEpoch: _accountEpoch,
+        allowed: hasAppAccess && !authBusy && !initializing,
+      );
+      notifyListeners();
+    }
   }
 
   bool _requireAppAccess({bool consultation = false}) {
@@ -148,6 +165,7 @@ class EshaController extends ChangeNotifier {
   }
 
   Future<void> initialize() async {
+    unawaited(selfie.initialize());
     try {
       await sync.attach(null);
       await api.restoreSession();
@@ -642,6 +660,8 @@ class EshaController extends ChangeNotifier {
     sync.removeListener(_changed);
     purchases.removeListener(_changed);
     voice.removeListener(_changed);
+    selfie.removeListener(_selfieChanged);
+    selfie.dispose();
     voice.dispose();
     sync.dispose();
     purchases.dispose();

@@ -6,25 +6,29 @@ the pink Korlix icon and the existing Esha visual direction.
 
 ## Native experience
 
-Discover, the routine planner, My Vanity, Try a Look and live consultations all
-require a signed-in account with a freshly server-verified active Esha trial or
-paid membership. A local purchase result or stored collection does not unlock
-the app. Core features remain usable when an active member's AI allowance is
-exhausted; live consultations also require available service, remaining
-allowance and explicit AI-sharing permission.
+Discover, the routine planner, My Vanity and Try a Look require signed-in,
+freshly server-verified app access through an active Esha trial, paid membership
+or an existing developer access grant. A local purchase result or stored
+collection does not unlock the app. Core features remain usable when an active
+member's AI allowance is exhausted. Live consultations also require available
+service, remaining allowance and explicit AI-sharing permission; developer app
+access does not activate paused AI services or create an AI allowance.
 
 - **Discover:** browse the manufacturer-sourced starter catalog, filter product
   categories, inspect product details and open the manufacturer page.
 - **Ask Esha:** create a guided beauty edit around a budget and stated preferences,
   optionally using products already owned. Live AI consultations use the same
   Esha membership and its disclosed consultation allowance.
-- **Try a Look:** explore illustrated lip colors, finishes and lash choices, then
-  save a look. This is an illustration; the app does not scan a face or provide a
-  camera-based virtual try-on.
+- **Try a Look:** explore illustrated lip colors, finishes and lash choices or
+  select one existing photo for a selfie preview. Lip and eye landmarks are
+  located on-device with Apple Vision on iOS or bundled Google ML Kit on Android.
+  Colors and placement are approximate. The feature does not identify people,
+  infer skin tone, assess health or offer camera capture. Saving a look saves
+  effect settings, without its photo or facial landmarks.
 - **My Vanity:** keep favorites, owned products, saved edits and looks. Signed-in
   collections can sync to the account with explicit handling of conflicting
   edits and pending changes. Existing device-only guest data remains separate
-  and does not provide continued app access without membership.
+  and does not itself grant app access.
 - **Account and membership:** sign in, create a shared Korlix account, request a
   password-reset email, restore purchases, manage store subscriptions and request
   whole-account deletion. These account, recovery, restore, subscription,
@@ -43,6 +47,31 @@ user review the paired question, answer or disclosed
 excerpt, reason and optional details before sending. Report submission uses the
 existing authenticated support route and requires a returned receipt; no live
 support report is sent as part of development checks.
+
+### Selfie data handling
+
+The system photo picker supplies one user-selected image with
+`requestFullMetadata: false`. Esha decodes and downscales the image locally;
+photos and facial landmarks are excluded from Korlix/OpenAI requests, account
+collections, vanity sync and saved-look data. The active preview belongs only to
+the current app session and is cleared on removal, sign-out or account switch.
+During normal operation, app-owned temporary picker copies are removed after
+reading or discarding them. Android picker results recovered from an interrupted
+previous process are discarded at startup and cleanup is attempted; their photos
+are never silently restored. An app interruption or OS/file error can leave a
+temporary app-cache copy until the device clears that cache or the app is
+removed. The original photo-library asset is unchanged.
+
+Google documents that ML Kit processes image inputs and results on-device while
+sending SDK performance and usage metrics to Google. Its Android disclosure
+includes device/app information and per-installation identifiers for bundled
+features. Do not describe this SDK as having no telemetry. See the primary
+[ML Kit privacy information](https://developers.google.com/ml-kit/terms) and
+[Android data disclosure](https://developers.google.com/ml-kit/android-data-disclosure).
+
+The Esha policy amendment is in `backend/esha/policies.mjs`. Release verification
+must confirm the session and network boundaries above in the actual native
+implementation before the updated binary and matching policy are published.
 
 ## Account and session model
 
