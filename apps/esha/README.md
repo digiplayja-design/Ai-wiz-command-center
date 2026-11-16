@@ -19,17 +19,25 @@ access does not activate paused AI services or create an AI allowance.
 - **Ask Esha:** create a guided beauty edit around a budget and stated preferences,
   optionally using products already owned. Live AI consultations use the same
   Esha membership and its disclosed consultation allowance.
-- **Try a Look:** explore illustrated lip colors, finishes and lash choices or
-  select one existing photo for a selfie preview. Lip and eye landmarks are
+- **Try a Look:** select one existing photo to preview lip colors, finishes and
+  lash choices. Lip and eye landmarks are
   located on-device with Apple Vision on iOS or bundled Google ML Kit on Android.
   Colors and placement are approximate. The feature does not identify people,
   infer skin tone, assess health or offer camera capture. Saving a look saves
   effect settings, without its photo or facial landmarks.
   A selected photo appears as soon as it is decoded, while makeup alignment
   continues. If alignment is unavailable, the original stays visible with a
-  clear explanation and Change/Remove controls; makeup controls appear only
-  after valid eye and lip landmarks are available. A face is not rejected just
-  because it occupies a smaller percentage of a wider photo.
+  clear explanation and Change/Remove controls. **Crop / zoom** lets you pinch,
+  drag or use a zoom slider to frame the face, then apply the crop and check
+  alignment again. Reset restores the full uploaded image for editing, and
+  Cancel keeps the current preview. The uploaded original is kept only in
+  session memory and remains unchanged. A face is not rejected just because
+  it occupies a smaller percentage of a wider photo.
+  Selecting a shade, finish or lash style switches an aligned preview to
+  **Try-on**, including after comparing **Original**. Until alignment is ready,
+  style choices are clearly described as settings only and no makeup is
+  claimed to be applied. Original/Try-on comparison and makeup strength become
+  available after valid eye and lip landmarks are found.
 - **My Vanity:** keep favorites, owned products, saved edits and looks. Signed-in
   collections can sync to the account with explicit handling of conflicting
   edits and pending changes. Existing device-only guest data remains separate

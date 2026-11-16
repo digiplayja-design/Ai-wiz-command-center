@@ -1079,6 +1079,16 @@ class StudioScreen extends StatelessWidget {
       EntitledContent(controller: controller, builder: _buildContent);
   Widget _buildContent(BuildContext context) {
     final c = controller, look = controller.vanity.studio;
+    final selfie = c.selfie;
+    final String? lookStatus = selfie.busy
+        ? 'Photo preparation is in progress. You can edit and save these settings while makeup alignment finishes.'
+        : selfie.photo == null
+        ? 'Choose Upload selfie to preview these settings. You can also edit and save a look without a photo.'
+        : !selfie.canTryOn
+        ? 'Settings only. Makeup is not applied to this photo. Use Crop / zoom to bring your face closer, or choose Change selfie.'
+        : selfie.showOriginal
+        ? 'Original is showing. Choose a look setting or tap Try-on to see the makeup preview.'
+        : null;
     return PageBody(
       children: [
         const PageHeading(
@@ -1092,6 +1102,17 @@ class StudioScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (lookStatus != null) ...[
+                Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    lookStatus,
+                    key: const Key('studio-look-status'),
+                    style: const TextStyle(color: muted, fontSize: 13),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
               const Text(
                 'Lip mood',
                 style: TextStyle(fontWeight: FontWeight.w600),

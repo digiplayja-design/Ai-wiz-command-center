@@ -133,6 +133,11 @@ class SelfiePhoto {
   final SelfieException? alignmentIssue;
   bool get hasMakeupAlignment => face != null;
   ui.Size get size => ui.Size(image.width.toDouble(), image.height.toDouble());
+  SelfiePhoto clone() => SelfiePhoto(
+    image: image.clone(),
+    face: face,
+    alignmentIssue: alignmentIssue,
+  );
   bool _disposed = false;
   void dispose() {
     if (_disposed) return;
@@ -144,6 +149,18 @@ class SelfiePhoto {
 abstract interface class SelfiePhotoService {
   Future<void> discardInterruptedSelection();
   Future<SelfiePhoto?> choose({
+    void Function(String message)? onProgress,
+    void Function(SelfiePhoto photo)? onPreview,
+  });
+}
+
+/// Local cropping is a separate capability so picker-only implementations can
+/// still be used. The caller owns [source] and keeps it alive until completion;
+/// the returned photo and any early preview each own their image handle.
+abstract interface class SelfiePhotoCropper {
+  Future<SelfiePhoto> crop(
+    ui.Image source,
+    ui.Rect normalizedCrop, {
     void Function(String message)? onProgress,
     void Function(SelfiePhoto photo)? onPreview,
   });
@@ -190,7 +207,8 @@ class PickerFileCleaner {
   }
 }
 
-class DeviceSelfiePhotoService implements SelfiePhotoService {
+class DeviceSelfiePhotoService
+    implements SelfiePhotoService, SelfiePhotoCropper {
   DeviceSelfiePhotoService({
     ImagePicker? picker,
     SelfieDetector? detector,
@@ -265,40 +283,10 @@ class DeviceSelfiePhotoService implements SelfiePhotoService {
         );
       }
       image = await normalizeSelfie(source);
-      // Display a decoded photo immediately. The controller owns this clone,
-      // so cancelling/removing it cannot dispose pixels still used here.
-      if (onPreview != null) {
-        onPreview(SelfiePhoto(image: image.clone()));
-      }
-      onProgress?.call('Aligning the look on your device…');
-      FaceLandmarks? face;
-      SelfieException? alignmentIssue;
-      try {
-        final png = await image.toByteData(format: ui.ImageByteFormat.png);
-        if (png == null || png.lengthInBytes > maxEncodedPreviewBytes) {
-          throw const SelfieException(
-            'alignment_image_too_large',
-            'Your photo is displayed. Choose a smaller copy to add the makeup preview.',
-          );
-        }
-        // The detector and painter receive the same normalized pixels.
-        // Re-encoding excludes the source image's EXIF and location tags.
-        final response = await _detector(
-          png.buffer.asUint8List(png.offsetInBytes, png.lengthInBytes),
-        );
-        face = FaceLandmarks.fromResponse(
-          response,
-          ui.Size(image.width.toDouble(), image.height.toDouble()),
-        );
-      } catch (failure) {
-        // Alignment controls makeup only. Keep the selected photo even when
-        // a detector cannot find one suitable face or complete landmarks.
-        alignmentIssue = _alignmentIssue(failure);
-      }
-      final result = SelfiePhoto(
-        image: image,
-        face: face,
-        alignmentIssue: alignmentIssue,
+      final result = await _alignImage(
+        image,
+        onProgress: onProgress,
+        onPreview: onPreview,
       );
       image = null; // Ownership transfers to the session-scoped controller.
       return result;
@@ -306,6 +294,124 @@ class DeviceSelfiePhotoService implements SelfiePhotoService {
       image?.dispose();
       if (selected != null) await _fileCleaner.clean(selected);
     }
+  }
+
+  @override
+  Future<SelfiePhoto> crop(
+    ui.Image source,
+    ui.Rect normalizedCrop, {
+    void Function(String message)? onProgress,
+    void Function(SelfiePhoto photo)? onPreview,
+  }) async {
+    final rect = normalizedCrop;
+    if ([
+          rect.left,
+          rect.top,
+          rect.right,
+          rect.bottom,
+        ].any((value) => !value.isFinite) ||
+        rect.isEmpty ||
+        rect.left < 0 ||
+        rect.top < 0 ||
+        rect.right > 1 ||
+        rect.bottom > 1) {
+      throw const SelfieException(
+        'invalid_crop',
+        'Keep the crop inside your photo and try again.',
+      );
+    }
+    final left = (rect.left * source.width).floor();
+    final top = (rect.top * source.height).floor();
+    final right = (rect.right * source.width).ceil();
+    final bottom = (rect.bottom * source.height).ceil();
+    final width = right - left, height = bottom - top;
+    if (width < 160 || height < 160) {
+      throw const SelfieException(
+        'crop_too_small',
+        'Zoom out a little so the crop keeps enough detail for your eyes and lips.',
+      );
+    }
+    if (math.max(width, height) > maxPreviewEdge) {
+      throw const SelfieException(
+        'crop_too_large',
+        'Choose the photo again before cropping it.',
+      );
+    }
+    onProgress?.call('Preparing your crop…');
+    ui.Image? cropped;
+    ui.Picture? picture;
+    try {
+      final recorder = ui.PictureRecorder();
+      ui.Canvas(recorder).drawImageRect(
+        source,
+        ui.Rect.fromLTWH(
+          left.toDouble(),
+          top.toDouble(),
+          width.toDouble(),
+          height.toDouble(),
+        ),
+        ui.Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
+        ui.Paint()..filterQuality = ui.FilterQuality.none,
+      );
+      picture = recorder.endRecording();
+      cropped = await picture.toImage(width, height);
+      // Re-detect against the cropped pixels. Landmarks from the uncropped
+      // photo are never reused at a different scale or offset.
+      final result = await _alignImage(
+        cropped,
+        onProgress: onProgress,
+        onPreview: onPreview,
+      );
+      cropped = null;
+      return result;
+    } finally {
+      picture?.dispose();
+      cropped?.dispose();
+    }
+  }
+
+  Future<SelfiePhoto> _alignImage(
+    ui.Image image, {
+    void Function(String message)? onProgress,
+    void Function(SelfiePhoto photo)? onPreview,
+  }) async {
+    if (onPreview != null) {
+      final preview = SelfiePhoto(image: image.clone());
+      try {
+        onPreview(preview);
+      } catch (_) {
+        preview.dispose();
+        rethrow;
+      }
+    }
+    onProgress?.call('Aligning the look on your device…');
+    FaceLandmarks? face;
+    SelfieException? alignmentIssue;
+    try {
+      final png = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (png == null || png.lengthInBytes > maxEncodedPreviewBytes) {
+        throw const SelfieException(
+          'alignment_image_too_large',
+          'Your photo is displayed. Crop closer to your face to add the makeup preview.',
+        );
+      }
+      // The detector and painter receive identical upright pixels. PNG
+      // re-encoding excludes the source image's EXIF and location tags.
+      final response = await _detector(
+        png.buffer.asUint8List(png.offsetInBytes, png.lengthInBytes),
+      );
+      face = FaceLandmarks.fromResponse(
+        response,
+        ui.Size(image.width.toDouble(), image.height.toDouble()),
+      );
+    } catch (failure) {
+      alignmentIssue = _alignmentIssue(failure);
+    }
+    return SelfiePhoto(
+      image: image,
+      face: face,
+      alignmentIssue: alignmentIssue,
+    );
   }
 
   static SelfieException _alignmentIssue(Object failure) => switch (failure) {
@@ -380,6 +486,12 @@ class SelfieStudioController extends ChangeNotifier {
   final SelfiePhotoService _service;
   SelfiePhoto? _photo;
   SelfiePhoto? get photo => _photo;
+  SelfiePhoto? _sourcePhoto;
+
+  /// Separate ownership preserves the uploaded original for non-destructive
+  /// edits and Reset, even after several cropped previews are applied.
+  SelfiePhoto? get sourcePhoto => _sourcePhoto;
+  ui.Rect cropRect = const ui.Rect.fromLTWH(0, 0, 1, 1);
   bool busy = false, showOriginal = false, _allowed = false, _disposed = false;
   String? error;
   String busyMessage = 'Choose a selfie from your photos…';
@@ -389,6 +501,8 @@ class SelfieStudioController extends ChangeNotifier {
   Future<void>? _initialization;
   bool get canChoose => !_disposed && _allowed && _ownerId != null && !busy;
   bool get canTryOn => _photo?.hasMakeupAlignment == true;
+  bool get canCrop =>
+      canChoose && _sourcePhoto != null && _service is SelfiePhotoCropper;
 
   Future<void> initialize() => _initialization ??= _initializePicker();
 
@@ -441,7 +555,10 @@ class SelfieStudioController extends ChangeNotifier {
             return;
           }
           _photo?.dispose();
+          _sourcePhoto?.dispose();
           _photo = preview;
+          _sourcePhoto = preview.clone();
+          cropRect = const ui.Rect.fromLTWH(0, 0, 1, 1);
           showOriginal = true;
           notifyListeners();
         },
@@ -458,7 +575,10 @@ class SelfieStudioController extends ChangeNotifier {
       }
       if (selected != null) {
         _photo?.dispose();
+        _sourcePhoto?.dispose();
         _photo = selected;
+        _sourcePhoto = selected.clone();
+        cropRect = const ui.Rect.fromLTWH(0, 0, 1, 1);
         showOriginal = !selected.hasMakeupAlignment;
       }
     } catch (failure) {
@@ -477,6 +597,65 @@ class SelfieStudioController extends ChangeNotifier {
         };
       }
     } finally {
+      if (current()) {
+        busy = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> applyCrop(ui.Rect normalizedCrop) async {
+    if (!canCrop) return;
+    final source = _sourcePhoto!;
+    // Keep an independent handle alive if the account changes or Remove photo
+    // disposes the session's originals while native alignment is pending.
+    final input = source.image.clone();
+    final generation = ++_generation;
+    busy = true;
+    busyMessage = 'Preparing your crop…';
+    error = null;
+    notifyListeners();
+    bool current() =>
+        !_disposed &&
+        generation == _generation &&
+        _allowed &&
+        identical(source, _sourcePhoto);
+    try {
+      final cropped = await (_service as SelfiePhotoCropper).crop(
+        input,
+        normalizedCrop,
+        onProgress: (message) {
+          if (current()) {
+            busyMessage = message;
+            notifyListeners();
+          }
+        },
+        onPreview: (preview) {
+          if (!current()) {
+            preview.dispose();
+            return;
+          }
+          _photo?.dispose();
+          _photo = preview;
+          cropRect = normalizedCrop;
+          showOriginal = true;
+          notifyListeners();
+        },
+      );
+      if (!current()) {
+        cropped.dispose();
+        return;
+      }
+      _photo?.dispose();
+      _photo = cropped;
+      cropRect = normalizedCrop;
+      showOriginal = !cropped.hasMakeupAlignment;
+    } catch (failure) {
+      if (current()) {
+        error = failure is SelfieException ? failure.message : 'This crop could not be prepared. Try a wider crop or choose another photo.';
+      }
+    } finally {
+      input.dispose();
       if (current()) {
         busy = false;
         notifyListeners();
@@ -505,6 +684,9 @@ class SelfieStudioController extends ChangeNotifier {
     ++_generation;
     _photo?.dispose();
     _photo = null;
+    _sourcePhoto?.dispose();
+    _sourcePhoto = null;
+    cropRect = const ui.Rect.fromLTWH(0, 0, 1, 1);
     busy = false;
     error = null;
     showOriginal = false;

@@ -7,7 +7,7 @@
   "app": {
     "display_name": "Esha by Korlix",
     "source_version": "1.0.0",
-    "source_build_number": 6,
+    "source_build_number": 7,
     "icon": {
       "source_path": "apps/esha/assets/esha-korlix-pink.png",
       "description": "Existing pink Korlix icon used by the native Esha project.",
@@ -868,6 +868,17 @@
       "france_available": false,
       "release_evidence": "docs/releases/esha-selfie-display-fix-20261116/selfie-display-fix-checkpoint-20261116.json",
       "full_flutter_tests_passed": 146
+    },
+    "crop_and_look_fix": {
+      "minimum_build": 7,
+      "status": "implemented_pending_release_verification",
+      "crop_and_zoom_on_device": true,
+      "preserves_uploaded_original_for_reset": true,
+      "reruns_landmarks_on_cropped_pixels": true,
+      "valid_style_selection_activates_try_on": true,
+      "unaligned_style_choices_clearly_marked_settings_only": true,
+      "photo_or_landmark_upload": false,
+      "physical_device_validation": false
     }
   }
 }

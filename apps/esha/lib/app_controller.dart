@@ -358,8 +358,22 @@ class EshaController extends ChangeNotifier {
   void setProfile(BeautyProfile profile) =>
       sync.update(vanity.copyWith(beautyProfile: profile));
   void setStudio(StudioLook look) {
-    if (!_requireAppAccess()) return;
-    sync.update(vanity.copyWith(studio: look));
+    if (_disposed ||
+        authBusy ||
+        initializing ||
+        !_requireAppAccess() ||
+        !sync.canEdit) {
+      return;
+    }
+    final current = vanity.studio;
+    if (look.shade != current.shade ||
+        look.finish != current.finish ||
+        look.lashes != current.lashes) {
+      sync.update(vanity.copyWith(studio: look));
+    }
+    // Selecting a look expresses preview intent, including reselecting the
+    // same shade while comparing Original. Only ready, aligned photos can show it.
+    if (selfie.canTryOn && !selfie.busy) selfie.setShowOriginal(false);
   }
 
   bool saveRoutine() {

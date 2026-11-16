@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../models.dart';
 import '../services/selfie.dart';
 import 'brand.dart';
+import 'selfie_crop_editor.dart';
 
 class SelfiePreviewCard extends StatelessWidget {
   const SelfiePreviewCard({
@@ -115,6 +116,8 @@ class SelfiePreviewCard extends StatelessWidget {
                 Text(
                   controller.busy
                       ? 'Your photo stays visible while Esha aligns the makeup preview.'
+                      : controller.canCrop
+                      ? 'Try Crop / zoom to bring your face closer, or choose Change selfie for another photo.'
                       : 'Choose Change selfie to try another photo, or Remove photo to clear this preview.',
                   style: const TextStyle(color: muted, fontSize: 12),
                 ),
@@ -187,6 +190,17 @@ class SelfiePreviewCard extends StatelessWidget {
               icon: const Icon(Icons.photo_library_outlined),
               label: Text(photo == null ? 'Upload selfie' : 'Change selfie'),
             ),
+            if (photo != null && controller.sourcePhoto != null) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                key: const Key('open-selfie-crop'),
+                onPressed: controller.canCrop
+                    ? () => showSelfieCropEditor(context, controller)
+                    : null,
+                icon: const Icon(Icons.crop),
+                label: const Text('Crop / zoom'),
+              ),
+            ],
             if (controller.busy) ...[
               const SizedBox(height: 16),
               const LinearProgressIndicator(),
