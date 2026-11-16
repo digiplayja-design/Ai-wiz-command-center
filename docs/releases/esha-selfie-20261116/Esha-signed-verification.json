@@ -1,0 +1,14 @@
+{
+  "artifact": "Esha by Korlix.ipa",
+  "artifact_kind": "ios-signed",
+  "source_commit": "f125ff9fe2edb32ffbd54b86be1a7115f2deecd4",
+  "bytes": 48499696,
+  "sha256": "2afeb2c4a657a72d66438641ba7e1ca486036a5b9f2e24e81338eabb1add1cce",
+  "application_id": "com.korlixdeveloper.esha",
+  "version_name": "1.0.0",
+  "version_code": "5",
+  "platform": "ios-device",
+  "signing": "verified-app-store-distribution",
+  "profile_type": "app_store",
+  "submitted_to_store": false
+}

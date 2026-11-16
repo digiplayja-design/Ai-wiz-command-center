@@ -15,7 +15,7 @@
     },
     "membership_scope": "catalog_routine_planner_vanity_look_studio_and_ai_require_fresh_same_account_server_verified_active_trial_or_paid_membership",
     "scope_revision_status": "membership_and_apple_draft_verified_voice_source_locally_tested_policy_amendment_not_deployed",
-    "latest_uploaded_ios_build_number": 4
+    "latest_uploaded_ios_build_number": 5
   },
   "apple": {
     "name": "Esha by Korlix",
@@ -839,12 +839,18 @@
   },
   "selfie_try_on_preparation": {
     "minimum_build": 5,
-    "status": "implemented_pending_release_verification",
+    "status": "ios_internal_testflight_testing_android_compile_verified",
     "processing": "on_device_apple_vision_android_bundled_mlkit",
     "photo_upload_to_korlix_or_openai": false,
     "photo_or_landmark_vanity_sync": false,
     "original_photo_unchanged": true,
     "store_description_sync_for_this_change": "not_yet_performed",
-    "physical_device_validation": false
+    "physical_device_validation": false,
+    "released_source_commit": "f125ff9fe2edb32ffbd54b86be1a7115f2deecd4",
+    "ios_build_number": 5,
+    "apple_build_id": "a5df5481-2b40-4d6c-a2a8-904e595b31f5",
+    "internal_group_state": "Testing",
+    "production_policy_source_commit": "eea73d13586a969a4502d9be1fc5da34707bc575",
+    "release_evidence": "docs/releases/esha-selfie-20261116/selfie-release-checkpoint-20261116.json"
   }
 }

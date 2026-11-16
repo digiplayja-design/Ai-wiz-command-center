@@ -1,0 +1,210 @@
+{
+  "schema_version": 1,
+  "task": "Esha local selfie privacy policy publication",
+  "status": "verified_live",
+  "source": {
+    "repository": "digiplayja-design/Ai-wiz-command-center",
+    "branch": "release/signup-plan-intent-20261021",
+    "remote_commit": "eea73d13586a969a4502d9be1fc5da34707bc575",
+    "parent_commit": "b28df8542f6b84c2179023dbb0f09795f60b85dd",
+    "local_commit": "a15bd219727e84843c784f9ed1e6b5c87f5ce781",
+    "tree": "bb8df5dd72e175d780f18743ae572606cc7ea97e",
+    "local_remote_tree_equal": true,
+    "changed_files": [
+      {
+        "path": "backend/esha/policies.mjs",
+        "status": "modified",
+        "additions": 22,
+        "deletions": 11,
+        "blob": "2fa72d7d399ea1aed5530a77446ff071c4a96741"
+      },
+      {
+        "path": "backend/test/esha_policy_routes.test.mjs",
+        "status": "modified",
+        "additions": 25,
+        "deletions": 0,
+        "blob": "45086a99fffeb8f0484cf3ed15c9e7a47e1362b0"
+      }
+    ],
+    "commit_url": "https://github.com/digiplayja-design/Ai-wiz-command-center/commit/eea73d13586a969a4502d9be1fc5da34707bc575"
+  },
+  "render": {
+    "workspace_id": "tea-d8cskuf7f7vs73emq1p0",
+    "service_id": "srv-d8csvkkp3tds73emfikg",
+    "service_url": "https://chee-chai-chee-backend.onrender.com",
+    "deploy_id": "dep-dbt4vp1srm7s73a891qg",
+    "status": "live",
+    "commit": "eea73d13586a969a4502d9be1fc5da34707bc575",
+    "created_at": "2026-11-16T00:35:48.97822Z",
+    "started_at": "2026-11-16T00:35:48.939548Z",
+    "finished_at": "2026-11-16T00:36:23.374755Z",
+    "auto_deploy": "no",
+    "service_configuration_unchanged": true,
+    "health_path": "/api/health",
+    "dashboard_url": "https://dashboard.render.com/web/srv-d8csvkkp3tds73emfikg/deploys/dep-dbt4vp1srm7s73a891qg"
+  },
+  "validation": {
+    "policy_route_test": {
+      "command": "node --test test/esha_policy_routes.test.mjs",
+      "passed": 1,
+      "failed": 0
+    },
+    "runtime_error_log_check": {
+      "from": "2026-11-16T00:35:48.939548Z",
+      "level": "error",
+      "type": "app",
+      "count": 0,
+      "has_more": false
+    }
+  },
+  "scope": {
+    "runtime_changed_files": [
+      "backend/esha/policies.mjs"
+    ],
+    "test_changed_files": [
+      "backend/test/esha_policy_routes.test.mjs"
+    ],
+    "environment_changes": false,
+    "database_changes": false,
+    "account_grant_changes": false,
+    "model_changes": false,
+    "voice_activation": false,
+    "paid_ai_calls": false,
+    "main_feature_worktree_mutated": false
+  },
+  "release_notes": [
+    "Local selfie/photo-picker and on-device lip/eye landmark disclosures are live.",
+    "Photos and landmarks are excluded from Korlix/OpenAI requests and vanity sync; saved looks retain effect choices.",
+    "Policy describes normal temporary-copy cleanup, cleanup attempts for retrieved interrupted Android results, and possible cache retention after an interruption or file error.",
+    "Android ML Kit SDK diagnostics are disclosed separately from on-device image processing.",
+    "Existing server-verified developer app access is described without granting a store subscription or AI allowance.",
+    "Production patch preserves its existing backend baseline; undeployed feature-branch voice policy text was not copied."
+  ],
+  "http_verification": {
+    "checked_at": "2026-11-16T00:36:58.208095+00:00",
+    "checks": [
+      {
+        "path": "/api/health",
+        "url": "https://chee-chai-chee-backend.onrender.com/api/health",
+        "final_url": "https://chee-chai-chee-backend.onrender.com/api/health",
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "bytes": 4114,
+        "sha256": "ee56b2b7b1b4aa5925c5876eb4fb7f089f7bfa371fffe0fe4d5822ecbb2b8488",
+        "health": {
+          "status": "Korlix AI backend is healthy",
+          "supabaseConfigured": true,
+          "supabaseAuthConfigured": true,
+          "openAIConfigured": true,
+          "reasoningPolicy": {
+            "model": "gpt-6-astra",
+            "effort": "max",
+            "enforced": true,
+            "featureModelOverrides": false,
+            "minOutputTokens": 32768
+          },
+          "chatModel": "gpt-6-astra",
+          "chatReasoningEffort": "max"
+        },
+        "stable_fields_unchanged": true
+      },
+      {
+        "path": "/esha/privacy",
+        "url": "https://chee-chai-chee-backend.onrender.com/esha/privacy",
+        "final_url": "https://chee-chai-chee-backend.onrender.com/esha/privacy",
+        "status": 200,
+        "content_type": "text/html; charset=utf-8",
+        "bytes": 18496,
+        "sha256": "fc2a1441da28954d897aea99b3944c80147f624c20906a094d7d634828cc9f3b",
+        "matches_published_source": true,
+        "headers": {
+          "Cache-Control": "no-store",
+          "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+          "Referrer-Policy": "no-referrer",
+          "X-Content-Type-Options": "nosniff"
+        }
+      },
+      {
+        "path": "/esha/terms",
+        "url": "https://chee-chai-chee-backend.onrender.com/esha/terms",
+        "final_url": "https://chee-chai-chee-backend.onrender.com/esha/terms",
+        "status": 200,
+        "content_type": "text/html; charset=utf-8",
+        "bytes": 13798,
+        "sha256": "df311a344138f65ef562b2ccb67ea7087802d248539a791ffc035040550013bf",
+        "matches_published_source": true,
+        "headers": {
+          "Cache-Control": "no-store",
+          "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+          "Referrer-Policy": "no-referrer",
+          "X-Content-Type-Options": "nosniff"
+        }
+      },
+      {
+        "path": "/api/esha/billing/catalog?provider=apple",
+        "url": "https://chee-chai-chee-backend.onrender.com/api/esha/billing/catalog?provider=apple",
+        "final_url": "https://chee-chai-chee-backend.onrender.com/api/esha/billing/catalog?provider=apple",
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "bytes": 447,
+        "sha256": "75c2063c0f7f8e1dea5b1749403e8513008ac906cd02ddb44999bb41513fdfad",
+        "catalog": {
+          "catalogVersion": "esha_monthly_v1",
+          "provider": "apple",
+          "bundleId": "com.korlixdeveloper.esha",
+          "product": {
+            "productId": "com.korlixdeveloper.esha.monthly",
+            "billingPeriod": "P1M",
+            "trialDays": 3,
+            "monthlyPriceCents": 499,
+            "currency": "USD",
+            "basePlanId": null,
+            "offerId": null
+          },
+          "purchasesEnabled": false,
+          "storeConfigurationVerified": false,
+          "allowanceConfigured": false,
+          "consultationLimits": {
+            "trial": null,
+            "monthly": null
+          },
+          "consultationEnabled": false,
+          "state": "planned"
+        },
+        "matches_predeploy_catalog": true
+      },
+      {
+        "path": "/api/esha/billing/catalog?provider=google",
+        "url": "https://chee-chai-chee-backend.onrender.com/api/esha/billing/catalog?provider=google",
+        "final_url": "https://chee-chai-chee-backend.onrender.com/api/esha/billing/catalog?provider=google",
+        "status": 200,
+        "content_type": "application/json; charset=utf-8",
+        "bytes": 443,
+        "sha256": "417e4aa40b408b6063d83ce72a2ab989d3937e0d20f508921dc9764a04bff77c",
+        "catalog": {
+          "catalogVersion": "esha_monthly_v1",
+          "provider": "google",
+          "bundleId": "com.korlixdeveloper.esha",
+          "product": {
+            "productId": "esha_monthly",
+            "billingPeriod": "P1M",
+            "trialDays": 3,
+            "monthlyPriceCents": 499,
+            "currency": "USD",
+            "basePlanId": "monthly",
+            "offerId": "trial-3-days"
+          },
+          "purchasesEnabled": false,
+          "storeConfigurationVerified": false,
+          "allowanceConfigured": false,
+          "consultationLimits": {
+            "trial": null,
+            "monthly": null
+          },
+          "consultationEnabled": false,
+          "state": "planned"
+        }
+      }
+    ]
+  }
+}

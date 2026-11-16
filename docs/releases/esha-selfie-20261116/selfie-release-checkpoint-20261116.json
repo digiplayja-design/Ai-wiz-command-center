@@ -1,0 +1,171 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-11-16T00:46:42.873578+00:00",
+  "status": "verified_available_in_internal_testflight",
+  "app": {
+    "name": "Esha by Korlix",
+    "bundleId": "com.korlixdeveloper.esha",
+    "appStoreAppId": "6835184869",
+    "sourceVersion": "1.0.0+5",
+    "intendedIosVersion": "1.0.0",
+    "intendedIosBuild": "5"
+  },
+  "source": {
+    "localCommit": "d59b77b69de7be0aefd28b04a8d018911f1491ab",
+    "remoteCommit": "f125ff9fe2edb32ffbd54b86be1a7115f2deecd4",
+    "tree": "25ba94b5de476886c66516e361eb3a9f789129d3"
+  },
+  "feature": {
+    "selection": "One existing photo selected through the device photo picker; no camera capture.",
+    "processing": "Photo normalization and lip/eye landmark detection occur on device using Apple Vision on iOS and bundled Google ML Kit on Android.",
+    "rendering": "The original photo and cosmetic overlays use the same contained image transform. Lip color preserves texture, the mouth opening is subtracted from the lip mask, and lash strokes follow the upper eye contours with face roll. No face reshaping.",
+    "controls": [
+      "Upload selfie",
+      "Change selfie",
+      "Remove photo",
+      "Cancel preview",
+      "Original",
+      "Try-on",
+      "Makeup strength",
+      "Existing shade, finish and lash controls"
+    ],
+    "savedLook": "Only shade, finish and lash settings are saved or synced; photo, facial landmarks and preview intensity are not part of the saved look."
+  },
+  "privacyAndScope": {
+    "photoOrLandmarkUpload": false,
+    "photoOrLandmarkVanitySync": false,
+    "photoOrLandmarkAiConsultation": false,
+    "originalGalleryPhoto": "Preserved; the app does not modify or delete the original.",
+    "sessionHandling": "The preview and landmarks clear on removal, sign-out or account change; access/privacy resets invalidate pending processing.",
+    "temporaryFiles": "Normal operation attempts to remove the app-owned picker copy after reading or discarding it. A crash or deletion failure can leave an app-cache copy until the device clears the cache or the app is removed. Interrupted Android picker results are discarded and cleanup is attempted on the next startup.",
+    "androidDiagnostics": "Google ML Kit sends SDK diagnostics and usage metrics to Google separately from on-device photo processing, including device/app information, per-installation identifiers, performance, configuration, input/output sizes, events and errors.",
+    "biometricUse": "Landmarks position cosmetic effects; this feature does not identify a person, infer skin tone or make a health assessment.",
+    "paidAiOrVoiceEnabledByThisChange": false
+  },
+  "localValidation": {
+    "flutterTestsPassed": 126,
+    "flutterAnalyzer": "passed_no_issues",
+    "sourceIdentityCheck": "passed",
+    "artifactPrivacyTestsPassed": 7,
+    "policyTests": {
+      "mainWorktree": "passed",
+      "scopedProductionPolicyPatch": "passed"
+    },
+    "provenance": "Root agent's completed local verification readbacks; counts are recorded as supplied, without summing overlapping subsets."
+  },
+  "releaseVerification": {
+    "githubCi": {
+      "runId": "43780984228",
+      "sourceCommit": "f125ff9fe2edb32ffbd54b86be1a7115f2deecd4",
+      "url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43780984228",
+      "statusAtObservation": "completed",
+      "finalSuccessVerified": true,
+      "conclusion": "success",
+      "completedAtUtc": "2026-11-16T00:42:25Z",
+      "jobs": [
+        {
+          "name": "Android analysis, tests, APK and unsigned AAB compilation",
+          "jobId": "133017870174",
+          "conclusion": "success",
+          "completedAtUtc": "2026-11-16T00:42:24Z"
+        },
+        {
+          "name": "iOS simulator compilation and verification",
+          "jobId": "133017870445",
+          "conclusion": "success",
+          "completedAtUtc": "2026-11-16T00:36:02Z"
+        },
+        {
+          "name": "Backend and SQL checks",
+          "jobId": "133017870483",
+          "conclusion": "success",
+          "completedAtUtc": "2026-11-16T00:32:57Z"
+        }
+      ],
+      "artifactIds": [
+        "14188098216",
+        "14188840442"
+      ]
+    },
+    "signedIosBuild": {
+      "buildNumber": "5",
+      "jobId": "6afa4fb490e83b09c4fac9b4",
+      "statusAtObservation": "finished",
+      "signedArtifactVerified": true,
+      "uploadVerified": true,
+      "url": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa4fb490e83b09c4fac9b4",
+      "jobIndex": 5,
+      "branch": "feature/esha-native-20261115",
+      "observedSourceCommit": "f125ff9fe2edb32ffbd54b86be1a7115f2deecd4",
+      "verificationBasis": "Root agent's live Codemagic UI readback.",
+      "duration": "6m 59s",
+      "artifactBytes": 48499696,
+      "artifactSha256": "2afeb2c4a657a72d66438641ba7e1ca486036a5b9f2e24e81338eabb1add1cce",
+      "artifactReceipt": "Esha-signed-verification.json",
+      "downloadedArtifactCheck": "downloaded-ipa-check.json",
+      "upload": {
+        "result": "UPLOAD SUCCEEDED with no errors",
+        "deliveryUuid": "a5df5481-2b40-4d6c-a2a8-904e595b31f5",
+        "observedLogTimestampUtc": "2026-11-16T00:42:08.339Z",
+        "transferredBytes": 48499696
+      }
+    },
+    "appleTestFlight": {
+      "processingVerified": true,
+      "complianceVerified": true,
+      "internalGroupAssignmentVerified": true,
+      "availabilityVerified": true,
+      "physicalDeviceInstallationVerified": false,
+      "processingState": "Complete",
+      "compliance": {
+        "encryptionCategory": "Standard encryption algorithms instead of, or in addition to, using or accessing the encryption within Apple operating system",
+        "franceDistribution": false,
+        "stateAfterSave": "Ready to Submit"
+      },
+      "buildId": "a5df5481-2b40-4d6c-a2a8-904e595b31f5",
+      "buildVersion": "1.0.0 (5)",
+      "internalGroupId": "34951be9-1955-4e01-94da-778608de638f",
+      "internalGroupName": "Esha Internal Testers",
+      "internalGroupTesterCount": 1,
+      "internalGroupBuildCount": 3,
+      "internalBuildState": "Testing",
+      "expiryText": "Expires in 90 days",
+      "url": "https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6835184869/testflight/groups/34951be9-1955-4e01-94da-778608de638f/builds",
+      "observedTesterInstalledBuildBeforeUpdate": "1.0.0 (4)",
+      "externalBetaReviewSubmitted": false,
+      "appStoreReviewSubmitted": false
+    },
+    "productionPolicyUpdate": {
+      "status": "verified_live",
+      "sourceCommit": "eea73d13586a969a4502d9be1fc5da34707bc575",
+      "deploymentId": "dep-dbt4vp1srm7s73a891qg",
+      "liveContentVerified": true,
+      "tree": "bb8df5dd72e175d780f18743ae572606cc7ea97e",
+      "finishedAtUtc": "2026-11-16T00:36:23.374755Z",
+      "evidence": "production-policy-deploy-20261116.json"
+    },
+    "expectedProof": {
+      "filename": "esha-build-5-testing.jpg",
+      "status": "captured_from_live_browser_and_verified_jpeg",
+      "existingArtifactClaimed": true,
+      "sha256": "542ddbb75085a8e6caabb4cae085b1a6b176cbf93dae83b05cb822be6f5572ab",
+      "bytes": 27068,
+      "captureScope": "Internal-group heading and build table; account header and tester contact details excluded. Left edge of the version column is partially cropped, while build number (5) and Testing remain visible; complete version is confirmed in the recorded accessibility readback."
+    }
+  },
+  "limitations": [
+    "This is an approximate cosmetic preview; image lighting, screens and real products can differ. It is not an exact product-shade match.",
+    "Selection requires one clear face with visible eyes and lips; unsuitable or ambiguous photos are rejected instead of receiving guessed alignment.",
+    "Real-person alignment on a physical iPhone or Android device has not yet been observed."
+  ],
+  "plannedDeviceCheck": [
+    "Open TestFlight and update Esha to 1.0.0 (5), now available in the existing internal group.",
+    "Sign in, open Try a Look, tap Upload selfie and choose a clear photo with one person.",
+    "Try shade, finish and lash settings; compare Original and Try-on, then adjust Makeup strength.",
+    "Use Change selfie or Remove photo; use Cancel preview while processing if needed.",
+    "Save this look and confirm My Vanity contains settings only; verify the photo is cleared after sign-out or an account switch."
+  ],
+  "pending": [
+    "User physical-device check of real-person selfie alignment and Original/strength/change/remove/privacy-reset behavior."
+  ]
+}
