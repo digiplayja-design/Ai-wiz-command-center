@@ -1,0 +1,179 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-11-16T01:11:18Z",
+  "status": "released_to_existing_internal_testflight_group_testing",
+  "app": {
+    "name": "Esha by Korlix",
+    "bundleId": "com.korlixdeveloper.esha",
+    "appStoreAppId": "6835184869",
+    "sourceVersion": "1.0.0+6",
+    "intendedIosVersion": "1.0.0",
+    "intendedIosBuild": "6"
+  },
+  "source": {
+    "localCommit": "bdab28d4289fe81698c2a370fc5d5f6d5f875e21",
+    "remoteCommit": "c1c9b41d2300605db71dd8f6dc70be3bf217078a",
+    "tree": "cd87df0ee27b38b73a441a053718bdef019a630a"
+  },
+  "reportedFailure": {
+    "affectedBuild": "1.0.0 (5)",
+    "symptom": "The user selected a selfie, but the photo was not displayed and the small_face alignment error appeared.",
+    "confirmedCause": [
+      "The Dart validator rejected faces narrower than 15% or shorter than 18% of the whole image, even when a wider portrait could contain usable landmarks.",
+      "An alignment exception disposed the decoded image before a photo could be returned to the controller, so an alignment failure also prevented original-photo display."
+    ],
+    "nativeAudit": "The native normalized-coordinate contracts were reviewed and found correct; the identified rejection was in the Dart relative-size validation.",
+    "investigationPrivacy": "The investigation used the supplied error screenshot, source inspection and tests. The original selected photo was not accessed or copied, and the supplied attachment is not copied into this checkpoint."
+  },
+  "correction": {
+    "earlyDisplay": "After decoding and input validation, an independently owned image clone is delivered to the controller before landmark detection finishes.",
+    "softAlignmentFailure": "A valid decoded photo remains visible as the original when makeup alignment fails; its alignment warning is separate from hard picker/decode errors.",
+    "ui": "Without landmarks, the preview explicitly says makeup is not applied, shows the actionable alignment message, and retains Change selfie and Remove photo. Cancel preview remains available while processing. Try-on and strength appear only when alignment is usable.",
+    "renderingGuard": "The painter always draws the selected image and independently skips all makeup overlays when landmarks are absent.",
+    "relativeSizeCutoff": "Removed the 15%-width/18%-height face-framing cutoff.",
+    "retainedValidation": "Single-face requirements, matching image dimensions, supported pose, finite bounded coordinates, positive face bounds and complete eye/lip landmark geometry remain checked. Image input and decoding limits remain in force.",
+    "lifecycle": "Generation/account/access guards preserve cancellation and privacy resets; late preview or final results cannot restore a cancelled or prior-account photo."
+  },
+  "unchanged": {
+    "backend": true,
+    "privacyPolicy": true,
+    "photoOrLandmarkUpload": false,
+    "photoOrLandmarkSync": false,
+    "galleryOriginalPreserved": true,
+    "paidAiOrVoiceActivation": "unchanged_disabled",
+    "historicalBuild5EvidenceModified": false
+  },
+  "localValidation": {
+    "fullFlutterTestsPassed": 146,
+    "fullFlutterAnalyzer": "passed_no_issues",
+    "sourceIdentityCheck": "passed",
+    "relevantRegressionCoverage": [
+      "Original image pixels remain visible with no landmarks even if try-on is requested.",
+      "The small_face warning retains the visible photo and actionable change/remove controls.",
+      "The decoded preview is visible while detection is pending.",
+      "Cancellation prevents a late result from restoring the photo.",
+      "Successful alignment and existing local makeup rendering continue to work."
+    ],
+    "provenance": "Root agent's full verification readbacks plus the focused UI/pixel regressions; overlapping subsets are not added to the full count."
+  },
+  "releaseVerification": {
+    "githubCi": {
+      "runId": "43783335126",
+      "sourceCommit": "c1c9b41d2300605db71dd8f6dc70be3bf217078a",
+      "url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43783335126",
+      "statusAtObservation": "completed",
+      "finalSuccessVerified": true,
+      "conclusion": "success",
+      "updatedAtUtc": "2026-11-16T01:06:18Z",
+      "jobs": [
+        {
+          "id": "133025337599",
+          "name": "Esha backend and SQL checks",
+          "conclusion": "success",
+          "completedAtUtc": "2026-11-16T00:57:10Z"
+        },
+        {
+          "id": "133025337785",
+          "name": "Compile iOS Simulator application",
+          "conclusion": "success",
+          "completedAtUtc": "2026-11-16T00:59:08Z"
+        },
+        {
+          "id": "133025337850",
+          "name": "Analyze, test, and compile Android",
+          "conclusion": "success",
+          "completedAtUtc": "2026-11-16T01:06:17Z"
+        }
+      ],
+      "artifactApiMetadata": [
+        {
+          "platform": "iOS Simulator",
+          "id": "14189955351",
+          "bytes": 75244226,
+          "sha256": "03f0785bd1a95422ffb610b76058ddb72b0fb1c988cd23cbfcfe5ac44afc5abf",
+          "expired": false
+        },
+        {
+          "platform": "Android debug and unsigned",
+          "id": "14189004631",
+          "bytes": 205702789,
+          "sha256": "3e79306f9ff263570c2f513d921a0b6b45d628ec08af5dd13a7c76a0a70e65ad",
+          "expired": false
+        }
+      ],
+      "artifactProvenance": "GitHub API artifact metadata only; these Android and simulator archives were not independently downloaded or rehashed for this fix."
+    },
+    "signedIosBuild": {
+      "jobId": "6afa550590e83b09c4facaf7",
+      "url": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa550590e83b09c4facaf7",
+      "jobIndex": 6,
+      "branch": "feature/esha-native-20261115",
+      "observedSourceCommit": "c1c9b41d2300605db71dd8f6dc70be3bf217078a",
+      "statusAtObservation": "finished",
+      "signedArtifactVerified": true,
+      "uploadVerified": true,
+      "verificationBasis": "Live Codemagic completion and upload-log readback, followed by independent download, SHA-256/byte-count comparison and IPA Info.plist inspection. The signed artifact receipt was generated before publishing; its submitted_to_store=false field is preserved as that earlier snapshot. The separate upload receipt records the subsequent successful Apple delivery.",
+      "artifactBytes": 48501009,
+      "artifactSha256": "d280774834b149d45ed04f7dae8c8fac0f8a6b2c6bea2bb052a1f4d4c7240c9d",
+      "artifactReceipt": "Esha-signed-verification.json",
+      "downloadedArtifactCheck": "downloaded-ipa-check.json",
+      "duration": "6m 48s",
+      "upload": {
+        "result": "UPLOAD SUCCEEDED with no errors",
+        "deliveryUuid": "15b56e18-eb4c-4f1e-beaa-958715e2feb3",
+        "observedLogTimestampUtc": "2026-11-16T01:04:37.281Z",
+        "transferredBytes": 48501009
+      }
+    },
+    "appleTestFlight": {
+      "processingVerified": true,
+      "complianceVerified": true,
+      "internalGroupAssignmentVerified": true,
+      "availabilityVerified": true,
+      "physicalDeviceInstallationVerified": false,
+      "processingState": "eligible_for_internal_testing",
+      "buildId": "15b56e18-eb4c-4f1e-beaa-958715e2feb3",
+      "processingVerificationBasis": "The exact build progressed through Missing Compliance and Ready to Submit, then its own row was verified as Testing in the existing internal group. The Build Uploads collection was not separately reread as Complete.",
+      "compliance": {
+        "encryptionSelection": "standard_algorithms_in_addition_to_apple_os",
+        "availableInFrance": false,
+        "savedForBuild": "1.0.0 (6)"
+      },
+      "version": "1.0.0",
+      "buildNumber": "6",
+      "groupName": "Esha Internal Testers",
+      "groupId": "34951be9-1955-4e01-94da-778608de638f",
+      "groupState": "Testing",
+      "observedExistingTesterCount": 1,
+      "observedGroupBuildCount": 4,
+      "groupUrl": "https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6835184869/testflight/groups/34951be9-1955-4e01-94da-778608de638f/builds",
+      "newTesterInvitationsSent": false,
+      "externalBetaReviewSubmitted": false,
+      "appStoreReviewSubmitted": false,
+      "observedAtUtc": "2026-11-16T01:08:50Z"
+    },
+    "deviceSpecificOriginalPhoto": {
+      "physicalValidationObserved": false,
+      "note": "The user's original selected photo has not been retested on their physical device with build 6."
+    },
+    "proof": {
+      "filename": "esha-build-6-testing.jpg",
+      "status": "captured_and_visually_verified",
+      "bytes": 33507,
+      "sha256": "2cbe8af17cc3c3913e20525bba032554ff8c1086bf8baf365bc84c9f532ad723",
+      "capturedAtUtc": "2026-11-16T01:08:50Z",
+      "scope": "Live App Store Connect internal-group Builds table, cropped to show group identity and the 1.0.0 (6) row marked Testing. No physical-device installation or original-photo result is inferred."
+    }
+  },
+  "plannedDeviceCheck": [
+    "Update Esha in TestFlight and confirm version 1.0.0 (6), now verified available in the existing internal group.",
+    "Open Try a Look, tap Upload selfie and choose the photo again.",
+    "Confirm that the original photo becomes visible while alignment runs.",
+    "If an alignment warning appears, confirm the photo remains visible and Change selfie or Remove photo works; makeup must not be claimed or painted without alignment.",
+    "If alignment succeeds, compare Original and Try-on and use strength, shade, finish and lash controls.",
+    "Check Cancel preview during processing and confirm no late photo reappears after cancellation."
+  ],
+  "pending": [
+    "Install build 6 and observe the user's original-photo display and alignment behavior on the physical device."
+  ]
+}

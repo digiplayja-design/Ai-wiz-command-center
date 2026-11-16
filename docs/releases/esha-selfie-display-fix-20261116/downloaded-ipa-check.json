@@ -1,0 +1,16 @@
+{
+  "source": "downloaded_signed_Codemagic_artifact",
+  "jobId": "6afa550590e83b09c4facaf7",
+  "bytes": 48501009,
+  "sha256": "d280774834b149d45ed04f7dae8c8fac0f8a6b2c6bea2bb052a1f4d4c7240c9d",
+  "infoPlist": {
+    "CFBundleIdentifier": "com.korlixdeveloper.esha",
+    "CFBundleShortVersionString": "1.0.0",
+    "CFBundleVersion": "6",
+    "MinimumOSVersion": "15.0",
+    "NSPhotoLibraryUsageDescription": "Choose a selfie to preview lip colors and lashes on your device. Esha does not upload your selfie.",
+    "NSCameraUsageDescription": "Esha\u2019s voice conversations use only your microphone. Esha does not use your camera.",
+    "NSMicrophoneUsageDescription": "Esha uses your microphone when you start a voice conversation. Korlix and OpenAI process your audio and conversation to answer you."
+  },
+  "appInfoPath": "Payload/Runner.app/Info.plist"
+}

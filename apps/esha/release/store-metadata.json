@@ -15,7 +15,7 @@
     },
     "membership_scope": "catalog_routine_planner_vanity_look_studio_and_ai_require_fresh_same_account_server_verified_active_trial_or_paid_membership",
     "scope_revision_status": "membership_and_apple_draft_verified_voice_source_locally_tested_policy_amendment_not_deployed",
-    "latest_uploaded_ios_build_number": 5
+    "latest_uploaded_ios_build_number": 6
   },
   "apple": {
     "name": "Esha by Korlix",
@@ -854,12 +854,20 @@
     "release_evidence": "docs/releases/esha-selfie-20261116/selfie-release-checkpoint-20261116.json",
     "photo_display_fix": {
       "minimum_build": 6,
-      "status": "implemented_pending_release_verification",
+      "status": "ios_internal_testflight_testing_android_compile_verified",
       "decoded_photo_visible_before_alignment": true,
       "alignment_failure_keeps_original_visible": true,
       "relative_face_size_cutoff_removed": true,
       "invalid_geometry_cannot_enable_makeup": true,
-      "physical_device_validation": false
+      "physical_device_validation": false,
+      "released_source_commit": "c1c9b41d2300605db71dd8f6dc70be3bf217078a",
+      "source_tree": "cd87df0ee27b38b73a441a053718bdef019a630a",
+      "ios_build_number": 6,
+      "apple_build_id": "15b56e18-eb4c-4f1e-beaa-958715e2feb3",
+      "internal_group_state": "Testing",
+      "france_available": false,
+      "release_evidence": "docs/releases/esha-selfie-display-fix-20261116/selfie-display-fix-checkpoint-20261116.json",
+      "full_flutter_tests_passed": 146
     }
   }
 }
