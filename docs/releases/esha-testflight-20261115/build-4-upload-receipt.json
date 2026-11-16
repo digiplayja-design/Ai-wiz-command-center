@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-11-16T00:14:54.161438+00:00",
+  "appStoreAppId": "6835184869",
+  "bundleId": "com.korlixdeveloper.esha",
+  "version": "1.0.0",
+  "build": "4",
+  "sourceCommit": "262b60ca5e3fe9eb75a7508bdce0da82c0a2b680",
+  "codemagic": {
+    "appId": "6a32198d2d0806059c3df062",
+    "buildId": "6afa487290e83b09c4fac7d3",
+    "workflow": "esha-ios-upload",
+    "status": "finished",
+    "duration": "6m 8s",
+    "url": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa487290e83b09c4fac7d3"
+  },
+  "artifact": {
+    "bytes": 48307985,
+    "sha256": "78a4dc53fb004982c014e3c7af604855c6f8e3ee789cddb9d216a25960dde6dd",
+    "signing": "verified-app-store-distribution",
+    "downloadedHashMatchesVerificationReport": true
+  },
+  "appleUpload": {
+    "status": "succeeded_without_errors",
+    "deliveryUuid": "33b13950-e0ad-4b15-94d8-926ee6e652ff",
+    "uploaderReportedAt": "2026-11-16 00:10:17.561",
+    "transferredBytes": 48307985
+  },
+  "betaReviewSubmitted": false,
+  "appStoreReviewSubmitted": false,
+  "processingAndGroupAssignment": "processing_complete_assigned_to_existing_internal_group_testing",
+  "verificationReportScope": "The signed verification JSON is a pre-upload artifact checkpoint. This receipt records the subsequent successful upload. Apple processing and TestFlight group assignment must be verified separately.",
+  "testflightAvailabilityReceipt": "build-4-testflight-availability.json"
+}

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-11-16T00:00:59.218145+00:00",
+  "appStoreAppId": "6835184869",
+  "bundleId": "com.korlixdeveloper.esha",
+  "version": "1.0.0",
+  "build": "3",
+  "sourceCommit": "6ad26c6379e9da6ae9a252ec16a0208471ac380c",
+  "codemagic": {
+    "appId": "6a32198d2d0806059c3df062",
+    "buildId": "6afa462c90e83b09c4fac75a",
+    "workflow": "esha-ios-upload",
+    "status": "finished",
+    "duration": "5m 55s",
+    "url": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa462c90e83b09c4fac75a"
+  },
+  "artifact": {
+    "bytes": 48307876,
+    "sha256": "c38f6e16e5bed6ff7d7a36ae3c10948dfd9bf3e19729a44f2a876084dce6a32b",
+    "signing": "verified-app-store-distribution",
+    "downloadedHashMatchesVerificationReport": true
+  },
+  "appleUpload": {
+    "status": "succeeded_without_errors",
+    "deliveryUuid": "8f8131ba-162d-4ffa-8e75-ddfeb1132cf7",
+    "uploaderReportedAt": "2026-11-16 00:00:21.115",
+    "transferredBytes": 48307876
+  },
+  "betaReviewSubmitted": false,
+  "appStoreReviewSubmitted": false,
+  "processingAndGroupAssignment": "processing_failed_90683_not_assigned",
+  "verificationReportScope": "The signed verification JSON is a pre-upload artifact checkpoint. This receipt records the subsequent successful upload.",
+  "processingFailureReceipt": "build-3-processing-failure.json"
+}

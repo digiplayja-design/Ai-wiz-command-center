@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-11-16T00:14:54.161438+00:00",
+  "status": "backend_live_corrected_build_available_in_testflight",
+  "app": {
+    "name": "Esha by Korlix",
+    "appStoreAppId": "6835184869",
+    "bundleId": "com.korlixdeveloper.esha"
+  },
+  "issue": {
+    "userReport": "The installed TestFlight build 1.0.0 (2) appeared unclickable after sign-in.",
+    "confirmedCause": "An existing server-authorized developer grant was enabled, but Esha's billing status and installed native membership gate did not recognize it as app access.",
+    "accountDataMinimization": "No account email, user identifier, credentials, purchase rows or raw logs are included.",
+    "scope": "The entitlement defect and a separate auth-busy cancellation race are confirmed; a global touch-input freeze on the user device was not established."
+  },
+  "correction": {
+    "existingGrantOnly": true,
+    "statusContract": {
+      "appAccess": {
+        "active": true,
+        "source": "developer"
+      },
+      "authority": "Existing server-authenticated developer access; no client email or profile-role allowlist."
+    },
+    "storeMembership": "Preserved as the truthful store entitlement, separate from developer app access.",
+    "nativeBehavior": "Accepts a fresh, same-account developer grant; retains verification expiry, refresh, revocation and account-switch guards; prevents redundant checkout and avoids optional storefront discovery for a verified developer.",
+    "accountBehavior": "Provides working entry to Esha after access verification and clears authentication busy state during session-loss recovery.",
+    "paidAiAndVoice": "Remain disabled; this correction does not bypass provider enablement or usage allowances."
+  },
+  "reviewedSource": {
+    "changedFiles": 8,
+    "localCommit": "b354801",
+    "remoteCommit": "6ad26c6379e9da6ae9a252ec16a0208471ac380c",
+    "tree": "d154f5febdeb8f91d851c8034d840437c267601e",
+    "localValidation": {
+      "nativeTestsPassed": 95,
+      "flutterAnalyzer": "passed_no_issues",
+      "nativeSourceCheck": "passed",
+      "eshaBackendTestsPassed": 125
+    },
+    "releaseMetadataCorrection": {
+      "remoteCommit": "262b60ca5e3fe9eb75a7508bdce0da82c0a2b680",
+      "localCommit": "00d9fde6601ad378d1a58ceff889fee31204d3bb",
+      "tree": "9e2f0630e453994798742543acf60291db35b38c",
+      "changedFiles": 4,
+      "privacyArtifactTestsPassed": 5,
+      "actualRejectedIpaFailsNewGate": true,
+      "purposeString": "Esha\u2019s voice conversations use only your microphone. Esha does not use your camera.",
+      "runtimeCaptureChanged": false,
+      "minimumSourceBuild": 4
+    }
+  },
+  "productionBackendPatch": {
+    "baseCommitPrefix": "5e2a4086",
+    "remoteCommit": "b28df8542f6b84c2179023dbb0f09795f60b85dd",
+    "tree": "aaf73f57c89f4df81bc4a3fe1e89aaab06ac55f7",
+    "targetedTestsPassed": 38,
+    "renderDeployment": {
+      "id": "dep-dbt48nmi0phs73el5it0",
+      "status": "live",
+      "finishedAtUtc": "2026-11-15T23:47:11.991517Z"
+    },
+    "verificationBasis": "Root agent's verified source, test and live deployment readbacks.",
+    "publicSmokeChecks": {
+      "healthHttpStatus": 200,
+      "healthStatus": "Korlix AI backend is healthy",
+      "billingCatalogHttpStatus": 200,
+      "unauthenticatedBillingStatusHttpStatus": 401,
+      "purchasesEnabled": false,
+      "consultationEnabled": false,
+      "allowanceConfigured": false,
+      "storeConfigurationVerified": false
+    }
+  },
+  "releaseStatus": {
+    "githubCi": {
+      "runId": "43776564173",
+      "sourceCommit": "6ad26c6379e9da6ae9a252ec16a0208471ac380c",
+      "url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43776564173",
+      "statusAtObservation": "completed",
+      "successNotYetVerified": false,
+      "conclusion": "success",
+      "completedAtUtc": "2026-11-15T23:52:45Z",
+      "jobs": {
+        "backend_and_sql": "success",
+        "android_analysis_tests_compile": "success",
+        "ios_simulator_compile": "success"
+      }
+    },
+    "replacementSignedIpa": {
+      "built": true,
+      "uploaded": true,
+      "status": "finished",
+      "workflow": "esha-ios-upload",
+      "buildId": "6afa487290e83b09c4fac7d3",
+      "url": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa487290e83b09c4fac7d3",
+      "observedSourceCommit": "262b60ca5e3fe9eb75a7508bdce0da82c0a2b680",
+      "minimumBuild": "4",
+      "remoteSshVncEnabled": false,
+      "durationSeconds": 368,
+      "version": "1.0.0",
+      "buildNumber": "4",
+      "artifact": {
+        "format": "signed_ipa",
+        "sha256": "78a4dc53fb004982c014e3c7af604855c6f8e3ee789cddb9d216a25960dde6dd",
+        "sizeBytes": 48307985
+      },
+      "upload": {
+        "status": "succeeded",
+        "uploadedAtUtc": "2026-11-16T00:10:17.561Z",
+        "deliveryUuid": "33b13950-e0ad-4b15-94d8-926ee6e652ff"
+      },
+      "appleProcessing": "complete",
+      "testflightAvailability": "available_to_existing_internal_group",
+      "internalGroupAssignment": "Esha Internal Testers",
+      "verificationBasis": "Root agent's Codemagic artifact/upload and App Store Connect readbacks.",
+      "testflightBuildStatus": "Testing",
+      "appleBuildId": "33b13950-e0ad-4b15-94d8-926ee6e652ff",
+      "testflightReceipt": "build-4-testflight-availability.json"
+    },
+    "installedBuild": "1.0.0 (2) at final App Store Connect observation",
+    "limitation": "The backend patch alone does not update installed build 2, which does not understand the new appAccess contract. Corrected build 1.0.0 (4) passed Apple processing and is available with Testing status in the existing internal group. Installation and physical-device post-login behavior of build 4 remain for the user to verify.",
+    "priorReplacementAttempt": {
+      "build": "3",
+      "sourceCommit": "6ad26c6379e9da6ae9a252ec16a0208471ac380c",
+      "codemagicStatus": "finished",
+      "appleFileTransfer": "succeeded",
+      "appleProcessing": "failed_90683_missing_camera_purpose",
+      "installable": false,
+      "receipt": "build-3-processing-failure.json"
+    },
+    "replacementGithubCi": {
+      "runId": "43778103762",
+      "sourceCommit": "262b60ca5e3fe9eb75a7508bdce0da82c0a2b680",
+      "url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43778103762",
+      "statusAtObservation": "completed",
+      "conclusion": "success",
+      "jobs": {
+        "backend_and_sql": "success",
+        "android_analysis_tests_compile": "success",
+        "ios_simulator_compile": "success"
+      },
+      "verificationBasis": "Root agent's fresh GitHub readback."
+    }
+  },
+  "unchanged": {
+    "developerGrantRecords": true,
+    "purchases": true,
+    "databaseSchema": true,
+    "productionConfiguration": true,
+    "paidAiAndVoiceActivation": "unchanged_disabled"
+  },
+  "pending": [
+    "Update Esha in TestFlight to 1.0.0 (4) and verify post-login interaction on the user device."
+  ]
+}

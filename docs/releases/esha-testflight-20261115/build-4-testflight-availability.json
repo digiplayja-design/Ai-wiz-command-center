@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "recordedAtUtc": "2026-11-16T00:14:54.161438+00:00",
+  "appStoreAppId": "6835184869",
+  "bundleId": "com.korlixdeveloper.esha",
+  "version": "1.0.0",
+  "build": "4",
+  "sourceCommit": "262b60ca5e3fe9eb75a7508bdce0da82c0a2b680",
+  "appleBuildId": "33b13950-e0ad-4b15-94d8-926ee6e652ff",
+  "appleProcessing": "Complete",
+  "exportCompliance": {
+    "saved": true,
+    "category": "Standard encryption algorithms instead of, or in addition to, using or accessing the encryption within Apple's operating system",
+    "distributionInFrance": false,
+    "postSaveStatus": "Ready to Submit",
+    "basis": "Source and signed-IPA review; existing user instruction to exclude France. Ready to Submit is the App Store Connect overall build state, not a submitted review."
+  },
+  "internalTesting": {
+    "groupId": "34951be9-1955-4e01-94da-778608de638f",
+    "groupName": "Esha Internal Testers",
+    "existingTesterCount": 1,
+    "buildCount": 2,
+    "newBuildStatus": "Testing",
+    "priorBuild": "1.0.0 (2)",
+    "newTestersAdded": false,
+    "verifiedUrl": "https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6835184869/testflight/groups/34951be9-1955-4e01-94da-778608de638f/builds"
+  },
+  "availability": "Available to the existing internal group; user still needs to update the installed build 2.",
+  "deviceValidation": "No claim of physical-device validation for build 4. The existing tester was shown as having installed build 2 before this update.",
+  "betaReviewSubmitted": false,
+  "appStoreReviewSubmitted": false,
+  "proof": {
+    "file": "esha-build-4-testing.jpg",
+    "sha256": "cae7807e5423584427f37550c92813b53e50cf9f068a17c97cf13ec100f7bf6b",
+    "bytes": 48560,
+    "scope": "Cropped live App Store Connect app/group/builds view; excludes account header and tester identity."
+  }
+}

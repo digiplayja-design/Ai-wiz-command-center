@@ -1,0 +1,40 @@
+{
+  "inspectedAtUtc": "2026-11-16T00:09:19.731771+00:00",
+  "bytes": 48307985,
+  "sha256": "78a4dc53fb004982c014e3c7af604855c6f8e3ee789cddb9d216a25960dde6dd",
+  "sourceCommit": "262b60ca5e3fe9eb75a7508bdce0da82c0a2b680",
+  "reportHashMatchesDownloadedArtifact": true,
+  "app": {
+    "CFBundleIdentifier": "com.korlixdeveloper.esha",
+    "CFBundleDisplayName": "Esha by Korlix",
+    "CFBundleShortVersionString": "1.0.0",
+    "CFBundleVersion": "4",
+    "MinimumOSVersion": "15.0",
+    "NSCameraUsageDescription": "Esha\u2019s voice conversations use only your microphone. Esha does not use your camera.",
+    "NSMicrophoneUsageDescription": "Esha uses your microphone when you start a voice conversation. Korlix and OpenAI process your audio and conversation to answer you.",
+    "ITSAppUsesNonExemptEncryption": null,
+    "ITSEncryptionExportComplianceCode": null
+  },
+  "embeddedFrameworks": {
+    "objective_c.framework": {
+      "CFBundleIdentifier": "io.flutter.flutter.native-assets.objective-c",
+      "CFBundleShortVersionString": "1.0",
+      "CFBundleVersion": "1.0"
+    },
+    "WebRTC.framework": {
+      "CFBundleIdentifier": "org.webrtc.WebRTC",
+      "CFBundleShortVersionString": "1.0",
+      "CFBundleVersion": "1.0"
+    },
+    "Flutter.framework": {
+      "CFBundleIdentifier": "io.flutter.flutter",
+      "CFBundleShortVersionString": "1.0",
+      "CFBundleVersion": "1.0"
+    },
+    "App.framework": {
+      "CFBundleIdentifier": "io.flutter.flutter.app",
+      "CFBundleShortVersionString": "1.0",
+      "CFBundleVersion": "1.0"
+    }
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "bytes": 48307876,
+  "sha256": "c38f6e16e5bed6ff7d7a36ae3c10948dfd9bf3e19729a44f2a876084dce6a32b",
+  "app": {
+    "CFBundleIdentifier": "com.korlixdeveloper.esha",
+    "CFBundleDisplayName": "Esha by Korlix",
+    "CFBundleShortVersionString": "1.0.0",
+    "CFBundleVersion": "3",
+    "MinimumOSVersion": "15.0",
+    "ITSAppUsesNonExemptEncryption": null,
+    "ITSEncryptionExportComplianceCode": null
+  },
+  "embeddedFrameworks": {
+    "objective_c.framework": {
+      "CFBundleIdentifier": "io.flutter.flutter.native-assets.objective-c",
+      "CFBundleShortVersionString": "1.0",
+      "CFBundleVersion": "1.0"
+    },
+    "WebRTC.framework": {
+      "CFBundleIdentifier": "org.webrtc.WebRTC",
+      "CFBundleShortVersionString": "1.0",
+      "CFBundleVersion": "1.0"
+    },
+    "Flutter.framework": {
+      "CFBundleIdentifier": "io.flutter.flutter",
+      "CFBundleShortVersionString": "1.0",
+      "CFBundleVersion": "1.0"
+    },
+    "App.framework": {
+      "CFBundleIdentifier": "io.flutter.flutter.app",
+      "CFBundleShortVersionString": "1.0",
+      "CFBundleVersion": "1.0"
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "observedAtUtc": "2026-11-16T00:03:50.475612+00:00",
+  "version": "1.0.0",
+  "build": "3",
+  "uploadDeliveryUuid": "8f8131ba-162d-4ffa-8e75-ddfeb1132cf7",
+  "processingStatus": "failed",
+  "errorCode": "90683",
+  "missingKey": "NSCameraUsageDescription",
+  "reason": "Apple requires a camera purpose string for APIs referenced by the embedded WebRTC SDK even when the app does not use those camera APIs.",
+  "correctionSource": "262b60ca5e3fe9eb75a7508bdce0da82c0a2b680",
+  "correction": "Add truthful audio-only camera-purpose text, verify both SDK usage strings in the finished iOS bundle, and set the source build minimum to4.",
+  "privacyRegressionTestsPassed": 5,
+  "actualRejectedIpaFailsNewGate": true,
+  "testFlightGroupAssigned": false,
+  "userInstallable": false
+}
