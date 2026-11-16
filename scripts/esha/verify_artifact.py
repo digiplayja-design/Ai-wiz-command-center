@@ -230,6 +230,14 @@ def verify_ios(path, kind, version=None, build=None):
             raise ValueError("The iOS artifact contains another app's bundle identity")
         if not any(name.endswith("/Flutter.framework/Flutter") for name in names):
             raise ValueError("The iOS artifact is missing its native Flutter engine")
+        app_root = str(PurePosixPath(infos[0]).parent) + "/"
+        if app_root + "Frameworks/WebRTC.framework/WebRTC" in names:
+            # Apple checks SDK camera references even when Esha requests audio
+            # only. Validate the finished bundle before exposing it for upload.
+            for key in ("NSCameraUsageDescription", "NSMicrophoneUsageDescription"):
+                purpose = info.get(key)
+                if not isinstance(purpose, str) or not purpose.strip():
+                    raise ValueError(f"The embedded WebRTC SDK requires a nonempty {key}")
         expected_platform = "iPhoneOS" if kind == "ios-signed" else "iPhoneSimulator"
         if expected_platform not in info.get("CFBundleSupportedPlatforms", []):
             raise ValueError("The iOS artifact was built for the wrong platform")
