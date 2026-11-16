@@ -7,7 +7,7 @@
   "app": {
     "display_name": "Esha by Korlix",
     "source_version": "1.0.0",
-    "source_build_number": 5,
+    "source_build_number": 6,
     "icon": {
       "source_path": "apps/esha/assets/esha-korlix-pink.png",
       "description": "Existing pink Korlix icon used by the native Esha project.",
@@ -851,6 +851,15 @@
     "apple_build_id": "a5df5481-2b40-4d6c-a2a8-904e595b31f5",
     "internal_group_state": "Testing",
     "production_policy_source_commit": "eea73d13586a969a4502d9be1fc5da34707bc575",
-    "release_evidence": "docs/releases/esha-selfie-20261116/selfie-release-checkpoint-20261116.json"
+    "release_evidence": "docs/releases/esha-selfie-20261116/selfie-release-checkpoint-20261116.json",
+    "photo_display_fix": {
+      "minimum_build": 6,
+      "status": "implemented_pending_release_verification",
+      "decoded_photo_visible_before_alignment": true,
+      "alignment_failure_keeps_original_visible": true,
+      "relative_face_size_cutoff_removed": true,
+      "invalid_geometry_cannot_enable_makeup": true,
+      "physical_device_validation": false
+    }
   }
 }

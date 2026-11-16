@@ -16,12 +16,17 @@ import 'fixtures.dart';
 
 class _SelfieService implements SelfiePhotoService {
   final requests = <Completer<SelfiePhoto?>>[];
+  final previews = <void Function(SelfiePhoto photo)?>[];
   int startupCalls = 0;
   @override
   Future<void> discardInterruptedSelection() async => startupCalls++;
   @override
-  Future<SelfiePhoto?> choose({void Function(String message)? onProgress}) {
+  Future<SelfiePhoto?> choose({
+    void Function(String message)? onProgress,
+    void Function(SelfiePhoto photo)? onPreview,
+  }) {
     onProgress?.call('Preparing on device');
+    previews.add(onPreview);
     final request = Completer<SelfiePhoto?>();
     requests.add(request);
     return request.future;
@@ -225,6 +230,63 @@ void main() {
         expect(controller.error, isNull);
       },
     );
+
+    test(
+      'decoded photo appears while alignment is pending and survives failure',
+      () async {
+        allow();
+        final request = controller.choosePhoto();
+        await Future<void>.delayed(Duration.zero);
+        final source = await _photo();
+        final preview = SelfiePhoto(image: source.image.clone());
+        service.previews.single!(preview);
+        expect(controller.photo, same(preview));
+        expect(controller.busy, isTrue);
+        expect(controller.showOriginal, isTrue);
+        expect(controller.canTryOn, isFalse);
+        final unaligned = SelfiePhoto(
+          image: source.image.clone(),
+          alignmentIssue: const SelfieException(
+            'no_face',
+            'Choose one clear face.',
+          ),
+        );
+        source.dispose();
+        service.requests.single.complete(unaligned);
+        await request;
+        expect(controller.photo, same(unaligned));
+        expect(controller.busy, isFalse);
+        expect(controller.error, isNull);
+        expect(controller.photo!.alignmentIssue!.code, 'no_face');
+        controller.setShowOriginal(false);
+        controller.setIntensity(.85);
+        expect(controller.showOriginal, isTrue);
+        expect(controller.intensity, .55);
+        expect(await unaligned.image.toByteData(), isNotNull);
+        controller.removePhoto();
+        expect(controller.photo, isNull);
+      },
+    );
+
+    test('account change disposes decoded preview and ignores late preview and result', () async {
+      allow();
+      final request = controller.choosePhoto();
+      await Future<void>.delayed(Duration.zero);
+      final source = await _photo();
+      final preview = SelfiePhoto(image: source.image.clone());
+      service.previews.single!(preview);
+      allow('owner-b', 2);
+      expect(controller.photo, isNull);
+      final latePreview = SelfiePhoto(image: source.image.clone());
+      service.previews.single!(latePreview);
+      service.requests.single.complete(source);
+      await request;
+      expect(controller.photo, isNull);
+      expect(controller.busy, isFalse);
+      expect(preview.image.debugDisposed, isTrue);
+      expect(latePreview.image.debugDisposed, isTrue);
+      expect(source.image.debugDisposed, isTrue);
+    });
 
     test('revoked access and sign-out clear photos immediately', () async {
       allow();

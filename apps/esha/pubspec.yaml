@@ -1,7 +1,7 @@
 name: esha_by_korlix
 description: Native beauty consultant and personal vanity from Korlix.
 publish_to: none
-version: 1.0.0+5
+version: 1.0.0+6
 
 environment:
   sdk: '>=3.13.7 <4.0.0'

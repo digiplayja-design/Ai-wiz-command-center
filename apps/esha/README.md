@@ -25,6 +25,11 @@ access does not activate paused AI services or create an AI allowance.
   Colors and placement are approximate. The feature does not identify people,
   infer skin tone, assess health or offer camera capture. Saving a look saves
   effect settings, without its photo or facial landmarks.
+  A selected photo appears as soon as it is decoded, while makeup alignment
+  continues. If alignment is unavailable, the original stays visible with a
+  clear explanation and Change/Remove controls; makeup controls appear only
+  after valid eye and lip landmarks are available. A face is not rejected just
+  because it occupies a smaller percentage of a wider photo.
 - **My Vanity:** keep favorites, owned products, saved edits and looks. Signed-in
   collections can sync to the account with explicit handling of conflicting
   edits and pending changes. Existing device-only guest data remains separate

@@ -71,14 +71,14 @@ class FaceLandmarks {
       _fraction(rawBounds['width']),
       _fraction(rawBounds['height']),
     );
-    if (bounds.width < .15 ||
-        bounds.height < .18 ||
+    // A face can have complete usable landmarks in a wider portrait. Its
+    // fraction of the whole photo is not a pixel-resolution requirement.
+    // Keep strict geometry checks without rejecting it for its framing.
+    if (bounds.width <= 0 ||
+        bounds.height <= 0 ||
         bounds.right > 1.002 ||
         bounds.bottom > 1.002) {
-      throw const SelfieException(
-        'small_face',
-        'Choose a closer selfie so Esha can place the lip color and lashes accurately.',
-      );
+      throw _alignmentFailure;
     }
     final outer = _points(face['outerLips'], 6);
     final inner = _points(face['innerLips'], 4);
@@ -126,9 +126,12 @@ class FaceLandmarks {
 }
 
 class SelfiePhoto {
-  SelfiePhoto({required this.image, required this.face});
+  SelfiePhoto({required this.image, this.face, this.alignmentIssue})
+    : assert(face == null || alignmentIssue == null);
   final ui.Image image;
-  final FaceLandmarks face;
+  final FaceLandmarks? face;
+  final SelfieException? alignmentIssue;
+  bool get hasMakeupAlignment => face != null;
   ui.Size get size => ui.Size(image.width.toDouble(), image.height.toDouble());
   bool _disposed = false;
   void dispose() {
@@ -140,7 +143,10 @@ class SelfiePhoto {
 
 abstract interface class SelfiePhotoService {
   Future<void> discardInterruptedSelection();
-  Future<SelfiePhoto?> choose({void Function(String message)? onProgress});
+  Future<SelfiePhoto?> choose({
+    void Function(String message)? onProgress,
+    void Function(SelfiePhoto photo)? onPreview,
+  });
 }
 
 typedef SelfieDetector = Future<Map<Object?, Object?>> Function(Uint8List png);
@@ -228,6 +234,7 @@ class DeviceSelfiePhotoService implements SelfiePhotoService {
   @override
   Future<SelfiePhoto?> choose({
     void Function(String message)? onProgress,
+    void Function(SelfiePhoto photo)? onPreview,
   }) async {
     XFile? selected;
     ui.Image? image;
@@ -240,7 +247,7 @@ class DeviceSelfiePhotoService implements SelfiePhotoService {
         requestFullMetadata: false,
       );
       if (selected == null) return null;
-      onProgress?.call('Aligning the look on your device…');
+      onProgress?.call('Opening your selected photo…');
       if (await selected.length() > maxFileBytes) {
         throw const SelfieException(
           'image_too_large',
@@ -258,23 +265,41 @@ class DeviceSelfiePhotoService implements SelfiePhotoService {
         );
       }
       image = await normalizeSelfie(source);
-      final png = await image.toByteData(format: ui.ImageByteFormat.png);
-      if (png == null || png.lengthInBytes > maxEncodedPreviewBytes) {
-        throw const SelfieException(
-          'image_too_large',
-          'This photo is too large to preview. Choose a smaller selfie.',
-        );
+      // Display a decoded photo immediately. The controller owns this clone,
+      // so cancelling/removing it cannot dispose pixels still used here.
+      if (onPreview != null) {
+        onPreview(SelfiePhoto(image: image.clone()));
       }
-      // The detector and painter receive the very same normalized pixels.
-      // Re-encoding also excludes the source image's EXIF and location tags.
-      final response = await _detector(
-        png.buffer.asUint8List(png.offsetInBytes, png.lengthInBytes),
+      onProgress?.call('Aligning the look on your device…');
+      FaceLandmarks? face;
+      SelfieException? alignmentIssue;
+      try {
+        final png = await image.toByteData(format: ui.ImageByteFormat.png);
+        if (png == null || png.lengthInBytes > maxEncodedPreviewBytes) {
+          throw const SelfieException(
+            'alignment_image_too_large',
+            'Your photo is displayed. Choose a smaller copy to add the makeup preview.',
+          );
+        }
+        // The detector and painter receive the same normalized pixels.
+        // Re-encoding excludes the source image's EXIF and location tags.
+        final response = await _detector(
+          png.buffer.asUint8List(png.offsetInBytes, png.lengthInBytes),
+        );
+        face = FaceLandmarks.fromResponse(
+          response,
+          ui.Size(image.width.toDouble(), image.height.toDouble()),
+        );
+      } catch (failure) {
+        // Alignment controls makeup only. Keep the selected photo even when
+        // a detector cannot find one suitable face or complete landmarks.
+        alignmentIssue = _alignmentIssue(failure);
+      }
+      final result = SelfiePhoto(
+        image: image,
+        face: face,
+        alignmentIssue: alignmentIssue,
       );
-      final face = FaceLandmarks.fromResponse(
-        response,
-        ui.Size(image.width.toDouble(), image.height.toDouble()),
-      );
-      final result = SelfiePhoto(image: image, face: face);
       image = null; // Ownership transfers to the session-scoped controller.
       return result;
     } finally {
@@ -282,6 +307,19 @@ class DeviceSelfiePhotoService implements SelfiePhotoService {
       if (selected != null) await _fileCleaner.clean(selected);
     }
   }
+
+  static SelfieException _alignmentIssue(Object failure) => switch (failure) {
+    SelfieException() => failure,
+    TimeoutException() => const SelfieException(
+      'alignment_timeout',
+      'Your photo is ready, but makeup alignment took too long. Try another clear, front-facing selfie.',
+    ),
+    MissingPluginException() => const SelfieException(
+      'alignment_unavailable',
+      'Your photo is ready. Update Esha to use makeup try-on on iPhone or Android.',
+    ),
+    _ => FaceLandmarks._alignmentFailure,
+  };
 
   static Future<ui.Image> normalizeSelfie(Uint8List bytes) async {
     if (bytes.isEmpty || bytes.length > maxFileBytes) {
@@ -350,6 +388,7 @@ class SelfieStudioController extends ChangeNotifier {
   int _accountEpoch = -1, _generation = 0;
   Future<void>? _initialization;
   bool get canChoose => !_disposed && _allowed && _ownerId != null && !busy;
+  bool get canTryOn => _photo?.hasMakeupAlignment == true;
 
   Future<void> initialize() => _initialization ??= _initializePicker();
 
@@ -396,6 +435,16 @@ class SelfieStudioController extends ChangeNotifier {
       await initialize();
       if (!current()) return;
       final selected = await _service.choose(
+        onPreview: (preview) {
+          if (!current()) {
+            preview.dispose();
+            return;
+          }
+          _photo?.dispose();
+          _photo = preview;
+          showOriginal = true;
+          notifyListeners();
+        },
         onProgress: (message) {
           if (current()) {
             busyMessage = message;
@@ -410,7 +459,7 @@ class SelfieStudioController extends ChangeNotifier {
       if (selected != null) {
         _photo?.dispose();
         _photo = selected;
-        showOriginal = false;
+        showOriginal = !selected.hasMakeupAlignment;
       }
     } catch (failure) {
       if (current()) {
@@ -436,13 +485,18 @@ class SelfieStudioController extends ChangeNotifier {
   }
 
   void setShowOriginal(bool value) {
-    if (_disposed || _photo == null || showOriginal == value) return;
+    if (_disposed ||
+        _photo == null ||
+        showOriginal == value ||
+        (!value && !canTryOn)) {
+      return;
+    }
     showOriginal = value;
     notifyListeners();
   }
 
   void setIntensity(double value) {
-    if (_disposed || _photo == null || !value.isFinite) return;
+    if (_disposed || !canTryOn || !value.isFinite) return;
     intensity = value.clamp(.15, .85);
     notifyListeners();
   }

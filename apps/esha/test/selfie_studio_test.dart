@@ -12,14 +12,19 @@ import 'package:flutter_test/flutter_test.dart';
 
 class PreviewService implements SelfiePhotoService {
   Future<SelfiePhoto?> Function() next = () async => null;
+  void Function(SelfiePhoto photo)? previewCallback;
   int selections = 0;
 
   @override
   Future<void> discardInterruptedSelection() async {}
 
   @override
-  Future<SelfiePhoto?> choose({void Function(String message)? onProgress}) {
+  Future<SelfiePhoto?> choose({
+    void Function(String message)? onProgress,
+    void Function(SelfiePhoto photo)? onPreview,
+  }) {
     selections++;
+    previewCallback = onPreview;
     onProgress?.call('Aligning the look on your device…');
     return next();
   }
@@ -143,6 +148,24 @@ void main() {
       expect(secondLook, orderedEquals(original));
     },
   );
+
+  test('a photo without alignment renders original pixels even when try-on is requested', () async {
+    final image = await texturedImage();
+    final photo = SelfiePhoto(
+      image: image,
+      alignmentIssue: const SelfieException(
+        'small_face',
+        'Choose a closer selfie so Esha can place the lip color and lashes accurately.',
+      ),
+    );
+    addTearDown(photo.dispose);
+    final source = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    expect(photo.hasMakeupAlignment, isFalse);
+    for (final original in [false, true]) {
+      final preview = await painted(photo, original: original);
+      expect(preview, orderedEquals(source!.buffer.asUint8List()));
+    }
+  });
 
   test(
     'contained overlays preserve the mouth opening, background and lip texture',
@@ -296,7 +319,7 @@ void main() {
   );
 
   testWidgets(
-    'picker cancel, clear errors and Cancel preview leave upload usable',
+    'picker cancel, decode errors and Cancel preview leave upload usable',
     (tester) async {
       final service = PreviewService();
       final controller = session(service);
@@ -308,13 +331,13 @@ void main() {
       expect(controller.error, isNull);
 
       service.next = () async => throw const SelfieException(
-        'no_face',
-        'No clear face was found. Choose another selfie.',
+        'invalid_image',
+        'This photo could not be decoded. Choose another image.',
       );
       await tester.tap(find.byKey(const Key('choose-selfie')));
       await tester.pumpAndSettle();
       expect(
-        find.text('No clear face was found. Choose another selfie.'),
+        find.text('This photo could not be decoded. Choose another image.'),
         findsOneWidget,
       );
       expect(
@@ -341,6 +364,126 @@ void main() {
       expect(controller.photo, isNull);
       expect(find.byKey(const Key('selfie-preview-image')), findsNothing);
       expect(controller.error, isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
+
+  testWidgets(
+    'small-face alignment warning keeps the photo visible and change/remove actionable',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 720));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final semantics = tester.ensureSemantics();
+      final image = (await tester.runAsync(texturedImage))!;
+      addTearDown(image.dispose);
+      const issue = SelfieException(
+        'small_face',
+        'Choose a closer selfie so Esha can place the lip color and lashes accurately.',
+      );
+      final service = PreviewService()
+        ..next = () async =>
+            SelfiePhoto(image: image.clone(), alignmentIssue: issue);
+      final controller = session(service);
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(card(controller, scale: 1.7));
+      await tester.ensureVisible(find.byKey(const Key('choose-selfie')));
+      await tester.tap(find.byKey(const Key('choose-selfie')));
+      await tester.pumpAndSettle();
+
+      expect(controller.photo, isNotNull);
+      expect(controller.canTryOn, isFalse);
+      expect(controller.error, isNull);
+      expect(find.byKey(const Key('selfie-preview-image')), findsOneWidget);
+      await tester.ensureVisible(find.byKey(const Key('selfie-preview-image')));
+      await tester.pump();
+      expect(
+        find.bySemanticsLabel('Your selected photo. Makeup is not applied.'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Original photo. Makeup is not applied.'),
+        findsOneWidget,
+      );
+      expect(find.text(issue.message), findsOneWidget);
+      expect(find.text('Try-on'), findsNothing);
+      expect(find.byType(Slider), findsNothing);
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('choose-selfie')))
+            .onPressed,
+        isNotNull,
+      );
+      expect(tester.takeException(), isNull);
+
+      await tester.ensureVisible(find.text('Remove photo'));
+      await tester.tap(find.text('Remove photo'));
+      await tester.pumpAndSettle();
+      expect(controller.photo, isNull);
+      expect(find.text(issue.message), findsNothing);
+
+      await tester.ensureVisible(find.byKey(const Key('choose-selfie')));
+      await tester.tap(find.byKey(const Key('choose-selfie')));
+      await tester.pumpAndSettle();
+      expect(controller.photo?.alignmentIssue, issue);
+      service.next = () async =>
+          SelfiePhoto(image: image.clone(), face: landmarks());
+      await tester.ensureVisible(find.text('Change selfie'));
+      await tester.tap(find.text('Change selfie'));
+      await tester.pumpAndSettle();
+      expect(controller.canTryOn, isTrue);
+      expect(find.text(issue.message), findsNothing);
+      expect(find.text('Try-on'), findsOneWidget);
+      expect(find.byType(Slider), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+      semantics.dispose();
+    },
+  );
+
+  testWidgets(
+    'decoded photo is visible during alignment and Cancel preview prevents a late restoration',
+    (tester) async {
+      final image = (await tester.runAsync(texturedImage))!;
+      addTearDown(image.dispose);
+      final pending = Completer<SelfiePhoto?>();
+      final service = PreviewService()..next = () => pending.future;
+      final controller = session(service);
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(card(controller));
+      await tester.tap(find.byKey(const Key('choose-selfie')));
+      await tester.pump();
+      expect(service.previewCallback, isNotNull);
+      service.previewCallback!(SelfiePhoto(image: image.clone()));
+      await tester.pump();
+      expect(controller.busy, isTrue);
+      expect(controller.photo, isNotNull);
+      expect(controller.canTryOn, isFalse);
+      expect(find.byKey(const Key('selfie-preview-image')), findsOneWidget);
+      expect(
+        find.text('Original photo. Makeup is not applied.'),
+        findsOneWidget,
+      );
+      expect(find.text('Try-on'), findsNothing);
+      expect(find.byType(Slider), findsNothing);
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      expect(
+        tester
+            .widget<FilledButton>(find.byKey(const Key('choose-selfie')))
+            .onPressed,
+        isNull,
+      );
+      await tester.ensureVisible(find.text('Cancel preview'));
+      await tester.tap(find.text('Cancel preview'));
+      await tester.pump();
+      expect(controller.busy, isFalse);
+      expect(controller.photo, isNull);
+      expect(controller.canChoose, isTrue);
+      pending.complete(SelfiePhoto(image: image.clone(), face: landmarks()));
+      await tester.pumpAndSettle();
+      expect(controller.photo, isNull);
+      expect(find.byKey(const Key('selfie-preview-image')), findsNothing);
+      expect(find.text('Upload selfie'), findsOneWidget);
+      expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     },
   );

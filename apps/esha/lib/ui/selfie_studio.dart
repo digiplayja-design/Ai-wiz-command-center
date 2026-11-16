@@ -21,6 +21,8 @@ class SelfiePreviewCard extends StatelessWidget {
     animation: controller,
     builder: (context, _) {
       final photo = controller.photo;
+      final canTryOn = photo?.hasMakeupAlignment == true && controller.canTryOn;
+      final showOriginal = !canTryOn || controller.showOriginal;
       return EshaPanel(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -71,7 +73,9 @@ class SelfiePreviewCard extends StatelessWidget {
                     builder: (context, constraints) => Semantics(
                       image: true,
                       excludeSemantics: true,
-                      label: controller.showOriginal
+                      label: !canTryOn
+                          ? 'Your selected photo. Makeup is not applied.'
+                          : showOriginal
                           ? 'Your original selfie, without makeup overlays'
                           : 'Selfie preview with ${lookNames[look.shade]} lips, ${look.finish.toLowerCase()} finish and ${look.lashes.toLowerCase()} lashes',
                       child: SizedBox(
@@ -82,7 +86,7 @@ class SelfiePreviewCard extends StatelessWidget {
                           painter: SelfieMakeupPainter(
                             photo: photo,
                             look: look,
-                            showOriginal: controller.showOriginal,
+                            showOriginal: showOriginal,
                             intensity: controller.intensity,
                           ),
                         ),
@@ -92,65 +96,89 @@ class SelfiePreviewCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
-              Wrap(
-                spacing: 10,
-                runSpacing: 8,
-                children: [
-                  ChoiceChip(
-                    label: const Text('Original'),
-                    selected: controller.showOriginal,
-                    onSelected: controller.busy
-                        ? null
-                        : (_) => controller.setShowOriginal(true),
-                  ),
-                  ChoiceChip(
-                    label: const Text('Try-on'),
-                    selected: !controller.showOriginal,
-                    onSelected: controller.busy
-                        ? null
-                        : (_) => controller.setShowOriginal(false),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  const Expanded(
+              if (!canTryOn) ...[
+                const Text(
+                  'Original photo. Makeup is not applied.',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                if (photo.alignmentIssue != null) ...[
+                  const SizedBox(height: 8),
+                  Semantics(
+                    liveRegion: true,
                     child: Text(
-                      'Makeup strength',
-                      style: TextStyle(fontWeight: FontWeight.w600),
+                      photo.alignmentIssue!.message,
+                      style: const TextStyle(color: pink),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${(controller.intensity * 100).round()}%',
-                    style: const TextStyle(color: muted),
-                  ),
                 ],
-              ),
-              Semantics(
-                label: 'Makeup strength',
-                child: Slider(
-                  key: const Key('selfie-intensity'),
-                  min: .15,
-                  max: .85,
-                  divisions: 14,
-                  value: controller.intensity,
-                  semanticFormatterCallback: (value) =>
-                      '${(value * 100).round()} percent',
-                  onChanged: controller.busy || controller.showOriginal
-                      ? null
-                      : controller.setIntensity,
+                const SizedBox(height: 8),
+                Text(
+                  controller.busy
+                      ? 'Your photo stays visible while Esha aligns the makeup preview.'
+                      : 'Choose Change selfie to try another photo, or Remove photo to clear this preview.',
+                  style: const TextStyle(color: muted, fontSize: 12),
                 ),
-              ),
-              if (controller.showOriginal)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 8),
-                  child: Text(
-                    'Switch to Try-on to adjust the strength.',
-                    style: TextStyle(color: muted, fontSize: 12),
+              ] else ...[
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('Original'),
+                      selected: controller.showOriginal,
+                      onSelected: controller.busy
+                          ? null
+                          : (_) => controller.setShowOriginal(true),
+                    ),
+                    ChoiceChip(
+                      label: const Text('Try-on'),
+                      selected: !controller.showOriginal,
+                      onSelected: controller.busy
+                          ? null
+                          : (_) => controller.setShowOriginal(false),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Makeup strength',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      '${(controller.intensity * 100).round()}%',
+                      style: const TextStyle(color: muted),
+                    ),
+                  ],
+                ),
+                Semantics(
+                  label: 'Makeup strength',
+                  child: Slider(
+                    key: const Key('selfie-intensity'),
+                    min: .15,
+                    max: .85,
+                    divisions: 14,
+                    value: controller.intensity,
+                    semanticFormatterCallback: (value) =>
+                        '${(value * 100).round()} percent',
+                    onChanged: controller.busy || controller.showOriginal
+                        ? null
+                        : controller.setIntensity,
                   ),
                 ),
+                if (controller.showOriginal)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      'Switch to Try-on to adjust the strength.',
+                      style: TextStyle(color: muted, fontSize: 12),
+                    ),
+                  ),
+              ],
             ],
             const SizedBox(height: 16),
             FilledButton.icon(
@@ -238,18 +266,19 @@ class SelfieMakeupPainter extends CustomPainter {
             : FilterQuality.high,
     );
     final strength = intensity.clamp(0.0, 1.0);
-    if (!showOriginal && strength > 0) {
+    final face = photo.face;
+    if (!showOriginal && strength > 0 && face != null) {
       Offset point(Offset p) => Offset(
         imageRect.left + p.dx * imageRect.width,
         imageRect.top + p.dy * imageRect.height,
       );
       List<Offset> ring(List<Offset> points) => points.map(point).toList();
-      final outer = ring(photo.face.outerLips);
-      final inner = ring(photo.face.innerLips);
-      final left = ring(photo.face.leftEye);
-      final right = ring(photo.face.rightEye);
+      final outer = ring(face.outerLips);
+      final inner = ring(face.innerLips);
+      final left = ring(face.leftEye);
+      final right = ring(face.rightEye);
       final mouth = outer.isEmpty
-          ? point(photo.face.bounds.bottomCenter)
+          ? point(face.bounds.bottomCenter)
           : _center(outer);
       _lips(canvas, outer, inner, left, right, strength);
       _lashes(canvas, left, mouth, strength);
