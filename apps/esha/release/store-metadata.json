@@ -15,7 +15,7 @@
     },
     "membership_scope": "catalog_routine_planner_vanity_look_studio_and_ai_require_fresh_same_account_server_verified_active_trial_or_paid_membership",
     "scope_revision_status": "membership_and_apple_draft_verified_voice_source_locally_tested_policy_amendment_not_deployed",
-    "latest_uploaded_ios_build_number": 6
+    "latest_uploaded_ios_build_number": 7
   },
   "apple": {
     "name": "Esha by Korlix",
@@ -871,14 +871,27 @@
     },
     "crop_and_look_fix": {
       "minimum_build": 7,
-      "status": "implemented_pending_release_verification",
+      "status": "ios_processed_pending_internal_group_approval_android_compile_verified",
       "crop_and_zoom_on_device": true,
       "preserves_uploaded_original_for_reset": true,
       "reruns_landmarks_on_cropped_pixels": true,
       "valid_style_selection_activates_try_on": true,
       "unaligned_style_choices_clearly_marked_settings_only": true,
       "photo_or_landmark_upload": false,
-      "physical_device_validation": false
+      "physical_device_validation": false,
+      "source_commit": "f2db8d3e8ce9c144e57c877a48eddf60ba2bddb1",
+      "source_tree": "c851af756f143534fdf99ca57e95353c2aca5621",
+      "ios_uploaded_build_number": 7,
+      "ios_build_id": "f7e623ad-2539-4c60-af85-8bf7183e1281",
+      "ios_processing_verified": true,
+      "ios_compliance_saved": true,
+      "ios_distribution_in_france": false,
+      "testflight_target_group": "Esha Internal Testers",
+      "testflight_group_assignment_verified": false,
+      "testflight_availability_verified": false,
+      "testflight_group_assignment_status": "blocked_by_automatic_approval_review_requires_explicit_group_approval",
+      "full_flutter_tests_passed": 183,
+      "release_evidence_path": "docs/releases/esha-crop-look-build-7/crop-look-checkpoint.json"
     }
   }
 }

@@ -1,0 +1,178 @@
+{
+  "schemaVersion": 1,
+  "status": "apple_processed_compliance_saved_pending_internal_group_approval",
+  "app": {
+    "name": "Esha by Korlix",
+    "bundleId": "com.korlixdeveloper.esha",
+    "appStoreAppId": "6835184869",
+    "version": "1.0.0",
+    "buildNumber": 7
+  },
+  "source": {
+    "remoteCommit": "f2db8d3e8ce9c144e57c877a48eddf60ba2bddb1",
+    "localCommit": "0fec1df2a33d6691599feddef2a2b62c72a0d316",
+    "tree": "c851af756f143534fdf99ca57e95353c2aca5621",
+    "branch": "feature/esha-native-20261115"
+  },
+  "request": [
+    "Add crop or zoom editing for an uploaded selfie.",
+    "Correct look selections that do not visibly apply to the photo."
+  ],
+  "findings": [
+    "Explicit style selections updated StudioLook but did not leave Original comparison mode.",
+    "Style controls remained usable while alignment was unavailable, when the painter correctly kept the original unchanged.",
+    "Independent synthetic pixel checks confirmed each shade, finish and lash choice changes valid aligned previews; effects occupy fewer pixels when the face is small in the photo."
+  ],
+  "changes": {
+    "editing": "Local full-screen Crop / zoom editor with pinch, drag, zoom slider, Reset, Cancel and Apply crop.",
+    "sourcePreservation": "Independent original image handle is retained only in the account session; repeated edits and Reset use the uploaded original, not successive cropped images.",
+    "alignment": "The selected crop is rasterized and re-detected using identical cropped pixels and dimensions. Existing uncropped landmarks are not reused.",
+    "lookSelection": "Accepted explicit shade, finish or lash selections, including reselection, switch a ready aligned photo to Try-on.",
+    "feedback": "No-photo, processing, unaligned settings-only, and Original comparison states are distinguished next to look settings.",
+    "privacy": "Removing the photo, sign-out, account switch or access reset clears stored photos and rejects late crop/selection results; no photo or landmark upload or sync."
+  },
+  "validation": {
+    "fullFlutterTests": 183,
+    "analysis": "passed_no_issues",
+    "sourceIdentity": "verified_flutter_3.47.9",
+    "physicalDeviceWithUserOriginalPhoto": false,
+    "testsLogSha256": "c7c32bd95c0fd528b99e04643afc2c8b81b3d9a7b2fb31f6d1c86ec029103d0d",
+    "focusedCoverage": "14 crop-service, 12 look-selection and 11 crop-editor tests are included in the full 183 count, not additional.",
+    "editorVisualQa": {
+      "file": "crop-editor-synthetic-qa.png",
+      "sha256": "4d5e23fe57e66ab2ef3ea916c45cfda2633f42ac2922f2f1a4a7dc0b2674fec2",
+      "scope": "Actual Flutter widget render with synthetic non-person color quadrants and optional local test fonts; readable controls inspected. Not a physical-device screenshot or test with the user photo."
+    }
+  },
+  "releaseVerification": {
+    "githubCi": {
+      "runId": "43787674119",
+      "url": "https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43787674119",
+      "sourceCommit": "f2db8d3e8ce9c144e57c877a48eddf60ba2bddb1",
+      "status": "completed",
+      "conclusion": "success",
+      "updatedAtUtc": "2026-11-16T01:48:16Z",
+      "finalSuccessVerified": true,
+      "jobs": [
+        {
+          "id": "133038856686",
+          "name": "Esha backend and SQL checks",
+          "conclusion": "success",
+          "completedAtUtc": "2026-11-16T01:41:29Z"
+        },
+        {
+          "id": "133038856877",
+          "name": "Compile iOS Simulator application",
+          "conclusion": "success",
+          "completedAtUtc": "2026-11-16T01:45:34Z"
+        },
+        {
+          "id": "133038856952",
+          "name": "Analyze, test, and compile Android",
+          "conclusion": "success",
+          "completedAtUtc": "2026-11-16T01:48:15Z"
+        }
+      ],
+      "artifacts": [
+        {
+          "id": "14191850193",
+          "name": "Esha-Android-debug-and-unsigned-f2db8d3e8ce9c144e57c877a48eddf60ba2bddb1",
+          "bytes": 205900216,
+          "digest": "sha256:2b5ef8dcad0dc8324be5ddb3a109a934ac2c4dd3a65c1f4c29cd6808a21f52cc",
+          "expired": false,
+          "expiresAtUtc": "2026-11-30T01:48:04Z"
+        },
+        {
+          "id": "14190912620",
+          "name": "Esha-iOS-Simulator-only-f2db8d3e8ce9c144e57c877a48eddf60ba2bddb1",
+          "bytes": 75264085,
+          "digest": "sha256:dcae06564f9054d7142ae7e5a175494915b206adb401219333a07691456fc294",
+          "expired": false,
+          "expiresAtUtc": "2026-11-30T01:45:25Z"
+        }
+      ],
+      "artifactProvenance": "GitHub API artifact metadata; simulator/Android archives were not independently downloaded or rehashed. The signed iPhone IPA has a separate independent download check."
+    },
+    "signedIosBuild": {
+      "jobId": "6afa5f3f90e83b09c4facd8b",
+      "url": "https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa5f3f90e83b09c4facd8b",
+      "jobIndex": 7,
+      "observedSourceCommit": "f2db8d3e8ce9c144e57c877a48eddf60ba2bddb1",
+      "startedLocal": "November 15, 2026 at 20:41 EST (minute precision shown in UI)",
+      "statusAtObservation": "finished",
+      "signedArtifactVerified": true,
+      "uploadVerified": true,
+      "nativeValidationStageCompleted": true,
+      "appleAppAndProfileVerified": true,
+      "candidateVersionVerified": "1.0.0 (7)",
+      "candidateVersionEvidence": "Codemagic prepare step: Verified the separate Esha Apple app and profile; candidate version 1.0.0 (7).",
+      "duration": "6m 2s",
+      "artifactBytes": 48538296,
+      "artifactSha256": "18a0536f950a6cdb828c8c01a33ee8f5cd6ae3179171d7ad3545efed1afd79b7",
+      "artifactReceipt": "Esha-signed-verification.json",
+      "downloadedArtifactCheck": "downloaded-ipa-check.json",
+      "upload": {
+        "result": "UPLOAD SUCCEEDED with no errors",
+        "deliveryUuid": "f7e623ad-2539-4c60-af85-8bf7183e1281",
+        "observedLogTimestampUtc": "2026-11-16T01:47:28.472Z",
+        "transferredBytes": 48538296
+      },
+      "verificationBasis": "Live Codemagic finished status and upload log plus independent downloaded IPA byte/hash and Info.plist comparison."
+    },
+    "appleTestFlight": {
+      "buildId": "f7e623ad-2539-4c60-af85-8bf7183e1281",
+      "version": "1.0.0",
+      "buildNumber": "7",
+      "processingState": "Processed",
+      "processingVerified": true,
+      "complianceVerified": true,
+      "internalGroupAssignmentVerified": false,
+      "availabilityVerified": false,
+      "physicalDeviceInstallationVerified": false,
+      "lastObservedState": "Build 1.0.0 (7) exists, compliance and test information are saved. Groups (0). Existing Esha Internal Testers is selected in Add Group dialog; final Add action was rejected by automatic approval review and was not retried.",
+      "url": "https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6835184869/testflight/ios/f7e623ad-2539-4c60-af85-8bf7183e1281",
+      "compliance": {
+        "encryptionSelection": "Standard encryption algorithms instead of, or in addition to, using or accessing the encryption within Apple's operating system",
+        "distributionInFrance": false,
+        "saved": true
+      },
+      "testInformationSaved": true,
+      "targetGroup": {
+        "id": "34951be9-1955-4e01-94da-778608de638f",
+        "name": "Esha Internal Testers",
+        "type": "Internal",
+        "existingGroup": true,
+        "assignmentSaved": false
+      },
+      "approvalBlock": {
+        "action": "Add build 1.0.0 (7) to Esha Internal Testers",
+        "source": "automatic_approval_review",
+        "reason": "Clicking Add would make build 1.0.0 (7) available to the existing Esha Internal Testers group, granting access to identified recipients; the user asked for Esha to appear in TestFlight but did not specifically authorize this access change, its recipients, and scope.",
+        "nextStep": "Obtain explicit approval to make Esha 1.0.0 (7) available to the existing Esha Internal Testers group, then complete Add and verify Testing.",
+        "attemptNotRetried": true
+      },
+      "evidence": {
+        "file": "esha-build-7-awaiting-group-approval.jpg",
+        "bytes": 55934,
+        "sha256": "63f813ce0fc7324e7aa06452a959b6794f2f82cf7eb2bbcdcdb4e7f2697a66e5",
+        "scope": "Live App Store Connect screen: processed build 1.0.0 (7), saved test information, Groups (0), Esha Internal Testers selected in pending Add Group modal. This is not Testing or availability proof."
+      }
+    }
+  },
+  "physicalDeviceCheck": [
+    "Update Esha in TestFlight to 1.0.0 (7).",
+    "Upload the same selfie, open Crop / zoom, zoom/drag until one face and both eyes/lips are visible, and Apply crop.",
+    "After alignment, select visibly different shades, Gloss and Bold lashes; compare Original and Try-on.",
+    "Select Original, then select or reselect a shade; confirm Try-on becomes active.",
+    "Reopen Crop / zoom and Reset to confirm the uploaded original remains available."
+  ],
+  "scope": {
+    "backendChanged": false,
+    "photoOrLandmarkUploadAdded": false,
+    "newPhotoPermissions": false,
+    "paidAiOrVoiceActivation": false,
+    "appStoreReviewSubmitted": false
+  },
+  "recordedAtUtc": "2026-11-16T01:41:07Z",
+  "updatedAtUtc": "2026-11-16T01:59:20Z"
+}
