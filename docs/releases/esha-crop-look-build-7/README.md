@@ -1,16 +1,18 @@
-# Crop and look-selection update — build 7 ready for group approval
+# Crop and look-selection update — released TestFlight build 7
 
-**Prepared and uploaded · November 15, 2026 (EST) · Esha 1.0.0 (7)**
+**Available to Esha Internal Testers · November 16, 2026 (EST) · Esha 1.0.0 (7)**
 
-The crop editor and look-selection correction are committed in **1.0.0+7**. All **183 Flutter tests** passed, the analyzer reports no issues, and the source identity check passed. All three cloud CI jobs passed. The signed iPhone package was independently verified and successfully uploaded to Apple. Apple processing is complete; export compliance and testing notes are saved. **TestFlight group assignment is blocked pending explicit approval**, so build 7 availability is not yet verified. UTC receipts may carry a November 16 date.
+The crop editor and look-selection correction are released in **1.0.0+7** to the existing **Esha Internal Testers** group. App Store Connect shows the exact build as **Testing**. All **183 Flutter tests** passed, the analyzer reports no issues, and the source identity check passed. All three cloud CI jobs passed. The signed iPhone package was independently verified and successfully uploaded to Apple. Apple processing, export compliance, testing notes and internal group assignment are complete.
 
-## Remaining approval
+## TestFlight release confirmation
 
-Automatic approval review rejected the final **Add** action for the existing **Esha Internal Testers** group. The stated reason was that making build **1.0.0 (7)** available to that group needed explicit authorization naming the recipients and access scope. The action was not retried. App Store Connect still shows **Groups (0)**, with the existing group selected in the pending Add Group dialog.
+The user explicitly approved making **Esha 1.0.0 (7)** available to the existing **Esha Internal Testers** group. The Add action completed successfully. The group now contains **1 Tester** and **5 Builds**, with build **1.0.0 (7)** marked **Testing**. This verification was recorded on **November 16, 2026 at 5:36 AM EST** (`2026-11-16T10:36:40Z`).
 
-The requested approval is: **Make Esha 1.0.0 (7) available to the existing Esha Internal Testers group.** After approval, complete Add and verify that the group lists build 7 as **Testing**. The build's encryption declaration was saved with **France: No**, preserving the user's selection. TestFlight's What to Test notes are saved and describe crop, zoom, Reset, Cancel, Original/Try-on and style checks.
+The build's encryption declaration remains saved with **France: No**, preserving the user's selection. TestFlight's What to Test notes are saved and describe crop, zoom, Reset, Cancel, Original/Try-on and style checks.
 
-![App Store Connect: build 7 prepared, existing tester group selected, final Add awaiting approval](esha-build-7-awaiting-group-approval.jpg)
+![App Store Connect: Esha Internal Testers lists build 1.0.0 (7) as Testing](esha-build-7-testing.jpg)
+
+The earlier automatic approval rejection is retained as history in the checkpoint and [pre-approval screenshot](esha-build-7-awaiting-group-approval.jpg). That blocked state was resolved after the user's explicit approval; it does not describe the current release status.
 
 ## What changes
 
@@ -34,9 +36,9 @@ An accepted shade, finish, lash or saved-look selection now activates **Try-on**
 | `apps/esha/lib/app_controller.dart` | Explicit look selections activate a ready Try-on preview |
 | `apps/esha/lib/ui/app.dart` | Distinct no-photo, pending, settings-only and Original guidance beside look controls |
 
-## Try build 7 once released
+## Try the update
 
-1. Open **TestFlight**, update Esha when the build becomes available, and confirm **1.0.0 (7)**.
+1. Open **TestFlight**, update Esha, and confirm **1.0.0 (7)**.
 2. Sign in, open **Try a Look → Upload selfie**, and choose the same photo used to report the problem.
 3. Open **Crop / zoom**. Pinch or adjust Zoom, then drag until one face, both eyes and the lips are clearly inside the frame. Choose **Apply crop** and wait for alignment.
 4. Try visibly different lip shades, **Gloss** and **Bold** lashes. Compare **Original / Try-on**. Select Original, then select or reselect a shade; confirm Try-on becomes active.
@@ -47,7 +49,7 @@ An accepted shade, finish, lash or saved-look selection now activates **Try-on**
 
 ## Validation and release status
 
-The full Flutter run includes all focused regressions below. Focused counts overlap the full count and are not added to it. Native build checks and Apple processing are complete; group assignment and availability verification remain pending approval.
+The full Flutter run includes all focused regressions below. Focused counts overlap the full count and are not added to it. Native build checks, Apple processing, group assignment and TestFlight availability verification are complete.
 
 | Check | Status |
 | --- | --- |
@@ -59,7 +61,7 @@ The full Flutter run includes all focused regressions below. Focused counts over
 | [GitHub CI 43787674119](https://github.com/digiplayja-design/Ai-wiz-command-center/actions/runs/43787674119) | All three jobs passed: backend/SQL, iOS Simulator, Android |
 | [Codemagic signed build 7](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6afa5f3f90e83b09c4facd8b) | Finished in 6m 2s; signed IPA independently verified; Apple upload succeeded |
 | Apple processing, export compliance and test notes | Complete; France: No; What to Test saved |
-| TestFlight group assignment and 1.0.0 (7) availability | **Pending explicit group approval**; automatic approval review blocked Add; Groups (0) |
+| TestFlight group assignment and 1.0.0 (7) availability | **Verified Testing** in the existing Esha Internal Testers group, November 16, 2026 |
 | User's original photo on their physical device | Pending |
 
 Release fields and subsequent receipts belong in the [release checkpoint](crop-look-checkpoint.json). The source branch is `feature/esha-native-20261115`: remote commit `f2db8d3e8ce9c144e57c877a48eddf60ba2bddb1`, local commit `0fec1df2a33d6691599feddef2a2b62c72a0d316`, matching tree `c851af756f143534fdf99ca57e95353c2aca5621`.

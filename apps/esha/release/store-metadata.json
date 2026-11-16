@@ -871,7 +871,7 @@
     },
     "crop_and_look_fix": {
       "minimum_build": 7,
-      "status": "ios_processed_pending_internal_group_approval_android_compile_verified",
+      "status": "ios_internal_testflight_testing_android_compile_verified",
       "crop_and_zoom_on_device": true,
       "preserves_uploaded_original_for_reset": true,
       "reruns_landmarks_on_cropped_pixels": true,
@@ -887,11 +887,13 @@
       "ios_compliance_saved": true,
       "ios_distribution_in_france": false,
       "testflight_target_group": "Esha Internal Testers",
-      "testflight_group_assignment_verified": false,
-      "testflight_availability_verified": false,
-      "testflight_group_assignment_status": "blocked_by_automatic_approval_review_requires_explicit_group_approval",
+      "testflight_group_assignment_verified": true,
+      "testflight_availability_verified": true,
+      "testflight_group_assignment_status": "Testing",
       "full_flutter_tests_passed": 183,
-      "release_evidence_path": "docs/releases/esha-crop-look-build-7/crop-look-checkpoint.json"
+      "release_evidence_path": "docs/releases/esha-crop-look-build-7/crop-look-checkpoint.json",
+      "testflight_verification_recorded_at_utc": "2026-11-16T10:36:40Z",
+      "testflight_testing_evidence_path": "docs/releases/esha-crop-look-build-7/esha-build-7-testing.jpg"
     }
   }
 }

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "status": "apple_processed_compliance_saved_pending_internal_group_approval",
+  "status": "ios_internal_testflight_testing_android_compile_verified",
   "app": {
     "name": "Esha by Korlix",
     "bundleId": "com.korlixdeveloper.esha",
@@ -126,10 +126,10 @@
       "processingState": "Processed",
       "processingVerified": true,
       "complianceVerified": true,
-      "internalGroupAssignmentVerified": false,
-      "availabilityVerified": false,
+      "internalGroupAssignmentVerified": true,
+      "availabilityVerified": true,
       "physicalDeviceInstallationVerified": false,
-      "lastObservedState": "Build 1.0.0 (7) exists, compliance and test information are saved. Groups (0). Existing Esha Internal Testers is selected in Add Group dialog; final Add action was rejected by automatic approval review and was not retried.",
+      "lastObservedState": "Build 1.0.0 (7) was added to the existing Esha Internal Testers group. The group lists 1 Tester and 5 Builds; the exact build 7 row shows Testing.",
       "url": "https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6835184869/testflight/ios/f7e623ad-2539-4c60-af85-8bf7183e1281",
       "compliance": {
         "encryptionSelection": "Standard encryption algorithms instead of, or in addition to, using or accessing the encryption within Apple's operating system",
@@ -142,20 +142,45 @@
         "name": "Esha Internal Testers",
         "type": "Internal",
         "existingGroup": true,
-        "assignmentSaved": false
+        "assignmentSaved": true,
+        "testerCount": 1,
+        "buildCount": 5
       },
       "approvalBlock": {
         "action": "Add build 1.0.0 (7) to Esha Internal Testers",
         "source": "automatic_approval_review",
         "reason": "Clicking Add would make build 1.0.0 (7) available to the existing Esha Internal Testers group, granting access to identified recipients; the user asked for Esha to appear in TestFlight but did not specifically authorize this access change, its recipients, and scope.",
         "nextStep": "Obtain explicit approval to make Esha 1.0.0 (7) available to the existing Esha Internal Testers group, then complete Add and verify Testing.",
-        "attemptNotRetried": true
+        "attemptNotRetried": true,
+        "historical": true,
+        "checkpointAtUtc": "2026-11-16T01:59:20Z",
+        "attemptNotRetriedScope": "This records the earlier blocked checkpoint only; the approved Add action was completed after explicit user authorization.",
+        "resolved": true
       },
       "evidence": {
         "file": "esha-build-7-awaiting-group-approval.jpg",
         "bytes": 55934,
         "sha256": "63f813ce0fc7324e7aa06452a959b6794f2f82cf7eb2bbcdcdb4e7f2697a66e5",
-        "scope": "Live App Store Connect screen: processed build 1.0.0 (7), saved test information, Groups (0), Esha Internal Testers selected in pending Add Group modal. This is not Testing or availability proof."
+        "scope": "Live App Store Connect screen: processed build 1.0.0 (7), saved test information, Groups (0), Esha Internal Testers selected in pending Add Group modal. This is not Testing or availability proof.",
+        "historical": true,
+        "phase": "before_explicit_group_approval"
+      },
+      "testingState": "Testing",
+      "verificationRecordedAtUtc": "2026-11-16T10:36:40Z",
+      "groupBuildsUrl": "https://appstoreconnect.apple.com/teams/f6169920-6326-4780-9d14-81013fac8eb0/apps/6835184869/testflight/groups/34951be9-1955-4e01-94da-778608de638f/builds",
+      "approvalResolution": {
+        "status": "resolved",
+        "userApproval": "The user replied Approve to the explicit question asking to make Esha 1.0.0 (7) available to the existing Esha Internal Testers group.",
+        "actionCompleted": true,
+        "verifiedState": "Testing",
+        "verificationRecordedAtUtc": "2026-11-16T10:36:40Z"
+      },
+      "testingEvidence": {
+        "file": "esha-build-7-testing.jpg",
+        "bytes": 67835,
+        "sha256": "5b126693cf37ae36fbe2cbfdd6acf3c4e16eeb0e2a2283e6ba88652b31ff5b7c",
+        "scope": "Live App Store Connect Esha Internal Testers Builds page showing Esha 1.0.0 (7) as Testing. Demonstrates group availability, not installation or physical-device behavior.",
+        "verificationRecordedAtUtc": "2026-11-16T10:36:40Z"
       }
     }
   },
@@ -174,5 +199,5 @@
     "appStoreReviewSubmitted": false
   },
   "recordedAtUtc": "2026-11-16T01:41:07Z",
-  "updatedAtUtc": "2026-11-16T01:59:20Z"
+  "updatedAtUtc": "2026-11-16T10:36:40Z"
 }
