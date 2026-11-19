@@ -21,6 +21,27 @@ subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
 }
+
+// Some Flutter plugins (including passkeys_doctor) set compileSdk after applying
+// the Android plugin. Apply the API 36 floor once their android DSL is complete.
+// Register these hooks before evaluationDependsOn eagerly evaluates :app.
+subprojects {
+    plugins.withId("com.android.application") {
+        extensions.configure<com.android.build.api.variant.ApplicationAndroidComponentsExtension>("androidComponents") {
+            finalizeDsl { android ->
+                android.compileSdk = maxOf(android.compileSdk ?: 0, 36)
+            }
+        }
+    }
+    plugins.withId("com.android.library") {
+        extensions.configure<com.android.build.api.variant.LibraryAndroidComponentsExtension>("androidComponents") {
+            finalizeDsl { android ->
+                android.compileSdk = maxOf(android.compileSdk ?: 0, 36)
+            }
+        }
+    }
+}
+
 subprojects {
     project.evaluationDependsOn(":app")
 }
@@ -28,34 +49,3 @@ subprojects {
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
-
-// Korlix Android parity: force all Android modules/plugins to compile against API 36.
-subprojects {
-    plugins.withId("com.android.application") {
-        extensions.configure<com.android.build.gradle.BaseExtension>("android") {
-            compileSdkVersion(36)
-        }
-    }
-    plugins.withId("com.android.library") {
-        extensions.configure<com.android.build.gradle.BaseExtension>("android") {
-            compileSdkVersion(36)
-        }
-    }
-}
-
-// KORLIX_FORCE_ANDROID_COMPILE_SDK_36_BEGIN
-// Force app and Flutter plugin subprojects, including passkeys_doctor, to compile against API 36.
-subprojects {
-    plugins.withId("com.android.application") {
-        extensions.configure<com.android.build.gradle.BaseExtension>("android") {
-            compileSdkVersion(36)
-        }
-    }
-
-    plugins.withId("com.android.library") {
-        extensions.configure<com.android.build.gradle.BaseExtension>("android") {
-            compileSdkVersion(36)
-        }
-    }
-}
-// KORLIX_FORCE_ANDROID_COMPILE_SDK_36_END
