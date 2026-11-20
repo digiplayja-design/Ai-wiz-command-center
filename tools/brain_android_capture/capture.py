@@ -251,7 +251,23 @@ def main():
         process, emulator_log = start_emulator()
         logcat_file = (OUT / "logcat.txt").open("wb")
         logcat_process = subprocess.Popen([str(ADB), "-s", SERIAL, "logcat", "-b", "main", "-b", "system", "-b", "crash", "-v", "time"], stdin=subprocess.DEVNULL, stdout=logcat_file, stderr=subprocess.STDOUT, env=CAPTURE_ENV)
-        captures = capture_scenes(apk)
+        for capture_attempt in range(2):
+            try:
+                captures = capture_scenes(apk)
+                break
+            except RuntimeError:
+                # A fresh Google APIs image can restart GMS during module setup.
+                # Android then kills WebView clients of its fonts provider. Retry
+                # only this observed infrastructure failure, once after restart.
+                device_log = (OUT / "logcat.txt").read_text(errors="replace")
+                provider_restart = any(
+                    "Killing " in line and ":com.korlix.capture/" in line
+                    and "depends on provider com.google.android.gms/.fonts.provider.FontsProvider" in line
+                    for line in device_log.splitlines()
+                )
+                if capture_attempt != 0 or not provider_restart:
+                    raise
+                print("Android restarted its fonts provider and killed the fixture; retrying the capture pass once.", flush=True)
         metadata = {
             "captureType": "native-android-webview-with-local-fixture-data",
             "productionApkRuntime": False,
