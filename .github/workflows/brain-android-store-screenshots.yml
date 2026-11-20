@@ -29,7 +29,19 @@ jobs:
           sudo chmod a+rw /dev/kvm
       - name: Install official Android toolchain
         run: |
-          sdkmanager "platform-tools" "emulator" "platforms;android-34" "build-tools;35.0.0" "system-images;android-34;google_apis;x86_64"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import subprocess
+          sdk_root = Path(os.environ['ANDROID_HOME'])
+          managers = sorted(sdk_root.glob('cmdline-tools/*/bin/sdkmanager'))
+          if not managers:
+              raise SystemExit('Android command-line tools are missing from the runner image')
+          manager = next((p for p in managers if '/latest/' in str(p)), managers[-1])
+          with open(os.environ['GITHUB_PATH'], 'a') as path_file:
+              path_file.write(str(manager.parent) + '\n')
+          subprocess.run([str(manager), '--sdk_root=' + str(sdk_root), 'platform-tools', 'emulator', 'platforms;android-34', 'build-tools;35.0.0', 'system-images;android-34;google_apis;x86_64'], check=True)
+          PY
       - name: Build isolated native fixture and capture original app UI
         run: python3 tools/brain_android_capture/capture.py
       - name: Upload captures and provenance
