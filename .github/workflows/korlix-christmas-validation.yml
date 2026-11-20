@@ -63,7 +63,10 @@ jobs:
           path: build/christmas-review/*.png
           retention-days: 14
       - name: Compile Android
-        run: flutter build apk --debug --no-pub
+        run: |
+          mkdir -p "$HOME/.gradle/init.d"
+          cp scripts/gradle-public-repositories.init.gradle "$HOME/.gradle/init.d/korlix-public-repositories.gradle"
+          flutter build apk --debug --no-pub
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: korlix-christmas-android-validation
