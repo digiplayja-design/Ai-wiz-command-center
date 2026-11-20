@@ -23,9 +23,11 @@ workflows:
           block drop out quick inet to { 169.254.0.0/16, 100.100.100.200/32 }
           block drop out quick inet6 to { fe80::/10, fd00:ec2::254/128 }
           PF
-          sudo pfctl -f "$rules"
+          # Keep the builder's existing firewall rules and add a scoped anchor.
+          sudo pfctl -s rules | grep -F 'anchor "com.apple/*"' >/dev/null
+          sudo pfctl -a com.apple/korlix_metadata -f "$rules"
           sudo pfctl -e 2>/dev/null || sudo pfctl -s info | grep -q 'Status: Enabled'
-          sudo pfctl -s rules | grep -q '169.254.0.0/16'
+          sudo pfctl -a com.apple/korlix_metadata -s rules | grep -q '169.254.0.0/16'
       - name: Install pinned Apple release tools
         script: |
           set -euo pipefail
