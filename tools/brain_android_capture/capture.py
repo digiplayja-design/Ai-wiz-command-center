@@ -58,6 +58,7 @@ def diagnostic_commands(label):
     """Keep command return codes and stderr; an empty file is not a successful read."""
     checks = [("host-processes", ["ps", "-eo", "pid,ppid,pcpu,pmem,rss,stat,etime,args"]),
               ("host-memory", ["free", "-m"]),
+              ("host-crash-info", ["coredumpctl", "--no-pager", "info", "--since=-10min"]),
               ("device-echo", [ADB, "-s", SERIAL, "shell", "echo", "device-responsive"]),
               ("device-files", [ADB, "-s", SERIAL, "shell", "ls", "-l", DEVICE_FILES])]
     for name, command in checks:
@@ -66,6 +67,8 @@ def diagnostic_commands(label):
             (OUT / f"{label}-{name}.txt").write_bytes(b"returncode=" + str(result.returncode).encode() + b"\n" + result.stdout + b"\nSTDERR\n" + result.stderr)
         except subprocess.TimeoutExpired as exc:
             (OUT / f"{label}-{name}.txt").write_bytes(b"TIMEOUT\n" + (exc.stdout or b"") + (exc.stderr or b""))
+        except FileNotFoundError as exc:
+            (OUT / f"{label}-{name}.txt").write_text(str(exc))
 
 
 def retrieve_state(name, timeout=15):
@@ -137,7 +140,7 @@ def start_emulator():
     (OUT / "avdmanager.log").write_bytes(created.stdout + created.stderr)
     emulator_log = (OUT / "emulator.log").open("wb")
     process = subprocess.Popen([str(SDK / "emulator/emulator"), "-avd", "korlix_capture", "-port", "5554",
-                               "-no-window", "-no-audio", "-no-snapshot", "-no-boot-anim", "-no-metrics", "-gpu", "swiftshader", "-feature", "-Vulkan",
+                               "-no-window", "-no-audio", "-no-snapshot", "-no-boot-anim", "-no-metrics", "-gpu", "swangle", "-feature", "-Vulkan",
                                "-accel", "on", "-memory", "4096", "-cores", str(min(4, os.cpu_count() or 2)), "-skin", "1080x1920"],
                               stdin=subprocess.DEVNULL, stdout=emulator_log, stderr=subprocess.STDOUT, env=CAPTURE_ENV)
     deadline = time.monotonic() + 300
@@ -262,6 +265,7 @@ def main():
             "fixtureLimitations": "Local sample account snapshot; no real sign-in, cloud persistence, voice, purchases, or production APK runtime are tested. Original UI assets and CSS remain unchanged. Existing motion toggle is paused. Add Memory contains an unsaved sample draft.",
             "androidApi": adb("shell", "getprop", "ro.build.version.sdk").stdout.decode().strip(),
             "androidFingerprint": adb("shell", "getprop", "ro.build.fingerprint").stdout.decode().strip(),
+            "emulatorGraphicsBackend": "swangle (SwiftShader with ANGLE); guest Vulkan disabled",
             "workflowCommit": os.environ.get("GITHUB_SHA"),
             "workflowRun": os.environ.get("GITHUB_RUN_ID"),
             "assets": asset_manifest,
