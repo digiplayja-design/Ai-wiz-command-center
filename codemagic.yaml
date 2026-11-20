@@ -27,7 +27,7 @@ workflows:
           python3 scripts/prepare_ios_release.py \
             --bundle-id com.korlixdeveloper.korlixai --app-id 6783100102 \
             --require-existing-build --environment-file "$CM_ENV"
-          cp docs/releases/crm-spreadsheet-20261030/korlix-ai-notes.txt release_notes_en-US.txt
+          cp docs/releases/christmas-models-20261119/korlix-ai-notes.txt release_notes_en-US.txt
       - name: Validate current iOS app and shared calling code
         script: |
           set -euo pipefail
@@ -48,6 +48,13 @@ workflows:
             test/social_call_reliability_test.dart test/social_screen_sharing_test.dart \
             test/social_communication_upgrade_test.dart \
             test/social_presence_model_test.dart test/social_presence_toggle_test.dart
+      - name: Validate Christmas appearance and model upgrade
+        script: |
+          set -euo pipefail
+          flutter test --no-pub --reporter expanded \
+            test/korlix_christmas_theme_test.dart test/korlix_astra_quality_test.dart \
+            test/korlix_theme_test.dart test/korlix_screen_skins_test.dart \
+            test/korlix_appearance_studio_test.dart test/live_convo/korlix_live_convo_agent_test.dart
       - name: Validate CRM spreadsheet import and Rici lifecycle
         script: |
           set -euo pipefail
@@ -93,7 +100,7 @@ workflows:
 
   korlix-ai-ios-testflight:
     <<: *korlix_ai_ios_release
-    name: Korlix AI CRM iOS TestFlight Upload
+    name: Korlix AI iOS TestFlight Upload
     publishing:
       app_store_connect:
         auth: integration

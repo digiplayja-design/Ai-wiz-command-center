@@ -38,6 +38,8 @@ import 'music_studio/music_studio_screen.dart';
 import 'music_studio/music_voice.dart';
 import 'chat/chat_workspace.dart';
 import 'theme/korlix_theme.dart';
+import 'theme/korlix_default_appearance.dart';
+import 'theme/korlix_christmas_greeting.dart';
 import 'theme/korlix_action_button.dart';
 import 'theme/korlix_action_grid.dart';
 import 'auth/korlix_welcome_confirmation.dart';
@@ -327,6 +329,7 @@ Future<void> main() async {
       ));
       WidgetsFlutterBinding.ensureInitialized();
       _installKorlixErrorSurface();
+      unawaited(restoreKorlixDefaultAppearance());
       _korlixPortalLaunchRequested =
           Uri.base.queryParametersAll.containsKey('app_portal');
       _korlixInitialPortalLaunch = captureKorlixPortalLaunch();
@@ -9712,6 +9715,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
                 child: Column(
                   children: [
                     _buildMockupHomeHeader(),
+                    const KorlixChristmasGreeting(),
                     KorlixStarterTasks(
                       key: ValueKey(_starterTasksPrefsKey),
                       storageKey: _starterTasksPrefsKey,

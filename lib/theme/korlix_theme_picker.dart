@@ -305,14 +305,14 @@ class KorlixThemePreview extends StatelessWidget {
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               colors: korlixButtonColorsFor(
-                                'Send',
+                                'Send', themeId: skin.id,
                               ).gradientColors,
                             ),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Icon(
                             Icons.arrow_upward,
-                            color: korlixButtonColorsFor('Send').foreground,
+                            color: korlixButtonColorsFor('Send', themeId: skin.id).foreground,
                             size: 18,
                           ),
                         ),
@@ -388,6 +388,7 @@ class KorlixThemeShortcuts extends StatelessWidget {
               alignment: WrapAlignment.center,
               children:
                   [
+                    'christmas_red',
                     'pure_white',
                     'pure_black',
                     'korlix_blue',

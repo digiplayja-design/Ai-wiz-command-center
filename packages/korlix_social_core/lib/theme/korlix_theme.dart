@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'korlix_button_colors.dart';
 
 const korlixThemeIds = [
+  'christmas_red',
   'pure_white',
   'pure_black',
   'lavender_mist',
@@ -17,6 +18,7 @@ const korlixThemeIds = [
 ];
 
 String korlixThemeDescription(String id) => switch (korlixNormalizeSkinId(id)) {
+  'christmas_red' => 'Snow-white surfaces, festive red accents and quiet snowflakes.',
   'pure_white' => 'True white backgrounds and panels. Crisp black text.',
   'pure_black' => 'Deep black with bright silver accents.',
   'lavender_mist' => 'Airy lavender with deep violet details.',
@@ -97,9 +99,11 @@ ThemeData korlixBuildTheme(String id) {
   final rounded = RoundedRectangleBorder(
     borderRadius: BorderRadius.circular(16),
   );
-  final primaryButton = korlixButtonColorsFor('Continue');
-  final elevatedButton = korlixButtonColorsFor('Save');
-  final actionInk = skin.isLight
+  final primaryButton = korlixButtonColorsFor('Continue', themeId: skin.id);
+  final elevatedButton = korlixButtonColorsFor('Save', themeId: skin.id);
+  final actionInk = skin.id == 'christmas_red'
+      ? skin.primary
+      : skin.isLight
       ? const Color(0xFF254EAC)
       : const Color(0xFF92C6FF);
   ButtonStyle filledStyle(KorlixButtonColors colors) =>
@@ -359,6 +363,32 @@ String korlixNormalizeSkinId(String theme) {
 
 KorlixSkinPalette korlixSkinPaletteFor(String theme) {
   switch (korlixNormalizeSkinId(theme)) {
+    case 'christmas_red':
+      return const KorlixSkinPalette(
+        id: 'christmas_red',
+        label: 'Christmas Red & White',
+        isLight: true,
+        backgroundTop: Color(0xFFFFFFFF),
+        backgroundMid: Color(0xFFFFFAFA),
+        backgroundBottom: Color(0xFFFFF4F4),
+        panel: Color(0xFFFFFFFF),
+        panelSoft: Color(0xFFFFF0F1),
+        panelDeep: Color(0xFFFFF7F7),
+        inputFill: Color(0xFFFFFFFF),
+        buttonFill: Color(0xFFFFF4F4),
+        primary: Color(0xFFB51F35),
+        secondary: Color(0xFF8F1930),
+        tertiary: Color(0xFF8A5424),
+        border: Color(0xFFB96A76),
+        glow: Color(0xFFD7354B),
+        text: Color(0xFF30151C),
+        mutedText: Color(0xFF69414A),
+        hintText: Color(0xFF77515A),
+        textOnAccent: Color(0xFFFFFFFF),
+        success: Color(0xFF216045),
+        danger: Color(0xFF94162A),
+        premium: Color(0xFF84521C),
+      );
     case 'pure_white':
       return const KorlixSkinPalette(
         id: 'pure_white',
