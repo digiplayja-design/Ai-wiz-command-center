@@ -15,6 +15,17 @@ workflows:
         certificates:
           - KORLIX_APP_STORE_CERT
     scripts:
+      - name: Block cloud metadata before release commands
+        script: |
+          set -euo pipefail
+          rules="$CM_BUILD_DIR/.korlix-metadata-block.pf"
+          cat > "$rules" <<'PF'
+          block drop out quick inet to { 169.254.0.0/16, 100.100.100.200/32 }
+          block drop out quick inet6 to { fe80::/10, fd00:ec2::254/128 }
+          PF
+          sudo pfctl -f "$rules"
+          sudo pfctl -e 2>/dev/null || sudo pfctl -s info | grep -q 'Status: Enabled'
+          sudo pfctl -s rules | grep -q '169.254.0.0/16'
       - name: Install pinned Apple release tools
         script: |
           set -euo pipefail
@@ -538,4 +549,3 @@ workflows:
       - apps/receipt_wiz/build/app/outputs/flutter-apk/app-debug.apk
       - apps/receipt_wiz/build/ios/iphonesimulator/ReceiptWiz-Simulator.zip
       - /tmp/xcodebuild_logs/*.log
-
