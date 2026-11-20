@@ -263,7 +263,7 @@ void main() {
   });
 
   testWidgets(
-    'shortcut controls offer six 48-pixel targets and a named preview action',
+    'shortcut controls offer seven 48-pixel targets and a named preview action',
     (tester) async {
       String? selected;
       var previews = 0;
@@ -282,12 +282,12 @@ void main() {
       await tester.tap(find.byTooltip('Rose Quartz'));
       await tester.pump();
       expect(selected, 'pink_white');
-      await tester.tap(find.text('KORLIX Midnight · 12 color themes'));
+      await tester.tap(find.text('KORLIX Midnight · 13 color themes'));
       expect(previews, 1);
       final targets = tester
           .widgetList<SizedBox>(find.byType(SizedBox))
           .where((box) => box.width == 48 && box.height == 48);
-      expect(targets.length, 6);
+      expect(targets.length, 7);
     },
   );
 

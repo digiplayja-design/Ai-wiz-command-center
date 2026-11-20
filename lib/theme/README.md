@@ -4,7 +4,7 @@ The home shortcuts and account appearance action open the same picker. Color
 themes and screen skins remain independent. The 18 curated templates select a
 pair; the existing saved appearance record and legacy theme aliases still work.
 
-There are 12 palettes and 10 skins (120 combinations). Color Mesh, Contour,
+There are 13 palettes and 10 skins (130 combinations). Color Mesh, Contour,
 Orbit and Linen join Classic, Glass, Glass Break, Bubbles, Aurora and Prism.
 Frames now vary their corners, edge treatment and shading with the selected
 skin. Backdrops use bounded static drawing behind an IgnorePointer. They do
@@ -25,7 +25,7 @@ invalid entries are ignored, and storage failures leave the current visit
 usable with a visible notice. These favorites do not sync between devices.
 
 Validation for the October 6, 2026 update: 36 Flutter tests passed, including all
-120 combinations preserving typed drafts and working controls, theme contrast,
+130 combinations preserving typed drafts and working controls, theme contrast,
 preview cancellation, Apply, reset, favorites reload, filtering and keyboard
 clearance. Responsive checks cover 320px/390px phones, landscape and iPad-size
 layouts, including 1.8x text. Four rendered review screens were inspected.
