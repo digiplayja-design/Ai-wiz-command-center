@@ -1,3 +1,5 @@
+import chatQuality from '../chat_quality.cjs';
+const {CHAT_MODEL} = chatQuality;
 import {randomUUID} from 'node:crypto';
 import {adminIds} from '../directory/core.mjs';
 import {directoryPassport} from '../directory/passport.mjs';
@@ -34,7 +36,7 @@ export function registerReceptionist(app,{database,requireUser,scheduling,genera
     const {data,error}=await database.from('korlix_directory_businesses').select('id,owner_id,published,state').eq('id',business).maybeSingle();
     if(error||!data)fail('Business not found.',404);return data;
   }
-  app.get('/api/receptionist/health',(_q,r)=>r.json({version:1,requiredTier:'enterprise',model:'gpt-6-astra',effort:'max',aiReady:!!generate,phoneAuthenticationReady:provider.ready,phoneConnectionReady:provider.connectionReady,bookingReady:!!scheduling,recordings:false,preview:true}));
+  app.get('/api/receptionist/health',(_q,r)=>r.json({version:1,requiredTier:'enterprise',model:CHAT_MODEL,effort:'max',aiReady:!!generate,phoneAuthenticationReady:provider.ready,phoneConnectionReady:provider.connectionReady,bookingReady:!!scheduling,recordings:false,preview:true}));
   app.get(prefix,owner(async(q,r,u,id)=>{
     const data=await command(u,'get',id);
     r.json({...data,events:await passport.events(u.id),voices:VOICES,aiReady:!!generate,
@@ -139,18 +141,18 @@ export function registerReceptionist(app,{database,requireUser,scheduling,genera
       if(!conversation.length||conversation.at(-1).role!=='user')fail('A caller question is required.');
       lease=randomUUID();call=await command(null,'claim',id,{lease});
       const stream=q.body.stream!==false,completionId='chatcmpl-'+randomUUID(),created=Math.floor(now()/1000);
-      const chunk=(content,finish=null)=>({id:completionId,object:'chat.completion.chunk',created,model:'gpt-6-astra',choices:[{index:0,delta:content===null?{}:{content},finish_reason:finish}]});
+      const chunk=(content,finish=null)=>({id:completionId,object:'chat.completion.chunk',created,model:CHAT_MODEL,choices:[{index:0,delta:content===null?{}:{content},finish_reason:finish}]});
       if(stream){r.set({'Content-Type':'text/event-stream','Connection':'keep-alive','X-Accel-Buffering':'no'});r.flushHeaders();r.write(': connected\n\n');heartbeat=setInterval(()=>{if(!r.destroyed)r.write(': processing\n\n');},8000);}
       const output=await turn({call,conversation,lease});
       const finished=await command(null,'finish',id,{lease,reply:output.reply,...output.usage});lease=null;
       if(finished?.deliver===false)output.reply='This receptionist is no longer available for this call. Please contact the business directly.';
       if(r.destroyed)return;
       if(stream){r.write('data: '+JSON.stringify(chunk(output.reply))+'\n\n');r.write('data: '+JSON.stringify(chunk(null,'stop'))+'\n\n');r.end('data: [DONE]\n\n');}
-      else r.json({id:completionId,object:'chat.completion',created,model:'gpt-6-astra',choices:[{index:0,message:{role:'assistant',content:output.reply},finish_reason:'stop'}]});
+      else r.json({id:completionId,object:'chat.completion',created,model:CHAT_MODEL,choices:[{index:0,message:{role:'assistant',content:output.reply},finish_reason:'stop'}]});
     }catch(e){
       if(lease&&call)await command(null,'release',call.id,{lease}).catch(()=>{});
       if(r.destroyed)return;
-      if(r.headersSent){r.write('data: '+JSON.stringify({id:'chatcmpl-unavailable',object:'chat.completion.chunk',model:'gpt-6-astra',choices:[{index:0,delta:{content:e instanceof ReceptionistError?safeError(e):'I could not confirm that just now. Please try again or contact the business directly.'},finish_reason:null}]})+'\n\n');r.end('data: [DONE]\n\n');}
+      if(r.headersSent){r.write('data: '+JSON.stringify({id:'chatcmpl-unavailable',object:'chat.completion.chunk',model:CHAT_MODEL,choices:[{index:0,delta:{content:e instanceof ReceptionistError?safeError(e):'I could not confirm that just now. Please try again or contact the business directly.'},finish_reason:null}]})+'\n\n');r.end('data: [DONE]\n\n');}
       else errorResponse(r,e);
     }finally{clearInterval(heartbeat);}
   });

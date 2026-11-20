@@ -2,7 +2,7 @@ import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import sharp from 'sharp';
 export const PRESETS = Object.freeze(JSON.parse(readFileSync(new URL('./catalog.json',import.meta.url))));
-export const MODEL='gpt-image-2.5-sunburst';
+export const MODEL='gpt-image-2.6-sunburst';
 export const QUALITY='max';
 export const MAX_SOURCE=15*1024*1024;
 export const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

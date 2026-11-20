@@ -126,7 +126,7 @@ test('HTTP route authenticates and rejects arbitrary text before making provider
 
 test('uses the selected agent runtime with Astra conversational reasoning, without sampling parameters',async()=>{
  const f=fixture(),{reply}=await f.run(),b=f.calls[0].body;
- assert.equal(b.model,'gpt-6-astra');assert.equal(b.reasoning_effort,'max');
+ assert.equal(b.model,'gpt-6.2-astra');assert.equal(b.reasoning_effort,'max');
  assert(b.max_completion_tokens>=8192);assert(!('temperature' in b));assert(!('top_p' in b));
  assert.deepEqual(f.loaded,[principal]);assert.equal(b.messages[1].content,f.runtime.instructions);
  assert.deepEqual(reply.agent,{id:'nova',name:'NOVA',memoryEnabled:true,memoryCount:1});

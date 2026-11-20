@@ -2,7 +2,7 @@
 
 // Shared text and image-analysis policy. Realtime audio is a separate engine.
 const {TEXT_MODEL: CHAT_MODEL, TEXT_EFFORT: CHAT_EFFORT} = require('./korlix_astra.cjs');
-const IMAGE_MODEL = 'gpt-image-2.5-sunburst';
+const IMAGE_MODEL = 'gpt-image-2.6-sunburst';
 const IMAGE_SIZES = new Set(['auto', '1024x1024', '1536x1024', '1024x1536']);
 const IMAGE_STYLES = Object.freeze({
   auto: '',
@@ -76,10 +76,10 @@ function imageSettings(body = {}, env = process.env) {
   if (!Object.hasOwn(IMAGE_STYLES, style)) throw invalid('Choose a supported image style.');
   const model = String(env.KORLIX_CHAT_IMAGE_MODEL || IMAGE_MODEL).trim();
   // A dedicated rollback setting never inherits a legacy global image model.
-  if (!/^gpt-image-(?:1(?:\.5|-mini)?|2(?:\.5-(?:sunburst|flare))?)(?:-\d{4}-\d{2}-\d{2})?$/.test(model)) {
+  if (!/^gpt-image-(?:1(?:\.5|-mini)?|2(?:\.[56]-(?:sunburst|flare))?)(?:-\d{4}-\d{2}-\d{2})?$/.test(model)) {
     throw Object.assign(new Error('Picture generation model is not configured correctly.'), {statusCode: 503});
   }
-  return {model, size, style, quality: model.startsWith('gpt-image-2.5-') ? 'xhigh' : 'high', output_format: 'png'};
+  return {model, size, style, quality: /^gpt-image-2\.[56]-/.test(model) ? 'xhigh' : 'high', output_format: 'png'};
 }
 
 function imagePrompt(prompt, style = 'auto') {

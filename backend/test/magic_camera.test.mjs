@@ -81,7 +81,7 @@ test('image path validates actual pixels and renderer requests Sunburst max with
  const source=await prepareSource(png);assert.equal((await sharp(source).metadata()).format,'jpeg');
  await assert.rejects(validateOutput('not base64'));
  let request,settings;const render=renderer({client:{images:{edit:async(a,b)=>{request=a;settings=b;return {data:[{b64_json:png.toString('base64')}]};}}},toFile:async()=>({})});
- await render(source,options());assert.equal(request.model,'gpt-image-2.5-sunburst');assert.equal(request.quality,'max');assert.equal(settings.maxRetries,0);assert.equal(request.n,1);
+ await render(source,options());assert.equal(request.model,'gpt-image-2.6-sunburst');assert.equal(request.quality,'max');assert.equal(settings.maxRetries,0);assert.equal(request.n,1);
 });
 test('companion session cannot escape Magic Camera scope',()=>{
  assert(magicAppRouteAllowed({method:'POST',originalUrl:'/api/magic-camera'}));assert(!magicAppRouteAllowed({method:'POST',originalUrl:'/api/generate'}));assert(!magicAppRouteAllowed({method:'GET',originalUrl:'/api/receipt-wiz'}));

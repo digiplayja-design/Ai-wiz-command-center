@@ -1,6 +1,6 @@
 'use strict';
 
-const TEXT_MODEL = 'gpt-6-astra';
+const TEXT_MODEL = 'gpt-6.2-astra';
 const TEXT_EFFORT = 'max';
 const TEXT_OUTPUT_TOKENS = 32768;
 const EFFORTS = new Set(['low', 'medium', 'high', 'xhigh', 'max']);

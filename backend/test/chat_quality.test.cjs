@@ -63,7 +63,7 @@ function fixture(options = {}) {
 
 test('active chat route uses Astra max even with older global model variables', async () => {
   const f=fixture(),r=await f.run({command:'Help plan a launch',model:'fake',reasoningEffort:'low'});
-  assert.equal(r.statusCode,200);assert.equal(f.calls[0].model,'gpt-6-astra');
+  assert.equal(r.statusCode,200);assert.equal(f.calls[0].model,'gpt-6.2-astra');
   assert.equal(f.calls[0].reasoning.effort,'max');assert.equal(f.calls[0].store,false);
   assert.equal(f.calls[0].max_output_tokens,32768);assert.equal(r.body.reasoningEffort,'max');
   assert.equal(f.usage.length,1);assert.equal(f.saved[0].command,'Help plan a launch');
@@ -160,7 +160,7 @@ test('prompt alias used by existing rewrite clients remains supported', async()=
 test('actual image route sends Sunburst xhigh, chosen shape, PNG and one image',async()=>{
   const f=fixture(),r=await f.run({prompt:'A cafe poster reading HELLO',imageSize:'1024x1536',imageStyle:'design'},'/api/image/create');
   assert.equal(r.statusCode,200);const request=f.calls[0];
-  assert.equal(request.model,'gpt-image-2.5-sunburst');assert.equal(request.quality,'xhigh');
+  assert.equal(request.model,'gpt-image-2.6-sunburst');assert.equal(request.quality,'xhigh');
   assert.equal(request.size,'1024x1536');assert.equal(request.output_format,'png');assert.equal(request.n,1);
   assert.match(request.prompt,/HELLO/);assert.match(request.prompt,/visual hierarchy/);
   assert.equal(r.body.imageDataUrl,'data:image/png;base64,cGljdHVyZQ==');assert.equal(f.usage.length,1);
@@ -175,6 +175,11 @@ test('image validation, missing access, empty output and provider errors never c
 test('image rollback uses only dedicated server configuration and preserves compatible quality',()=>{
   assert.equal(quality.imageSettings({}, {OPENAI_IMAGE_GENERATION_MODEL:'gpt-image-1'}).model,quality.IMAGE_MODEL);
   assert.equal(quality.imageSettings({}, {KORLIX_CHAT_IMAGE_MODEL:'gpt-image-2'}).quality,'high');
+  for (const model of ['gpt-image-2.6-sunburst','gpt-image-2.6-flare','gpt-image-2.5-sunburst','gpt-image-2.5-flare']) {
+    const settings = quality.imageSettings({}, {KORLIX_CHAT_IMAGE_MODEL:model});
+    assert.equal(settings.model,model);assert.equal(settings.quality,'xhigh');
+  }
+  assert.throws(()=>quality.imageSettings({}, {KORLIX_CHAT_IMAGE_MODEL:'gpt-image-2.6'}));
   assert.throws(()=>quality.imageSettings({}, {KORLIX_CHAT_IMAGE_MODEL:'arbitrary-model'}));
 });
 test('legacy image helper now runs Astra planning and maximum-quality edits',async()=>{
