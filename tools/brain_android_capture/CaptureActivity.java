@@ -11,6 +11,9 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.WebChromeClient;
+import android.webkit.ConsoleMessage;
+import android.webkit.RenderProcessGoneDetail;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -26,6 +29,7 @@ public final class CaptureActivity extends Activity {
     private int scrollDp;
     private int attempts;
     private boolean prepared;
+    private volatile boolean captureWritten;
     private static final String TRAINING = "Keep answers clear and practical.\nUse short steps when explaining a task.";
     private static final String MEMORY = "Our office closes at 4 PM on Fridays.";
 
@@ -35,6 +39,12 @@ public final class CaptureActivity extends Activity {
         if (!"home".equals(screen) && !"train".equals(screen) && !"memory".equals(screen) && !"brain".equals(screen)) screen = "home";
         scrollDp = Math.max(0, Math.min(500, getIntent().getIntExtra("scroll", 0)));
         new File(getFilesDir(), "capture-state.json").delete();
+        progress("activity-created", screen);
+        new java.util.Timer(true).schedule(new java.util.TimerTask() {
+            @Override public void run() {
+                if (!captureWritten) writeNativeError("Native capture watchdog expired before WebView completed");
+            }
+        }, 45000);
         getWindow().setStatusBarColor(0xff08070d);
         getWindow().setNavigationBarColor(0xff08070d);
         getWindow().getDecorView().setSystemUiVisibility(0);
@@ -50,7 +60,15 @@ public final class CaptureActivity extends Activity {
         settings.setSupportZoom(false);
         settings.setTextZoom(100);
         view.addJavascriptInterface(new Bridge(), "Korlix");
+        view.setWebChromeClient(new WebChromeClient() {
+            @Override public boolean onConsoleMessage(ConsoleMessage message) {
+                android.util.Log.i("KorlixCapture", message.messageLevel() + ": " + message.message() + " at " + message.lineNumber());
+                return true;
+            }
+        });
         view.setWebViewClient(new WebViewClient() {
+            @Override public void onPageStarted(WebView v, String url, android.graphics.Bitmap icon) { progress("page-started", url); }
+            @Override public boolean onRenderProcessGone(WebView v, RenderProcessGoneDetail detail) { progress("renderer-gone", "crash=" + detail.didCrash()); return true; }
             @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest request) {
                 return !request.getUrl().toString().startsWith("file:///android_asset/");
             }
@@ -60,6 +78,7 @@ public final class CaptureActivity extends Activity {
                 return null;
             }
             @Override public void onPageFinished(WebView v, String url) {
+                progress("page-finished", url);
                 if (!prepared) {
                     prepared = true;
                     handler.postDelayed(new Runnable() { @Override public void run() { waitForLoaded(); } }, 6000);
@@ -73,6 +92,7 @@ public final class CaptureActivity extends Activity {
     private void waitForLoaded() {
         view.evaluateJavascript("document.querySelector('#cinema-kb-account-status')?.textContent==='Account connected' && document.fonts.status==='loaded' && document.querySelector('.kb-product')?.dataset.boot==='ready'", new ValueCallback<String>() {
             @Override public void onReceiveValue(String ready) {
+                progress("readiness", ready);
                 if (!"true".equals(ready)) {
                     if (++attempts > 60) { writeState("Page did not finish loading"); return; }
                     handler.postDelayed(new Runnable() { @Override public void run() { waitForLoaded(); } }, 500);
@@ -80,6 +100,7 @@ public final class CaptureActivity extends Activity {
                 }
                 String navigation = "home".equals(screen) ? "void 0" : "document.querySelector('section[data-screen=\"home\"] [data-go=\"" + screen + "\"]').click()";
                 view.evaluateJavascript(navigation, null);
+                progress("navigated", screen);
                 handler.postDelayed(new Runnable() { @Override public void run() { prepareCapture(); } }, 1200);
             }
         });
@@ -92,12 +113,30 @@ public final class CaptureActivity extends Activity {
         js += "document.activeElement?.blur();return document.querySelector('section[data-screen]:not([hidden])')?.dataset.screen;})()";
         view.evaluateJavascript(js, new ValueCallback<String>() {
             @Override public void onReceiveValue(String actual) {
+                progress("prepared", actual);
                 if (!JSONObject.quote(screen).equals(actual)) { writeState("Unexpected screen: " + actual); return; }
                 // Native WebView scroll, preserving the app's original layout.
                 view.scrollTo(0, Math.round(scrollDp * getResources().getDisplayMetrics().density));
                 handler.postDelayed(new Runnable() { @Override public void run() { writeState(null); } }, 800);
             }
         });
+    }
+
+    private void progress(String stage, String detail) {
+        try {
+            JSONObject record = new JSONObject().put("stage", stage).put("detail", detail).put("screen", screen);
+            try (FileOutputStream out = openFileOutput("capture-progress.json", MODE_PRIVATE)) { out.write(record.toString(2).getBytes(StandardCharsets.UTF_8)); }
+            android.util.Log.i("KorlixCapture", stage + ": " + detail);
+        } catch (Exception exception) { android.util.Log.e("KorlixCapture", "Progress write failed", exception); }
+    }
+
+    private synchronized void writeNativeError(String message) {
+        if (captureWritten) return;
+        try {
+            JSONObject record = new JSONObject().put("screen", screen).put("requestedScrollDp", scrollDp).put("error", message);
+            try (FileOutputStream out = openFileOutput("capture-state.json", MODE_PRIVATE)) { out.write(record.toString(2).getBytes(StandardCharsets.UTF_8)); }
+            captureWritten = true;
+        } catch (Exception exception) { android.util.Log.e("KorlixCapture", "Native error write failed", exception); }
     }
 
     private void writeState(final String error) {
@@ -114,6 +153,7 @@ public final class CaptureActivity extends Activity {
                     result.put("page", new JSONArray("[" + raw + "]").getString(0));
                     if (error != null) result.put("error", error);
                     try (FileOutputStream out = openFileOutput("capture-state.json", MODE_PRIVATE)) { out.write(result.toString(2).getBytes(StandardCharsets.UTF_8)); }
+                    captureWritten = true;
                 } catch (Exception exception) { android.util.Log.e("KorlixCapture", "Could not write capture state", exception); }
             }
         });

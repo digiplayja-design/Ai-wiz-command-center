@@ -108,8 +108,8 @@ def start_emulator():
     (OUT / "avdmanager.log").write_bytes(created.stdout + created.stderr)
     emulator_log = (OUT / "emulator.log").open("wb")
     process = subprocess.Popen([str(SDK / "emulator/emulator"), "-avd", "korlix_capture", "-port", "5554",
-                               "-no-window", "-no-audio", "-no-snapshot", "-no-boot-anim", "-gpu", "swiftshader_indirect",
-                               "-accel", "on", "-memory", "2048", "-cores", "2", "-skin", "1080x1920"],
+                               "-no-window", "-no-audio", "-no-snapshot", "-no-boot-anim", "-no-metrics", "-gpu", "swiftshader", "-feature", "-Vulkan",
+                               "-accel", "on", "-memory", "4096", "-cores", str(min(4, os.cpu_count() or 2)), "-skin", "1080x1920"],
                               stdout=emulator_log, stderr=subprocess.STDOUT, env=CAPTURE_ENV)
     deadline = time.monotonic() + 300
     while time.monotonic() < deadline:
@@ -145,7 +145,7 @@ def capture_scenes(apk):
             deadline = time.monotonic() + 55
             state = None
             while time.monotonic() < deadline:
-                result = adb("exec-out", "run-as", PACKAGE, "cat", "files/capture-state.json", check=False)
+                result = adb("exec-out", "run-as", PACKAGE, "cat", "files/capture-state.json", check=False, timeout=15)
                 if result.returncode == 0:
                     try:
                         candidate = json.loads(result.stdout)
@@ -155,10 +155,14 @@ def capture_scenes(apk):
                     except (ValueError, KeyError):
                         pass
                 time.sleep(0.5)
-            if state is None:
-                raise RuntimeError(f"Capture did not become ready: {name}")
-            if state.get("error"):
-                raise RuntimeError(state["error"])
+            if state is None or state.get("error"):
+                for filename, command in [(name + "-failure.png", ("exec-out", "screencap", "-p")), (name + "-progress.json", ("exec-out", "run-as", PACKAGE, "cat", "files/capture-progress.json"))]:
+                    try:
+                        diagnostic = adb(*command, check=False, timeout=15)
+                        (OUT / filename).write_bytes(diagnostic.stdout)
+                    except subprocess.TimeoutExpired:
+                        (OUT / (filename + ".timeout.txt")).write_text("ADB diagnostic command timed out\n")
+                raise RuntimeError(state.get("error") if state else f"Capture did not become ready: {name}")
             state["page"] = json.loads(state["page"])
             if state["page"]["screen"] != screen or state["page"]["account"] != "Account connected":
                 raise RuntimeError(f"Wrong fixture page: {state}")
@@ -176,9 +180,13 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     process = None
     emulator_log = None
+    logcat_process = None
+    logcat_file = None
     try:
         apk, asset_manifest = build_apk()
         process, emulator_log = start_emulator()
+        logcat_file = (OUT / "logcat.txt").open("wb")
+        logcat_process = subprocess.Popen([str(ADB), "-s", SERIAL, "logcat", "-v", "time", "-s", "KorlixCapture:V", "chromium:W", "AndroidRuntime:E"], stdout=logcat_file, stderr=subprocess.STDOUT, env=CAPTURE_ENV)
         captures = capture_scenes(apk)
         metadata = {
             "captureType": "native-android-webview-with-local-fixture-data",
@@ -210,9 +218,16 @@ def main():
         (OUT / "command-error.txt").write_text(exc.stdout.decode(errors="replace") + "\n" + exc.stderr.decode(errors="replace"))
         raise
     finally:
+        if logcat_process is not None:
+            logcat_process.terminate()
+            try:
+                logcat_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                logcat_process.kill()
+        if logcat_file is not None:
+            logcat_file.close()
         if process is not None:
             try:
-                (OUT / "logcat.txt").write_bytes(adb("logcat", "-d", "-s", "KorlixCapture:E", "chromium:E", check=False).stdout)
                 adb("emu", "kill", check=False, timeout=15)
             except Exception:
                 process.terminate()
