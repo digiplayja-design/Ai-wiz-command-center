@@ -25,7 +25,7 @@ invalid entries are ignored, and storage failures leave the current visit
 usable with a visible notice. These favorites do not sync between devices.
 
 Validation for the October 6, 2026 update: 36 Flutter tests passed, including all
-130 combinations preserving typed drafts and working controls, theme contrast,
+120 combinations preserving typed drafts and working controls, theme contrast,
 preview cancellation, Apply, reset, favorites reload, filtering and keyboard
 clearance. Responsive checks cover 320px/390px phones, landscape and iPad-size
 layouts, including 1.8x text. Four rendered review screens were inspected.
