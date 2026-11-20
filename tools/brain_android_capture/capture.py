@@ -43,7 +43,8 @@ CAPTURE_ENV = dict(os.environ, ANDROID_USER_HOME=str(ANDROID_CONFIG),
 
 
 def run(args, *, cwd=ROOT, check=True, timeout=180, data=None):
-    return subprocess.run([str(x) for x in args], cwd=cwd, input=data, stdout=subprocess.PIPE,
+    input_options = {"input": data} if data is not None else {"stdin": subprocess.DEVNULL}
+    return subprocess.run([str(x) for x in args], cwd=cwd, **input_options, stdout=subprocess.PIPE,
                           stderr=subprocess.PIPE, check=check, timeout=timeout, env=CAPTURE_ENV)
 
 
@@ -110,7 +111,7 @@ def start_emulator():
     process = subprocess.Popen([str(SDK / "emulator/emulator"), "-avd", "korlix_capture", "-port", "5554",
                                "-no-window", "-no-audio", "-no-snapshot", "-no-boot-anim", "-no-metrics", "-gpu", "swiftshader", "-feature", "-Vulkan",
                                "-accel", "on", "-memory", "4096", "-cores", str(min(4, os.cpu_count() or 2)), "-skin", "1080x1920"],
-                              stdout=emulator_log, stderr=subprocess.STDOUT, env=CAPTURE_ENV)
+                              stdin=subprocess.DEVNULL, stdout=emulator_log, stderr=subprocess.STDOUT, env=CAPTURE_ENV)
     deadline = time.monotonic() + 300
     while time.monotonic() < deadline:
         if process.poll() is not None:
@@ -133,6 +134,8 @@ def start_emulator():
 
 
 def capture_scenes(apk):
+    adb("shell", "screencap", "-p", "/sdcard/korlix-device-before.png", timeout=20)
+    adb("pull", "/sdcard/korlix-device-before.png", OUT / "device-before.png", timeout=20)
     adb("install", "-r", apk)
     captures = []
     for label, screen, offsets in SCENES:
@@ -140,12 +143,17 @@ def capture_scenes(apk):
             name = f"{label}-y{offset:03d}"
             print(f"Capturing {name}", flush=True)
             adb("shell", "am", "force-stop", PACKAGE)
-            adb("shell", "am", "start", "-W", "-n", PACKAGE + "/.CaptureActivity", "--es", "screen", screen,
+            launch = adb("shell", "am", "start", "-W", "-n", PACKAGE + "/.CaptureActivity", "--es", "screen", screen,
                 "--ei", "scroll", str(offset))
+            (OUT / (name + "-launch.txt")).write_bytes(launch.stdout + launch.stderr)
             deadline = time.monotonic() + 55
             state = None
             while time.monotonic() < deadline:
-                result = adb("exec-out", "run-as", PACKAGE, "cat", "files/capture-state.json", check=False, timeout=15)
+                try:
+                    result = adb("shell", "run-as", PACKAGE, "cat", "files/capture-state.json", check=False, timeout=15)
+                except subprocess.TimeoutExpired:
+                    (OUT / (name + "-transport-error.txt")).write_text("ADB shell metadata read timed out\n")
+                    break
                 if result.returncode == 0:
                     try:
                         candidate = json.loads(result.stdout)
@@ -156,7 +164,12 @@ def capture_scenes(apk):
                         pass
                 time.sleep(0.5)
             if state is None or state.get("error"):
-                for filename, command in [(name + "-failure.png", ("exec-out", "screencap", "-p")), (name + "-progress.json", ("exec-out", "run-as", PACKAGE, "cat", "files/capture-progress.json"))]:
+                try:
+                    adb("shell", "screencap", "-p", "/sdcard/korlix-capture-failure.png", timeout=15)
+                    adb("pull", "/sdcard/korlix-capture-failure.png", OUT / (name + "-failure.png"), timeout=15)
+                except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
+                    (OUT / (name + "-screenshot-error.txt")).write_text("Could not retrieve the diagnostic screenshot\n")
+                for filename, command in [(name + "-progress.json", ("shell", "run-as", PACKAGE, "cat", "files/capture-progress.json"))]:
                     try:
                         diagnostic = adb(*command, check=False, timeout=15)
                         (OUT / filename).write_bytes(diagnostic.stdout)
@@ -166,7 +179,10 @@ def capture_scenes(apk):
             state["page"] = json.loads(state["page"])
             if state["page"]["screen"] != screen or state["page"]["account"] != "Account connected":
                 raise RuntimeError(f"Wrong fixture page: {state}")
-            png = adb("exec-out", "screencap", "-p").stdout
+            device_png = "/sdcard/korlix-" + name + ".png"
+            adb("shell", "screencap", "-p", device_png, timeout=20)
+            adb("pull", device_png, OUT / (name + ".png"), timeout=20)
+            png = (OUT / (name + ".png")).read_bytes()
             if png[:8] != b"\x89PNG\r\n\x1a\n" or struct.unpack(">II", png[16:24]) != (1080, 1920):
                 raise RuntimeError("Native screenshot is not a 1080x1920 PNG")
             (OUT / (name + ".png")).write_bytes(png)
@@ -186,7 +202,7 @@ def main():
         apk, asset_manifest = build_apk()
         process, emulator_log = start_emulator()
         logcat_file = (OUT / "logcat.txt").open("wb")
-        logcat_process = subprocess.Popen([str(ADB), "-s", SERIAL, "logcat", "-v", "time", "-s", "KorlixCapture:V", "chromium:W", "AndroidRuntime:E"], stdout=logcat_file, stderr=subprocess.STDOUT, env=CAPTURE_ENV)
+        logcat_process = subprocess.Popen([str(ADB), "-s", SERIAL, "logcat", "-v", "time", "-s", "KorlixCapture:V", "chromium:W", "AndroidRuntime:E"], stdin=subprocess.DEVNULL, stdout=logcat_file, stderr=subprocess.STDOUT, env=CAPTURE_ENV)
         captures = capture_scenes(apk)
         metadata = {
             "captureType": "native-android-webview-with-local-fixture-data",

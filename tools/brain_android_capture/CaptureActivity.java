@@ -67,7 +67,13 @@ public final class CaptureActivity extends Activity {
             }
         });
         view.setWebViewClient(new WebViewClient() {
-            @Override public void onPageStarted(WebView v, String url, android.graphics.Bitmap icon) { progress("page-started", url); }
+            @Override public void onPageStarted(WebView v, String url, android.graphics.Bitmap icon) {
+                progress("page-started", url);
+                if (!prepared) {
+                    prepared = true;
+                    handler.postDelayed(new Runnable() { @Override public void run() { waitForLoaded(); } }, 6000);
+                }
+            }
             @Override public boolean onRenderProcessGone(WebView v, RenderProcessGoneDetail detail) { progress("renderer-gone", "crash=" + detail.didCrash()); return true; }
             @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest request) {
                 return !request.getUrl().toString().startsWith("file:///android_asset/");
@@ -79,10 +85,6 @@ public final class CaptureActivity extends Activity {
             }
             @Override public void onPageFinished(WebView v, String url) {
                 progress("page-finished", url);
-                if (!prepared) {
-                    prepared = true;
-                    handler.postDelayed(new Runnable() { @Override public void run() { waitForLoaded(); } }, 6000);
-                }
             }
         });
         setContentView(view);
@@ -90,10 +92,12 @@ public final class CaptureActivity extends Activity {
     }
 
     private void waitForLoaded() {
-        view.evaluateJavascript("document.querySelector('#cinema-kb-account-status')?.textContent==='Account connected' && document.fonts.status==='loaded' && document.querySelector('.kb-product')?.dataset.boot==='ready'", new ValueCallback<String>() {
+        view.evaluateJavascript("(()=>{const account=document.querySelector('#cinema-kb-account-status')?.textContent;const fonts=document.fonts?.status;const boot=document.querySelector('.kb-product')?.dataset.boot;return {ready:account==='Account connected'&&fonts==='loaded'&&boot==='ready',account,fonts,boot,document:document.readyState};})()", new ValueCallback<String>() {
             @Override public void onReceiveValue(String ready) {
                 progress("readiness", ready);
-                if (!"true".equals(ready)) {
+                boolean pageReady = false;
+                try { pageReady = new JSONObject(ready).optBoolean("ready"); } catch (Exception ignored) { }
+                if (!pageReady) {
                     if (++attempts > 60) { writeState("Page did not finish loading"); return; }
                     handler.postDelayed(new Runnable() { @Override public void run() { waitForLoaded(); } }, 500);
                     return;
