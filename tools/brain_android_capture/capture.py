@@ -36,11 +36,15 @@ ANDROID_JAR = SDK / "platforms/android-34/android.jar"
 ADB = SDK / "platform-tools/adb"
 SERIAL = "emulator-5554"
 PACKAGE = "com.korlix.capture"
+ANDROID_CONFIG = BUILD / "android-user"
+AVD_HOME = ANDROID_CONFIG / "avd"
+CAPTURE_ENV = dict(os.environ, ANDROID_USER_HOME=str(ANDROID_CONFIG),
+                   ANDROID_EMULATOR_HOME=str(ANDROID_CONFIG), ANDROID_AVD_HOME=str(AVD_HOME))
 
 
 def run(args, *, cwd=ROOT, check=True, timeout=180, data=None):
     return subprocess.run([str(x) for x in args], cwd=cwd, input=data, stdout=subprocess.PIPE,
-                          stderr=subprocess.PIPE, check=check, timeout=timeout)
+                          stderr=subprocess.PIPE, check=check, timeout=timeout, env=CAPTURE_ENV)
 
 
 def adb(*args, **kwargs):
@@ -97,14 +101,16 @@ def build_apk():
 
 
 def start_emulator():
+    AVD_HOME.mkdir(parents=True, exist_ok=True)
     avdmanager = shutil.which("avdmanager") or str(SDK / "cmdline-tools/latest/bin/avdmanager")
-    run([avdmanager, "create", "avd", "--force", "--name", "korlix_capture", "--package",
+    created = run([avdmanager, "create", "avd", "--force", "--name", "korlix_capture", "--path", AVD_HOME / "korlix_capture.avd", "--package",
          "system-images;android-34;google_apis;x86_64", "--device", "pixel_2"], data=b"no\n")
+    (OUT / "avdmanager.log").write_bytes(created.stdout + created.stderr)
     emulator_log = (OUT / "emulator.log").open("wb")
     process = subprocess.Popen([str(SDK / "emulator/emulator"), "-avd", "korlix_capture", "-port", "5554",
                                "-no-window", "-no-audio", "-no-snapshot", "-no-boot-anim", "-gpu", "swiftshader_indirect",
                                "-accel", "on", "-memory", "2048", "-cores", "2", "-skin", "1080x1920"],
-                              stdout=emulator_log, stderr=subprocess.STDOUT)
+                              stdout=emulator_log, stderr=subprocess.STDOUT, env=CAPTURE_ENV)
     deadline = time.monotonic() + 300
     while time.monotonic() < deadline:
         if process.poll() is not None:
