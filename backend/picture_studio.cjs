@@ -58,7 +58,7 @@ function pictureOptions(body = {}) {
 
 function pictureModelSettings() {
   const {model} = imageSettings();
-  return {model,quality:model.startsWith('gpt-image-2.5-')?'max':'high'};
+  return {model,quality:/^gpt-image-2\.[56]-/.test(model)?'max':'high'};
 }
 
 function pictureInstructions(options, plan = '') {

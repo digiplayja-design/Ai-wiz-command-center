@@ -1,3 +1,5 @@
+import chatQuality from '../chat_quality.cjs';
+const {CHAT_MODEL} = chatQuality;
 import {fail,uuid,sessionSecret} from './core.mjs';
 
 export function receptionistProvider(environment=process.env,fetcher=fetch){
@@ -32,7 +34,7 @@ export function receptionistProvider(environment=process.env,fetcher=fetch){
     return {name:('K-Nova · '+b.name).slice(0,40),
       firstMessage:`Hello, I'm K-Nova, the AI receptionist for ${b.name}. This call is processed by AI. I can save your request for the business. ${s.greeting||'How can I help you today?'}`,
       firstMessageMode:'assistant-speaks-first',maxDurationSeconds:call.max_seconds,
-      model:{provider:'custom-llm',url:root+'/api/receptionist/model',model:'gpt-6-astra',metadataSendMode:'variable',numFastTurns:0,
+      model:{provider:'custom-llm',url:root+'/api/receptionist/model',model:CHAT_MODEL,metadataSendMode:'variable',numFastTurns:0,
         headers:{'x-korlix-call-key':sessionSecret(secret,call.id)},timeoutSeconds:120,messages:[]},
       voice:{provider:'openai',voiceId:s.voice||'coral',model:'gpt-4o-mini-tts'},
       transcriber:{provider:'openai',model:'gpt-4o-transcribe'},

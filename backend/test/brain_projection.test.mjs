@@ -189,7 +189,7 @@ test('production research uses existing Astra policy and required search without
   const client = {responses: {create: async (request, config) => {payload = request; options = config; return providerAnswer();}}};
   const result = await researchPlace({client, question: 'How many people live here?', place, now: Date.UTC(2026, 10, 7)});
   assert.equal(result.sources.length, 1);
-  assert.equal(payload.model, 'gpt-6-astra');
+  assert.equal(payload.model, 'gpt-6.2-astra');
   assert.deepEqual(payload.reasoning, {effort: 'max'});
   assert.equal(payload.store, false);
   assert.equal(payload.tool_choice, 'required');

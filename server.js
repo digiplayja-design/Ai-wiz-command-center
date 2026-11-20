@@ -1497,7 +1497,7 @@ async function createAdvancedFileResponse({
     process.env.OPENAI_DOCUMENT_MODEL ||
     process.env.OPENAI_ULTRA_MODEL ||
     process.env.OPENAI_MODEL ||
-    "gpt-6-astra";
+    "gpt-6.2-astra";
 
   const fileName = String(file.originalname || "uploaded-file");
   const mimeType = getUploadMimeType(file);
@@ -1566,14 +1566,14 @@ function getOpenAIModelForTier(profile, options = {}) {
   const tier = String(profile?.tier || "basic").toLowerCase();
 
   if (tier === "ultra") {
-    return process.env.OPENAI_ULTRA_MODEL || "gpt-6-astra";
+    return process.env.OPENAI_ULTRA_MODEL || "gpt-6.2-astra";
   }
 
   if (tier === "enterprise") {
     return (
       process.env.OPENAI_ENTERPRISE_MODEL ||
       process.env.OPENAI_ULTRA_MODEL ||
-      "gpt-6-astra"
+      "gpt-6.2-astra"
     );
   }
 
@@ -1581,14 +1581,14 @@ function getOpenAIModelForTier(profile, options = {}) {
     return (
       process.env.OPENAI_PRO_MODEL ||
       process.env.OPENAI_MODEL ||
-      "gpt-6-astra"
+      "gpt-6.2-astra"
     );
   }
 
   return (
     process.env.OPENAI_BASIC_MODEL ||
     process.env.OPENAI_MODEL ||
-    "gpt-6-astra"
+    "gpt-6.2-astra"
   );
 }
 
@@ -3807,7 +3807,7 @@ async function createKorlixImprovedImage({ file, prompt }) {
   const imageMediaType = mimeType || "image/png";
 
   const response = await createTextResponse(client, {
-    model: "gpt-6-astra",
+    model: "gpt-6.2-astra",
     input: [
       {
         role: "user",
@@ -3880,7 +3880,7 @@ async function createKorlixImaginedImage({ prompt }) {
   });
 
   const response = await createTextResponse(client, {
-    model: "gpt-6-astra",
+    model: "gpt-6.2-astra",
     input: buildKorlixImageCreatePrompt(prompt),
     tools: [
       {
@@ -4259,7 +4259,7 @@ Instructions:
         process.env.OPENAI_FILE_MODEL ||
         process.env.OPENAI_MODEL ||
         process.env.OPENAI_CHAT_MODEL ||
-        "gpt-6-astra",
+        "gpt-6.2-astra",
       input: [
         {
           role: "user",
@@ -4436,7 +4436,7 @@ app.post("/api/analyze-document", documentUpload.single("file"), async (req, res
     process.env.OPENAI_DOCUMENT_MODEL ||
     process.env.OPENAI_ULTRA_MODEL ||
     process.env.OPENAI_MODEL ||
-    "gpt-6-astra";
+    "gpt-6.2-astra";
 
         response = await createOpenAIResponse(client, {
           model,
@@ -4470,7 +4470,7 @@ app.post("/api/analyze-document", documentUpload.single("file"), async (req, res
     process.env.OPENAI_DOCUMENT_MODEL ||
     process.env.OPENAI_ULTRA_MODEL ||
     process.env.OPENAI_MODEL ||
-    "gpt-6-astra";
+    "gpt-6.2-astra";
 
       response = await createOpenAIResponse(client, {
         model,
@@ -4595,7 +4595,7 @@ app.post("/api/generate", async (req, res) => {
       apiKey: process.env.OPENAI_API_KEY,
     });
 
-    const normalModel = process.env.OPENAI_MODEL || "gpt-6-astra";
+    const normalModel = process.env.OPENAI_MODEL || "gpt-6.2-astra";
     const searchModel = process.env.OPENAI_SEARCH_MODEL || normalModel;
 
     const modeInstruction = fileRequested
@@ -4895,7 +4895,7 @@ IMPORTANT RULES:
     }
 
     const response = await createTextResponse(client, {
-      model: process.env.OPENAI_FILE_MODEL || process.env.OPENAI_MODEL || "gpt-6-astra",
+      model: process.env.OPENAI_FILE_MODEL || process.env.OPENAI_MODEL || "gpt-6.2-astra",
       input: [{ role: "user", content }],
     });
 
@@ -6881,8 +6881,8 @@ function korlixLiveConvoAgentModelProofV1() {
             process.env.OPENAI_FILE_MODEL ||
             process.env.OPENAI_MODEL ||
             process.env.OPENAI_CHAT_MODEL ||
-            "gpt-6-astra",
-          ).trim() || "gpt-6-astra"
+            "gpt-6.2-astra",
+          ).trim() || "gpt-6.2-astra"
         );
 
   return {
@@ -8603,7 +8603,7 @@ app.post(
             process.env.OPENAI_DOCUMENT_MODEL ||
             process.env.OPENAI_MODEL ||
             process.env.OPENAI_CHAT_MODEL ||
-            "gpt-6-astra",
+            "gpt-6.2-astra",
 
           input: [
             {
@@ -8920,7 +8920,7 @@ app.post(
             process.env.OPENAI_DOCUMENT_MODEL ||
             process.env.OPENAI_MODEL ||
             process.env.OPENAI_CHAT_MODEL ||
-            "gpt-6-astra",
+            "gpt-6.2-astra",
 
           input: [
             {
@@ -11727,7 +11727,7 @@ function korlixLiveDocsDocumentModel() {
     }
   }
 
-  return "gpt-6-astra";
+  return "gpt-6.2-astra";
 }
 
 function korlixLiveDocsDocumentModelRequest({ input }) {

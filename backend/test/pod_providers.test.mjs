@@ -54,7 +54,7 @@ test('research uses the shared Astra max policy, bounded search, verified source
   assert.equal(result.usage.status, 'completed');
   assert.equal(fixture.calls.length, 1);
   const {payload, options} = fixture.calls[0];
-  assert.equal(payload.model, 'gpt-6-astra');
+  assert.equal(payload.model, 'gpt-6.2-astra');
   assert.deepEqual(payload.reasoning, {effort: 'max'});
   assert.equal(chatQuality.CHAT_EFFORT, 'max', 'Pod uses the same reasoning policy as main chat');
   assert.equal(payload.store, false);
@@ -442,7 +442,7 @@ test('turn alternates two or three distinct AI roles and selects host for closin
   assert.equal((await fixture.providers.turn(turnArgs({episode: {...episode, hostCount: 3, turns: [host, {speaker: 'analyst', text: 'Consider scope.'}]}}))).speaker, 'challenger');
   assert.equal((await fixture.providers.turn(turnArgs({episode: {...episode, turns: [host]}, remainingSeconds: 40}))).speaker, 'host');
   const {payload, options} = fixture.calls.at(-1);
-  assert.equal(payload.model, 'gpt-6-astra');
+  assert.equal(payload.model, 'gpt-6.2-astra');
   assert.equal(payload.reasoning.effort, 'max');
   assert.equal(payload.max_output_tokens, 32768);
   assert.equal(payload.text.format.schema.properties.text.maxLength, 400);

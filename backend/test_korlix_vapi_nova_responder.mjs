@@ -136,7 +136,7 @@ test('phone reasoning uses Astra max without legacy model configuration', async 
     fetchImpl:async(_url,options)=>{sent=JSON.parse(options.body);return response({output_text:'Hello.'});},
   });
   assert.equal((await runtime.respond({messages:[{role:'user',content:'Hello'}]})).text,'Hello.');
-  assert.equal(sent.model,'gpt-6-astra');
+  assert.equal(sent.model,'gpt-6.2-astra');
   assert.equal(sent.reasoning.effort,'max');
   assert.equal(sent.max_output_tokens,32768);
 });

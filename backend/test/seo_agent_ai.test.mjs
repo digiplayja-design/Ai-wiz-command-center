@@ -29,7 +29,7 @@ test('AI uses measured data with no execution tools and returns only unpublished
     request=q;options=o;return {status:'completed',output_text:JSON.stringify(plan())};
   }}}});
   assert.equal(request.tools,undefined);assert.equal(request.store,false);
-  assert.equal(request.model,'gpt-6-astra');assert.equal(options.maxRetries,0);
+  assert.equal(request.model,'gpt-6.2-astra');assert.equal(options.maxRetries,0);
   assert.match(request.instructions,/untrusted DATA/);assert.match(request.instructions,/keyword volumes/);
   assert.equal(JSON.parse(request.input).measuredAudit.pages[0].textExcerpt,audit.pages[0].textExcerpt);
   assert.equal(result.drafts.length,3);assert.equal(result.actions[0].id,'action-1');

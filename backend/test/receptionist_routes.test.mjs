@@ -44,7 +44,7 @@ test('forged phone requests and guessed call IDs cannot invoke AI or touch the c
 });
 test('provider selection gives a per-call model credential and disables recordings and provider reasoning',async()=>{
  const response=await request('/api/receptionist/provider/events',{body:{message:{type:'assistant-request',call:{id:callId,phoneNumberId:phone}}},headers:{'x-vapi-secret':secret}});
- assert.equal(response.status,200);const a=response.body.assistant;assert.equal(a.model.model,'gpt-6-astra');assert.equal(a.model.numFastTurns,0);assert.equal(a.artifactPlan.recordingEnabled,false);assert.equal(a.artifactPlan.transcriptPlan.enabled,false);assert.equal(a.analysisPlan.summaryPlan.enabled,false);assert.match(a.firstMessage,/AI receptionist/);
+ assert.equal(response.status,200);const a=response.body.assistant;assert.equal(a.model.model,'gpt-6.2-astra');assert.equal(a.model.numFastTurns,0);assert.equal(a.artifactPlan.recordingEnabled,false);assert.equal(a.artifactPlan.transcriptPlan.enabled,false);assert.equal(a.analysisPlan.summaryPlan.enabled,false);assert.match(a.firstMessage,/AI receptionist/);
  assert.equal(a.model.headers['x-korlix-call-key'],sessionSecret(secret,callId));assert.notEqual(a.model.headers['x-korlix-call-key'],secret);
 });
 test('caller-supplied system instructions are discarded and metering uses model results',async()=>{
@@ -62,7 +62,7 @@ test('a message in preview mode never writes to the caller inbox',async()=>{
 test('Astra max, structured output and private history handling are enforced',async()=>{
  let request;const generate=receptionistAI({responses:{create:async r=>{request=r;return{status:'completed',output_text:JSON.stringify({action:'reply',reply:'Hello'}),usage:{input_tokens:10,output_tokens:5}};}}});
  await generate({context:{business:{name:'Fixture'}},messages:[{role:'user',content:'Hello'}]});
- assert.equal(request.model,'gpt-6-astra');assert.equal(request.reasoning.effort,'max');assert.equal(request.store,false);assert.equal(request.text.format.strict,true);assert.equal(request.max_output_tokens,32768);
+ assert.equal(request.model,'gpt-6.2-astra');assert.equal(request.reasoning.effort,'max');assert.equal(request.store,false);assert.equal(request.text.format.strict,true);assert.equal(request.max_output_tokens,32768);
 });
 test('booking confirmations are explicit, and settings reject unbounded limits and unsafe selections',()=>{
  assert(confirmedBooking('Yes, confirm booking.'));assert(!confirmedBooking('Do not confirm booking'));assert(!confirmedBooking('I said confirm booking yesterday'));

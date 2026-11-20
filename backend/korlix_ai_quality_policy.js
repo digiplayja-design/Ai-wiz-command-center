@@ -10,7 +10,7 @@ const KORLIX_OPENAI_QUALITY = Object.freeze({
 
   imageModel:
     process.env.KORLIX_OPENAI_IMAGE_MODEL ||
-    'gpt-image-2',
+    'gpt-image-2.6-sunburst',
 
   audioModel:
     process.env.KORLIX_OPENAI_AUDIO_MODEL ||

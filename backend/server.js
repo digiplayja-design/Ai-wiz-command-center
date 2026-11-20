@@ -5810,7 +5810,7 @@ function korlixLiveConvoAgentModelProofV1() {
       : (
           String(
             CHAT_MODEL,
-          ).trim() || "gpt-6-astra"
+          ).trim() || "gpt-6.2-astra"
         );
 
   return {
