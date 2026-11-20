@@ -36,9 +36,9 @@ public final class CaptureActivity extends Activity {
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         screen = getIntent().getStringExtra("screen");
-        if (!"home".equals(screen) && !"train".equals(screen) && !"memory".equals(screen) && !"brain".equals(screen)) screen = "home";
+        if (!"probe".equals(screen) && !"home".equals(screen) && !"train".equals(screen) && !"memory".equals(screen) && !"brain".equals(screen)) screen = "home";
         scrollDp = Math.max(0, Math.min(500, getIntent().getIntExtra("scroll", 0)));
-        new File(getFilesDir(), "capture-state.json").delete();
+        new File(getExternalFilesDir(null), "capture-state.json").delete();
         progress("activity-created", screen);
         new java.util.Timer(true).schedule(new java.util.TimerTask() {
             @Override public void run() {
@@ -88,10 +88,22 @@ public final class CaptureActivity extends Activity {
             }
         });
         setContentView(view);
-        view.loadUrl("file:///android_asset/web/index.html");
+        if ("probe".equals(screen)) {
+            view.loadDataWithBaseURL("file:///android_asset/", "<!doctype html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'></head><body style='background:#08070d;color:white;font:24px sans-serif;padding:24px'><h1>Android rendering check</h1><p>This is a diagnostic control, not a store screenshot.</p></body></html>", "text/html", "UTF-8", null);
+        } else view.loadUrl("file:///android_asset/web/index.html");
     }
 
     private void waitForLoaded() {
+        progress("readiness-requested", screen);
+        if ("probe".equals(screen)) {
+            view.evaluateJavascript("document.readyState", new ValueCallback<String>() {
+                @Override public void onReceiveValue(String value) {
+                    progress("probe-ready", value);
+                    writeNativeError("Diagnostic rendering check completed: " + value);
+                }
+            });
+            return;
+        }
         view.evaluateJavascript("(()=>{const account=document.querySelector('#cinema-kb-account-status')?.textContent;const fonts=document.fonts?.status;const boot=document.querySelector('.kb-product')?.dataset.boot;return {ready:account==='Account connected'&&fonts==='loaded'&&boot==='ready',account,fonts,boot,document:document.readyState};})()", new ValueCallback<String>() {
             @Override public void onReceiveValue(String ready) {
                 progress("readiness", ready);
@@ -129,7 +141,7 @@ public final class CaptureActivity extends Activity {
     private void progress(String stage, String detail) {
         try {
             JSONObject record = new JSONObject().put("stage", stage).put("detail", detail).put("screen", screen);
-            try (FileOutputStream out = openFileOutput("capture-progress.json", MODE_PRIVATE)) { out.write(record.toString(2).getBytes(StandardCharsets.UTF_8)); }
+            try (FileOutputStream out = new FileOutputStream(new File(getExternalFilesDir(null), "capture-progress.json"))) { out.write(record.toString(2).getBytes(StandardCharsets.UTF_8)); }
             android.util.Log.i("KorlixCapture", stage + ": " + detail);
         } catch (Exception exception) { android.util.Log.e("KorlixCapture", "Progress write failed", exception); }
     }
@@ -138,8 +150,9 @@ public final class CaptureActivity extends Activity {
         if (captureWritten) return;
         try {
             JSONObject record = new JSONObject().put("screen", screen).put("requestedScrollDp", scrollDp).put("error", message);
-            try (FileOutputStream out = openFileOutput("capture-state.json", MODE_PRIVATE)) { out.write(record.toString(2).getBytes(StandardCharsets.UTF_8)); }
+            try (FileOutputStream out = new FileOutputStream(new File(getExternalFilesDir(null), "capture-state.json"))) { out.write(record.toString(2).getBytes(StandardCharsets.UTF_8)); }
             captureWritten = true;
+            android.util.Log.i("KorlixCapture", "native-state-written: " + message);
         } catch (Exception exception) { android.util.Log.e("KorlixCapture", "Native error write failed", exception); }
     }
 
@@ -156,8 +169,9 @@ public final class CaptureActivity extends Activity {
                     result.put("webView", WebView.getCurrentWebViewPackage().versionName);
                     result.put("page", new JSONArray("[" + raw + "]").getString(0));
                     if (error != null) result.put("error", error);
-                    try (FileOutputStream out = openFileOutput("capture-state.json", MODE_PRIVATE)) { out.write(result.toString(2).getBytes(StandardCharsets.UTF_8)); }
+                    try (FileOutputStream out = new FileOutputStream(new File(getExternalFilesDir(null), "capture-state.json"))) { out.write(result.toString(2).getBytes(StandardCharsets.UTF_8)); }
                     captureWritten = true;
+                    android.util.Log.i("KorlixCapture", "capture-state-written: " + screen);
                 } catch (Exception exception) { android.util.Log.e("KorlixCapture", "Could not write capture state", exception); }
             }
         });
@@ -170,6 +184,7 @@ public final class CaptureActivity extends Activity {
                 JSONObject reply = new JSONObject();
                 reply.put("type", "reply"); reply.put("id", request.getString("id"));
                 String action = request.getString("action");
+                android.util.Log.i("KorlixCapture", "bridge-action: " + action);
                 if ("load".equals(action)) {
                     JSONObject memory = new JSONObject();
                     memory.put("id", "sample-office-hours"); memory.put("content", MEMORY); memory.put("source", "Typed entry");
@@ -180,7 +195,8 @@ public final class CaptureActivity extends Activity {
                 else if ("welcomeState".equals(action)) reply.put("data", new JSONObject().put("native", true).put("automatic", false).put("foreground", true));
                 else if ("stopWelcome".equals(action) || "stopDictation".equals(action) || "welcomeHeard".equals(action)) reply.put("data", JSONObject.NULL);
                 else reply.put("error", "This offline screenshot fixture does not execute " + action + ".");
-                final String script = "window.KorlixBrainReceive(" + reply.toString() + ")";
+                // Pause through the shipped control before the expensive intro/lightning frames.
+                final String script = "window.KorlixBrainReceive(" + reply.toString() + ");" + ("load".equals(action) ? "(()=>{const motion=document.getElementById('cinema-kb-motion-toggle');if(motion?.getAttribute('aria-pressed')==='false')motion.click();const root=document.querySelector('.kb-product');if(root?.dataset.boot==='running'){document.querySelector('section[data-screen=\"home\"] [data-go=\"train\"]').click();document.querySelector('section[data-screen=\"train\"] [data-go=\"home\"]').click();}})()" : "");
                 handler.post(new Runnable() { @Override public void run() { view.evaluateJavascript(script, null); } });
             } catch (Exception exception) { android.util.Log.e("KorlixCapture", "Invalid bridge message", exception); }
         }
