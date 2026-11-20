@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.korlix.capture" android:versionCode="1" android:versionName="build14-fixture">
+    <uses-sdk android:minSdkVersion="28" android:targetSdkVersion="34" />
+    <!-- Deliberately no network, microphone, billing, or account permissions. -->
+    <application android:label="KORLIX UI fixture" android:theme="@android:style/Theme.Material.NoActionBar" android:debuggable="true" android:allowBackup="false" android:usesCleartextTraffic="false">
+        <activity android:name=".CaptureActivity" android:exported="true" android:screenOrientation="portrait" android:hardwareAccelerated="true" android:windowSoftInputMode="stateAlwaysHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

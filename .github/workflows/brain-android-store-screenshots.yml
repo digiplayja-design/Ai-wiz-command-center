@@ -1,0 +1,42 @@
+name: KORLIX Brain build14 Android listing captures
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/brain-android-store-screenshots-20261119]
+    paths:
+      - tools/brain_android_capture/**
+      - .github/workflows/brain-android-store-screenshots.yml
+permissions:
+  contents: read
+concurrency:
+  group: brain-android-store-captures-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  capture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Enable Android emulator acceleration
+        run: |
+          test -e /dev/kvm
+          sudo chmod a+rw /dev/kvm
+      - name: Install official Android toolchain
+        run: |
+          sdkmanager "platform-tools" "emulator" "platforms;android-34" "build-tools;35.0.0" "system-images;android-34;google_apis;x86_64"
+      - name: Build isolated native fixture and capture original app UI
+        run: python3 tools/brain_android_capture/capture.py
+      - name: Upload captures and provenance
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: korlix-brain-build14-native-android-captures
+          path: artifacts/brain-android-capture/
+          if-no-files-found: error
+          retention-days: 30
