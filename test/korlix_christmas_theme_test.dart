@@ -85,6 +85,12 @@ void main() {
           )),
         ),
       ));
+      if (output != null) {
+        await tester.runAsync(() => precacheImage(
+          const AssetImage('assets/branding/korlix_mini_mark.png'),
+          tester.element(find.byType(KorlixEntryWelcome)),
+        ));
+      }
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
       expect(find.text('Create a little Christmas magic'), findsOneWidget);
