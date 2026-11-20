@@ -4,7 +4,7 @@ The home shortcuts and account appearance action open the same picker. Color
 themes and screen skins remain independent. The 18 curated templates select a
 pair; the existing saved appearance record and legacy theme aliases still work.
 
-There are 12 palettes and 10 skins (120 combinations). Color Mesh, Contour,
+There are 13 palettes and 10 skins (130 combinations). Color Mesh, Contour,
 Orbit and Linen join Classic, Glass, Glass Break, Bubbles, Aurora and Prism.
 Frames now vary their corners, edge treatment and shading with the selected
 skin. Backdrops use bounded static drawing behind an IgnorePointer. They do

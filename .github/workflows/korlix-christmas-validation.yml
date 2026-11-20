@@ -1,0 +1,103 @@
+name: KORLIX Christmas and model upgrade
+on:
+  workflow_dispatch:
+  push:
+    branches: [upgrade/korlix-ai-mobile-20261119]
+permissions:
+  contents: read
+concurrency:
+  group: korlix-christmas-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  CI: 'true'
+  FLUTTER_SUPPRESS_ANALYTICS: 'true'
+  DART_SUPPRESS_ANALYTICS: 'true'
+  COCOAPODS_DISABLE_STATS: 'true'
+jobs:
+  android:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Block instance metadata before toolchain setup
+        run: |
+          set -euo pipefail
+          for network in 169.254.0.0/16 100.100.100.200/32; do
+            sudo iptables -I OUTPUT 1 -d "$network" -j REJECT
+          done
+          for network in fe80::/10 fd00:ec2::254/128; do
+            sudo ip6tables -I OUTPUT 1 -d "$network" -j REJECT
+          done
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - name: Resolve locked dependencies
+        run: flutter pub get --enforce-lockfile
+      - name: Analyze model and appearance changes
+        run: |
+          flutter analyze --no-pub --no-fatal-infos \
+            lib/theme lib/korlix_ai_quality_policy.dart lib/live_convo/korlix_live_convo_agent.dart \
+            packages/korlix_social_core/lib/theme test/korlix_christmas_theme_test.dart
+      - name: Verify appearance, model compatibility, billing and reporting
+        run: |
+          KORLIX_CHRISTMAS_REVIEW="$PWD/build/christmas-review" KORLIX_FLUTTER_ROOT="$FLUTTER_ROOT" \
+          flutter test --no-pub --reporter expanded \
+            test/korlix_christmas_theme_test.dart test/korlix_astra_quality_test.dart \
+            test/korlix_theme_test.dart test/korlix_screen_skins_test.dart \
+            test/korlix_appearance_studio_test.dart test/social_appearance_test.dart \
+            test/auth_welcome_test.dart test/signup_accessibility_release_test.dart \
+            test/apple_billing_test.dart test/live_convo/korlix_live_convo_agent_test.dart \
+            test/support test/babyblend_reporting_test.dart test/image_to_video_reporting_test.dart
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: korlix-christmas-previews
+          path: build/christmas-review/*.png
+          retention-days: 14
+      - name: Compile Android
+        run: |
+          mkdir -p "$HOME/.gradle/init.d"
+          cp scripts/gradle-public-repositories.init.gradle "$HOME/.gradle/init.d/korlix-public-repositories.gradle"
+          flutter build apk --debug --no-pub
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: korlix-christmas-android-validation
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
+  ios:
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - name: Block instance metadata before toolchain setup
+        run: |
+          set -euo pipefail
+          rules="$RUNNER_TEMP/korlix-metadata-block.pf"
+          cat > "$rules" <<'PF'
+          block drop out quick inet to { 169.254.0.0/16, 100.100.100.200/32 }
+          block drop out quick inet6 to { fe80::/10, fd00:ec2::254/128 }
+          PF
+          sudo pfctl -f "$rules"
+          sudo pfctl -e 2>/dev/null || sudo pfctl -s info | grep -q 'Status: Enabled'
+          sudo pfctl -s rules | grep -q '169.254.0.0/16'
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.47.7'
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - name: Verify iOS release checks
+        run: python3 -m unittest discover -s scripts/tests -p test_ios_release.py -v
+      - name: Compile iOS simulator
+        run: flutter build ios --simulator --debug --no-pub

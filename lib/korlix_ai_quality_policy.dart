@@ -1,12 +1,12 @@
-const String kKorlixOpenAIPremiumModel = 'gpt-6-astra';
+const String kKorlixOpenAIPremiumModel = 'gpt-6.2-astra';
 
-const String kKorlixOpenAITextModel = 'gpt-6-astra';
+const String kKorlixOpenAITextModel = 'gpt-6.2-astra';
 
-const String kKorlixOpenAIStreamingModel = 'gpt-6-astra';
+const String kKorlixOpenAIStreamingModel = 'gpt-6.2-astra';
 
 const String kKorlixOpenAIImageModel = String.fromEnvironment(
   'KORLIX_OPENAI_IMAGE_MODEL',
-  defaultValue: 'gpt-image-2',
+  defaultValue: 'gpt-image-2.6-sunburst',
 );
 
 const String kKorlixOpenAIReasoningEffort = 'max';

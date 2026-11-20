@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../sounds/korlix_sound_actions.dart';
 import '../theme/korlix_theme.dart';
+import '../theme/korlix_christmas_greeting.dart';
 import 'korlix_entry_intro.dart';
 
 /// A preview of the product, not an unauthenticated generation surface.
@@ -23,6 +24,7 @@ class KorlixEntryWelcome extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        const KorlixChristmasGreeting(),
         if (showBranding) ...[
         Image.asset('assets/branding/korlix_mini_mark.png', height: 58),
         const SizedBox(height: 12),

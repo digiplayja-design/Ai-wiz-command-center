@@ -76,6 +76,7 @@ KorlixButtonColors korlixButtonColorsFor(
   String label, {
   IconData? icon,
   bool destructive = false,
+  String? themeId,
 }) {
   final normalized = label.toLowerCase().trim();
   final key = normalized.replaceAll(RegExp(r'[^a-z0-9à-ÿ]'), '');
@@ -97,6 +98,14 @@ KorlixButtonColors korlixButtonColorsFor(
   ].contains(icon);
   if (destructive || destructiveLabel || destructiveIcon) {
     return korlixButtonPalettes.last;
+  }
+
+  if (themeId == 'christmas_red') {
+    return const KorlixButtonColors(
+      id: 'christmas_red',
+      start: Color(0xFFB51F35),
+      end: Color(0xFF8F1930),
+    );
   }
 
   final id = switch (key) {
