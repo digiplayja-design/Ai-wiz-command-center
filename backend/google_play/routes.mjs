@@ -3,7 +3,7 @@ import {PACKAGE as DEFAULT_PACKAGE, PRODUCTS as DEFAULT_PRODUCTS, VERSION as DEF
 import {CATALOG_FAILURES, googlePlay} from './provider.mjs';
 
 export function registerGooglePlay(app, {database, requireUser, loadProfile, environment = process.env,
-  configuration = {}, store = playStore(database), provider = googlePlay(environment), notificationHandlers = {}, autoStart = true, now = Date.now} = {}) {
+  configuration = {}, store = playStore(database), provider = googlePlay(environment), notificationHandlers = {}, bindMeasurement, autoStart = true, now = Date.now} = {}) {
   const {root = '/api/billing/google', packageName: PACKAGE = DEFAULT_PACKAGE, products: PRODUCTS = DEFAULT_PRODUCTS,
     version: VERSION = DEFAULT_VERSION, accountIdentifier: accountId = defaultAccountId} = configuration;
   const rates = new Map();
@@ -97,7 +97,13 @@ export function registerGooglePlay(app, {database, requireUser, loadProfile, env
     if (!provider.configured) fail('Google Play verification is unavailable. Please try Restore Purchases later.', 503);
     const product = req.body?.productId;
     if (!Object.hasOwn(PRODUCTS, product || '') || req.body?.source !== 'google_play') fail('Unsupported Google Play purchase.');
-    res.json(await sync(user.id, purchaseToken(req.body?.verificationData), product));
+    const token = purchaseToken(req.body?.verificationData);
+    const verified = await sync(user.id, token, product);
+    if (bindMeasurement && req.body.checkoutId && verified?.verified) {
+      verified.measurementBound = await bindMeasurement(user.id, {store:'android', sku:verified.productId,
+        storeReference:token, environment:verified.environment, checkoutId:req.body.checkoutId});
+    }
+    res.json(verified);
   }));
   async function handleNotification(event) {
       if (event.packageName !== PACKAGE) fail('Notification package does not match.', 400);
