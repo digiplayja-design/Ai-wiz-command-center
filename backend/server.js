@@ -37,6 +37,7 @@ import { registerReceptionist } from './receptionist/routes.mjs';
 import { receptionistAI } from './receptionist/ai.mjs';
 import {registerWebBilling} from './web_billing/routes.mjs';
 import {registerGooglePlay} from './google_play/routes.mjs';
+import {registerStorePaymentCheck} from './store_measurement/check.mjs';
 import {playStore as createGooglePlayStore} from './google_play/core.mjs';
 import {googlePlay} from './google_play/provider.mjs';
 import {PACKAGE as KORLIX_PLAY_PACKAGE} from './google_play/core.mjs';
@@ -12951,9 +12952,12 @@ process.once('SIGTERM',()=>receptionistRegistration.stop());
 process.once('SIGINT',()=>receptionistRegistration.stop());
 registerWebBilling(app, {database: supabaseAdmin, requireUser, loadProfile: getOrCreateProfile});
 const receiptBilling = registerReceiptBilling(app, {database: supabaseAdmin, requireUser, loadProfile: getOrCreateProfile});
+const mainGoogleProvider = googlePlay(process.env, {notificationPackages: [KORLIX_PLAY_PACKAGE, RECEIPT_PACKAGE, MAGIC_PACKAGE]});
 const mainGoogleBilling = registerGooglePlay(app, {database: supabaseAdmin, requireUser, loadProfile: getOrCreateProfile,
-  provider: googlePlay(process.env, {notificationPackages: [KORLIX_PLAY_PACKAGE, RECEIPT_PACKAGE, MAGIC_PACKAGE]}),
+  provider: mainGoogleProvider,
   notificationHandlers: {[RECEIPT_PACKAGE]: receiptBilling.handleNotification, [MAGIC_PACKAGE]: magicBilling.handleNotification}});
+registerStorePaymentCheck(app, {database: supabaseAdmin, requireUser, apple: korlixAppleBuild130Config,
+  play: mainGoogleProvider, enabled: process.env.KORLIX_STORE_PAYMENT_CHECK_ENABLED === 'true'});
 process.once('SIGTERM', () => { receiptBilling.stop(); mainGoogleBilling.stop(); magicBilling.stop(); magicApple.stop(); });
 process.once('SIGINT', () => { receiptBilling.stop(); mainGoogleBilling.stop(); magicBilling.stop(); magicApple.stop(); });
 registerWorkforce(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1, workspaceEmail: workforceEmails }); // K138_WORKFORCE
