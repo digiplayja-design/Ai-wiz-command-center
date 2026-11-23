@@ -47,6 +47,10 @@ export function googlePlay(environment = process.env, {auth, identity = new OAut
       return true;
     },
     async subscription(token) { return request(`${root}/purchases/subscriptionsv2/tokens/${encodeURIComponent(purchaseToken(token))}`); },
+    async order(orderId) {
+      const fields = 'orderId,purchaseToken,state,total,orderHistory(processedEvent/eventTime),lineItems(productId,subscriptionDetails/basePlanId)';
+      return request(`${root}/orders/${encodeURIComponent(orderId)}?fields=${encodeURIComponent(fields)}`);
+    },
     async acknowledge(token, product) {
       if (!Object.hasOwn(products, product)) fail('Unsupported subscription.');
       await request(`${root}/purchases/subscriptions/${product}/tokens/${encodeURIComponent(purchaseToken(token))}:acknowledge`, 'POST', {});

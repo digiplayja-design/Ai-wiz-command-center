@@ -37,6 +37,8 @@ import { registerReceptionist } from './receptionist/routes.mjs';
 import { receptionistAI } from './receptionist/ai.mjs';
 import {registerWebBilling} from './web_billing/routes.mjs';
 import {registerGooglePlay} from './google_play/routes.mjs';
+import {registerStorePaymentCheck} from './store_measurement/check.mjs';
+import {registerFirstPaymentDelivery} from './store_measurement/delivery.mjs';
 import {playStore as createGooglePlayStore} from './google_play/core.mjs';
 import {googlePlay} from './google_play/provider.mjs';
 import {PACKAGE as KORLIX_PLAY_PACKAGE} from './google_play/core.mjs';
@@ -112,6 +114,7 @@ const { registerK135zZoomRoutes, createK135zServerRuntime } = k135zGate5Routes;
 
 import express from "express";
 import {assertAppleAccountBinding, refreshSignedAppleTransaction, appleTransactionAccess} from './web_billing/apple_security.mjs';
+import {readAppleSigningKey} from './web_billing/apple_signing_key.mjs';
 import {createKorlixSignupHandler, KORLIX_MINIMUM_AGE, KORLIX_SIGNUP_POLICY_VERSION} from "./korlix_signup_eligibility.mjs";
 import crypto from "crypto";
 import cors from "cors";
@@ -11098,24 +11101,6 @@ function korlixAppleBuild130Env(name) {
   return String(process.env[name] || "").trim();
 }
 
-function korlixAppleBuild130PrivateKey() {
-  const base64Value = korlixAppleBuild130Env(
-    "KORLIX_APPLE_PRIVATE_KEY_BASE64"
-  );
-
-  if (base64Value) {
-    try {
-      return Buffer.from(base64Value, "base64").toString("utf8").trim();
-    } catch (_) {
-      return "";
-    }
-  }
-
-  return korlixAppleBuild130Env("KORLIX_APPLE_PRIVATE_KEY")
-    .replace(/\\n/g, "\n")
-    .trim();
-}
-
 function korlixAppleBuild130IsJws(value) {
   const text = String(value || "").trim();
   return text.length > 40 && text.split(".").length === 3;
@@ -11179,7 +11164,7 @@ async function korlixAppleBuild130Config() {
     const library = await import("@apple/app-store-server-library");
     const issuerId = korlixAppleBuild130Env("KORLIX_APPLE_ISSUER_ID");
     const keyId = korlixAppleBuild130Env("KORLIX_APPLE_KEY_ID");
-    const privateKey = korlixAppleBuild130PrivateKey();
+    const privateKey = readAppleSigningKey(process.env);
     const appAppleIdRaw = korlixAppleBuild130Env("KORLIX_APPLE_APP_ID");
     const appAppleId = Number(appAppleIdRaw);
     const rootCertificates = await korlixAppleBuild130RootCertificates();
@@ -11759,7 +11744,11 @@ app.post("/api/billing/apple/verify", async (req, res) => {
       },
     });
 
+    const measurement = body.checkoutId ? {measurementBound: await firstPaymentDelivery.bindVerified(user.id,
+      {store:'ios', sku:transaction.productId, storeReference:transaction.originalTransactionId,
+        environment:transaction.environment, checkoutId:body.checkoutId})} : {};
     return res.json({
+      ...measurement,
       ok: true,
       verified: true,
       active: applied?.active ?? transaction.active,
@@ -12951,9 +12940,16 @@ process.once('SIGTERM',()=>receptionistRegistration.stop());
 process.once('SIGINT',()=>receptionistRegistration.stop());
 registerWebBilling(app, {database: supabaseAdmin, requireUser, loadProfile: getOrCreateProfile});
 const receiptBilling = registerReceiptBilling(app, {database: supabaseAdmin, requireUser, loadProfile: getOrCreateProfile});
+const mainGoogleProvider = googlePlay(process.env, {notificationPackages: [KORLIX_PLAY_PACKAGE, RECEIPT_PACKAGE, MAGIC_PACKAGE]});
+const firstPaymentDelivery = registerFirstPaymentDelivery(app, {database: supabaseAdmin, requireUser,
+  apple: korlixAppleBuild130Config, play: mainGoogleProvider});
 const mainGoogleBilling = registerGooglePlay(app, {database: supabaseAdmin, requireUser, loadProfile: getOrCreateProfile,
-  provider: googlePlay(process.env, {notificationPackages: [KORLIX_PLAY_PACKAGE, RECEIPT_PACKAGE, MAGIC_PACKAGE]}),
+  provider: mainGoogleProvider, bindMeasurement: firstPaymentDelivery.bindVerified,
   notificationHandlers: {[RECEIPT_PACKAGE]: receiptBilling.handleNotification, [MAGIC_PACKAGE]: magicBilling.handleNotification}});
+registerStorePaymentCheck(app, {database: supabaseAdmin, requireUser, apple: korlixAppleBuild130Config,
+  play: mainGoogleProvider, enabled: process.env.KORLIX_STORE_PAYMENT_CHECK_ENABLED === 'true'});
+process.once('SIGTERM', firstPaymentDelivery.stop);
+process.once('SIGINT', firstPaymentDelivery.stop);
 process.once('SIGTERM', () => { receiptBilling.stop(); mainGoogleBilling.stop(); magicBilling.stop(); magicApple.stop(); });
 process.once('SIGINT', () => { receiptBilling.stop(); mainGoogleBilling.stop(); magicBilling.stop(); magicApple.stop(); });
 registerWorkforce(app, { database: supabaseAdmin, requireUser, loadAgentProfile: korlixAgentLoadProfileV1, workspaceEmail: workforceEmails }); // K138_WORKFORCE
