@@ -2,7 +2,7 @@ name: KORLIX Christmas and model upgrade
 on:
   workflow_dispatch:
   push:
-    branches: [upgrade/korlix-ai-mobile-20261119]
+    branches: [upgrade/korlix-ai-mobile-20261119, tracking/first-subscription-mobile-20261123]
 permissions:
   contents: read
 concurrency:
@@ -44,7 +44,7 @@ jobs:
       - name: Analyze model and appearance changes
         run: |
           flutter analyze --no-pub --no-fatal-infos \
-            lib/theme lib/korlix_ai_quality_policy.dart lib/live_convo/korlix_live_convo_agent.dart \
+            lib/billing/store_measurement.dart lib/billing/korlix_apple_billing.dart lib/theme lib/korlix_ai_quality_policy.dart lib/live_convo/korlix_live_convo_agent.dart \
             packages/korlix_social_core/lib/theme test/korlix_christmas_theme_test.dart
       - name: Verify appearance, model compatibility, billing and reporting
         run: |
@@ -54,7 +54,7 @@ jobs:
             test/korlix_theme_test.dart test/korlix_screen_skins_test.dart \
             test/korlix_appearance_studio_test.dart test/social_appearance_test.dart \
             test/auth_welcome_test.dart test/signup_accessibility_release_test.dart \
-            test/apple_billing_test.dart test/live_convo/korlix_live_convo_agent_test.dart \
+            test/apple_billing_test.dart test/store_measurement_test.dart test/privacy/korlix_privacy_settings_test.dart test/live_convo/korlix_live_convo_agent_test.dart \
             test/support test/babyblend_reporting_test.dart test/image_to_video_reporting_test.dart
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()

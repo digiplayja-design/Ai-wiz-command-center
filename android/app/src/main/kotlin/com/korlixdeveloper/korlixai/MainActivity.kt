@@ -94,6 +94,8 @@ class MainActivity: FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "korlix/store_measurement")
+            .setMethodCallHandler { call, result -> StoreMeasurement.handle(applicationContext, call, result) }
         socialNative = KorlixSocialNativeChannel(this,
             MethodChannel(flutterEngine.dartExecutor.binaryMessenger, KorlixSocialNative.CHANNEL), true)
         KorlixSocialNative.acceptIntent(this, intent)

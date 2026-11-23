@@ -8,6 +8,7 @@ import UserNotifications
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
   private var soundEffects: KorlixSoundEffects?
+  private var storeMeasurement: StoreMeasurement?
   private var socialCalls: FlutterMethodChannel?
   private var socialCallId: String?
   private var riciStopTarget: Any?
@@ -101,6 +102,9 @@ import UserNotifications
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "KorlixStoreMeasurement") {
+      storeMeasurement = StoreMeasurement(messenger: registrar.messenger())
+    }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "KorlixSocialNative") {
       socialNative.attach(messenger: registrar.messenger())
     }

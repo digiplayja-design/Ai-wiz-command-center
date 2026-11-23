@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'store_measurement.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:ai_wiz_command_center/auth/korlix_http.dart' as http;
@@ -56,6 +58,7 @@ class KorlixAppleBillingService extends ChangeNotifier
   final Set<String> _appleEligibleTrials = {};
   final InAppPurchase _store;
   final http.Client _http;
+  late final StoreMeasurement measurement = StoreMeasurement(_http);
   final Map<String, ProductDetails> _products = <String, ProductDetails>{};
 
   StreamSubscription<List<PurchaseDetails>>? _purchaseSubscription;
@@ -230,6 +233,7 @@ class KorlixAppleBillingService extends ChangeNotifier
     _headersBuilder = headersBuilder;
     _handleSessionChange();
     _sessionScope = _readSessionScope();
+    _configureMeasurement();
     _sessionChanges?.removeListener(_handleSessionChange);
     _sessionChanges = sessionChanges;
     _sessionChanges?.addListener(_handleSessionChange);
@@ -298,6 +302,7 @@ class KorlixAppleBillingService extends ChangeNotifier
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      if (isStorePlatform) unawaited(measurement.refresh());
       unawaited(recoverGooglePurchases());
     }
   }
@@ -594,6 +599,8 @@ class KorlixAppleBillingService extends ChangeNotifier
         );
       }
 
+      await measurement.begin(productId);
+      if (!_sessionMatches(scope)) return;
       final bool started = await _store.buyNonConsumable(
         purchaseParam: purchaseParam,
       );
@@ -744,6 +751,8 @@ class KorlixAppleBillingService extends ChangeNotifier
         throw StateError('Please sign in to verify your subscription.');
       }
 
+      final checkoutId = await measurement.checkoutFor(purchase.productID);
+      if (!_sessionMatches(scope)) return;
       final http.Response response = await _http
           .post(
             Uri.parse('$_backendBaseUrl/api/billing/$_providerPath/verify'),
@@ -756,6 +765,7 @@ class KorlixAppleBillingService extends ChangeNotifier
               'source': purchase.verificationData.source,
               'transactionDate': purchase.transactionDate,
               'restored': purchase.status == PurchaseStatus.restored,
+              if (checkoutId != null) 'checkoutId': checkoutId,
             }),
           )
           .timeout(const Duration(seconds: 60));
@@ -780,6 +790,9 @@ class KorlixAppleBillingService extends ChangeNotifier
       storeFinished = true;
 
       if (!_sessionMatches(scope)) return;
+      if (checkoutId != null && data['measurementBound'] == true) {
+        unawaited(measurement.bound(purchase.productID, checkoutId));
+      }
       if (purchase is GooglePlayPurchaseDetails && data['active'] == true) {
         _googlePurchases[purchase.productID] = purchase;
       }
@@ -849,10 +862,18 @@ class KorlixAppleBillingService extends ChangeNotifier
     return scope != null && scope == _sessionSnapshot;
   }
 
+  void _configureMeasurement() {
+    if (!isStorePlatform) return;
+    final builder = _headersBuilder;
+    final owner = _sessionScope == null || builder == null ? null : _currentUserIdFromHeaders(builder());
+    unawaited(measurement.selectAccount(owner, isGooglePlatform ? 'android' : 'ios', _backendBaseUrl, builder));
+  }
+
   void _handleSessionChange() {
     if (_disposed || _sessionScope == _readSessionScope()) return;
     _sessionVersion++;
     _sessionScope = _readSessionScope();
+    _configureMeasurement();
     _endPurchaseOperation();
     _checkingStatus = false;
     _currentTier = 'basic';
@@ -971,6 +992,7 @@ class KorlixAppleBillingService extends ChangeNotifier
     _restoreTimer?.cancel();
     _sessionChanges?.removeListener(_handleSessionChange);
     unawaited(_purchaseSubscription?.cancel());
+    measurement.dispose();
     _http.close();
     super.dispose();
   }
@@ -1101,6 +1123,7 @@ class _KorlixAppleSubscriptionSheet extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: 14),
+                if (service.isStorePlatform) KorlixStoreMeasurementChoice(service: service),
                 if (requestedTier != null) ...[
                   Text(
                     'You chose ${requestedTier == 'ultra' ? 'Ultra' : 'Pro'}. '
@@ -1529,3 +1552,25 @@ class _KorlixAppleSubscriptionSheet extends StatelessWidget {
   }
 }
 // KORLIX_APPLE_SUBSCRIPTIONS_BUILD130_CLIENT_END
+
+class KorlixStoreMeasurementChoice extends StatelessWidget {
+  const KorlixStoreMeasurementChoice({super.key, required this.service});
+  final KorlixAppleBillingService service;
+
+  @override
+  Widget build(BuildContext context) {
+    final choice = service.measurement;
+    return ListenableBuilder(listenable: choice, builder: (context, _) => Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SwitchListTile.adaptive(
+          title: const Text('Share ad measurement with Google'),
+          subtitle: const Text('Optional. Share app activity and your first paid subscription so Korlix can measure its ads. You can turn this off in Legal & Privacy.'),
+          value: choice.enabled,
+          onChanged: choice.working || service.busy ? null : choice.choose,
+        ),
+        if (choice.feedback != null) Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Text(choice.feedback!)),
+      ],
+    ));
+  }
+}
