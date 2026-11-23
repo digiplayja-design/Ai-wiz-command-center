@@ -605,3 +605,21 @@ workflows:
       - apps/receipt_wiz/build/app/outputs/flutter-apk/app-debug.apk
       - apps/receipt_wiz/build/ios/iphonesimulator/ReceiptWiz-Simulator.zip
       - /tmp/xcodebuild_logs/*.log
+
+  korlix-ios-internal-group-147:
+    name: KORLIX AI internal TestFlight verification 12.0.6 (147)
+    instance_type: mac_mini_m2
+    max_build_duration: 35
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    scripts:
+      - *korlix_hub_ios_metadata_guard
+      - name: Verify internal TestFlight availability for build 147
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.asc-verify-tools"
+          (
+            unset APP_STORE_CONNECT_KEY_IDENTIFIER APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_PRIVATE_KEY
+            "$CM_BUILD_DIR/.asc-verify-tools/bin/python" -m pip install --disable-pip-version-check --quiet 'codemagic-cli-tools==0.69.0'
+          )
+          "$CM_BUILD_DIR/.asc-verify-tools/bin/python" scripts/verify_internal_testflight_147.py --assign --wait-minutes 25
