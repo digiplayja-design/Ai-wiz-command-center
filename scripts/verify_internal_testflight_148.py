@@ -1,10 +1,11 @@
 """One existing internal TestFlight group's membership for one uploaded KORLIX build."""
 
 import argparse
-import os
 import re
 import sys
 import time
+import traceback
+from pathlib import Path
 from urllib.parse import urlsplit
 
 
@@ -35,15 +36,32 @@ class Apple:
     def __init__(self):
         import requests
         from codemagic.apple.app_store_connect import AppStoreConnectApiClient
+        from codemagic.tools.app_store_connect.arguments import Types
 
-        # Codemagic supplies this identity from the workflow's named integration.
+        # Resolve the named integration exactly as the successful upload CLI does.
+        # An environment entry can itself be an @file: or @env: reference.
+        def configured(argument):
+            try:
+                item = argument.from_environment_variable_default()
+            except (OSError, ValueError):
+                raise Stop("The Codemagic integration could not resolve its " +
+                           argument.environment_variable_key + " setting.") from None
+            if item is None:
+                raise Stop("Codemagic did not provide " + argument.environment_variable_key + ".")
+            return item.value
+
         self.auth = AppStoreConnectApiClient(
-            key_identifier=os.environ["APP_STORE_CONNECT_KEY_IDENTIFIER"],
-            issuer_id=os.environ["APP_STORE_CONNECT_ISSUER_ID"],
-            private_key=os.environ["APP_STORE_CONNECT_PRIVATE_KEY"],
+            key_identifier=configured(Types.KeyIdentifierArgument),
+            issuer_id=configured(Types.IssuerIdArgument),
+            private_key=configured(Types.PrivateKeyArgument),
             log_requests=False,
             enable_jwt_cache=False,
         )
+        # Validate signing before making any request. Do not log or persist the token.
+        try:
+            self.auth.generate_auth_headers()
+        except Exception as exc:
+            raise Stop(f"Local App Store Connect signing failed ({type(exc).__name__}).") from None
         self.session = requests.Session()
 
     def request(self, method, url, **kwargs):
@@ -175,7 +193,13 @@ def main():
         print(str(exc), file=sys.stderr)
         return 1
     except Exception as exc:
-        # Provider bodies, environment contents and raw exception messages stay private.
+        # Print code locations only; provider bodies and exception text can contain secrets.
+        frames = list(traceback.walk_tb(exc.__traceback__))
+        verifier_frame = next((item for item in reversed(frames)
+                               if item[0].f_code.co_filename == __file__), frames[0])
+        for label, (frame, line) in (("Verification step", verifier_frame), ("Failure", frames[-1])):
+            source = Path(frame.f_code.co_filename).name
+            print(f"{label} at {source}:{line} in {frame.f_code.co_name}", file=sys.stderr)
         print(f"Verification could not finish ({type(exc).__name__}).", file=sys.stderr)
         return 1
     return 0
