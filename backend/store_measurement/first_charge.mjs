@@ -23,9 +23,18 @@ function earliest(charges) {
   return first;
 }
 
-async function firstAppleCharge(originalId, userId, apple) {
-  const {library, productionClient, productionVerifier} = await apple();
-  if (!productionClient || !productionVerifier) incomplete();
+function appleTransactionCharge(tx) {
+  // An older payload may omit price. Only an explicit free trial proves a zero charge in that case.
+  if (tx.offerDiscountType === 'FREE_TRIAL' && (tx.price == null || tx.price === 0)) return null;
+  if (!Number.isSafeInteger(tx.price) || tx.price < 0 || tx.offerDiscountType === 'FREE_TRIAL') incomplete();
+  if (tx.price === 0) return null;
+  if (!CURRENCY.test(tx.currency ?? '')) incomplete();
+  return {store: 'ios', time: tx.purchaseDate, value: tx.price / 1000, currency: tx.currency,
+    refunded: tx.revocationDate != null};
+}
+
+async function readAppleChargeHistory(originalId, userId, library, client, verifier, environment, observe) {
+  if (!client || !verifier) incomplete();
   const options = {sort: library.Order.ASCENDING, productIds: APPLE_PRODUCTS,
     productTypes: [library.ProductType.AUTO_RENEWABLE]};
   let revision = null;
@@ -34,11 +43,11 @@ async function firstAppleCharge(originalId, userId, apple) {
   let sawOriginal = false;
   let original;
   for (let page = 0; page < MAX_HISTORY_REQUESTS; page++) {
-    const history = await productionClient.getTransactionHistory(originalId, revision, options, library.GetTransactionHistoryVersion.V2);
+    const history = await client.getTransactionHistory(originalId, revision, options, library.GetTransactionHistoryVersion.V2);
     if (!Array.isArray(history?.signedTransactions) || typeof history.hasMore !== 'boolean') incomplete();
     for (const signed of history.signedTransactions) {
-      const tx = await productionVerifier.verifyAndDecodeTransaction(signed);
-      if (tx.bundleId !== PACKAGE || tx.environment !== 'Production') incomplete();
+      const tx = await verifier.verifyAndDecodeTransaction(signed);
+      if (tx.bundleId !== PACKAGE || tx.environment !== environment) incomplete();
       if (tx.originalTransactionId !== originalId || !APPLE_PRODUCTS.includes(tx.productId)) continue;
       if (tx.transactionId === originalId) sawOriginal = true;
       if (tx.inAppOwnershipType === 'FAMILY_SHARED') continue;
@@ -46,13 +55,9 @@ async function firstAppleCharge(originalId, userId, apple) {
           (tx.appAccountToken && tx.appAccountToken.toLowerCase() !== userId.toLowerCase())) incomplete();
       if (!tx.transactionId || !Number.isSafeInteger(tx.purchaseDate) || tx.purchaseDate <= 0) incomplete();
       if (tx.transactionId === originalId) original = {startedAt: tx.purchaseDate, sku: tx.productId};
-      // An older payload may omit price. Only an explicit free trial proves a zero charge in that case.
-      if (tx.offerDiscountType === 'FREE_TRIAL' && (tx.price == null || tx.price === 0)) continue;
-      if (!Number.isSafeInteger(tx.price) || tx.price < 0 || tx.offerDiscountType === 'FREE_TRIAL') incomplete();
-      if (tx.price === 0) continue;
-      if (!CURRENCY.test(tx.currency ?? '')) incomplete();
-      charges.push({store: 'ios', time: tx.purchaseDate, value: tx.price / 1000, currency: tx.currency,
-        refunded: tx.revocationDate != null});
+      const charge = appleTransactionCharge(tx);
+      observe?.(tx, charge);
+      if (charge) charges.push(charge);
     }
     if (!history.hasMore) {
       if (!sawOriginal) incomplete();
@@ -65,6 +70,16 @@ async function firstAppleCharge(originalId, userId, apple) {
     revisions.add(revision);
   }
   incomplete();
+}
+
+async function firstAppleCharge(originalId, userId, apple) {
+  const {library, productionClient, productionVerifier} = await apple();
+  return readAppleChargeHistory(originalId, userId, library, productionClient, productionVerifier, 'Production');
+}
+
+// The standalone sandbox check cannot supply a production environment or fall back to a production client.
+export function readAppleSandboxChargeHistory(originalId, userId, {library, sandboxClient, sandboxVerifier}, observe) {
+  return readAppleChargeHistory(originalId, userId, library, sandboxClient, sandboxVerifier, 'Sandbox', observe);
 }
 
 function orderTotal(money) {
