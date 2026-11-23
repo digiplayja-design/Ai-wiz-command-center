@@ -1,0 +1,41 @@
+name: Offline KORLIX store payment regression
+on:
+  push:
+    branches: [qa/korlix-store-payment-e0a1a7c-20261123]
+permissions:
+  contents: read
+jobs:
+  store-payment:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - name: Verify the source under test
+        run: |
+          test "$(git rev-parse HEAD^)" = e0a1a7cb0d7ab5b20d701e3fbf667f96226c7614
+          test "$(git diff --name-only HEAD^ HEAD)" = .github/workflows/korlix-store-payment-qa.yml
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Install locked dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run all 66 store tests with loopback only and no service credentials
+        run: |
+          mkdir -p "$RUNNER_TEMP/korlix-qa-home"
+          sudo unshare --net /bin/bash -eu -c '
+            /usr/sbin/ip link set lo up
+            test -z "$(/usr/sbin/ip route show default)"
+            test "$(/usr/sbin/ip -o link show | wc -l)" -eq 1
+            exec /usr/sbin/runuser -u "$1" -- /usr/bin/env -i HOME="$2" PATH="$3" TZ=UTC CI=true "$4" --test --test-concurrency=1 \
+              test/apple_billing_runtime.test.mjs test/apple_billing_security.test.mjs \
+              test/apple_billing_database_security.test.mjs test/google_play_billing.test.mjs \
+              test/store_first_payment.test.mjs test/store_measurement_delivery.test.mjs \
+              test/apple_sandbox_first_payment.test.mjs
+          ' _ "$(id -un)" "$RUNNER_TEMP/korlix-qa-home" "$PATH" "$(command -v node)"
