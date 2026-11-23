@@ -31,20 +31,23 @@ workflows:
           sudo pfctl -a com.apple/korlix_metadata -f "$rules"
           sudo pfctl -e 2>/dev/null || sudo pfctl -s info | grep -q 'Status: Enabled'
           sudo pfctl -a com.apple/korlix_metadata -s rules | grep -q '169.254.0.0/16'
-      - name: Install pinned Apple release tools
+      - &korlix_hub_ios_tools
+        name: Install pinned Apple release tools
         script: |
           set -euo pipefail
           python3 -m venv "$CM_BUILD_DIR/.ios-release-tools"
           "$CM_BUILD_DIR/.ios-release-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
           printf 'PATH=%s/.ios-release-tools/bin:%s\n' "$CM_BUILD_DIR" "$PATH" >> "$CM_ENV"
-      - name: Verify existing Apple app and choose next build
+      - &korlix_hub_ios_version
+        name: Verify existing Apple app and choose next build
         script: |
           set -euo pipefail
           python3 scripts/prepare_ios_release.py \
             --bundle-id com.korlixdeveloper.korlixai --app-id 6783100102 \
             --require-existing-build --environment-file "$CM_ENV"
           cp docs/releases/christmas-models-20261119/korlix-ai-notes.txt release_notes_en-US.txt
-      - name: Validate current iOS app and shared calling code
+      - &korlix_hub_ios_checks
+        name: Validate current iOS app and shared calling code
         script: |
           set -euo pipefail
           flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
@@ -64,14 +67,16 @@ workflows:
             test/social_call_reliability_test.dart test/social_screen_sharing_test.dart \
             test/social_communication_upgrade_test.dart \
             test/social_presence_model_test.dart test/social_presence_toggle_test.dart
-      - name: Validate Christmas appearance and model upgrade
+      - &korlix_hub_ios_appearance
+        name: Validate Christmas appearance and model upgrade
         script: |
           set -euo pipefail
           flutter test --no-pub --reporter expanded \
             test/korlix_christmas_theme_test.dart test/korlix_astra_quality_test.dart \
             test/korlix_theme_test.dart test/korlix_screen_skins_test.dart \
             test/korlix_appearance_studio_test.dart test/live_convo/korlix_live_convo_agent_test.dart
-      - name: Validate CRM spreadsheet import and Rici lifecycle
+      - &korlix_hub_ios_crm
+        name: Validate CRM spreadsheet import and Rici lifecycle
         script: |
           set -euo pipefail
           flutter analyze --no-pub lib/contacts_crm/contact_import.dart \
@@ -88,7 +93,8 @@ workflows:
           CONFIGURATION=Release PRODUCT_BUNDLE_IDENTIFIER=com.korlixdeveloper.korlixai \
             SRCROOT="$CM_BUILD_DIR/ios" TARGET_BUILD_DIR="$CM_BUILD_DIR/ios" \
             UNLOCALIZED_RESOURCES_FOLDER_PATH=Runner python3 scripts/prepare_ios_analytics.py
-      - name: Prepare native dependencies and apply existing app signing
+      - &korlix_hub_ios_sign
+        name: Prepare native dependencies and apply existing app signing
         script: |
           set -euo pipefail
           flutter build ios --release --config-only --no-codesign --no-pub \
@@ -96,7 +102,8 @@ workflows:
           xcode-project use-profiles --project ios/Runner.xcodeproj \
             --export-options-plist "$CM_BUILD_DIR/ios-release-export.plist" \
             --custom-export-options '{"manageAppVersionAndBuildNumber": false}'
-      - name: Build and verify Korlix AI IPA
+      - &korlix_hub_ios_build
+        name: Build and verify Korlix AI IPA
         script: |
           set -euo pipefail
           flutter build ipa --release --no-pub \
@@ -125,6 +132,24 @@ workflows:
   korlix-ai-ios-testflight:
     <<: *korlix_ai_ios_release
     name: Korlix AI iOS TestFlight Upload
+    scripts:
+      - *korlix_hub_ios_metadata_guard
+      - *korlix_hub_ios_tools
+      - *korlix_hub_ios_version
+      - name: Select the internal TestFlight train
+        script: |
+          set -euo pipefail
+          # Apple closed 12.0.6 and rejected build 147.
+          printf 'KORLIX_IOS_VERSION=12.0.7\n' >> "$CM_ENV"
+          if (( KORLIX_IOS_BUILD_NUMBER < 148 )); then
+            printf 'KORLIX_IOS_BUILD_NUMBER=148\n' >> "$CM_ENV"
+          fi
+      - *korlix_hub_ios_checks
+      - *korlix_hub_ios_appearance
+      - *korlix_hub_ios_crm
+      - *korlix_hub_ios_firebase_config
+      - *korlix_hub_ios_sign
+      - *korlix_hub_ios_build
     publishing:
       app_store_connect:
         auth: integration
