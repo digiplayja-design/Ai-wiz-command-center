@@ -135,6 +135,12 @@ workflows:
 
   korlix-hub-ios-firebase-validation:
     name: KORLIX AI iOS Firebase configuration validation
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: 'qa/korlix-hub-ios-firebase-20261123-01'
+          include: true
     instance_type: mac_mini_m2
     max_build_duration: 60
     environment:
