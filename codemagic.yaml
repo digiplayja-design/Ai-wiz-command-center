@@ -6,6 +6,8 @@ workflows:
     integrations:
       app_store_connect: Codemagic Korlix AI
     environment:
+      groups:
+        - korlix_hub_firebase_ios
       flutter: 3.47.7
       xcode: 26.6
       cocoapods: default
@@ -15,7 +17,8 @@ workflows:
         certificates:
           - KORLIX_APP_STORE_CERT
     scripts:
-      - name: Block cloud metadata before release commands
+      - &korlix_hub_ios_metadata_guard
+        name: Block cloud metadata before release commands
         script: |
           set -euo pipefail
           rules="$CM_BUILD_DIR/.korlix-metadata-block.pf"
@@ -77,6 +80,14 @@ workflows:
             test/live_convo/crm_voice_lifecycle_test.dart
           flutter test --no-pub --reporter expanded \
             test/contacts_crm test/live_convo/crm_voice_lifecycle_test.dart
+      - &korlix_hub_ios_firebase_config
+        name: Stage the registered KORLIX AI Apple configuration
+        script: |
+          set -euo pipefail
+          umask 077
+          CONFIGURATION=Release PRODUCT_BUNDLE_IDENTIFIER=com.korlixdeveloper.korlixai \
+            SRCROOT="$CM_BUILD_DIR/ios" TARGET_BUILD_DIR="$CM_BUILD_DIR/ios" \
+            UNLOCALIZED_RESOURCES_FOLDER_PATH=Runner python3 scripts/prepare_ios_analytics.py
       - name: Prepare native dependencies and apply existing app signing
         script: |
           set -euo pipefail
@@ -121,6 +132,43 @@ workflows:
         # internal group only after Apple finishes processing this build.
         submit_to_testflight: false
         submit_to_app_store: false
+
+  korlix-hub-ios-firebase-validation:
+    name: KORLIX AI iOS Firebase configuration validation
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      groups:
+        - korlix_hub_firebase_ios
+      flutter: 3.47.7
+      xcode: 26.6
+      cocoapods: default
+      vars:
+        FLUTTER_SUPPRESS_ANALYTICS: 'true'
+        DART_SUPPRESS_ANALYTICS: 'true'
+        COCOAPODS_DISABLE_STATS: 'true'
+    scripts:
+      - *korlix_hub_ios_metadata_guard
+      - *korlix_hub_ios_firebase_config
+      - name: Compile the unsigned iOS simulator app
+        script: |
+          set -euo pipefail
+          flutter --suppress-analytics --no-version-check pub get --enforce-lockfile
+          flutter --suppress-analytics --no-version-check build ios --simulator --debug --no-pub
+      - name: Verify the Firebase file embedded in Runner.app
+        script: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import base64
+          import os
+          from pathlib import Path
+
+          expected = base64.b64decode(os.environ['KORLIX_FIREBASE_IOS_PLIST_BASE64'].strip(), validate=True)
+          app = Path('build/ios/iphonesimulator/Runner.app')
+          if (app / 'GoogleService-Info.plist').read_bytes() != expected:
+              raise SystemExit('Embedded Firebase configuration differs from the registered file.')
+          print('The unsigned iOS app contains the exact registered Firebase configuration.')
+          PY
 
   korlix-messenger-ios-appstore: &messenger_ios_release
     name: KORLIX Messenger iOS App Store
