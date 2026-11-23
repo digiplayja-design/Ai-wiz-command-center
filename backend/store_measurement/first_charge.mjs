@@ -96,10 +96,27 @@ async function firstGoogleCharge(token, userId, knownTokens, play) {
   if (sub.externalAccountIdentifiers?.obfuscatedExternalAccountId !== accountId(userId) ||
       (sub.linkedPurchaseToken && !knownTokens.has(sub.linkedPurchaseToken))) incomplete();
   if (sub.testPurchase != null) return null;
+  for await (const order of readGoogleOrders(token, sub, play)) {
+    if (order.value > 0) return order;
+  }
+  return null;
+}
+
+// Only the license-test checker uses this entry point. A replacement purchase requires
+// its predecessor's history, so this one-chain diagnostic accepts original tokens only.
+export async function* readGoogleLicenseTestOrders(token, userId, play) {
+  const sub = await play.subscription(token);
+  if (!sub?.testPurchase || typeof sub.testPurchase !== 'object' || Array.isArray(sub.testPurchase) ||
+      sub.externalAccountIdentifiers?.obfuscatedExternalAccountId !== accountId(userId) ||
+      sub.linkedPurchaseToken) incomplete();
+  yield* readGoogleOrders(token, sub, play);
+}
+
+async function* readGoogleOrders(token, sub, play) {
   if (!Array.isArray(sub.lineItems) || sub.lineItems.length !== 1) incomplete();
   const item = sub.lineItems[0];
   if (!Object.hasOwn(GOOGLE_PRODUCTS, item.productId) || item.offerDetails?.basePlanId !== 'monthly') incomplete();
-  if (!item.latestSuccessfulOrderId && ['SUBSCRIPTION_STATE_PENDING','SUBSCRIPTION_STATE_PENDING_PURCHASE_CANCELED'].includes(sub.subscriptionState)) return null;
+  if (!item.latestSuccessfulOrderId && ['SUBSCRIPTION_STATE_PENDING','SUBSCRIPTION_STATE_PENDING_PURCHASE_CANCELED'].includes(sub.subscriptionState)) return;
   const match = /^(GPA\.\d{4}-\d{4}-\d{4}-\d{5})(?:\.\.(\d+))?$/.exec(item.latestSuccessfulOrderId ?? '');
   if (!match) incomplete();
   const baseId = match[1], latest = match[2] === undefined ? -1 : Number(match[2]);
@@ -120,10 +137,9 @@ async function firstGoogleCharge(token, userId, knownTokens, play) {
     if (!Number.isFinite(time) || time <= 0) incomplete();
     if (cycle === -1) original = {startedAt: time, sku: line.productId};
     if (value > 0 && !original) incomplete();
-    if (value > 0) return {store: 'android', time, value, currency: order.total.currencyCode,
+    yield {store: 'android', time, value, currency: order.total.currencyCode,
       refunded: order.state !== 'PROCESSED', source: {...original, hash: bindingHash(token)}};
   }
-  return null;
 }
 
 // The database supplies every store binding owned by the authenticated KORLIX account.
