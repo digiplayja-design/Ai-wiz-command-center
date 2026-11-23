@@ -3,6 +3,7 @@ import {pathToFileURL} from 'node:url';
 import {PACKAGE} from '../google_play/core.mjs';
 import {readAppleSandboxChargeHistory} from '../store_measurement/first_charge.mjs';
 import {UUID} from '../web_billing/core.mjs';
+import {readAppleSigningKey} from '../web_billing/apple_signing_key.mjs';
 
 const appleId = /^[1-9]\d{0,31}$/;
 const skipped = () => ({status: 'skip', freeTrials: 0, firstPayments: 0, laterPayments: 0});
@@ -11,10 +12,8 @@ const skipped = () => ({status: 'skip', freeTrials: 0, firstPayments: 0, laterPa
 // environment so a tester's account and transaction don't appear in command histories.
 async function appleSandboxProvider() {
   const env = process.env;
-  const privateKey = env.KORLIX_APPLE_PRIVATE_KEY_BASE64
-    ? Buffer.from(env.KORLIX_APPLE_PRIVATE_KEY_BASE64, 'base64').toString('utf8')
-    : env.KORLIX_APPLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
-  if (!privateKey?.trim() || !env.KORLIX_APPLE_KEY_ID || !env.KORLIX_APPLE_ISSUER_ID) {
+  const privateKey = readAppleSigningKey(env);
+  if (!privateKey || !env.KORLIX_APPLE_KEY_ID || !env.KORLIX_APPLE_ISSUER_ID) {
     throw new Error('Apple verification is unavailable.');
   }
   const library = await import('@apple/app-store-server-library');
@@ -23,7 +22,7 @@ async function appleSandboxProvider() {
   ].map(name => readFile(new URL('../apple_root_certs/' + name, import.meta.url))));
   return {
     library,
-    sandboxClient: new library.AppStoreServerAPIClient(privateKey.trim(), env.KORLIX_APPLE_KEY_ID,
+    sandboxClient: new library.AppStoreServerAPIClient(privateKey, env.KORLIX_APPLE_KEY_ID,
       env.KORLIX_APPLE_ISSUER_ID, PACKAGE, library.Environment.SANDBOX),
     sandboxVerifier: new library.SignedDataVerifier(certificates, true, library.Environment.SANDBOX, PACKAGE),
   };

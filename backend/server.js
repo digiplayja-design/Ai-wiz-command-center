@@ -114,6 +114,7 @@ const { registerK135zZoomRoutes, createK135zServerRuntime } = k135zGate5Routes;
 
 import express from "express";
 import {assertAppleAccountBinding, refreshSignedAppleTransaction, appleTransactionAccess} from './web_billing/apple_security.mjs';
+import {readAppleSigningKey} from './web_billing/apple_signing_key.mjs';
 import {createKorlixSignupHandler, KORLIX_MINIMUM_AGE, KORLIX_SIGNUP_POLICY_VERSION} from "./korlix_signup_eligibility.mjs";
 import crypto from "crypto";
 import cors from "cors";
@@ -11100,24 +11101,6 @@ function korlixAppleBuild130Env(name) {
   return String(process.env[name] || "").trim();
 }
 
-function korlixAppleBuild130PrivateKey() {
-  const base64Value = korlixAppleBuild130Env(
-    "KORLIX_APPLE_PRIVATE_KEY_BASE64"
-  );
-
-  if (base64Value) {
-    try {
-      return Buffer.from(base64Value, "base64").toString("utf8").trim();
-    } catch (_) {
-      return "";
-    }
-  }
-
-  return korlixAppleBuild130Env("KORLIX_APPLE_PRIVATE_KEY")
-    .replace(/\\n/g, "\n")
-    .trim();
-}
-
 function korlixAppleBuild130IsJws(value) {
   const text = String(value || "").trim();
   return text.length > 40 && text.split(".").length === 3;
@@ -11181,7 +11164,7 @@ async function korlixAppleBuild130Config() {
     const library = await import("@apple/app-store-server-library");
     const issuerId = korlixAppleBuild130Env("KORLIX_APPLE_ISSUER_ID");
     const keyId = korlixAppleBuild130Env("KORLIX_APPLE_KEY_ID");
-    const privateKey = korlixAppleBuild130PrivateKey();
+    const privateKey = readAppleSigningKey(process.env);
     const appAppleIdRaw = korlixAppleBuild130Env("KORLIX_APPLE_APP_ID");
     const appAppleId = Number(appAppleIdRaw);
     const rootCertificates = await korlixAppleBuild130RootCertificates();
