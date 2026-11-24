@@ -1,165 +1,153 @@
 workflows:
-  korlix-copybox-apple-status:
-    name: KORLIX COPY Box — read-only Apple release status
+  korlix-apple-release-queue:
+    name: Korlix Apple release queue (read only)
     instance_type: mac_mini_m2
     max_build_duration: 10
     integrations:
       app_store_connect: Codemagic Korlix AI
-    # Manual only. Existing managed integration; no signing or publishing.
-    # Only app-scoped GETs. No credentials, contact values or tester identities
-    # are written to logs or artifacts. The report is not a release approval.
     scripts:
-      - name: Check read-only scope and private-data filtering
+      - name: Read current iOS versions, release states and review queues
         script: |
           set -euo pipefail
-          python3 -B -m unittest discover -s scripts/tests -p 'test_read_copybox_apple_status.py' -v
-      - name: Read COPY Box release status through the existing integration
-        script: |
-          set -euo pipefail
-          python3 -m venv "$CM_BUILD_DIR/.copybox-apple-status-tools"
-          "$CM_BUILD_DIR/.copybox-apple-status-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
-          "$CM_BUILD_DIR/.copybox-apple-status-tools/bin/python" scripts/read_copybox_apple_status.py
-    artifacts:
-      - artifacts/copybox-apple-status.json
-
-  korlix-copybox-reviewer-acceptance:
-    name: KORLIX COPY Box — bounded reviewer API acceptance
-    instance_type: mac_mini_m2
-    max_build_duration: 10
-    integrations:
-      app_store_connect: Codemagic Korlix AI
-    # Manual only. Uses the existing saved dedicated review account in memory.
-    # One synthetic rewrite, followed by sign-out of only its fresh session.
-    # No secret, account profile, or generated text is logged or exported.
-    scripts:
-      - name: Verify scope, request limits, secret filtering, and cleanup
-        script: |
-          set -euo pipefail
-          python3 -B -m unittest discover -s scripts/tests -p 'test_read_copybox_apple_status.py' -v
-          python3 -B -m unittest discover -s scripts/tests -p 'test_check_copybox_reviewer_acceptance.py' -v
-      - name: Exercise the saved COPY Box reviewer account once
-        script: |
-          set -euo pipefail
-          python3 -m venv "$CM_BUILD_DIR/.copybox-reviewer-acceptance-tools"
-          "$CM_BUILD_DIR/.copybox-reviewer-acceptance-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
-          "$CM_BUILD_DIR/.copybox-reviewer-acceptance-tools/bin/python" scripts/check_copybox_reviewer_acceptance.py --run-once
-    artifacts:
-      - artifacts/copybox-reviewer-acceptance.json
-
-  korlix-copybox-native-ios-acceptance:
-    name: KORLIX COPY Box — native iOS guest acceptance
-    instance_type: mac_mini_m2
-    max_build_duration: 45
-    working_directory: apps/korlix_copy_box
-    environment:
-      flutter: 3.47.7
-      xcode: 26.6
-      cocoapods: default
-    scripts:
-      - name: Run actual iOS guest app and verify a fresh-process restore
-        script: |
-          set -euo pipefail
-          python3 "$CM_BUILD_DIR/scripts/ci/run_copybox_native_acceptance.py" ios
-        test_report: artifacts/native-acceptance/report-*.json
-    artifacts:
-      - $CM_BUILD_DIR/apps/korlix_copy_box/artifacts/native-acceptance/*
-      - /tmp/xcodebuild_logs/*.log
-
-  korlix-copybox-complete-apple-age-rating:
-    name: KORLIX COPY Box — complete reviewed Apple age declaration
-    instance_type: mac_mini_m2
-    max_build_duration: 10
-    integrations:
-      app_store_connect: Codemagic Korlix AI
-    environment:
-      vars:
-        COPYBOX_RUN_REVIEWER_ACCEPTANCE: "false"
-    # Manual only. The CopyBox output boundary is already verified live at
-    # a8a416fa77eac0a25236e72cc3828f1a5ccf96cf. Managed Apple auth stays in memory.
-    # Only the exact age declaration can be patched; no app submission,
-    # release mode, build selection, pricing or publishing action is configured.
-    scripts:
-      - name: Verify identity guards, age-only mutations, ratings, and secret filtering
-        script: |
-          set -euo pipefail
-          python3 -B -m unittest discover -s scripts/tests -p 'test_read_copybox_apple_status.py' -v
-          python3 -B -m unittest discover -s scripts/tests -p 'test_complete_copybox_apple_age_rating.py' -v
-          python3 -B -m unittest discover -s scripts/tests -p 'test_check_copybox_reviewer_acceptance.py' -v
-      - name: Prepare existing managed Apple integration tooling
-        script: |
-          set -euo pipefail
-          python3 -m venv "$CM_BUILD_DIR/.copybox-apple-age-tools"
-          "$CM_BUILD_DIR/.copybox-apple-age-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
-      - name: Optionally rerun the existing bounded reviewer API acceptance
-        script: |
-          set -euo pipefail
-          case "${COPYBOX_RUN_REVIEWER_ACCEPTANCE:-false}" in
-            true)
-              "$CM_BUILD_DIR/.copybox-apple-age-tools/bin/python" scripts/check_copybox_reviewer_acceptance.py --run-once
-              ;;
-            false)
-              echo "Existing reviewer acceptance rerun is not selected."
-              ;;
-            *)
-              echo "COPYBOX_RUN_REVIEWER_ACCEPTANCE must be true or false." >&2
-              exit 2
-              ;;
-          esac
-      - name: Complete only the reviewed COPY Box age declaration
-        script: |
-          set -euo pipefail
-          "$CM_BUILD_DIR/.copybox-apple-age-tools/bin/python" scripts/complete_copybox_apple_age_rating.py --apply-reviewed
-    artifacts:
-      - artifacts/copybox-apple-age-completion.json
-      - artifacts/copybox-reviewer-acceptance.json
-
-  korlix-copybox-select-apple-build:
-    name: KORLIX COPY Box — select verified uploaded iOS build
-    instance_type: mac_mini_m2
-    max_build_duration: 10
-    integrations:
-      app_store_connect: Codemagic Korlix AI
-    environment:
-      vars:
-        # Set from the successful signed upload report before starting this workflow.
-        COPYBOX_EXPECTED_BUILD_NUMBER: "2"
-    # Manual only. No reviewer generation, upload, publishing or review submission.
-    # One exact version/build relationship PATCH at most; readback is mandatory.
-    scripts:
-      - name: Check build identity, selection guards, and idempotence
-        script: |
-          set -euo pipefail
-          python3 -B -m unittest discover -s scripts/tests -p 'test_select_copybox_apple_build.py' -v
-      - name: Select the confirmed uploaded build using the existing Apple integration
-        script: |
-          set -euo pipefail
-          : "${COPYBOX_EXPECTED_BUILD_NUMBER:?Set the confirmed uploaded CopyBox build number}"
-          python3 -m venv "$CM_BUILD_DIR/.copybox-apple-build-tools"
-          "$CM_BUILD_DIR/.copybox-apple-build-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
-          "$CM_BUILD_DIR/.copybox-apple-build-tools/bin/python" scripts/select_copybox_apple_build.py \
-            --select-reviewed-build --build-number "$COPYBOX_EXPECTED_BUILD_NUMBER"
-    artifacts:
-      - artifacts/copybox-apple-build-selection.json
-
-
-  korlix-copybox-sync-apple-metadata:
-    name: KORLIX COPY Box — synchronize reviewed Apple description and notes
-    instance_type: mac_mini_m2
-    max_build_duration: 10
-    integrations:
-      app_store_connect: Codemagic Korlix AI
-    # Manual only. Exact pinned description and review notes from app commit e25b4b57.
-    # No contact/demo fields, build selection, reviewer calls or review submission.
-    scripts:
-      - name: Verify source hashes, field limits, scoped writes, and private-data exclusion
-        script: |
-          set -euo pipefail
-          python3 -B -m unittest discover -s scripts/tests -p 'test_sync_copybox_apple_metadata.py' -v
-      - name: Synchronize only the reviewed description and App Review notes
-        script: |
-          set -euo pipefail
-          python3 -m venv "$CM_BUILD_DIR/.copybox-apple-metadata-tools"
-          "$CM_BUILD_DIR/.copybox-apple-metadata-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
-          "$CM_BUILD_DIR/.copybox-apple-metadata-tools/bin/python" scripts/sync_copybox_apple_metadata.py --apply-reviewed-metadata
-    artifacts:
-      - artifacts/copybox-apple-metadata-sync.json
+          tool_env="$CM_BUILD_DIR/.release-queue-venv"
+          python3 -m venv "$tool_env"
+          "$tool_env/bin/python" -m pip -q install 'codemagic-cli-tools==0.69.0'
+          "$tool_env/bin/python" - <<'KORLIX_READ_ONLY'
+          import json
+          import os
+          import sys
+          from datetime import datetime, timezone
+          from urllib.parse import urlparse
+          
+          import requests
+          from codemagic.apple.app_store_connect import AppStoreConnectApiClient
+          from codemagic.tools.app_store_connect.arguments import Types
+          
+          ORIGIN = "https://api.appstoreconnect.apple.com"
+          EDITABLE = {"PREPARE_FOR_SUBMISSION", "READY_FOR_REVIEW", "REJECTED", "METADATA_REJECTED", "DEVELOPER_REJECTED", "INVALID_BINARY"}
+          
+          def get(path, params=None, optional=False):
+              url = path if path.startswith("https://") else ORIGIN + path
+              parsed = urlparse(url)
+              if parsed.scheme != "https" or parsed.netloc != "api.appstoreconnect.apple.com" or not parsed.path.startswith("/v1/"):
+                  raise ValueError("Unexpected Apple API destination")
+              response = session.get(url, params=params, headers=client.generate_auth_headers(), allow_redirects=False, timeout=25)
+              if response.status_code != 200:
+                  if not (optional and response.status_code == 404):
+                      errors = response.json().get("errors", []) if "json" in response.headers.get("content-type", "") else []
+                      print("READ_STATUS", response.status_code, parsed.path, [e.get("code") for e in errors], flush=True)
+                  return {}
+              return response.json()
+          
+          def listing(path, params=None):
+              page = get(path, params)
+              if "data" not in page:
+                  return None
+              rows = list(page["data"])
+              while page.get("links", {}).get("next"):
+                  page = get(page["links"]["next"])
+                  if "data" not in page:
+                      return None
+                  rows.extend(page["data"])
+              return rows
+          
+          def attrs(record):
+              return (record or {}).get("attributes", {})
+          
+          def related_id(record, kind):
+              link = record.get("relationships", {}).get(kind, {}).get("data") or {}
+              return link.get("id") if isinstance(link, dict) else None
+          
+          def version_state(version):
+              a = attrs(version)
+              return a.get("appVersionState") or a.get("appStoreState")
+          
+          def release_listing(version_id, primary):
+              found = listing(f"/v1/appStoreVersions/{version_id}/appStoreVersionLocalizations", {"limit": 100})
+              if found is None:
+                  return {"localizations": "unavailable"}
+              loc = next((v for v in found if attrs(v).get("locale") == primary), found[0] if found else None)
+              if not loc:
+                  return {"localizations": 0}
+              a = attrs(loc)
+              result = {"locale": a.get("locale"), "missingFields": [k for k in ("description", "keywords", "supportUrl") if not a.get(k)]}
+              sets = listing(f"/v1/appStoreVersionLocalizations/{loc['id']}/appScreenshotSets", {"limit": 100})
+              if sets is None:
+                  result["screenshots"] = "unavailable"
+              else:
+                  sets_summary = {}
+                  for group in sets:
+                      images = listing(f"/v1/appScreenshotSets/{group['id']}/appScreenshots", {"limit": 50})
+                      sets_summary[attrs(group).get("screenshotDisplayType", "unknown")] = None if images is None else [attrs(image).get("assetDeliveryState", {}).get("state") for image in images]
+                  result["screenshots"] = sets_summary
+              return result
+          
+          def summarize_app(app):
+              app_id = app["id"]
+              primary = attrs(app).get("primaryLocale")
+              out = {"name": attrs(app).get("name"), "appleId": app_id, "versions": [], "submissions": []}
+              vp = get(f"/v1/apps/{app_id}/appStoreVersions", {"filter[platform]": "IOS", "include": "build", "limit": 100})
+              if "data" not in vp:
+                  vp = get(f"/v1/apps/{app_id}/appStoreVersions", {"limit": 100})
+              if "data" not in vp or vp.get("links", {}).get("next"):
+                  out["versionCoverage"] = "incomplete"
+              vs = sorted((v for v in vp.get("data", []) if attrs(v).get("platform") == "IOS"), key=lambda v: attrs(v).get("createdDate") or "", reverse=True)
+              builds = {v["id"]: attrs(v) for v in vp.get("included", []) if v.get("type") == "builds"}
+              for v in vs:
+                  a = attrs(v)
+                  state = version_state(v)
+                  if len(out["versions"]) >= 5 and state in {"REPLACED_WITH_NEW_VERSION", "REMOVED_FROM_SALE", "DEVELOPER_REMOVED_FROM_SALE"}:
+                      continue
+                  vid = v["id"]
+                  bid = related_id(v, "build")
+                  if "build" not in v.get("relationships", {}) or "data" not in v["relationships"]["build"]:
+                      payload = get(f"/v1/appStoreVersions/{vid}/build", optional=True)
+                      b = payload.get("data") or {}
+                      bid = b.get("id")
+                      if bid:
+                          builds[bid] = attrs(b)
+                  if bid and bid not in builds:
+                      builds[bid] = attrs(get(f"/v1/builds/{bid}").get("data"))
+                  build = builds.get(bid, {})
+                  row = {"version": a.get("versionString"), "state": state, "release": a.get("releaseType"), "selectedBuild": build.get("version"), "buildState": build.get("processingState")}
+                  if state in EDITABLE:
+                      row["listing"] = release_listing(vid, primary)
+                      row["copyrightPresent"] = bool(a.get("copyright"))
+                  out["versions"].append(row)
+              sp = get(f"/v1/apps/{app_id}/reviewSubmissions", {"limit": 100})
+              if "data" not in sp or sp.get("links", {}).get("next"):
+                  out["submissionCoverage"] = "incomplete"
+              for sub in sp.get("data", []):
+                  a = attrs(sub)
+                  if a.get("platform") not in {"IOS", None} or a.get("state") in {"COMPLETE", "CANCELED"}:
+                      continue
+                  items = get(f"/v1/reviewSubmissions/{sub['id']}/items", {"include": "appStoreVersion", "limit": 50})
+                  versions = {r["id"]: attrs(r).get("versionString") for r in items.get("included", []) if r.get("type") == "appStoreVersions"}
+                  out["submissions"].append({"state": a.get("state"), "submitted": a.get("submittedDate"), "items": [{"state": attrs(item).get("state"), "version": versions.get(related_id(item, "appStoreVersion"))} for item in items.get("data", [])], "itemsReadable": "data" in items})
+              params = {"filter[app]": app_id, "sort": "-uploadedDate", "include": "preReleaseVersion", "limit": 3}
+              latest = get("/v1/builds", params)
+              trains = {v["id"]: attrs(v) for v in latest.get("included", []) if v.get("type") == "preReleaseVersions"}
+              out["recentBuilds"] = [{"train": trains.get(related_id(b, "preReleaseVersion"), {}).get("version"), "build": attrs(b).get("version"), "state": attrs(b).get("processingState"), "expired": attrs(b).get("expired"), "uploaded": attrs(b).get("uploadedDate")} for b in latest.get("data", [])]
+              return out
+          
+          if __name__ == "__main__":
+              try:
+                  client = AppStoreConnectApiClient(
+                      key_identifier=Types.KeyIdentifierArgument(os.environ["APP_STORE_CONNECT_KEY_IDENTIFIER"]).value,
+                      issuer_id=Types.IssuerIdArgument(os.environ["APP_STORE_CONNECT_ISSUER_ID"]).value,
+                      private_key=Types.PrivateKeyArgument(os.environ["APP_STORE_CONNECT_PRIVATE_KEY"]).value,
+                      log_requests=False, enable_jwt_cache=False,
+                  )
+                  with requests.Session() as session:
+                      apps = listing("/v1/apps", {"fields[apps]": "name,bundleId,primaryLocale", "limit": 200})
+                      if apps is None:
+                          raise RuntimeError("App inventory unavailable")
+                      selected = [a for a in apps if "korlix" in (str(attrs(a).get("name")) + " " + str(attrs(a).get("bundleId"))).lower()]
+                      print("PORTFOLIO_START", datetime.now(timezone.utc).isoformat(), "teamApps", len(apps), "matched", len(selected), flush=True)
+                      for app in selected:
+                          print("PORTFOLIO_APP", json.dumps(summarize_app(app), separators=(",", ":")), flush=True)
+                      print("PORTFOLIO_COMPLETE", len(selected), flush=True)
+              except Exception as exc:
+                  print("Portfolio read did not finish:", type(exc).__name__, file=sys.stderr)
+                  sys.exit(1)
+          KORLIX_READ_ONLY
