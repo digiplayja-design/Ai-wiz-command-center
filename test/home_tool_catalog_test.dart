@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ai_wiz_command_center/navigation/home_tool_catalog.dart';
 
@@ -36,12 +37,16 @@ void main() {
             'FieldProof',
             'Inventory Studio',
             'Bookkeeping 2027',
+            'Fax Number by Korlix',
           ],
           enterprise: enterprise,
         ).map((entry) => entry.label).toList();
         for (final tools in [home, finder]) {
           expect(tools, contains('KORLIX 2MEETU'));
-          expect(tools.where((tool) => tool == 'Fax Number by Korlix'), hasLength(1));
+          expect(
+            tools.where((tool) => tool == 'Fax Number by Korlix'),
+            hasLength(kIsWeb ? 0 : 1),
+          );
           for (final feature in [
             'AI Receptionist',
             'FieldProof',

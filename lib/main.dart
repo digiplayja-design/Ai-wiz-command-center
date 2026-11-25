@@ -10207,7 +10207,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     if (tool == 'Payroll') { unawaited(_openPayroll()); return; }
     if (tool == 'KORLIX 2MEETU' || tool == 'Scheduling') { unawaited(_openScheduling()); return; }
 
-    if (tool == 'Fax Number by Korlix') { unawaited(_openFaxWorkspace()); return; }
+    if (!kIsWeb && tool == 'Fax Number by Korlix') { unawaited(_openFaxWorkspace()); return; }
     if (tool == 'Business Directory') { unawaited(_openBusinessDirectory()); return; }
     if (tool == 'Business Passport') { unawaited(_openBusinessDirectory(passportMode:true)); return; }
     if (tool == 'AI Receptionist') { unawaited(_openBusinessDirectory(receptionistMode:true)); return; }
@@ -11335,7 +11335,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       if (tool == 'Payroll') return 'Enterprise US payroll, employee onboarding and payroll tax workflows';
       if (tool == 'KORLIX 2MEETU' || tool == 'Scheduling') return 'Free scheduling, booking pages, group sessions and appointments';
       if (tool == 'Business Passport') return 'Your free business page: services, photos, booking link and shareable QR';
-      if (tool == 'Fax Number by Korlix') return 'Send PDFs, receive faxes and check delivery';
+      if (!kIsWeb && tool == 'Fax Number by Korlix') return 'Send PDFs, receive faxes and check delivery';
       if (tool == 'Business Directory') return 'Find businesses and explore their public Business Passports';
       if (tool == 'AI Receptionist') return 'K-Nova answers your business calls and books appointments · Enterprise';
       if (tool == 'Workforce') return 'Your business, team tasks, shifts and Rici voice assistance';

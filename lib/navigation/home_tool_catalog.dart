@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 /// Shared by the home sections and More tools so each feature has one entry.
 const homeBusinessTools = <String>[
   // Keep CRM first and visible independently of the home tier request.
   'Contacts CRM',
-  'Fax Number by Korlix',
+  if (!kIsWeb) 'Fax Number by Korlix',
   'Logo Studio',
   'KORLIX 2MEETU',
   'SEO Agent',
@@ -88,7 +90,7 @@ class HomeToolEntry {
 }
 
 const _toolDetails = <String, String>{
-  'Fax Number by Korlix': 'Send, receive and track PDF faxes on your business fax line',
+  if (!kIsWeb) 'Fax Number by Korlix': 'Send, receive and track PDF faxes on your business fax line',
   'Contacts CRM': 'Contacts, leads, follow-ups and autonomous email',
   'Workforce': 'Team tasks, work updates and email reminders',
   'Business Passport':
@@ -139,6 +141,7 @@ List<HomeToolEntry> searchableHomeTools({
   final entries = <String, HomeToolEntry>{};
   void add(String label, String group) {
     final identity = homeToolIdentity(label);
+    if (kIsWeb && identity == 'fax number by korlix') return;
     if (!enterprise &&
         homeEnterpriseTools.any((tool) => homeToolIdentity(tool) == identity)) {
       return;
