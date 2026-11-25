@@ -10,6 +10,7 @@ import {
 } from '../../supabase/functions/korlix-fax/rules.mjs';
 import { createHandler } from '../../supabase/functions/korlix-fax/handler.mjs';
 import { send, callback } from '../../supabase/functions/korlix-fax/transmissions.mjs';
+import { resolveFaxServices, services } from '../../supabase/functions/korlix-fax/services.mjs';
 
 const company = '+18335550123',
   contact = '+16145550124',
@@ -165,7 +166,6 @@ test('user history and file links are restricted to the signed-in owner, and ope
   assert.equal((await app(request('/operator/requests'))).status, 403);
 });
 test('ordering is locked before calling the carrier and routes are checked before activating', async () => {
-  const { services } = await import('../../supabase/functions/korlix-fax/services.mjs');
   const settings = {
     SUPABASE_URL: 'https://project.test',
     SUPABASE_SERVICE_ROLE_KEY: 'fixture',
@@ -190,8 +190,11 @@ test('ordering is locked before calling the carrier and routes are checked befor
       }
       return Response.json([{ ...line }]);
     }
-    if (url.pathname.endsWith('available_phone_numbers'))
+    if (url.pathname.endsWith('available_phone_numbers')) {
+      assert.equal(url.searchParams.get('filter[features]'), 'fax');
+      assert.equal(url.searchParams.get('filter[limit]'), '8');
       return Response.json({ data: [inventory('1')] });
+    }
     if (url.pathname.endsWith('/number_orders') && opts.method === 'POST') {
       count++;
       return Response.json({ data: { id: 'order-1' } });
@@ -224,4 +227,49 @@ test('ordering is locked before calling the carrier and routes are checked befor
   await svc.order({ ...line }, quote(inventory('1'), 'toll_free'));
   assert.equal(count, 1);
   assert.equal(line.state, 'active');
+});
+
+test('a single carrier key discovers the correct fax route, caches it, and rejects ambiguous or mismatched routes', async () => {
+  const settings = { SUPABASE_URL: 'https://project.test', TELNYX_API_KEY: 'fixture' };
+  const app = {
+    id: '55',
+    application_name: 'FAX Number by Korlix',
+    active: true,
+    webhook_event_url: 'https://project.test/functions/v1/korlix-fax/carrier',
+    outbound: { outbound_voice_profile_id: '7' },
+  };
+  let clock = 0;
+  let lookups = 0;
+  let apps = [{ ...app, webhook_event_url: 'https://other.test/hook' }];
+  const resolve = resolveFaxServices((name) => settings[name], async (url, options) => {
+    assert.equal(options.method, 'GET');
+    assert.equal(options.headers.Authorization, 'Bearer fixture');
+    lookups++;
+    return Response.json({ data: url.endsWith('/public_key') ? { public: pub } : apps });
+  }, () => clock);
+  assert.equal((await resolve()).ready, false);
+  apps = [app];
+  clock += 31_000;
+  const [first, second] = await Promise.all([resolve(), resolve()]);
+  assert.equal(first.ready, true);
+  assert.equal(first.connection, '55');
+  assert.equal(first.publicKey, pub);
+  assert.equal(first, second);
+  assert.equal(lookups, 4);
+  apps = [app, { ...app, id: '56' }];
+  clock += 301_000;
+  assert.equal((await resolve()).ready, false);
+});
+
+test('a masked carrier number is reported as an account-level restriction', async () => {
+  const settings = {
+    SUPABASE_URL: 'https://project.test',
+    TELNYX_API_KEY: 'fixture',
+    TELNYX_FAX_CONNECTION_ID: '55',
+    TELNYX_PUBLIC_KEY: pub,
+  };
+  const svc = services((name) => settings[name], async () => Response.json({
+    data: [{ ...inventory('1'), phone_number: '+18335------' }],
+  }));
+  await assert.rejects(svc.inventory({ preference: 'toll_free' }), { status: 409 });
 });

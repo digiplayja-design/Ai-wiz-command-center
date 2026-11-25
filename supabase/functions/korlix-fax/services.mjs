@@ -1,11 +1,71 @@
 import { bucket, digest, fail, lineNumber, quote, uuid } from './rules.mjs';
 
-export function services(env, http = fetch) {
+async function telnyx(http, key, path, method = 'GET', body) {
+  const response = await http('https://api.telnyx.com/v2/' + path, {
+    method,
+    headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    redirect: 'error',
+    signal: AbortSignal.timeout(20000),
+  });
+  if (!response.ok)
+    throw Object.assign(new Error('The fax carrier could not complete this request.'), {
+      status: 502,
+      remoteStatus: response.status,
+    });
+  return (await response.json()).data;
+}
+
+// Discover the dedicated fax application and webhook signing key for this deployment.
+// Reading configuration must never create carrier resources or place a number order.
+export function resolveFaxServices(env, http = fetch, clock = Date.now) {
+  const initial = services(env, http);
+  const key = env('TELNYX_API_KEY')?.trim();
+  if (!key || initial.ready) return () => Promise.resolve(initial);
+  let pending;
+  let expires = 0;
+  async function resolve() {
+    const filter = new URLSearchParams({
+      'filter[application_name][contains]': 'FAX Number by Korlix',
+      'page[size]': '100',
+    });
+    const [signer, apps] = await Promise.all([
+      initial.publicKey ? null : telnyx(http, key, 'public_key'),
+      initial.connection ? [] : telnyx(http, key, 'fax_applications?' + filter),
+    ]);
+    const matches = apps.filter(
+      (app) =>
+        app.application_name === 'FAX Number by Korlix' &&
+        app.active === true &&
+        app.webhook_event_url === initial.hook &&
+        app.outbound?.outbound_voice_profile_id &&
+        app.id
+    );
+    const connection = initial.connection || (matches.length === 1 ? String(matches[0].id) : '');
+    const publicKey = initial.publicKey || signer?.public;
+    if (!connection || typeof publicKey !== 'string' || atob(publicKey).length !== 32) return initial;
+    return services(env, http, { connection, publicKey });
+  }
+  return () => {
+    if (!pending || clock() >= expires) {
+      expires = Infinity;
+      pending = resolve()
+        .catch(() => initial)
+        .then((svc) => {
+          expires = clock() + (svc.ready ? 5 * 60_000 : 30_000);
+          return svc;
+        });
+    }
+    return pending;
+  };
+}
+
+export function services(env, http = fetch, settings = {}) {
   const base = env('SUPABASE_URL'),
     serviceKey = env('SUPABASE_SERVICE_ROLE_KEY');
-  const carrierKey = env('TELNYX_API_KEY'),
-    connection = env('TELNYX_FAX_CONNECTION_ID');
-  const publicKey = env('TELNYX_PUBLIC_KEY'),
+  const carrierKey = env('TELNYX_API_KEY')?.trim(),
+    connection = settings.connection || env('TELNYX_FAX_CONNECTION_ID');
+  const publicKey = settings.publicKey || env('TELNYX_PUBLIC_KEY'),
     ready = Boolean(carrierKey && connection && publicKey);
   const storage = base + '/storage/v1',
     hook = base + '/functions/v1/korlix-fax/carrier';
@@ -49,18 +109,7 @@ export function services(env, http = fetch) {
   }
   async function carrier(path, method = 'GET', body) {
     if (!ready) fail(503, 'The fax carrier is awaiting setup.');
-    const res = await http('https://api.telnyx.com/v2/' + path, {
-      method,
-      headers: { Authorization: 'Bearer ' + carrierKey, 'Content-Type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(20000),
-    });
-    if (!res.ok)
-      throw Object.assign(new Error('The fax carrier could not complete this request.'), {
-        status: 502,
-        remoteStatus: res.status,
-      });
-    return (await res.json()).data;
+    return telnyx(http, carrierKey, path, method, body);
   }
   async function login(body) {
     if (
@@ -128,14 +177,19 @@ export function services(env, http = fetch) {
   async function inventory(line) {
     const filters = new URLSearchParams({
       'filter[country_code]': 'US',
-      'filter[features][]': 'fax',
-      'filter[limit]': '80',
+      'filter[features]': 'fax',
+      'filter[limit]': '8',
       'filter[best_effort]': 'false',
       'filter[phone_number_type]': line.preference === 'toll_free' ? 'toll_free' : 'local',
     });
     if (line.preference === 'toll_free') filters.set('filter[quickship]', 'true');
     else filters.set('filter[national_destination_code]', line.preference);
     const entries = await carrier('available_phone_numbers?' + filters);
+    if (entries.length && entries.every((entry) => /[-x*]/i.test(entry.phone_number)))
+      fail(
+        409,
+        'Telnyx is hiding these numbers. Check Korlix’s number-ordering access in Telnyx Account Levels.'
+      );
     return entries.map((entry) => quote(entry, line.preference)).filter(Boolean);
   }
   async function routedNumber(phone) {
