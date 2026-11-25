@@ -148,6 +148,36 @@ test('outbound submission retries reuse the same fax and ambiguous carrier accep
 test('late queued or sending events cannot regress a delivered fax', () => {
   for (const [, allowed] of Object.values(updates)) assert.ok(!allowed.includes('delivered'));
 });
+test('late terminal page counts fill an existing receipt once and keep its original completion month', async () => {
+  for (const direction of ['inbound', 'outbound']) {
+    const status = direction === 'inbound' ? 'received' : 'delivered';
+    const stamp = '2024-02-29T23:59:59.999Z';
+    const row = { status, pages: null, updated_at: stamp };
+    let filled = 0;
+    const svc = {
+      publicKey: pub, connection: '55', lineFor: async () => ({ phone: company, user_id: user.user_id }),
+      http: async () => assert.fail('a receipt update must not fetch a second PDF'),
+      db: async (table, filters, method, values) => {
+        assert.equal(filters.carrier_id, 'eq.' + carrierId);
+        if (!method) return [{ ...row }];
+        assert.equal(method, 'PATCH');
+        if (filters.status !== 'eq.' + status || row.pages !== null) return [];
+        assert.equal(filters.pages, 'is.null');
+        assert.deepEqual(values, { pages: 3 });
+        Object.assign(row, values);
+        filled++;
+        return null;
+      },
+    };
+    for (const pages of [-1, 3, 5]) {
+      const payload = { direction, connection_id: '55', fax_id: carrierId, page_count: pages,
+        from: direction === 'inbound' ? contact : company, to: direction === 'inbound' ? company : contact };
+      await callback(await signed({ event_type: 'fax.' + status, payload }), svc);
+    }
+    assert.deepEqual(row, { status, pages: 3, updated_at: stamp });
+    assert.equal(filled, 1);
+  }
+});
 test('user history and file links are restricted to the signed-in owner, and operators have a separate gate', async () => {
   const seen = [];
   const svc = {

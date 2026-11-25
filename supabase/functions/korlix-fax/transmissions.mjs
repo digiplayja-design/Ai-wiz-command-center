@@ -16,6 +16,17 @@ const now = () => new Date().toISOString();
 const match = (id) => ({ id: 'eq.' + id });
 const patch = (svc, where, values) =>
   svc.db(table, where, 'PATCH', { ...values, updated_at: now() });
+const pageCount = (payload) =>
+  Number.isInteger(payload.page_count) && payload.page_count >= 0 && payload.page_count <= 2147483647
+    ? payload.page_count
+    : null;
+
+function fillMissingPages(svc, where, status, pages) {
+  // A late count belongs to the original completion month. Preserve its receipt timestamp.
+  return svc.db(table, { ...where, status: 'eq.' + status, pages: 'is.null' },
+    'PATCH', { pages }, 'return=minimal');
+}
+
 export async function send(req, user, svc) {
   const line = await svc.lineFor({ user_id: 'eq.' + user.user_id, state: 'eq.active' });
   if (!line || !svc.ready) fail(409, 'An active fax line is required to send.');
@@ -110,8 +121,14 @@ async function incoming(event, p, svc) {
     user_id: 'eq.' + line.user_id,
   };
   const existing = (await svc.db(table, where))[0];
-  if (existing?.status === 'received' || (existing && event === 'fax.failed')) return;
   const complete = event === 'fax.received' && !p.partial_content;
+  const pages = pageCount(p);
+  if (existing?.status === 'received') {
+    if (complete && existing.pages == null && pages !== null)
+      await fillMissingPages(svc, where, 'received', pages);
+    return;
+  }
+  if (existing && event === 'fax.failed') return;
   let objectPath = null;
   if (complete || (p.partial_content && p.media_url)) {
     const response = await svc.http(mediaLink(p.media_url || p.stored_media_url), {
@@ -137,17 +154,20 @@ async function incoming(event, p, svc) {
       : p.partial_content
         ? 'The carrier received only part of this fax.'
         : String(p.failure_reason || 'Transmission failed.').slice(0, 160),
-    pages: Number.isInteger(p.page_count) ? p.page_count : null,
+    pages,
     updated_at: now(),
   };
-  await svc.db(
+  const inserted = await svc.db(
     table,
     { on_conflict: 'direction,carrier_id' },
     'POST',
     record,
-    'resolution=ignore-duplicates,return=minimal'
+    'resolution=ignore-duplicates,return=representation'
   );
-  if (complete) await patch(svc, { ...where, status: 'eq.failed' }, record);
+  if (complete && !inserted?.length) {
+    const promoted = await patch(svc, { ...where, status: 'eq.failed' }, record);
+    if (!promoted?.length && pages !== null) await fillMissingPages(svc, where, 'received', pages);
+  }
 }
 export async function callback(req, svc) {
   const raw = new TextDecoder().decode(await boundedBytes(req, 128 * 1024));
@@ -189,6 +209,9 @@ export async function callback(req, svc) {
     detail:
       status === 'failed' ? String(p.failure_reason || 'Transmission failed.').slice(0, 160) : null,
   };
-  if (Number.isInteger(p.page_count)) changes.pages = p.page_count;
-  await patch(svc, where, changes);
+  const pages = pageCount(p);
+  if (pages !== null || status === 'delivered') changes.pages = pages;
+  const applied = await patch(svc, where, changes);
+  if (!applied?.length && status === 'delivered' && pages !== null)
+    await fillMissingPages(svc, { ...where, carrier_id: 'eq.' + p.fax_id }, status, pages);
 }

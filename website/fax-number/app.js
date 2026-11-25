@@ -15,6 +15,7 @@ import {
   clearDoc,
   receiptPdf,
 } from "./fax-document.js";
+import { activityCsv, activityPage, currentMonth, validMonth } from "./fax-activity.js";
 const $ = (id) => document.getElementById(id);
 const screen = $("screen"),
   sheet = $("sheet"),
@@ -60,6 +61,7 @@ const folderState = () => ({
   sequence: 0,
 });
 const folders = { inbound: folderState(), outbound: folderState() };
+let report = null, receiptReport = "";
 let contacts = [],
   ws = null,
   activeRecord = null,
@@ -169,8 +171,62 @@ function usage() {
   const u = ws.usage;
   if (!u) return "";
   const cap = ws.billing?.active && ws.plans?.[ws.billing.plan]?.pages;
-  return `<section class="usage"><div class="row-between"><h2>Monthly pages</h2><span><b>${esc(u.pages)}</b>${cap ? " / " + cap : " used"}</span></div>${cap ? `<progress class="page-meter" aria-label="Monthly pages used" value="${u.pages}" max="${Math.max(cap, u.pages)}"></progress>` : `<p class="usage-detail">${esc(u.inboundPages)} received · ${esc(u.outboundPages)} sent</p>`}${u.pendingReports ? '<p class="usage-detail">Additional page counts are awaiting carrier confirmation.</p>' : ""}</section>`;
+  return `<section class="usage"><div class="row-between"><h2>Monthly pages</h2><span><b>${esc(u.pages)}</b>${cap ? " / " + cap : " used"}</span></div>${cap ? `<progress class="page-meter" aria-label="Monthly pages used" value="${u.pages}" max="${Math.max(cap, u.pages)}"></progress>` : `<p class="usage-detail">${esc(u.inboundPages)} received · ${esc(u.outboundPages)} sent</p>`}${u.pendingReports ? '<p class="usage-detail">Additional page counts are awaiting carrier confirmation.</p>' : ""}${btn("activity", "View monthly activity", "soft-link activity-link", "chevron-right")}</section>`;
 }
+function activityRow(r) {
+  const inbound = r.direction === "inbound";
+  const date = when(r.updated_at, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "UTC" });
+  const number = displayNumber(party(r));
+  return `<button data-act="record" data-id="${esc(r.id)}" class="fax-row">
+    <span class="filemark ${inbound ? "" : "out"}">${icon(inbound ? "tray-arrow-down" : "tray-arrow-up")}</span>
+    <span class="rtext"><b>${esc(r.name)}</b><small>${inbound ? "Received from" : "Delivered to"} ${esc(number)}</small><small>${esc(date)} UTC</small></span>
+    <span class="row-time">${Number.isInteger(r.pages) ? esc(pageCount(r.pages)) : "Count pending"}${icon("chevron-right")}</span>
+  </button>`;
+}
+
+function activityView() {
+  const { month, summary, items, next, loading, exporting, error } = report;
+  const picker = `<label class="field-label" for="activity-month">Report month</label>
+    <input type="month" class="control" id="activity-month" value="${esc(month)}" max="${currentMonth()}" placeholder="YYYY-MM" required>`;
+  let body = "";
+  if (summary) {
+    const counts = [["Total pages", summary.pages], ["Sent", summary.outboundPages], ["Received", summary.inboundPages]];
+    body = `<dl class="activity-totals">${counts.map(([label, value]) => `<div><dt>${esc(label)}</dt><dd>${esc(value)}</dd></div>`).join("")}</dl>`;
+    if (summary.pendingReports) body += `<p class="usage-detail">${esc(summary.pendingReports)} ${summary.pendingReports === 1 ? "fax is" : "faxes are"} awaiting a carrier page count.</p>`;
+    if (items.length) {
+      body += `<div class="activity-list-head"><h2 class="small-title">Completed faxes</h2>
+        ${btn("activity-csv", exporting ? "Preparing CSV…" : "Download CSV", "soft-link", "download-outline", exporting ? "disabled" : "")}</div>
+        <div class="list-box">${items.map(activityRow).join("")}</div>`;
+      if (next) body += btn("activity-more", loading ? "Loading…" : "Load older faxes", "soft-link full", "", loading ? "disabled" : "");
+    } else body += '<div class="empty-folder"><h3>No completed faxes this month</h3></div>';
+  } else if (loading) body = '<p class="lead block" role="status">Loading activity…</p>';
+  if (error) body += `<p class="err" role="alert">${esc(error)}</p>${btn("activity-retry", "Try again", "soft-link")}`;
+  return `<div class="flow"><div class="flow-nav">${btn("leave-activity", "Back", "back", "chevron-left")}
+    ${summary ? btn("activity-refresh", "Refresh", "soft-link", "restart", loading ? "disabled" : "") : ""}</div>
+    <h1 class="title">Monthly fax activity</h1><p class="lead">Pages are grouped by completion date in UTC.</p>
+    <div class="block">${picker}</div>${body}</div>`;
+}
+
+async function loadActivity(more = false) {
+  const state = report;
+  if (state.loading || (more && !state.next)) return;
+  state.loading = true;
+  state.error = "";
+  render();
+  try {
+    const page = await activityPage(state.month, more ? state.next : null);
+    state.items = more ? [...state.items, ...page.items] : page.items;
+    if (!more) state.summary = page.summary;
+    state.next = page.next;
+  } catch (err) {
+    state.error = err.message;
+    state.retryMore = more;
+  } finally {
+    state.loading = false;
+    if (report === state && route === "activity/" + state.month) render();
+  }
+}
+
 function faxRow(r) {
   const whom = party(r),
     name = contactName(whom) || displayNumber(whom);
@@ -286,7 +342,7 @@ function receipt(r) {
     ["Fax reference", r.id],
     ["Details", r.detail],
   ];
-  return `<div class="flow receipt"><div class="flow-nav">${btn(inbound ? "home" : "sent", "Back", "back", "chevron-left")}</div><div class="receipt-hero"><div class="seal ${failed ? "failed" : ""}">${icon(failed ? "information-outline" : r.status === "received" ? "tray-arrow-down" : done ? "check" : "progress-clock")}</div><h1 class="title">${esc(title)}</h1><p class="lead">${esc(stamp(r.updated_at || r.created_at))}</p></div><div class="receipt-card"><div class="receipt-head">${icon("file-check-outline")}${inbound ? "Received fax" : done ? "Delivery receipt" : "Delivery status"}</div>${details(meta)}</div><div class="btn-stack">${inbound && r.hasFile ? btn("view-record", "Open document", "primary full", "file-document-outline") : failed && r.hasFile && !inbound ? btn("retry", "Try again", "primary full", "restart") : btn("sent", inbound ? "View inbox" : "View sent faxes", "primary full", inbound ? "tray-arrow-down" : "tray-arrow-up", inbound ? 'data-folder="inbound"' : "")}${r.hasFile ? (inbound ? btn("save-record", "Save PDF", "soft-link", "download-outline") : btn("view-record", "View document", "soft-link", "file-document-outline")) : ""}${done ? btn("save-receipt", "Save receipt PDF", "soft-link", "file-check-outline") : btn("refresh", "Refresh status", "soft-link", "restart")}</div></div>`;
+  return `<div class="flow receipt"><div class="flow-nav">${btn(receiptReport ? "receipt-report" : inbound ? "home" : "sent", "Back", "back", "chevron-left")}</div><div class="receipt-hero"><div class="seal ${failed ? "failed" : ""}">${icon(failed ? "information-outline" : r.status === "received" ? "tray-arrow-down" : done ? "check" : "progress-clock")}</div><h1 class="title">${esc(title)}</h1><p class="lead">${esc(stamp(r.updated_at || r.created_at))}</p></div><div class="receipt-card"><div class="receipt-head">${icon("file-check-outline")}${inbound ? "Received fax" : done ? "Delivery receipt" : "Delivery status"}</div>${details(meta)}</div><div class="btn-stack">${inbound && r.hasFile ? btn("view-record", "Open document", "primary full", "file-document-outline") : failed && r.hasFile && !inbound ? btn("retry", "Try again", "primary full", "restart") : btn("sent", inbound ? "View inbox" : "View sent faxes", "primary full", inbound ? "tray-arrow-down" : "tray-arrow-up", inbound ? 'data-folder="inbound"' : "")}${r.hasFile ? (inbound ? btn("save-record", "Save PDF", "soft-link", "download-outline") : btn("view-record", "View document", "soft-link", "file-document-outline")) : ""}${done ? btn("save-receipt", "Save receipt PDF", "soft-link", "file-check-outline") : btn("refresh", "Refresh status", "soft-link", "restart")}</div></div>`;
 }
 function setup() {
   const line = ws.line,
@@ -330,6 +386,7 @@ function render() {
   else if (route === "recipient") html = recipient();
   else if (route === "review") html = review();
   else if (route === "setup") html = setup();
+  else if (route.startsWith("activity/")) html = activityView();
   else if (route.startsWith("record/"))
     html =
       activeRecord?.id === route.slice(7)
@@ -374,7 +431,13 @@ async function navigate() {
   if (!ws) return;
   const tick = ++generation;
   let target = location.hash.slice(1) || "inbox";
+  if (target === "activity") {
+    target = "activity/" + currentMonth();
+    history.replaceState(null, "", "#" + target);
+  }
+  const activityRoute = target.startsWith("activity/") && validMonth(target.slice(9));
   if (
+    !activityRoute &&
     !/^record\/[a-f0-9-]{36}$/i.test(target) &&
     !["inbox", "sent", "setup", "add", "recipient", "review"].includes(target)
   )
@@ -388,6 +451,11 @@ async function navigate() {
   if (target === "review" && !phoneNumber(draft.number)) target = "recipient";
   if (target === "inbox" || target === "sent")
     folder = target === "sent" ? "outbound" : "inbound";
+  if (target.startsWith("record/") && target !== route)
+    receiptReport = route.startsWith("activity/") ? route : "";
+  if (activityRoute && (report?.month !== target.slice(9) || !route.startsWith("record/"))) {
+    report = { month: target.slice(9), summary: null, items: [], next: null, loading: false, exporting: false, error: "" };
+  }
   route = target;
   alertText = "";
   if (route.startsWith("record/"))
@@ -395,6 +463,10 @@ async function navigate() {
   render();
   window.scrollTo(0, 0);
   screen.focus({ preventScroll: true });
+  if (activityRoute) {
+    if (!report.summary) await loadActivity();
+    return;
+  }
   if (route.startsWith("record/")) {
     try {
       const r = await api("/document/" + target.slice(7));
@@ -562,7 +634,9 @@ function download(doc) {
   const a = document.createElement("a");
   a.href = doc.url;
   a.download = doc.name;
+  document.body.append(a);
   a.click();
+  a.remove();
 }
 function account() {
   const b = ws.billing;
@@ -655,6 +729,31 @@ async function prepareRici(explicit = false) {
   go(draft.doc ? "review" : "add");
 }
 const actions = {
+  activity: () => go("activity/" + currentMonth()),
+  "leave-activity": () => go(folder === "outbound" ? "sent" : "inbox"),
+  "receipt-report": () => go(receiptReport),
+  "activity-more": () => loadActivity(true),
+  "activity-refresh": () => loadActivity(),
+  "activity-retry": () => loadActivity(report.retryMore),
+  "activity-csv": async () => {
+    const state = report;
+    if (state.exporting) return;
+    alertText = "";
+    state.exporting = true;
+    render();
+    try {
+      const data = await activityCsv(state.month);
+      if (state !== report || route !== "activity/" + state.month) return;
+      const url = URL.createObjectURL(data);
+      download({ url, name: "Fax-by-Korlix-" + state.month + ".csv" });
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (err) {
+      if (state === report && route === "activity/" + state.month) failUI(err.message);
+    } finally {
+      state.exporting = false;
+      if (state === report && route === "activity/" + state.month) render();
+    }
+  },
   home: () => go("inbox"),
   sent: (b) => go(b?.dataset.folder === "inbound" ? "inbox" : "sent"),
   reload: () => location.reload(),
@@ -872,6 +971,14 @@ document.addEventListener("input", (e) => {
 });
 document.addEventListener("change", async (e) => {
   const field = e.target;
+  if (field.id === "activity-month") {
+    if (validMonth(field.value)) go("activity/" + field.value);
+    else {
+      field.value = report.month;
+      failUI("Choose the current month or an earlier month.");
+    }
+    return;
+  }
   if (field.id === "prefix") {
     $("area").hidden = field.value !== "local";
     return;

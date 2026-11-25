@@ -169,7 +169,8 @@ function updateLine() {
 async function loadWorkspace() {
   state.workspace = await api('/workspace');
   if (new URLSearchParams(location.search).get('return') === 'workspace') {
-    location.replace('./');
+    const report = /^#activity(?:\/\d{4}-(?:0[1-9]|1[0-2]))?$/.test(location.hash);
+    location.replace('./' + (report ? location.hash : ''));
     return;
   }
   updateLine();

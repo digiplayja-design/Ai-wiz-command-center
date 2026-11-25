@@ -1,5 +1,6 @@
 import { boundedBytes, fail, lineNumber, uuid } from './rules.mjs';
 import { send, callback } from './transmissions.mjs';
+import { activity, monthlyUsage, reportPeriod } from './activity.mjs';
 
 const customerPlans = {
   solo: { name: 'Solo', pages: 100, price: '9.99' },
@@ -88,20 +89,10 @@ export function createHandler(svc, origin = 'https://korlix-fax-number.onrender.
             /* Still show the pending order. */
           }
         }
-        const now = new Date();
-        const start = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-        const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
-        const usage = await svc.rpc('monthly_usage', {
-          p_user: user.user_id,
-          p_start: start.toISOString(),
-          p_end: end.toISOString(),
-        });
+        const period = reportPeriod();
+        const usage = await monthlyUsage(svc, user.user_id, period);
         return json({
-          usage: {
-            ...usage,
-            start: start.toISOString(),
-            end: end.toISOString(),
-          },
+          usage: { ...usage, ...period },
           email: user.email,
           operator: user.operator,
           line: line || null,
@@ -110,6 +101,8 @@ export function createHandler(svc, origin = 'https://korlix-fax-number.onrender.
           ...(enrollmentOpen ? { plans: customerPlans } : {}),
         });
       }
+      if (req.method === 'GET' && path === '/activity')
+        return json(await activity(svc, user.user_id, url.searchParams));
       if (req.method === 'POST' && path === '/line') {
         const { preference, plan } = await body(req);
         if (plan != null && (typeof plan !== 'string' || !Object.hasOwn(customerPlans, plan)))

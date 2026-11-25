@@ -5,7 +5,8 @@ export const currentSession = () => sessionStorage.getItem(key);
 export function openLogin(message = "") {
   sessionStorage.removeItem(key);
   if (message) sessionStorage.setItem("korlixFaxNotice", message);
-  location.replace("account.html?return=workspace");
+  const report = /^#activity(?:\/\d{4}-(?:0[1-9]|1[0-2]))?$/.test(location.hash);
+  location.replace("account.html?return=workspace" + (report ? location.hash : ""));
 }
 export function phoneNumber(value) {
   if (typeof value !== "string" || !/^[\d+()\s.-]+$/.test(value)) return "";
