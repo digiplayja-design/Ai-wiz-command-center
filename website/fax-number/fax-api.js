@@ -86,7 +86,7 @@ export function checkFileUrl(url) {
 export async function dispatch(doc, recipient, owner) {
   const bytes = await doc.file.arrayBuffer();
   const hash = Array.from(
-    new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)),
+    crypto.subtle ? new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)) : window.KorlixFaxNative.hash(bytes),
     (x) => x.toString(16).padStart(2, "0"),
   ).join("");
   const pending = "faxPending:" + owner + ":" + recipient + ":" + hash;

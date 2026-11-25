@@ -178,3 +178,56 @@ workflows:
           ls -lah artifacts
     artifacts:
       - artifacts/*.aab
+
+  fax-ios-testflight:
+    name: Fax by Korlix internal TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    working_directory: apps/fax
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    environment:
+      node: 24
+      xcode: latest
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.korlixdeveloper.fax
+    scripts:
+      - name: Prepare iPhone and iPad app
+        script: npm ci && npm run web && npx cap sync ios
+      - name: Build with the fax provisioning profile
+        script: |
+          cd ios/App
+          xcode-project use-profiles --project App.xcodeproj
+          xcode-project build-ipa --project App.xcodeproj --scheme App
+    artifacts:
+      - $CM_BUILD_DIR/apps/fax/ios/App/build/ios/ipa/*.ipa
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: false
+        submit_to_app_store: false
+
+  fax-android-candidate:
+    name: Fax by Korlix signed Play bundle
+    instance_type: linux_x2
+    max_build_duration: 60
+    working_directory: apps/fax
+    environment:
+      node: 24
+      java: 21
+      android_signing:
+        - KORLIX_FAX_UPLOAD_KEY
+    scripts:
+      - name: Prepare Android files
+        script: npm ci && npm run web && npx cap sync android
+      - name: Build and check signed upload bundle
+        script: |
+          set -eu
+          test -f "$CM_KEYSTORE_PATH"
+          cd android
+          ./gradlew --no-daemon :app:bundleRelease
+          jarsigner -verify app/build/outputs/bundle/release/app-release.aab
+          keytool -printcert -jarfile app/build/outputs/bundle/release/app-release.aab > /dev/null
+    artifacts:
+      - $CM_BUILD_DIR/apps/fax/android/app/build/outputs/bundle/release/*.aab

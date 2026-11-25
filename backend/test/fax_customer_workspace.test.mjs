@@ -201,3 +201,20 @@ test('only the verified company identity can open a password session or use an S
   for (const call of calls) assert.equal((await call()).status,200);
   assert.deepEqual([opens,handoffs,redeemed],[1,1,1]);
 });
+
+test('packaged apps can use the company mailbox only with a valid session', async () => {
+  const handler = createHandler({ identity: async () => fail(401, 'Sign in.') });
+  for (const origin of ['https://fax.localhost', 'capacitor://fax.localhost']) {
+    for (const path of ['/signin', '/send', '/activity', '/file/' + record]) {
+      const headers = (await handler(request(path, 'OPTIONS', null, { origin }))).headers;
+      assert.equal(headers.get('access-control-allow-origin'), origin);
+    }
+    assert.equal((await handler(request('/workspace', 'GET', null, { origin }))).status, 401);
+    for (const path of ['/hub-handoff', '/redeem', '/line', '/carrier']) {
+      assert.equal((await handler(request(path, 'OPTIONS', null, { origin }))).status, 403);
+    }
+  }
+  for (const origin of ['https://fax.localhost.example.com', 'http://fax.localhost', 'null']) {
+    assert.equal((await handler(request('/workspace', 'OPTIONS', null, { origin }))).status, 403);
+  }
+});

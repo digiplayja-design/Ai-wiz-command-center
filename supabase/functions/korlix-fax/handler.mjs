@@ -17,6 +17,8 @@ export function createHandler(svc, origin = 'https://korlix-fax-number.onrender.
     'https://www.korlixdeveloper.com',
     'https://korlixdeveloper-website.onrender.com',
   ]);
+  const mobileOrigins = new Set(['https://fax.localhost', 'capacitor://fax.localhost']);
+  const mobileRoutes = new Set(['/health', '/signin', '/signout', '/workspace', '/contacts', '/send', '/history', '/activity', '/operator/requests']);
   function visibleDoc({ object_path, ...item }) {
     return { ...item, hasFile: !!object_path };
   }
@@ -39,7 +41,9 @@ export function createHandler(svc, origin = 'https://korlix-fax-number.onrender.
     };
     const rqOrigin = req.headers.get('origin');
     const allowedOrigin =
-      rqOrigin === origin || (path === '/hub-handoff' && hubOrigins.has(rqOrigin));
+      rqOrigin === origin ||
+      (path === '/hub-handoff' && hubOrigins.has(rqOrigin)) ||
+      (mobileOrigins.has(rqOrigin) && (mobileRoutes.has(path) || /^\/(?:file|document)\/[a-f0-9-]+$/i.test(path)));
     if (rqOrigin && allowedOrigin) headers['Access-Control-Allow-Origin'] = rqOrigin;
     headers['Access-Control-Allow-Headers'] =
       'content-type, x-fax-session, x-fax-to, x-filename, x-request-id' +

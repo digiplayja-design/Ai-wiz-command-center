@@ -1,0 +1,19 @@
+{
+  "appId": "com.korlixdeveloper.fax",
+  "appName": "Fax by Korlix",
+  "webDir": "www",
+  "server": {
+    "hostname": "fax.localhost",
+    "androidScheme": "https",
+    "iosScheme": "capacitor"
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "ios": {
+    "includePlugins": [
+      "@capacitor/filesystem",
+      "@capacitor/share"
+    ]
+  }
+}

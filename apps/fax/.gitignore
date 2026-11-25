@@ -1,0 +1,7 @@
+node_modules/
+www/
+artifacts/
+
+# Generated from the shared Korlix artwork by bundle.mjs
+android/app/src/main/res/mipmap-*/*.png
+ios/App/App/Assets.xcassets/**/*.png

@@ -630,13 +630,19 @@ async function showPage() {
   const img = $("page-img");
   img.src = await pageImage(doc, index);
 }
-function download(doc) {
+async function download(doc) {
+  if (window.KorlixFaxNative) {
+    await window.KorlixFaxNative.saveFile(doc.file, doc.name);
+    return;
+  }
   const a = document.createElement("a");
-  a.href = doc.url;
+  const url = doc.url || URL.createObjectURL(doc.file);
+  a.href = url;
   a.download = doc.name;
   document.body.append(a);
   a.click();
   a.remove();
+  if (!doc.url) setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 function account() {
   const b = ws.billing;
@@ -744,9 +750,7 @@ const actions = {
     try {
       const data = await activityCsv(state.month);
       if (state !== report || route !== "activity/" + state.month) return;
-      const url = URL.createObjectURL(data);
-      download({ url, name: "Fax-by-Korlix-" + state.month + ".csv" });
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      await download({ file: data, name: "Fax-by-Korlix-" + state.month + ".csv" });
     } catch (err) {
       if (state === report && route === "activity/" + state.month) failUI(err.message);
     } finally {
@@ -772,6 +776,8 @@ const actions = {
   record: (b) => go("record/" + b.dataset.id),
   copy: copyNumber,
   share: async () => {
+    if (window.KorlixFaxNative)
+      return window.KorlixFaxNative.shareNumber(displayNumber(ws.line.phone));
     if (navigator.share)
       try {
         await navigator.share({
@@ -787,7 +793,11 @@ const actions = {
         `<p class="lead">${esc(displayNumber(ws.line.phone))}</p><div class="btn-stack">${btn("copy", "Copy number", "primary", "content-copy")}</div>`,
       );
   },
-  camera: () => $("camera-file").click(),
+  camera: async () => {
+    if (!window.KorlixFaxNative) return $("camera-file").click();
+    const files = await window.KorlixFaxNative.scan();
+    if (files) await loadIntoDraft(() => scanPages(files, draft.doc));
+  },
   upload: () => $("upload-file").click(),
   remove: () => {
     clearDraft();
@@ -878,14 +888,15 @@ const actions = {
       ["Details", r.detail],
     ];
     const file = await receiptPdf(outcome, fields, r.id);
-    const url = URL.createObjectURL(file);
-    download({ url, name: file.name });
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    await download({ file, name: file.name });
   },
   "save-record": async () => {
     const d = await storedDoc(activeRecord, true);
-    download(d);
-    setTimeout(() => clearDoc(d), 60000);
+    try {
+      await download(d);
+    } finally {
+      setTimeout(() => clearDoc(d), 60000);
+    }
   },
   "save-view": () => download(viewer.doc),
   prev: () => {
@@ -944,10 +955,6 @@ const actions = {
 document.addEventListener("click", async (e) => {
   const b = e.target.closest("button[data-act]");
   if (!b || !actions[b.dataset.act] || b.disabled) return;
-  if (["camera", "upload"].includes(b.dataset.act)) {
-    actions[b.dataset.act](b);
-    return;
-  }
   b.disabled = true;
   try {
     await actions[b.dataset.act](b);

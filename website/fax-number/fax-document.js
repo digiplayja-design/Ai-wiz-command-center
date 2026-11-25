@@ -136,7 +136,7 @@ async function jpegPage(file) {
 export async function scanPages(files, previous) {
   const pages = previous?.scanPages ? [...previous.scanPages] : [];
   let size = pages.reduce((n, p) => n + p.length, 0);
-  for (const file of files) {
+  for await (const file of files) {
     const page = await jpegPage(file);
     size += page.length;
     if (size > sendLimit)
