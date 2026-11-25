@@ -12,7 +12,7 @@ final class FaxViewController: CAPBridgeViewController {
 final class FaxScanner: CAPPlugin, CAPBridgedPlugin, VNDocumentCameraViewControllerDelegate {
     let identifier = "FaxScanner"
     let jsName = "FaxScanner"
-    let pluginMethods = [CAPPluginMethod(name: "scan", returnType: CAPPluginReturnPromise)]
+    let pluginMethods: [CAPPluginMethod] = [CAPPluginMethod(name: "scan", returnType: CAPPluginReturnPromise)]
     private var pending: CAPPluginCall?
 
     @objc func scan(_ call: CAPPluginCall) {
