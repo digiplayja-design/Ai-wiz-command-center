@@ -6,7 +6,10 @@ const local = createHandler(services(env), origin);
 const resolve = resolveFaxServices(env);
 Deno.serve(async (request: Request) => {
   const path = new URL(request.url).pathname;
-  if (request.method === 'OPTIONS' || /\/(signin|signout|history|file\/[^/]+)$/.test(path))
+  if (
+    request.method === 'OPTIONS' ||
+    /\/(signin|signout|hub-handoff|redeem|history|contacts|(?:document|file)\/[^/]+)$/.test(path)
+  )
     return local(request);
   return createHandler(await resolve(), origin)(request);
 });

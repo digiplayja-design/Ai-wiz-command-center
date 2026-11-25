@@ -3,7 +3,10 @@ import { bucket, digest, fail, lineNumber, quote, uuid } from './rules.mjs';
 async function telnyx(http, key, path, method = 'GET', body) {
   const response = await http('https://api.telnyx.com/v2/' + path, {
     method,
-    headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+    headers: {
+      Authorization: 'Bearer ' + key,
+      'Content-Type': 'application/json',
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
     redirect: 'error',
     signal: AbortSignal.timeout(20000),
@@ -43,7 +46,8 @@ export function resolveFaxServices(env, http = fetch, clock = Date.now) {
     );
     const connection = initial.connection || (matches.length === 1 ? String(matches[0].id) : '');
     const publicKey = initial.publicKey || signer?.public;
-    if (!connection || typeof publicKey !== 'string' || atob(publicKey).length !== 32) return initial;
+    if (!connection || typeof publicKey !== 'string' || atob(publicKey).length !== 32)
+      return initial;
     return services(env, http, { connection, publicKey });
   }
   return () => {
@@ -70,8 +74,17 @@ export function services(env, http = fetch, settings = {}) {
   const storage = base + '/storage/v1',
     hook = base + '/functions/v1/korlix-fax/carrier';
   async function internal(path, method = 'GET', body, extras = {}) {
-    const headers = { apikey: serviceKey, Authorization: 'Bearer ' + serviceKey, ...extras };
-    const res = await http(path, { method, headers, body, signal: AbortSignal.timeout(20000) });
+    const headers = {
+      apikey: serviceKey,
+      Authorization: 'Bearer ' + serviceKey,
+      ...extras,
+    };
+    const res = await http(path, {
+      method,
+      headers,
+      body,
+      signal: AbortSignal.timeout(20000),
+    });
     if (!res.ok) {
       const error = Object.assign(new Error('Fax storage could not complete the request.'), {
         status: 503,
@@ -111,6 +124,55 @@ export function services(env, http = fetch, settings = {}) {
     if (!ready) fail(503, 'The fax carrier is awaiting setup.');
     return telnyx(http, carrierKey, path, method, body);
   }
+  function randomToken() {
+    return Array.from(crypto.getRandomValues(new Uint8Array(32)), (n) =>
+      n.toString(16).padStart(2, '0')
+    ).join('');
+  }
+  async function hubHandoff(req) {
+    const bearer = req.headers.get('authorization') || '';
+    if (!/^Bearer [^\s]{20,8192}$/.test(bearer)) fail(401, 'Sign in to Korlix first.');
+    const response = await http(base + '/auth/v1/user', {
+      headers: { apikey: env('SUPABASE_ANON_KEY'), Authorization: bearer },
+      redirect: 'error',
+      signal: AbortSignal.timeout(12000),
+    });
+    if (!response.ok)
+      fail(response.status >= 500 ? 503 : 401, 'Open your Korlix account and sign in again.');
+    const member = await response.json();
+    if (
+      !uuid.test(member.id) ||
+      !member.email_confirmed_at ||
+      member.deleted_at ||
+      Date.parse(member.banned_until) > Date.now()
+    )
+      fail(403, 'Confirm your Korlix account first.');
+    const code = randomToken();
+    await db(
+      'korlix_fax_handoffs',
+      { on_conflict: 'user_id' },
+      'POST',
+      {
+        user_id: member.id,
+        code_hash: await digest(code),
+        expires_at: new Date(Date.now() + 90000).toISOString(),
+      },
+      'resolution=merge-duplicates,return=minimal'
+    );
+    return { code };
+  }
+  async function redeemHandoff({ code, device }) {
+    if (!/^[0-9a-f]{64}$/.test(code || '') || !uuid.test(device))
+      fail(401, 'Open Fax Number from Korlix again.');
+    const token = randomToken();
+    const ok = await rpc('redeem_handoff', {
+      p_code: await digest(code),
+      p_device: device,
+      p_hash: await digest(token),
+    });
+    if (!ok) fail(401, 'The Korlix sign-in link expired or the device limit was reached.');
+    return { token };
+  }
   async function login(body) {
     if (
       !uuid.test(body.device) ||
@@ -127,7 +189,10 @@ export function services(env, http = fetch, settings = {}) {
     const response = await http(base + '/auth/v1/token?grant_type=password', {
       method: 'POST',
       headers: { apikey: anon, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: body.email.trim(), password: body.password }),
+      body: JSON.stringify({
+        email: body.email.trim(),
+        password: body.password,
+      }),
     });
     if (!response.ok) {
       if (response.status === 429) fail(429, 'Too many sign-in attempts. Try again later.');
@@ -142,9 +207,7 @@ export function services(env, http = fetch, settings = {}) {
     if (!revoked.ok) fail(503, 'Korlix could not finish sign-in. Please try again.');
     if (!data.user?.email_confirmed_at || !uuid.test(data.user.id))
       fail(403, 'Confirm your Korlix email before signing in.');
-    const token = [...crypto.getRandomValues(new Uint8Array(32))]
-      .map((n) => n.toString(16).padStart(2, '0'))
-      .join('');
+    const token = randomToken();
     const ok = await rpc('open_session', {
       p_user: data.user.id,
       p_device: body.device,
@@ -241,7 +304,9 @@ export function services(env, http = fetch, settings = {}) {
   }
   async function sync(line) {
     if (line.state !== 'ordering') return line;
-    const filter = new URLSearchParams({ 'filter[customer_reference]': line.id });
+    const filter = new URLSearchParams({
+      'filter[customer_reference]': line.id,
+    });
     const orders = line.order_id
       ? [await carrier('number_orders/' + encodeURIComponent(line.order_id))]
       : await carrier('number_orders?' + filter);
@@ -251,7 +316,11 @@ export function services(env, http = fetch, settings = {}) {
         x.phone_numbers?.some((n) => n.phone_number === line.phone)
     );
     if (!order) return line; // An ambiguous POST is reconciled, never repeated automatically.
-    const where = { id: 'eq.' + line.id, state: 'eq.ordering', phone: 'eq.' + line.phone };
+    const where = {
+      id: 'eq.' + line.id,
+      state: 'eq.ordering',
+      phone: 'eq.' + line.phone,
+    };
     const requested = order.phone_numbers.find((n) => n.phone_number === line.phone);
     if (order.status === 'failure' || requested.status === 'failure') {
       await db('korlix_fax_lines', where, 'PATCH', {
@@ -312,6 +381,9 @@ export function services(env, http = fetch, settings = {}) {
     signed,
     login,
     identity,
+    rpc,
+    hubHandoff,
+    redeemHandoff,
     ready,
     carrier,
     publicKey,

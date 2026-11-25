@@ -2,138 +2,81 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#102d34" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
     <meta name="referrer" content="no-referrer" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://uxtjzjbwtppjvnsoiijv.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'"
+      content="default-src 'self'; script-src 'self'; worker-src 'self' blob:; style-src 'self'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' blob: https://uxtjzjbwtppjvnsoiijv.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'"
     />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="korlix-teal-tiger-192.png" />
+    <meta name="theme-color" content="#f8faf9" />
+    <meta name="robots" content="index,follow" />
     <meta
       name="description"
-      content="Request a dedicated fax number and send, receive, and track PDF faxes with your Korlix account."
+      content="Send, receive and track private faxes with your Korlix account."
     />
     <title>FAX Number by Korlix</title>
-    <link rel="stylesheet" href="app.css" />
-    <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="korlix-teal-tiger-192.png" />
-    <link rel="apple-touch-icon" href="korlix-teal-tiger-192.png" />
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      href="assets/inter.woff2"
+      crossorigin
+    />
+    <link
+      rel="preload"
+      as="font"
+      type="font/woff"
+      href="assets/icons.woff"
+      crossorigin
+    />
+    <link rel="stylesheet" href="assets/icons.css" />
+    <link rel="stylesheet" href="ui.css" />
+    <script type="module" src="app.js"></script>
   </head>
   <body>
-    <template id="brand"
-      ><span class="brand"
-        ><img src="korlix-teal-tiger-192.png" alt="" /><span><b>FAX Number</b><small>by Korlix</small></span></span
-      ></template
-    >
-    <main id="login">
-      <section class="intro">
-        <div class="brand-slot"></div>
-        <div class="intro-center">
-          <div class="paper-art" aria-hidden="true">
-            <div class="paper-back"></div>
-            <div class="paper-sheet">
-              <span>FAX</span><i></i><i></i>
-              <div class="paper-rule"></div>
-              <i></i><i></i>
-            </div>
-            <div class="slot"></div>
-          </div>
-          <h1>Your fax line.<br /><em>On your phone.</em></h1>
-          <p>Get a dedicated number, send PDFs, and see when each fax arrives.</p>
-        </div>
-      </section>
-      <section class="signin">
-        <div class="form-wrap">
-          <h2>Sign in</h2>
-          <p class="sub">Open your fax workspace with your Korlix account.</p>
-          <form id="login-form">
-            <label for="email">Email address</label
-            ><input
-              id="email"
-              type="email"
-              autocomplete="username"
-              placeholder="you@company.com"
-              required
-              maxlength="254"
-            />
-            <label for="password">Password</label>
-            <div class="password">
-              <input
-                id="password"
-                type="password"
-                autocomplete="current-password"
-                required
-                maxlength="2048"
-              /><button
-                id="show-password"
-                type="button"
-                aria-label="Show password"
-                aria-pressed="false"
-              >
-                Show
-              </button>
-            </div>
-            <p class="alert" id="login-error" role="alert" hidden></p>
-            <button class="primary wide" id="login-button">Sign in to Fax Number</button>
-          </form>
-          <p class="signup">
-            New to Korlix?
-            <a href="https://korlixdeveloper.com/app/" target="_blank" rel="noopener"
-              >Create an account</a
-            >
-          </p>
-        </div>
-        <footer>
-          <a href="https://korlixdeveloper.com/privacy-policy.html" target="_blank" rel="noopener"
-            >Privacy</a
-          ><a href="mailto:support@korlixdeveloper.com">Korlix support</a>
-        </footer>
-      </section>
-    </main>
-    <div id="app" hidden>
-      <header>
-        <div class="brand-slot"></div>
-        <div class="account">
-          <span id="account"></span><button id="logout" class="textbtn">Sign out</button>
-        </div>
-      </header>
-      <main class="workspace">
-        <aside>
-          <button class="primary wide" id="compose">New fax</button>
-          <nav aria-label="Fax workspace">
-            <button class="nav-item" data-view="inbound">
-              <span aria-hidden="true">↓</span> Inbox
-            </button>
-            <button class="nav-item" data-view="outbound">
-              <span aria-hidden="true">↑</span> Sent
-            </button>
-            <button class="nav-item" data-view="number">
-              <span aria-hidden="true">#</span> My number
-            </button>
-            <button class="nav-item" data-view="ops" id="ops-nav" hidden>
-              <span aria-hidden="true">≡</span> Line requests
-            </button>
-          </nav>
-          <div class="sidebar-number">
-            <small>YOUR FAX NUMBER</small><strong id="side-value"></strong
-            ><span id="side-detail"></span>
-          </div>
-        </aside>
-        <section class="view">
-          <p class="alert" id="error" role="alert" hidden></p>
-          <p class="notice" id="notice" role="status" hidden></p>
-          <div id="content" aria-live="polite"></div>
-        </section>
-      </main>
-    </div>
-    <dialog id="dialog">
-      <div class="dialog-top">
-        <h2 id="dialog-title"></h2>
-        <button type="button" class="textbtn" id="close-dialog">Close</button>
+    <header class="topbar" id="app-header" hidden>
+      <div class="head-inner">
+        <button
+          class="brand"
+          id="brand-home"
+          aria-label="FAX Number by Korlix, home"
+        >
+          <img
+            src="korlix-teal-tiger-192.png"
+            width="44"
+            height="44"
+            alt=""
+          /><span
+            ><strong>FAX Number</strong><small>by Korlix</small></span
+          ></button
+        ><button
+          class="icon-btn profile"
+          id="account"
+          aria-label="Your account"
+        >
+          <i aria-hidden="true" class="ic i-account-outline"></i>
+        </button>
       </div>
-      <div id="dialog-body"></div>
-      <p class="alert" id="dialog-error" role="alert" hidden></p>
+    </header>
+    <main id="screen" tabindex="-1" aria-label="Fax workspace">
+      <p class="lead" role="status">Opening your fax workspace…</p>
+    </main>
+    <dialog id="sheet">
+      <div class="sheet-top">
+        <h2 id="sheet-title"></h2>
+        <button id="sheet-close" class="icon-btn" aria-label="Close">
+          <i aria-hidden="true" class="ic i-close"></i>
+        </button>
+      </div>
+      <div id="sheet-content"></div>
     </dialog>
-    <script type="module" src="app.js"></script>
+    <div id="toast" role="status" aria-live="polite"></div>
+    <noscript>Enable JavaScript to open your fax workspace.</noscript>
   </body>
 </html>

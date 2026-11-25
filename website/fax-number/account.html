@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#102d34" />
+    <meta name="referrer" content="no-referrer" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://uxtjzjbwtppjvnsoiijv.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'"
+    />
+    <meta
+      name="description"
+      content="Request a dedicated fax number and send, receive, and track PDF faxes with your Korlix account."
+    />
+    <title>FAX Number by Korlix</title>
+    <link rel="stylesheet" href="app.css" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="korlix-teal-tiger-192.png" />
+    <link rel="apple-touch-icon" href="korlix-teal-tiger-192.png" />
+  </head>
+  <body>
+    <template id="brand"
+      ><span class="brand"
+        ><img src="korlix-teal-tiger-192.png" alt="" /><span><b>FAX Number</b><small>by Korlix</small></span></span
+      ></template
+    >
+    <main id="login">
+      <section class="intro">
+        <div class="brand-slot"></div>
+        <div class="intro-center">
+          <div class="paper-art" aria-hidden="true">
+            <div class="paper-back"></div>
+            <div class="paper-sheet">
+              <span>FAX</span><i></i><i></i>
+              <div class="paper-rule"></div>
+              <i></i><i></i>
+            </div>
+            <div class="slot"></div>
+          </div>
+          <h1>Your fax line.<br /><em>On your phone.</em></h1>
+          <p>Get a dedicated number, send PDFs, and see when each fax arrives.</p>
+        </div>
+      </section>
+      <section class="signin">
+        <div class="form-wrap">
+          <h2>Sign in</h2>
+          <p class="sub">Open your fax workspace with your Korlix account.</p>
+          <form id="login-form">
+            <label for="email">Email address</label
+            ><input
+              id="email"
+              type="email"
+              autocomplete="username"
+              placeholder="you@company.com"
+              required
+              maxlength="254"
+            />
+            <label for="password">Password</label>
+            <div class="password">
+              <input
+                id="password"
+                type="password"
+                autocomplete="current-password"
+                required
+                maxlength="2048"
+              /><button
+                id="show-password"
+                type="button"
+                aria-label="Show password"
+                aria-pressed="false"
+              >
+                Show
+              </button>
+            </div>
+            <p class="alert" id="login-error" role="alert" hidden></p>
+            <button class="primary wide" id="login-button">Sign in to Fax Number</button>
+          </form>
+          <p class="signup">
+            New to Korlix?
+            <a href="https://korlixdeveloper.com/app/" target="_blank" rel="noopener"
+              >Create an account</a
+            >
+          </p>
+        </div>
+        <footer>
+          <a href="https://korlixdeveloper.com/privacy-policy.html" target="_blank" rel="noopener"
+            >Privacy</a
+          ><a href="mailto:support@korlixdeveloper.com">Korlix support</a>
+        </footer>
+      </section>
+    </main>
+    <div id="app" hidden>
+      <header>
+        <div class="brand-slot"></div>
+        <div class="account">
+          <a href="./">Fax workspace</a><span id="account"></span><button id="logout" class="textbtn">Sign out</button>
+        </div>
+      </header>
+      <main class="workspace">
+        <aside>
+          <button class="primary wide" id="compose">New fax</button>
+          <nav aria-label="Fax workspace">
+            <button class="nav-item" data-view="inbound">
+              <span aria-hidden="true">↓</span> Inbox
+            </button>
+            <button class="nav-item" data-view="outbound">
+              <span aria-hidden="true">↑</span> Sent
+            </button>
+            <button class="nav-item" data-view="number">
+              <span aria-hidden="true">#</span> My number
+            </button>
+            <button class="nav-item" data-view="ops" id="ops-nav" hidden>
+              <span aria-hidden="true">≡</span> Line requests
+            </button>
+          </nav>
+          <div class="sidebar-number">
+            <small>YOUR FAX NUMBER</small><strong id="side-value"></strong
+            ><span id="side-detail"></span>
+          </div>
+        </aside>
+        <section class="view">
+          <p class="alert" id="error" role="alert" hidden></p>
+          <p class="notice" id="notice" role="status" hidden></p>
+          <div id="content" aria-live="polite"></div>
+        </section>
+      </main>
+    </div>
+    <dialog id="dialog">
+      <div class="dialog-top">
+        <h2 id="dialog-title"></h2>
+        <button type="button" class="textbtn" id="close-dialog">Close</button>
+      </div>
+      <div id="dialog-body"></div>
+      <p class="alert" id="dialog-error" role="alert" hidden></p>
+    </dialog>
+    <script type="module" src="account.js"></script>
+  </body>
+</html>

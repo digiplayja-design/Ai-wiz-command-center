@@ -1,625 +1,864 @@
-const API = 'https://uxtjzjbwtppjvnsoiijv.supabase.co/functions/v1/korlix-fax';
+import {
+  api,
+  currentSession,
+  openLogin,
+  redeem,
+  phoneNumber,
+  displayNumber,
+  checkFileUrl,
+  dispatch,
+} from "./fax-api.js";
+import { readPdf, pageImage, scanPages, clearDoc } from "./fax-document.js";
 const $ = (id) => document.getElementById(id);
-const storeKey = 'korlixFaxSession';
-const labels = {
-  preparing: 'Preparing',
-  submitting: 'Submitting',
-  checking: 'Awaiting confirmation',
-  queued: 'Queued',
-  sending: 'Sending',
-  delivered: 'Delivered',
-  received: 'Received',
-  failed: 'Failed',
-  requested: 'Requested',
-  ordering: 'Carrier processing',
-  active: 'Active',
-};
-const state = {
-  token: sessionStorage.getItem(storeKey),
-  workspace: null,
-  view: 'inbound',
-  epoch: 0,
-};
-for (const slot of document.querySelectorAll('.brand-slot'))
-  slot.append($('brand').content.cloneNode(true));
-function el(tag, text, cls) {
-  const n = document.createElement(tag);
-  if (text !== undefined) n.textContent = text;
-  if (cls) n.className = cls;
-  return n;
-}
-function note(id, txt = '') {
-  const node = $(id);
-  node.textContent = txt;
-  node.hidden = !txt;
-}
-function button(text, action, cls = 'secondary') {
-  const btn = el('button', text, cls);
-  btn.type = 'button';
-  btn.onclick = async () => {
-    btn.disabled = true;
-    try {
-      await action();
-    } catch (e) {
-      note($('dialog').open ? 'dialog-error' : 'error', e.message);
-    } finally {
-      btn.disabled = false;
-    }
-  };
-  return btn;
-}
-const formatPhone = (s) =>
-  typeof s === 'string' ? s.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, '+1 ($1) $2-$3') : '';
-const date = (s) =>
-  new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(
-    new Date(s)
+const screen = $("screen"),
+  sheet = $("sheet"),
+  sheetBody = $("sheet-content");
+const esc = (v) =>
+  String(v ?? "").replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        c
+      ],
   );
-const dollars = (n) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
-function loginScreen(msg = '') {
-  state.token = null;
-  state.workspace = null;
-  state.view = 'inbound';
-  state.epoch++;
-  sessionStorage.removeItem(storeKey);
-  if ($('dialog').open) $('dialog').close();
-  $('app').hidden = true;
-  $('login').hidden = false;
-  $('password').value = '';
-  $('password').type = 'password';
-  $('show-password').textContent = 'Show';
-  $('show-password').setAttribute('aria-pressed', 'false');
-  $('show-password').setAttribute('aria-label', 'Show password');
-  $('content').replaceChildren();
-  $('account').textContent = '';
-  $('side-value').textContent = '';
-  note('login-error', msg);
-}
-async function api(path, { method = 'GET', body, headers = {}, raw = false } = {}) {
-  const options = {
-    method,
-    headers: { ...headers },
-    cache: 'no-store',
-    referrerPolicy: 'no-referrer',
-  };
-  if (state.token) options.headers['X-Fax-Session'] = state.token;
-  if (body !== undefined) {
-    options.body = raw ? body : JSON.stringify(body);
-    if (!raw) options.headers['Content-Type'] = 'application/json';
-  }
-  let res;
-  try {
-    res = await fetch(API + path, options);
-  } catch {
-    throw Error('Could not reach the fax service. Check your connection and try again.');
-  }
-  const data = await res.json().catch(() => ({}));
-  if (res.status === 401 && state.token && path !== '/signin')
-    loginScreen('Your session ended. Sign in again.');
-  if (!res.ok) throw Error(data.error || 'Could not complete this request.');
-  return data;
-}
-function openDialog(title, content) {
-  $('dialog-title').textContent = title;
-  $('dialog-body').replaceChildren(content);
-  note('dialog-error');
-  if (!$('dialog').open) $('dialog').showModal();
-}
-$('close-dialog').onclick = () => $('dialog').close();
-$('show-password').onclick = () => {
-  const show = $('password').type === 'password';
-  $('password').type = show ? 'text' : 'password';
-  $('show-password').textContent = show ? 'Hide' : 'Show';
-  $('show-password').setAttribute('aria-pressed', String(show));
-  $('show-password').setAttribute('aria-label', show ? 'Hide password' : 'Show password');
-};
-$('login-form').onsubmit = async (event) => {
-  event.preventDefault();
-  const btn = $('login-button');
-  btn.disabled = true;
-  note('login-error');
-  btn.textContent = 'Signing in…';
-  try {
-    let device = localStorage.getItem('korlixFaxDevice');
-    if (!device) {
-      device = crypto.randomUUID();
-      localStorage.setItem('korlixFaxDevice', device);
-    }
-    const auth = await api('/signin', {
-      method: 'POST',
-      body: { email: $('email').value, password: $('password').value, device },
-    });
-    $('password').value = '';
-    state.token = auth.token;
-    sessionStorage.setItem(storeKey, auth.token);
-    await loadWorkspace();
-  } catch (e) {
-    note('login-error', e.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Sign in to Fax Number';
-  }
-};
-$('logout').onclick = async () => {
-  try {
-    await api('/signout', { method: 'POST' });
-    loginScreen();
-  } catch (e) {
-    note('error', e.message);
-  }
-};
-function updateLine() {
-  const w = state.workspace,
-    line = w.line;
-  $('account').textContent = w.email;
-  $('ops-nav').hidden = !w.operator;
-  $('side-value').textContent =
-    line?.state === 'active'
-      ? formatPhone(line.phone)
-      : line
-        ? 'Activation pending'
-        : 'Get a number';
-  $('side-detail').textContent = line
-    ? line.preference === 'toll_free'
-      ? 'U.S. toll-free'
-      : 'Area code ' + line.preference
-    : 'For sending and receiving faxes';
-}
-async function loadWorkspace() {
-  state.workspace = await api('/workspace');
-  updateLine();
-  $('login').hidden = true;
-  $('app').hidden = false;
-  await render(state.view);
-}
-function heading(title, sub, action) {
-  const row = el('div', undefined, 'headrow'),
-    left = el('div');
-  left.append(el('h1', title));
-  if (sub) left.append(el('p', sub, 'sub'));
-  row.append(left);
-  if (action) row.append(action);
-  return row;
-}
-function empty(title, copy, action) {
-  const box = el('div', undefined, 'empty');
-  box.append(el('h2', title), el('p', copy, 'muted'));
-  if (action) box.append(action);
-  return box;
-}
-function detail(fields) {
-  const list = el('dl', undefined, 'detail');
-  for (const [k, v] of fields) {
-    if (v != null && v !== '') list.append(el('dt', k), el('dd', String(v)));
-  }
-  return list;
-}
-async function render(view) {
-  state.view = view;
-  const generation = ++state.epoch;
-  note('error');
-  note('notice');
-  document
-    .querySelectorAll('[data-view]')
-    .forEach((n) =>
-      n.getAttribute('data-view') === view
-        ? n.setAttribute('aria-current', 'page')
-        : n.removeAttribute('aria-current')
-    );
-  const content = $('content');
-  content.replaceChildren();
-  try {
-    if (view === 'number') {
-      showNumber(content);
-      return;
-    }
-    if (view === 'ops') {
-      await showOps(content, generation);
-      return;
-    }
-    const inbound = view === 'inbound';
-    content.append(
-      heading(
-        inbound ? 'Inbox' : 'Sent',
-        inbound ? 'Faxes received on your number.' : 'Delivery status for outgoing faxes.',
-        button('Refresh', () => render(view), 'textbtn')
-      )
-    );
-    const list = el('div', undefined, 'history');
-    content.append(list);
-    async function page(offset) {
-      const data = await api('/history?direction=' + view + '&offset=' + offset);
-      if (generation !== state.epoch) return;
-      if (offset === 0 && !data.items.length) {
-        const active = state.workspace.line?.state === 'active';
-        list.append(
-          empty(
-            inbound ? 'Your inbox is empty' : 'No sent faxes yet',
-            inbound
-              ? active
-                ? 'Share your number to receive your first fax.'
-                : 'Incoming PDFs will appear here once your line is active.'
-              : active
-                ? 'Send a PDF to see its delivery status here.'
-                : 'Activate your line to send your first PDF.',
-            button(
-              active && !inbound ? 'New fax' : 'View my number',
-              active && !inbound ? compose : () => render('number')
-            )
-          )
-        );
-      }
-      for (const doc of data.items) {
-        const row = button('', () => documentDetails(doc), 'row'),
-          label = el('span');
-        label.append(
-          el('strong', inbound ? formatPhone(doc.sender) : doc.name),
-          el(
-            'small',
-            (inbound ? 'Received ' : 'To ' + formatPhone(doc.recipient) + ' · ') +
-              date(doc.created_at)
-          )
-        );
-        row.append(label, el('span', labels[doc.status] || doc.status, 'status'));
-        list.append(row);
-      }
-      if (data.more) {
-        const load = button('Load older faxes', async () => {
-          await page(offset + data.items.length);
-          load.remove();
-        });
-        list.append(load);
-      }
-    }
-    await page(0);
-  } catch (e) {
-    if (generation === state.epoch) note('error', e.message);
-  }
-}
-function showNumber(content) {
-  const line = state.workspace.line;
-  content.append(
-    heading('My number', 'Your dedicated fax line.', button('Refresh', loadWorkspace, 'textbtn'))
-  );
-  if (line) {
-    const card = el('div', undefined, 'line-card');
-    card.append(
-      el('span', labels[line.state], 'status'),
-      el(
-        'h2',
-        line.state === 'active'
-          ? formatPhone(line.phone)
-          : line.is_company
-            ? 'Korlix company line'
-            : 'Your line request'
-      )
-    );
-    const text =
-      line.state === 'active'
-        ? 'Use this number to receive faxes.'
-        : line.state === 'ordering'
-          ? 'The carrier is processing your line.'
-          : 'Your request is saved. The number will appear here once the carrier activates it.';
-    card.append(
-      el('p', text, 'muted'),
-      el(
-        'p',
-        line.preference === 'toll_free' ? 'U.S. toll-free' : 'U.S. area code ' + line.preference,
-        'muted'
-      )
-    );
-    if (line.state === 'active')
-      card.append(
-        button('Copy number', async () => {
-          await navigator.clipboard.writeText(line.phone);
-          note('notice', 'Number copied.');
-        })
-      );
-    content.append(card);
-    if (state.workspace.operator && line.state !== 'active')
-      content.append(button('Manage line requests', () => render('ops')));
-    return;
-  }
-  const box = el('form', undefined, 'surface narrow');
-  box.append(
-    el('h2', 'Request a number'),
-    el('p', 'Choose toll-free or a local U.S. area code.', 'muted')
-  );
-  const label = el('label', 'Number type');
-  label.htmlFor = 'number-type';
-  const type = el('select');
-  type.id = 'number-type';
-  for (const [v, t] of [
-    ['toll_free', 'U.S. toll-free'],
-    ['local', 'U.S. local number'],
-  ]) {
-    const o = el('option', t);
-    o.value = v;
-    type.append(o);
-  }
-  const areaLabel = el('label', 'Preferred area code');
-  areaLabel.htmlFor = 'area';
-  const area = el('input');
-  area.id = 'area';
-  area.inputMode = 'numeric';
-  area.maxLength = 3;
-  area.pattern = '[2-9][0-9]{2}';
-  area.placeholder = 'e.g. 614';
-  areaLabel.hidden = area.hidden = true;
-  type.onchange = () => {
-    areaLabel.hidden = area.hidden = type.value !== 'local';
-    area.required = type.value === 'local';
-  };
-  const submit = el('button', 'Request number', 'primary wide');
-  submit.type = 'submit';
-  box.append(label, type, areaLabel, area, submit);
-  content.append(box);
-  box.onsubmit = async (e) => {
-    e.preventDefault();
-    submit.disabled = true;
-    try {
-      const r = await api('/line', {
-        method: 'POST',
-        body: { preference: type.value === 'local' ? area.value : type.value },
-      });
-      state.workspace.line = r.line;
-      updateLine();
-      await render('number');
-    } catch (err) {
-      note('error', err.message);
-    } finally {
-      submit.disabled = false;
-    }
-  };
-}
-function documentDetails(doc) {
-  const wrap = el('div');
-  wrap.append(
-    el('strong', doc.name),
-    detail([
-      ['Status', labels[doc.status]],
-      ['From', formatPhone(doc.sender)],
-      ['To', formatPhone(doc.recipient)],
-      ['Pages', doc.pages],
-      ['Created', date(doc.created_at)],
-      ['Updated', date(doc.updated_at)],
-      ['Details', doc.detail],
-    ])
-  );
-  if (doc.hasFile)
-    wrap.append(
-      button('Get PDF link', async () => {
-        const f = await api('/file/' + doc.id);
-        const a = el('a', 'Open PDF', 'secondary linkbtn');
-        a.href = f.url;
-        a.target = '_blank';
-        a.rel = 'noopener noreferrer';
-        wrap.lastElementChild.replaceWith(a);
-        a.focus();
-      })
-    );
-  openDialog(doc.direction === 'inbound' ? 'Received fax' : 'Fax receipt', wrap);
-}
-function compose() {
-  if (state.workspace.line?.state !== 'active' || !state.workspace.carrierReady) {
-    render('number');
-    note('notice', 'Sending becomes available when your line is active.');
-    return;
-  }
-  const form = el('form'),
-    label = el('label', 'Recipient fax number'),
-    to = el('input');
-  label.htmlFor = 'to';
-  to.id = 'to';
-  to.type = 'tel';
-  to.placeholder = '+1 (614) 555-0100';
-  to.required = true;
-  const fileLabel = el('label', 'PDF document'),
-    file = el('input', undefined, 'file');
-  file.type = 'file';
-  file.required = true;
-  file.accept = 'application/pdf,.pdf';
-  file.id = 'pdf';
-  fileLabel.htmlFor = 'pdf';
-  const submit = el('button', 'Review fax', 'primary wide');
-  submit.type = 'submit';
-  const actions = el('div', undefined, 'actions');
-  actions.append(submit);
-  form.append(label, to, fileLabel, file, el('p', 'One PDF, up to 8 MB.', 'hint'), actions);
-  openDialog('New fax', form);
-  form.onsubmit = (e) => {
-    e.preventDefault();
-    note('dialog-error');
-    const digits = to.value.replace(/\D/g, '');
-    const recipient = digits.length === 10 ? '+1' + digits : '+' + digits;
-    const doc = file.files[0];
-    if (!/^\+1[2-9]\d{2}[2-9]\d{6}$/.test(recipient)) {
-      note('dialog-error', 'Enter a valid 10-digit or +1 fax number.');
-      return;
-    }
-    if (!doc || doc.size < 5 || doc.size > 8388608) {
-      note('dialog-error', 'Choose a PDF up to 8 MB.');
-      return;
-    }
-    const wrap = el('div');
-    wrap.append(
-      detail([
-        ['From', formatPhone(state.workspace.line.phone)],
-        ['To', formatPhone(recipient)],
-        ['Document', doc.name],
-      ])
-    );
-    const actions = el('div', undefined, 'actions');
-    const dispatch = button(
-      'Send fax',
-      async () => {
-        const checksum = Array.from(
-          new Uint8Array(await crypto.subtle.digest('SHA-256', await doc.arrayBuffer())),
-          (x) => x.toString(16).padStart(2, '0')
-        ).join('');
-        const pending = 'faxPending:' + state.workspace.email + ':' + recipient + ':' + checksum;
-        const request = sessionStorage.getItem(pending) || crypto.randomUUID();
-        sessionStorage.setItem(pending, request);
-        const result = await api('/send', {
-          method: 'POST',
-          raw: true,
-          body: doc,
-          headers: {
-            'Content-Type': 'application/pdf',
-            'X-Request-ID': request,
-            'X-Fax-To': recipient,
-            'X-Filename': encodeURIComponent(doc.name.slice(0, 120)),
-          },
-        });
-        sessionStorage.removeItem(pending);
-        $('dialog').close();
-        await render('outbound');
-        note('notice', 'Fax status: ' + (labels[result.status] || result.status) + '.');
-      },
-      'primary'
-    );
-    actions.append(
-      button('Edit', () => openDialog('New fax', form)),
-      dispatch
-    );
-    wrap.append(actions);
-    openDialog('Review fax', wrap);
-  };
-}
-async function showOps(content, generation) {
-  content.append(
-    heading(
-      'Line requests',
-      'Review and activate requested numbers.',
-      button('Refresh', loadWorkspace, 'textbtn')
+const icon = (n) => `<i aria-hidden="true" class="ic i-${n}"></i>`;
+const btn = (action, txt, cls = "primary", glyph = "", extra = "") =>
+  `<button type="button" data-act="${action}" class="${cls}" ${extra}>${glyph ? icon(glyph) : ""}${esc(txt)}</button>`;
+const details = (items) =>
+  `<dl class="details">${items
+    .filter(([, v]) => v !== null && v !== undefined && v !== "")
+    .map(
+      ([k, v, sub]) =>
+        `<div><dt>${esc(k)}</dt><dd>${esc(v)}${sub ? `<small>${esc(sub)}</small>` : ""}</dd></div>`,
     )
-  );
-  const data = await api('/operator/requests');
-  if (generation !== state.epoch) return;
-  if (!state.workspace.carrierReady)
-    content.append(
-      el(
-        'p',
-        'Carrier connection pending. Requests are saved while Telnyx activation is completed.',
-        'notice'
-      )
-    );
-  if (!data.items.length) {
-    content.append(empty('No pending requests', 'New line requests will appear here.'));
+    .join("")}</dl>`;
+const pageCount = (n) =>
+  Number.isInteger(n)
+    ? n + (n === 1 ? " page" : " pages")
+    : "Page count pending";
+const statuses = {
+  preparing: "Preparing",
+  submitting: "Submitting",
+  checking: "Awaiting confirmation",
+  queued: "Queued",
+  sending: "Sending",
+  delivered: "Delivered",
+  received: "Received",
+  failed: "Failed",
+};
+const terminal = new Set(["delivered", "received", "failed"]);
+const folderState = () => ({ items: [], more: false, loaded: false, sequence: 0 });
+const folders = { inbound: folderState(), outbound: folderState() };
+let contacts = [],
+  ws = null,
+  activeRecord = null,
+  folder = "inbound",
+  selectedPlan = "solo",
+  route = "inbox",
+  generation = 0,
+  busy = false,
+  reading = false,
+  background = false,
+  fileJob = 0;
+let draft = { doc: null, number: "", saveName: "" },
+  viewer = null,
+  speech = null,
+  toastTimer,
+  alertText = "";
+const plans = {
+  solo: { name: "Solo", pages: 100, price: "9.99" },
+  business: { name: "Business", pages: 250, price: "19.99" },
+};
+function clearDraft() {
+  fileJob++;
+  reading = false;
+  clearDoc(draft.doc);
+  draft = { doc: null, number: "", saveName: "" };
+}
+function closeSheet() {
+  if (sheet.open) sheet.close();
+}
+sheet.addEventListener("close", () => {
+  if (speech) {
+    speech.abort();
+    speech = null;
+  }
+  if (viewer?.owned) clearDoc(viewer.doc);
+  viewer = null;
+});
+function modal(title, body) {
+  $("sheet-title").textContent = title;
+  sheetBody.innerHTML = body;
+  if (!sheet.open) sheet.showModal();
+  $("sheet-close").focus({ preventScroll: true });
+}
+function toast(text) {
+  clearTimeout(toastTimer);
+  $("toast").textContent = text;
+  $("toast").classList.add("show");
+  toastTimer = setTimeout(() => $("toast").classList.remove("show"), 3100);
+}
+function failUI(message) {
+  const e = sheet.open ? sheetBody.querySelector("[role=alert]") : null;
+  if (e) {
+    e.textContent = message;
     return;
   }
-  const list = el('div', undefined, 'stack');
-  content.append(list);
-  for (const row of data.items) {
-    const box = el('div', undefined, 'surface');
-    box.append(
-      el(
-        'h2',
-        row.is_company ? 'Korlix company line' : 'Customer line · ' + row.id.slice(0, 8),
-        'ops-title'
-      ),
-      el(
-        'p',
-        (row.preference === 'toll_free' ? 'U.S. toll-free' : 'Local · ' + row.preference) +
-          ' · ' +
-          labels[row.state] +
-          ' · ' +
-          date(row.created_at),
-        'muted'
-      )
-    );
-    if (state.workspace.carrierReady) {
-      if (row.state === 'ordering')
-        box.append(
-          button('Check order', async () => {
-            await api('/operator/' + row.id + '/sync', { method: 'POST' });
-            await loadWorkspace();
-          })
-        );
-      else
-        box.append(
-          button('View available numbers', async () => {
-            const offer = await api('/operator/' + row.id + '/options');
-            const options = el('div', undefined, 'stack');
-            if (!offer.items.length)
-              options.append(
-                el(
-                  'p',
-                  'No matching fax numbers are available at $2/month or less with zero upfront cost.',
-                  'muted'
-                )
-              );
-            for (const q of offer.items)
-              options.append(
-                button(formatPhone(q.number) + ' · ' + dollars(q.monthly) + '/month', () => {
-                  const confirmation = el('div');
-                  confirmation.append(
-                    detail([
-                      ['Number', formatPhone(q.number)],
-                      ['Monthly', dollars(q.monthly)],
-                      ['Upfront', dollars(q.upfront)],
-                      ['Usage', 'Fax pages and carrier transmission are extra.'],
-                    ]),
-                    button(
-                      'Order this number',
-                      async () => {
-                        await api('/operator/' + row.id + '/order', { method: 'POST', body: q });
-                        $('dialog').close();
-                        await loadWorkspace();
-                      },
-                      'primary'
-                    )
-                  );
-                  openDialog('Confirm number order', confirmation);
-                })
-              );
-            openDialog('Available fax numbers', options);
-          })
-        );
-      box.append(
-        button(
-          'Link an owned number',
-          () => {
-            const form = el('form'),
-              label = el('label', 'Active Telnyx fax number'),
-              input = el('input');
-            input.type = 'tel';
-            input.required = true;
-            input.id = 'owned';
-            label.htmlFor = 'owned';
-            const submit = el('button', 'Link number', 'primary wide');
-            submit.type = 'submit';
-            form.append(
-              label,
-              input,
-              el('p', 'Use a number already assigned to the Korlix fax application.', 'hint'),
-              submit
-            );
-            form.onsubmit = async (event) => {
-              event.preventDefault();
-              submit.disabled = true;
-              try {
-                const digits = input.value.replace(/\D/g, '');
-                const phone = digits.length === 10 ? '+1' + digits : '+' + digits;
-                await api('/operator/' + row.id + '/attach', { method: 'POST', body: { phone } });
-                $('dialog').close();
-                await loadWorkspace();
-              } catch (e) {
-                note('dialog-error', e.message);
-              } finally {
-                submit.disabled = false;
-              }
-            };
-            openDialog('Link an owned number', form);
-          },
-          'textbtn'
-        )
-      );
+  if (sheet.open) {
+    const p = document.createElement("p");
+    p.className = "err";
+    p.setAttribute("role", "alert");
+    p.textContent = message;
+    sheetBody.append(p);
+    return;
+  }
+  alertText = message;
+  const note = $("view-error");
+  if (note) {
+    note.hidden = false;
+    note.textContent = message;
+  } else toast(message);
+}
+function go(path) {
+  closeSheet();
+  alertText = "";
+  if (location.hash.slice(1) === path) {
+    navigate();
+  } else location.hash = path;
+}
+function note() {
+  return `<p id="view-error" class="err" role="alert" ${alertText ? "" : "hidden"}>${esc(alertText)}</p>`;
+}
+const arrNumbers = () => new Map(contacts.map((c) => [c.phone, c.name]));
+function party(rec) {
+  return rec.direction === "inbound" ? rec.sender : rec.recipient;
+}
+function contactName(phone) {
+  return contacts.find((c) => c.phone === phone)?.name || "";
+}
+function when(iso, options) {
+  const d = new Date(iso);
+  return Number.isFinite(+d) ? d.toLocaleString(undefined, options) : "";
+}
+function day(iso) {
+  const d = new Date(iso),
+    now = new Date(),
+    prev = new Date(now);
+  prev.setDate(now.getDate() - 1);
+  if (d.toDateString() === now.toDateString()) return "Today";
+  if (d.toDateString() === prev.toDateString()) return "Yesterday";
+  return when(iso, { month: "short", day: "numeric", year: "numeric" });
+}
+const stamp = (s) => when(s, { dateStyle: "medium", timeStyle: "short" });
+function numberCard() {
+  const l = ws.line,
+    active = l?.state === "active" && l.phone;
+  return `<div class="line-card"><div class="stripes" aria-hidden="true"><i></i><i></i><i></i><i></i></div><div class="line-top"><span class="eyebrow">Your fax number</span>${active ? '<span class="line-live"><i class="dot"></i>Active</span>' : ""}</div><h1 class="line-number ${active ? "" : "no-line"}">${active ? esc(displayNumber(l.phone)) : l ? "Activation pending" : "Get a fax number"}</h1><div class="line-tools">${active ? btn("copy", "Copy", "glass-btn", "content-copy") + btn("share", "Share", "glass-btn", "share-variant-outline") : btn("setup", l ? "View request" : "Get my fax number", "glass-btn", "phone-outline")}</div></div>`;
+}
+function usage() {
+  const u = ws.usage;
+  if (!u) return "";
+  const cap = ws.billing?.active && plans[ws.billing.plan]?.pages;
+  return `<section class="usage"><div class="row-between"><h2>Monthly pages</h2><span><b>${esc(u.pages)}</b>${cap ? " / " + cap : " used"}</span></div>${cap ? `<progress class="page-meter" aria-label="Monthly pages used" value="${u.pages}" max="${Math.max(cap, u.pages)}"></progress>` : `<p class="usage-detail">${esc(u.inboundPages)} received · ${esc(u.outboundPages)} sent</p>`}${u.pendingReports ? '<p class="usage-detail">Additional page counts are awaiting carrier confirmation.</p>' : ""}</section>`;
+}
+function faxRow(r) {
+  const whom = party(r),
+    name = contactName(whom) || displayNumber(whom);
+  const sub =
+    r.direction === "inbound"
+      ? r.status === "failed"
+        ? "Failed"
+        : r.name
+      : statuses[r.status] || "Pending";
+  return `<button class="fax-row" data-act="record" data-id="${esc(r.id)}"><span class="filemark ${r.direction === "outbound" ? "out" : ""}">${icon("file-document-outline")}</span><span class="rtext"><b>${esc(name || "Unknown sender")}</b><small>${esc(sub)}${Number.isInteger(r.pages) ? " · " + pageCount(r.pages) : ""}</small></span><span class="row-time">${esc(when(r.created_at, { hour: "numeric", minute: "2-digit" }))}${icon("chevron-right")}</span></button>`;
+}
+function home() {
+  const f = folders[folder],
+    groups = new Map();
+  for (const r of f.items) {
+    const group = day(r.created_at);
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group).push(r);
+  }
+  return `<div class="home-grid"><div class="overview">${numberCard()}<div class="action-row">${btn("compose", "Send a Fax", "primary", "send-outline")}${btn("rici", "Rici", "secondary", "waveform", 'aria-label="Ask Rici"')}</div></div><section class="mail"><h2 class="section-title">Mailbox</h2><div class="segment" role="group" aria-label="Mailbox folder">${["inbound", "outbound"].map((v, i) => `<button data-act="folder" data-id="${v}" class="${folder === v ? "selected" : ""}" aria-pressed="${folder === v}">${icon(i ? "tray-arrow-up" : "tray-arrow-down")}${i ? "Sent" : "Inbox"}${v === folder && f.items.length ? `<span class="seg-total">${f.items.length}${f.more ? "+" : ""}</span>` : ""}</button>`).join("")}</div>${!f.loaded ? '<p class="lead">Loading faxes…</p>' : !f.items.length ? `<div class="empty-folder">${icon("tray-arrow-" + (folder === "inbound" ? "down" : "up"))}<h3>${folder === "inbound" ? "Your inbox is ready" : "No sent faxes yet"}</h3><p>${folder === "outbound" ? "Delivery updates appear here after you send a fax." : ws.line?.state === "active" ? "Share your number to receive your first fax." : "Incoming faxes appear here once your line is active."}</p></div>` : ""}${[...groups].map(([name, items]) => `<h3 class="group-title">${esc(name)}</h3><div class="list-box">${items.map(faxRow).join("")}</div>`).join("")}${f.more ? btn("older", "Load older faxes", "soft-link") : ""}</section>${usage()}</div>`;
+}
+function step(n, title, back, sub = "") {
+  return `<div class="flow-nav">${btn(back, "Back", "back", "chevron-left")}<span class="step-text">Step ${n} of 3</span></div><div class="stepper" aria-hidden="true">${[1, 2, 3].map((i) => `<span class="${i <= n ? "on" : ""}"></span>`).join("")}</div><h1 class="title">${esc(title)}</h1>${sub ? `<p class="lead">${esc(sub)}</p>` : ""}`;
+}
+function choice(action, glyph, title, sub) {
+  return `<button class="source-choice" data-act="${action}">${icon(glyph)}<span><b>${esc(title)}</b><small>${esc(sub)}</small></span>${icon("chevron-right")}</button>`;
+}
+function filePanel(doc) {
+  return `<div class="paper-card"><button class="paper-stage" data-act="view-draft" aria-label="Preview document"><img src="${esc(doc.images.get(0))}" alt=""><span class="pagebadge">1 of ${doc.pages}</span></button><div class="doc-title">${icon("file-document-outline")}<span><b>${esc(doc.name)}</b><small>${pageCount(doc.pages)} · PDF</small></span>${btn("view-draft", "", "edit", "arrow-expand-all", 'aria-label="Expand document"')}</div></div>`;
+}
+function add() {
+  const recent = folders.outbound.items.find((r) => r.hasFile);
+  return `<div class="flow">${step(1, "Add a document", "home", "Scan paper or choose a PDF up to 8 MB.")}<div class="block source-list">${choice("camera", "camera-outline", draft.doc?.scanPages ? "Scan another page" : "Scan pages", "Use your camera")}${choice("upload", "folder-open-outline", "Choose a PDF", "Browse files")}</div><input id="camera-file" type="file" accept="image/*" capture="environment" multiple hidden><input id="upload-file" type="file" accept="application/pdf,.pdf" hidden><p id="file-status" class="lead" role="status">${reading ? "Preparing document…" : ""}</p>${draft.doc ? `<section class="block"><div class="row-between"><h2 class="small-title">Your document</h2>${btn("remove", "Remove", "edit")}</div>${filePanel(draft.doc)}</section><div class="btn-stack">${btn("after-doc", draft.number ? "Review fax" : "Choose recipient", "primary full", "", reading ? "disabled" : "")}</div>` : recent ? `<section class="block"><h2 class="small-title">Recent document</h2><div class="list-box"><button class="fax-row" data-act="recent" data-id="${esc(recent.id)}"><span class="filemark">${icon("file-document-outline")}</span><span class="rtext"><b>${esc(recent.name)}</b><small>${pageCount(recent.pages)} · PDF</small></span>${icon("chevron-right")}</button></div></section>` : ""}</div>`;
+}
+function recipientOptions() {
+  const options = arrNumbers();
+  for (const r of [...folders.outbound.items, ...folders.inbound.items]) {
+    const p = phoneNumber(party(r));
+    if (p && !options.has(p)) options.set(p, "");
+  }
+  return [...options];
+}
+function contactRows(filter = "") {
+  const list = recipientOptions().filter(
+    ([n, name]) =>
+      !filter ||
+      n.includes(filter) ||
+      name.toLowerCase().includes(filter.toLowerCase()),
+  );
+  return list
+    .slice(0, 30)
+    .map(
+      ([n, name]) =>
+        `<button class="contact" data-act="contact" data-num="${esc(n)}" aria-pressed="${phoneNumber(draft.number) === n}"><span class="contact-avatar">${
+          name
+            ? esc(
+                name
+                  .split(/\s+/)
+                  .slice(0, 2)
+                  .map((w) => w[0])
+                  .join("")
+                  .toUpperCase(),
+              )
+            : icon("phone-outline")
+        }</span><span><b>${esc(name || displayNumber(n))}</b><small>${esc(name ? displayNumber(n) : "Recent fax number")}</small></span>${icon(phoneNumber(draft.number) === n ? "check-circle-outline" : "chevron-right")}</button>`,
+    )
+    .join("");
+}
+function recipient() {
+  return `<div class="flow">${step(2, "Choose a recipient", "add")}<label class="field-label" for="fax-to">Recipient’s fax number</label><input class="control" id="fax-to" type="tel" inputmode="tel" autocomplete="off" value="${esc(draft.number)}" placeholder="10-digit U.S. fax number"><label class="field-label" for="contact-name">Save as a contact <span class="optional">(optional)</span></label><input class="control" id="contact-name" maxlength="80" value="${esc(draft.saveName)}" placeholder="Person or business"><section class="block">${recipientOptions().length ? `<h2 class="small-title">Recent contacts</h2><div class="list-box" id="contacts-list">${contactRows()}</div>` : ""}</section><div class="btn-stack">${btn("review", "Review fax", "primary full", "", phoneNumber(draft.number) ? "" : "disabled")}</div></div>`;
+}
+function review() {
+  const to = phoneNumber(draft.number),
+    who = draft.saveName || contactName(to);
+  return `<div class="flow">${step(3, "Review your fax", "recipient", "Confirm the document and recipient.")}<div class="block">${filePanel(draft.doc)}</div><div class="review-info"><div class="row-between"><h2 class="small-title">Fax details</h2>${btn("recipient", "Edit recipient", "edit")}</div>${details(
+    [
+      ["To", who || displayNumber(to), who ? displayNumber(to) : ""],
+      ["From", displayNumber(ws.line.phone)],
+      ["Pages", String(draft.doc.pages)],
+    ],
+  )}</div><div class="btn-stack review-actions">${btn("send", busy ? "Submitting…" : "Send " + pageCount(draft.doc.pages), "primary full", "send-outline", busy ? "disabled" : "")}</div></div>`;
+}
+function receipt(r) {
+  const inbound = r.direction === "inbound",
+    failed = r.status === "failed",
+    done = terminal.has(r.status),
+    other = party(r),
+    who = contactName(other),
+    label = statuses[r.status] || "Pending";
+  const title = failed
+    ? "Delivery failed"
+    : r.status === "delivered"
+      ? "Fax delivered"
+      : r.status === "received"
+        ? "Fax received"
+        : label;
+  const meta = [
+    [
+      inbound ? "From" : "Recipient",
+      who || displayNumber(other),
+      who ? displayNumber(other) : "",
+    ],
+    [inbound ? "To" : "From", displayNumber(inbound ? r.recipient : r.sender)],
+    ["Document", r.name],
+    [
+      r.status === "delivered"
+        ? "Pages delivered"
+        : r.status === "received"
+          ? "Pages received"
+          : "Pages reported",
+      Number.isInteger(r.pages) ? String(r.pages) : "Awaiting page count",
+    ],
+    ["Fax reference", r.id],
+    ["Details", r.detail],
+  ];
+  return `<div class="flow receipt"><div class="flow-nav">${btn(inbound ? "home" : "sent", "Back", "back", "chevron-left")}</div><div class="receipt-hero"><div class="seal ${failed ? "failed" : ""}">${icon(failed ? "information-outline" : r.status === "received" ? "tray-arrow-down" : done ? "check" : "progress-clock")}</div><h1 class="title">${esc(title)}</h1><p class="lead">${esc(stamp(r.updated_at || r.created_at))}</p></div><div class="receipt-card"><div class="receipt-head">${icon("file-check-outline")}${inbound ? "Received fax" : done ? "Delivery receipt" : "Delivery status"}</div>${details(meta)}</div><div class="btn-stack">${inbound && r.hasFile ? btn("view-record", "Open document", "primary full", "file-document-outline") : failed && r.hasFile && !inbound ? btn("retry", "Try again", "primary full", "restart") : btn("sent", inbound ? "View inbox" : "View sent faxes", "primary full", inbound ? "tray-arrow-down" : "tray-arrow-up", inbound ? 'data-folder="inbound"' : "")}${r.hasFile ? (inbound ? btn("save-record", "Save PDF", "soft-link", "download-outline") : btn("view-record", "View document", "soft-link", "file-document-outline")) : ""}${!done ? btn("refresh", "Refresh status", "soft-link", "restart") : ""}</div></div>`;
+}
+function setup() {
+  const line = ws.line,
+    active = line?.state === "active";
+  if (line)
+    return `<div class="flow"><div class="flow-nav">${btn("home", "Back", "back", "chevron-left")}</div><section class="block"><h1 class="title">${active ? "Your fax number" : "Activation pending"}</h1><p class="lead">${active ? "Use this number to send and receive faxes." : "Korlix has your request. Your number will appear here when activation is complete."}</p></section><div class="block">${details(
+      [
+        [
+          "Status",
+          active
+            ? "Active"
+            : line.state === "ordering"
+              ? "Carrier processing"
+              : "Requested",
+        ],
+        ["Number", active ? displayNumber(line.phone) : null],
+        [
+          "Preference",
+          line.preference === "toll_free"
+            ? "U.S. toll-free"
+            : "Area code " + line.preference,
+        ],
+        ["Requested plan", plans[line.requested_plan]?.name],
+      ],
+    )}</div><div class="btn-stack">${btn("refresh", "Refresh", "outline-btn", "restart")}</div></div>`;
+  return `<div class="flow"><div class="flow-nav">${btn("home", "Back", "back", "chevron-left")}</div><div class="block"><h1 class="title">Get my fax number</h1><p class="lead">Choose a plan to request your own U.S. fax number.</p></div><div class="block plan-list">${Object.entries(
+    plans,
+  )
+    .map(
+      ([id, p]) =>
+        `<button class="plan ${id === selectedPlan ? "selected" : ""}" data-act="plan" data-id="${id}" aria-pressed="${id === selectedPlan}"><span><b>${p.name}</b><small>${p.pages} pages per month</small></span><span class="price">$${p.price}<small> / mo</small></span></button>`,
+    )
+    .join(
+      "",
+    )}</div><label class="field-label" for="prefix">Number preference</label><select class="control" id="prefix"><option value="toll_free">U.S. toll-free</option><option value="local">Local U.S. area code</option></select><input id="area" class="control area" inputmode="numeric" maxlength="3" aria-label="Three-digit area code" placeholder="Three-digit area code" hidden><div class="btn-stack">${btn("request", "Request my fax number", "primary full", "phone-outline")}</div><p class="small-note block">Submitting a request is free. Pricing applies when you activate a paid plan.</p></div>`;
+}
+function render() {
+  if (!ws) return;
+  let html;
+  if (route === "add") html = add();
+  else if (route === "recipient") html = recipient();
+  else if (route === "review") html = review();
+  else if (route === "setup") html = setup();
+  else if (route.startsWith("record/"))
+    html =
+      activeRecord?.id === route.slice(7)
+        ? receipt(activeRecord)
+        : '<p class="lead" role="status">Opening fax…</p>';
+  else html = home();
+  screen.innerHTML = note() + html;
+}
+async function getFolder(dir, more = false) {
+  const f = folders[dir],
+    offset = more ? f.items.length : 0,
+    tag = ++f.sequence;
+  const data = await api("/history?direction=" + dir + "&offset=" + offset);
+  if (f.sequence !== tag) return;
+  if (!more && f.loaded && f.items.length > 25) {
+    const freshIds = new Set(data.items.map((r) => r.id));
+    const last = data.items.at(-1);
+    f.items = [
+      ...data.items,
+      ...(last
+        ? f.items.filter(
+            (r) =>
+              !freshIds.has(r.id) &&
+              (r.created_at < last.created_at ||
+                (r.created_at === last.created_at && r.id < last.id)),
+          )
+        : []),
+    ];
+  } else
+    f.items = more
+      ? [...new Map([...f.items, ...data.items].map((r) => [r.id, r])).values()]
+      : data.items;
+  if (more || f.items.length <= 25) f.more = data.more;
+  f.loaded = true;
+}
+function locate(id) {
+  return [...folders.inbound.items, ...folders.outbound.items].find(
+    (x) => x.id === id,
+  );
+}
+async function navigate() {
+  if (!ws) return;
+  const tick = ++generation;
+  let target = location.hash.slice(1) || "inbox";
+  if (
+    !/^record\/[a-f0-9-]{36}$/i.test(target) &&
+    !["inbox", "sent", "setup", "add", "recipient", "review"].includes(target)
+  )
+    target = "inbox";
+  if (
+    ["add", "recipient", "review"].includes(target) &&
+    ws.line?.state !== "active"
+  )
+    target = "setup";
+  if (["recipient", "review"].includes(target) && !draft.doc) target = "add";
+  if (target === "review" && !phoneNumber(draft.number)) target = "recipient";
+  if (target === "inbox" || target === "sent")
+    folder = target === "sent" ? "outbound" : "inbound";
+  route = target;
+  alertText = "";
+  if (route.startsWith("record/"))
+    activeRecord = locate(route.slice(7)) || null;
+  render();
+  window.scrollTo(0, 0);
+  screen.focus({ preventScroll: true });
+  if (route.startsWith("record/")) {
+    try {
+      const r = await api("/document/" + target.slice(7));
+      if (tick === generation) {
+        activeRecord = r;
+        render();
+      }
+    } catch (e) {
+      if (tick === generation) failUI(e.message);
     }
-    list.append(box);
   }
 }
-for (const btn of document.querySelectorAll('[data-view]'))
-  btn.onclick = () => render(btn.dataset.view);
-$('compose').onclick = compose;
-if (state.token) loadWorkspace().catch((e) => loginScreen(e.message));
+async function refresh(force = false) {
+  if (!ws || background) return;
+  const current = route;
+  if (
+    !force &&
+    (document.hidden ||
+      sheet.open ||
+      (!["sent", "inbox", "setup"].includes(route) &&
+        !route.startsWith("record/")))
+  )
+    return;
+  background = true;
+  try {
+    const prev = folders.inbound.items[0]?.id,
+      wasLoaded = folders.inbound.loaded;
+    const jobs = [
+      api("/workspace").then((r) => {
+        ws = r;
+      }),
+    ];
+    if (current.startsWith("record/"))
+      jobs.push(
+        api("/document/" + current.slice(7)).then((r) => {
+          if (route === current) activeRecord = r;
+        }),
+      );
+    else if (current === "sent" || current === "inbox")
+      jobs.push(getFolder(folder));
+    await Promise.all(jobs);
+    if (
+      route === current &&
+      !sheet.open &&
+      !(current === "setup" && !ws.line)
+    ) {
+      alertText = "";
+      render();
+    }
+    if (
+      prev &&
+      wasLoaded &&
+      folder === "inbound" &&
+      route === "inbox" &&
+      prev !== folders.inbound.items[0]?.id
+    )
+      toast("New fax received");
+  } catch (e) {
+    if (force || route === current) failUI(e.message);
+  } finally {
+    background = false;
+  }
+}
+async function start() {
+  let code = new URLSearchParams(location.hash.slice(1)).get("handoff");
+  if (code) {
+    history.replaceState(null, "", location.pathname + location.search);
+    sessionStorage.removeItem("korlixFaxSession");
+    try {
+      await redeem(code);
+    } catch (e) {
+      openLogin(e.message);
+      return;
+    }
+    code = null;
+  }
+  if (!currentSession()) {
+    openLogin();
+    return;
+  }
+  try {
+    ws = await api("/workspace");
+    $("app-header").hidden = false;
+    await navigate();
+    const results = await Promise.allSettled([
+      getFolder("inbound"),
+      getFolder("outbound"),
+      api("/contacts").then((data) => {
+        contacts = data.items;
+      }),
+    ]);
+    if (
+      route === "inbox" ||
+      route === "sent" ||
+      route === "add" ||
+      route === "recipient"
+    )
+      render();
+    const err = results.find((x) => x.status === "rejected");
+    if (err) failUI(err.reason.message);
+  } catch (e) {
+    if (e.status === 401) return;
+    screen.innerHTML = `<div class="flow"><h1 class="title">Workspace unavailable</h1><p class="lead">${esc(e.message)}</p><div class="btn-stack">${btn("reload", "Try again", "primary full")}${btn("signout", "Sign out", "soft-link")}</div></div>`;
+  }
+}
+async function storedDoc(r, forViewing = false) {
+  const data = await api("/file/" + r.id);
+  const url = checkFileUrl(data.url);
+  const response = await fetch(url, {
+    credentials: "omit",
+    redirect: "error",
+    referrerPolicy: "no-referrer",
+    cache: "no-store",
+    signal: AbortSignal.timeout(45000),
+  });
+  if (!response.ok)
+    throw Error("The document could not be opened. Refresh and try again.");
+  const blob = await response.blob();
+  return readPdf(
+    new File([blob], data.name || r.name, { type: "application/pdf" }),
+    forViewing,
+  );
+}
+async function loadIntoDraft(loader) {
+  const job = ++fileJob;
+  reading = true;
+  const indicator = $("file-status");
+  if (indicator) indicator.textContent = "Preparing document…";
+  let doc;
+  try {
+    doc = await loader();
+    if (
+      job !== fileJob ||
+      (!["add", "inbox", "sent", "review"].includes(route) &&
+        !route.startsWith("record/"))
+    ) {
+      clearDoc(doc);
+      return;
+    }
+    const old = draft.doc;
+    draft.doc = doc;
+    clearDoc(old);
+    if (route === "add") render();
+  } finally {
+    if (job === fileJob) {
+      reading = false;
+      if (route === "add") render();
+    }
+  }
+}
+async function openViewer(doc, owned = false) {
+  viewer = { doc, owned, index: 0 };
+  modal(doc.name, '<p class="lead">Opening document…</p>');
+  await showPage();
+}
+async function showPage() {
+  const current = viewer;
+  if (!current) return;
+  const { index, doc } = current;
+  sheetBody.innerHTML = `<div class="viewer-tools">${btn("prev", "Previous", "chip", "", index === 0 ? "disabled" : "")}<span>Page ${index + 1} of ${doc.pages}</span>${btn("next", "Next", "chip", "", index >= doc.pages - 1 ? "disabled" : "")}</div><img id="page-img" class="viewer-image" alt="Page ${index + 1}"><div class="btn-stack">${btn("save-view", "Save PDF", "soft-link", "download-outline")}</div>`;
+  const img = $("page-img");
+  img.src = await pageImage(doc, index);
+}
+function download(doc) {
+  const a = document.createElement("a");
+  a.href = doc.url;
+  a.download = doc.name;
+  a.click();
+}
+function account() {
+  const b = ws.billing;
+  modal(
+    "Your account",
+    details([
+      ["Email", ws.email],
+      [
+        "Fax number",
+        ws.line?.phone ? displayNumber(ws.line.phone) : "Awaiting activation",
+      ],
+      [
+        "Plan",
+        ws.line?.is_company
+          ? "Korlix company line"
+          : b?.active
+            ? plans[b.plan]?.name
+            : plans[ws.line?.requested_plan]?.name &&
+              plans[ws.line.requested_plan].name + " requested",
+      ],
+    ]) +
+      `<div class="sheet-actions">${btn("setup", "My number", "outline-btn", "phone-outline")}${ws.operator ? btn("manage", "Line requests", "outline-btn", "account-multiple-outline") : ""}${btn("signout", "Sign out", "soft-link")}</div>`,
+  );
+}
+async function copyNumber() {
+  try {
+    await navigator.clipboard.writeText(ws.line.phone);
+    toast("Fax number copied");
+  } catch {
+    modal(
+      "Copy your fax number",
+      `<input id="copy-field" class="control" readonly value="${esc(ws.line.phone)}">`,
+    );
+    $("copy-field").select();
+  }
+}
+function rici() {
+  const recent = folders.outbound.items.find((r) => r.hasFile),
+    known = recipientOptions().find(([, name]) => name);
+  const speechOK = window.SpeechRecognition || window.webkitSpeechRecognition;
+  modal(
+    "Ask Rici",
+    `<label class="small-title" for="rici-request">What would you like to fax?</label><input id="rici-request" class="control" placeholder="Document and recipient"><p class="small-note block">Enter a saved contact or fax number. You’ll review the document before sending.</p>${speechOK ? btn("dictate", "Dictate request", "soft-link", "microphone-outline") : ""}${recent && known ? `<div class="block"><h3 class="small-title">Recent document</h3>${btn("rici-last", "Fax " + recent.name + " to " + known[1], "chip", "waveform")}</div>` : ""}<p role="alert" class="err"></p><div class="btn-stack">${btn("prepare", "Prepare fax", "primary")}</div>`,
+  );
+}
+function listen() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+  if (speech) speech.abort();
+  speech = new SR();
+  speech.lang = navigator.language || "en-US";
+  speech.interimResults = false;
+  speech.onresult = (e) => {
+    if ($("rici-request")) $("rici-request").value = e.results[0][0].transcript;
+  };
+  speech.onerror = () => {
+    if (sheet.open) failUI("You can type your request here.");
+  };
+  speech.start();
+}
+async function prepareRici(explicit = false) {
+  const q = $("rici-request").value.trim().toLowerCase();
+  const options = recipientOptions();
+  const names = options.filter(
+    ([, name]) => name && q.includes(name.toLowerCase()),
+  );
+  const numbers =
+    q.match(/\+?1?[\s.(\-]*[2-9]\d{2}[\s.)\-]*[2-9]\d{2}[\s.\-]*\d{4}/g) || [];
+  const phone = explicit
+    ? options.find(([, name]) => name)?.[0]
+    : numbers.length === 1
+      ? phoneNumber(numbers[0])
+      : !numbers.length && names.length === 1
+        ? names[0][0]
+        : "";
+  if (!phone)
+    throw Error("Enter one recipient’s saved contact name or full fax number.");
+  const docs = folders.outbound.items.filter((r) => r.hasFile);
+  const matches = docs.filter((x) =>
+    q.includes(x.name.toLowerCase().replace(/\.pdf$/, "")),
+  );
+  const rec = explicit ? docs[0] : matches[0];
+  if (rec) {
+    const doc = await storedDoc(rec);
+    clearDraft();
+    draft.doc = doc;
+  }
+  draft.number = displayNumber(phone);
+  draft.saveName = contactName(phone);
+  go(draft.doc ? "review" : "add");
+}
+const actions = {
+  home: () => go("inbox"),
+  sent: (b) => go(b?.dataset.folder === "inbound" ? "inbox" : "sent"),
+  reload: () => location.reload(),
+  folder: (b) => go(b.dataset.id === "outbound" ? "sent" : "inbox"),
+  older: async () => {
+    await getFolder(folder, true);
+    render();
+  },
+  compose: () => {
+    clearDraft();
+    go(ws.line?.state === "active" ? "add" : "setup");
+  },
+  setup: () => go("setup"),
+  add: () => go("add"),
+  recipient: () => go("recipient"),
+  record: (b) => go("record/" + b.dataset.id),
+  copy: copyNumber,
+  share: async () => {
+    if (navigator.share)
+      try {
+        await navigator.share({
+          title: "Fax number",
+          text: displayNumber(ws.line.phone),
+        });
+      } catch (e) {
+        if (e.name !== "AbortError") throw e;
+      }
+    else
+      modal(
+        "Share your fax number",
+        `<p class="lead">${esc(displayNumber(ws.line.phone))}</p><div class="btn-stack">${btn("copy", "Copy number", "primary", "content-copy")}</div>`,
+      );
+  },
+  camera: () => $("camera-file").click(),
+  upload: () => $("upload-file").click(),
+  remove: () => {
+    clearDraft();
+    render();
+  },
+  recent: async (b) => {
+    const rec = locate(b.dataset.id);
+    await loadIntoDraft(() => storedDoc(rec));
+    if (route === "add" && draft.doc) go(draft.number ? "review" : "recipient");
+  },
+  "after-doc": () => {
+    if (!reading && draft.doc)
+      go(phoneNumber(draft.number) ? "review" : "recipient");
+  },
+  contact: (b) => {
+    draft.number = displayNumber(b.dataset.num);
+    draft.saveName = contactName(b.dataset.num);
+    render();
+  },
+  review: async () => {
+    const number = phoneNumber(draft.number);
+    if (!number) throw Error("Enter a valid U.S. fax number.");
+    const name = draft.saveName.trim();
+    if (name && name !== contactName(number)) {
+      const saved = await api("/contacts", {
+        method: "POST",
+        body: { name, phone: number },
+      });
+      contacts = [saved, ...contacts.filter((c) => c.phone !== number)];
+    }
+    go("review");
+  },
+  send: async () => {
+    if (busy || !draft.doc) return;
+    busy = true;
+    render();
+    try {
+      const r = await dispatch(draft.doc, phoneNumber(draft.number), ws.email);
+      clearDraft();
+      go("record/" + r.id);
+      await getFolder("outbound");
+    } finally {
+      busy = false;
+      if (route === "review" && draft.doc) render();
+    }
+  },
+  retry: async () => {
+    const rec = activeRecord;
+    if (rec.status !== "failed" || rec.direction !== "outbound" || !rec.hasFile)
+      return;
+    const doc = await storedDoc(rec);
+    clearDraft();
+    draft.doc = doc;
+    draft.number = displayNumber(rec.recipient);
+    go("review");
+  },
+  "view-draft": () => openViewer(draft.doc),
+  "view-record": async () =>
+    openViewer(await storedDoc(activeRecord, true), true),
+  "save-record": async () => {
+    const d = await storedDoc(activeRecord, true);
+    download(d);
+    setTimeout(() => clearDoc(d), 60000);
+  },
+  "save-view": () => download(viewer.doc),
+  prev: () => {
+    if (viewer.index > 0) {
+      viewer.index--;
+      return showPage();
+    }
+  },
+  next: () => {
+    if (viewer.index < viewer.doc.pages - 1) {
+      viewer.index++;
+      return showPage();
+    }
+  },
+  refresh: () => refresh(true),
+  plan: (b) => {
+    selectedPlan = b.dataset.id;
+    const pref = $("prefix")?.value,
+      area = $("area")?.value;
+    render();
+    if (pref === "local") {
+      $("prefix").value = pref;
+      $("area").hidden = false;
+      $("area").value = area;
+    }
+  },
+  request: async () => {
+    const preference =
+      $("prefix").value === "local" ? $("area").value.trim() : "toll_free";
+    if (preference !== "toll_free" && !/^[2-9]\d{2}$/.test(preference))
+      throw Error("Enter a valid three-digit U.S. area code.");
+    const result = await api("/line", {
+      method: "POST",
+      body: { preference, plan: selectedPlan },
+    });
+    ws.line = result.line;
+    render();
+    toast("Your fax number request was saved");
+  },
+  manage: () => location.assign("account.html"),
+  signout: async () => {
+    await api("/signout", { method: "POST" });
+    clearDraft();
+    openLogin();
+  },
+  rici: () => {
+    if (ws.line?.state !== "active") go("setup");
+    else rici();
+  },
+  dictate: listen,
+  prepare: () => prepareRici(false),
+  "rici-last": () => prepareRici(true),
+};
+document.addEventListener("click", async (e) => {
+  const b = e.target.closest("button[data-act]");
+  if (!b || !actions[b.dataset.act] || b.disabled) return;
+  if (["camera", "upload"].includes(b.dataset.act)) {
+    actions[b.dataset.act](b);
+    return;
+  }
+  b.disabled = true;
+  try {
+    await actions[b.dataset.act](b);
+  } catch (err) {
+    failUI(err.message);
+  } finally {
+    if (b.isConnected) b.disabled = false;
+  }
+});
+document.addEventListener("input", (e) => {
+  if (e.target.id === "fax-to") {
+    draft.number = e.target.value;
+    draft.saveName = contactName(phoneNumber(draft.number));
+    $("contact-name").value = draft.saveName;
+    screen.querySelector('[data-act="review"]').disabled = !phoneNumber(
+      draft.number,
+    );
+    const lst = $("contacts-list");
+    if (lst) lst.innerHTML = contactRows();
+  } else if (e.target.id === "contact-name") draft.saveName = e.target.value;
+});
+document.addEventListener("change", async (e) => {
+  const field = e.target;
+  if (field.id === "prefix") {
+    $("area").hidden = field.value !== "local";
+    return;
+  }
+  if (!["camera-file", "upload-file"].includes(field.id) || !field.files.length)
+    return;
+  const files = [...field.files];
+  try {
+    await loadIntoDraft(() =>
+      field.id === "camera-file"
+        ? scanPages(files, draft.doc)
+        : readPdf(files[0]),
+    );
+  } catch (err) {
+    failUI(err.message);
+  }
+});
+$("brand-home").onclick = () => go("inbox");
+$("account").onclick = account;
+$("sheet-close").onclick = closeSheet;
+window.addEventListener("hashchange", () => {
+  if (ws) {
+    closeSheet();
+    navigate();
+  }
+});
+window.addEventListener("pageshow", (e) => {
+  if (e.persisted) {
+    if (!currentSession()) openLogin();
+    else refresh(true);
+  }
+});
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) refresh();
+});
+setInterval(() => refresh(), 10000);
+start();
