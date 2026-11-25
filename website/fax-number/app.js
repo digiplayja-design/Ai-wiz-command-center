@@ -59,12 +59,17 @@ const dollars = (n) =>
 function loginScreen(msg = '') {
   state.token = null;
   state.workspace = null;
+  state.view = 'inbound';
   state.epoch++;
   sessionStorage.removeItem(storeKey);
   if ($('dialog').open) $('dialog').close();
   $('app').hidden = true;
   $('login').hidden = false;
   $('password').value = '';
+  $('password').type = 'password';
+  $('show-password').textContent = 'Show';
+  $('show-password').setAttribute('aria-pressed', 'false');
+  $('show-password').setAttribute('aria-label', 'Show password');
   $('content').replaceChildren();
   $('account').textContent = '';
   $('side-value').textContent = '';
