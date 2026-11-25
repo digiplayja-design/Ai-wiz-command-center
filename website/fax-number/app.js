@@ -8,7 +8,13 @@ import {
   checkFileUrl,
   dispatch,
 } from "./fax-api.js";
-import { readPdf, pageImage, scanPages, clearDoc } from "./fax-document.js";
+import {
+  readPdf,
+  pageImage,
+  scanPages,
+  clearDoc,
+  receiptPdf,
+} from "./fax-document.js";
 const $ = (id) => document.getElementById(id);
 const screen = $("screen"),
   sheet = $("sheet"),
@@ -47,7 +53,12 @@ const statuses = {
   failed: "Failed",
 };
 const terminal = new Set(["delivered", "received", "failed"]);
-const folderState = () => ({ items: [], more: false, loaded: false, sequence: 0 });
+const folderState = () => ({
+  items: [],
+  more: false,
+  loaded: false,
+  sequence: 0,
+});
 const folders = { inbound: folderState(), outbound: folderState() };
 let contacts = [],
   ws = null,
@@ -276,7 +287,7 @@ function receipt(r) {
     ["Fax reference", r.id],
     ["Details", r.detail],
   ];
-  return `<div class="flow receipt"><div class="flow-nav">${btn(inbound ? "home" : "sent", "Back", "back", "chevron-left")}</div><div class="receipt-hero"><div class="seal ${failed ? "failed" : ""}">${icon(failed ? "information-outline" : r.status === "received" ? "tray-arrow-down" : done ? "check" : "progress-clock")}</div><h1 class="title">${esc(title)}</h1><p class="lead">${esc(stamp(r.updated_at || r.created_at))}</p></div><div class="receipt-card"><div class="receipt-head">${icon("file-check-outline")}${inbound ? "Received fax" : done ? "Delivery receipt" : "Delivery status"}</div>${details(meta)}</div><div class="btn-stack">${inbound && r.hasFile ? btn("view-record", "Open document", "primary full", "file-document-outline") : failed && r.hasFile && !inbound ? btn("retry", "Try again", "primary full", "restart") : btn("sent", inbound ? "View inbox" : "View sent faxes", "primary full", inbound ? "tray-arrow-down" : "tray-arrow-up", inbound ? 'data-folder="inbound"' : "")}${r.hasFile ? (inbound ? btn("save-record", "Save PDF", "soft-link", "download-outline") : btn("view-record", "View document", "soft-link", "file-document-outline")) : ""}${!done ? btn("refresh", "Refresh status", "soft-link", "restart") : ""}</div></div>`;
+  return `<div class="flow receipt"><div class="flow-nav">${btn(inbound ? "home" : "sent", "Back", "back", "chevron-left")}</div><div class="receipt-hero"><div class="seal ${failed ? "failed" : ""}">${icon(failed ? "information-outline" : r.status === "received" ? "tray-arrow-down" : done ? "check" : "progress-clock")}</div><h1 class="title">${esc(title)}</h1><p class="lead">${esc(stamp(r.updated_at || r.created_at))}</p></div><div class="receipt-card"><div class="receipt-head">${icon("file-check-outline")}${inbound ? "Received fax" : done ? "Delivery receipt" : "Delivery status"}</div>${details(meta)}</div><div class="btn-stack">${inbound && r.hasFile ? btn("view-record", "Open document", "primary full", "file-document-outline") : failed && r.hasFile && !inbound ? btn("retry", "Try again", "primary full", "restart") : btn("sent", inbound ? "View inbox" : "View sent faxes", "primary full", inbound ? "tray-arrow-down" : "tray-arrow-up", inbound ? 'data-folder="inbound"' : "")}${r.hasFile ? (inbound ? btn("save-record", "Save PDF", "soft-link", "download-outline") : btn("view-record", "View document", "soft-link", "file-document-outline")) : ""}${done ? btn("save-receipt", "Save receipt PDF", "soft-link", "file-check-outline") : btn("refresh", "Refresh status", "soft-link", "restart")}</div></div>`;
 }
 function setup() {
   const line = ws.line,
@@ -738,6 +749,41 @@ const actions = {
   "view-draft": () => openViewer(draft.doc),
   "view-record": async () =>
     openViewer(await storedDoc(activeRecord, true), true),
+  "save-receipt": async () => {
+    const r = activeRecord;
+    if (!r || !terminal.has(r.status)) return;
+    const time = new Date(r.updated_at || r.created_at);
+    const outcome =
+      r.status === "failed"
+        ? "Failed fax report"
+        : r.direction === "inbound"
+          ? "Received fax receipt"
+          : "Fax delivery receipt";
+    const fields = [
+      ["Status", statuses[r.status]],
+      [
+        "Status updated",
+        new Intl.DateTimeFormat("en-US", {
+          dateStyle: "long",
+          timeStyle: "long",
+          timeZone: "UTC",
+        }).format(time),
+      ],
+      ["From", displayNumber(r.sender)],
+      ["To", displayNumber(r.recipient)],
+      ["Document", r.name],
+      [
+        "Pages reported",
+        Number.isInteger(r.pages) ? r.pages : "Awaiting page count",
+      ],
+      ["Fax reference", r.id],
+      ["Details", r.detail],
+    ];
+    const file = await receiptPdf(outcome, fields, r.id);
+    const url = URL.createObjectURL(file);
+    download({ url, name: file.name });
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  },
   "save-record": async () => {
     const d = await storedDoc(activeRecord, true);
     download(d);

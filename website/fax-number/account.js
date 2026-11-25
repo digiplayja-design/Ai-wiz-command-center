@@ -532,6 +532,8 @@ async function showOps(content, generation) {
         'muted'
       )
     );
+    const plan = { solo: 'Solo', business: 'Business' }[row.requested_plan];
+    if (plan) box.append(el('p', 'Requested plan · ' + plan, 'muted'));
     if (state.workspace.carrierReady) {
       if (row.state === 'ordering')
         box.append(

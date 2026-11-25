@@ -25,7 +25,7 @@ async function pdfWriter() {
       script.onload = () => resolve(window.PDFLib);
       script.onerror = () => {
         writer = null;
-        reject(Error("Could not load the scan converter."));
+        reject(Error("Could not load the PDF tools."));
       };
       document.head.append(script);
     });
@@ -153,14 +153,12 @@ export async function scanPages(files, previous) {
     const scale = Math.min(w / img.width, h / img.height);
     const iw = img.width * scale,
       ih = img.height * scale;
-    pdf
-      .addPage([w, h])
-      .drawImage(img, {
-        x: (w - iw) / 2,
-        y: (h - ih) / 2,
-        width: iw,
-        height: ih,
-      });
+    pdf.addPage([w, h]).drawImage(img, {
+      x: (w - iw) / 2,
+      y: (h - ih) / 2,
+      width: iw,
+      height: ih,
+    });
   }
   const file = new File([await pdf.save()], "Scanned pages.pdf", {
     type: "application/pdf",
@@ -168,4 +166,68 @@ export async function scanPages(files, previous) {
   const doc = await readPdf(file);
   doc.scanPages = pages;
   return doc;
+}
+
+export async function receiptPdf(title, fields, id) {
+  const lib = await pdfWriter();
+  const pdf = await lib.PDFDocument.create();
+  pdf.setTitle(title + " · FAX Number by Korlix");
+  pdf.setAuthor("Korlix");
+  const font = await pdf.embedFont(lib.StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(lib.StandardFonts.HelveticaBold);
+  const page = pdf.addPage([612, 792]);
+  const ink = lib.rgb(0.05, 0.12, 0.12),
+    teal = lib.rgb(0.01, 0.37, 0.34);
+  page.drawRectangle({ x: 0, y: 779, width: 612, height: 13, color: teal });
+  page.drawText("FAX Number by Korlix", {
+    x: 52,
+    y: 723,
+    font: bold,
+    size: 15,
+    color: teal,
+  });
+  page.drawText(title, { x: 52, y: 667, font: bold, size: 30, color: ink });
+  const supported = new Set(font.getCharacterSet());
+  let y = 610;
+  for (const [key, raw] of fields) {
+    if (raw == null || raw === "") continue;
+    const text = String(raw).replace(/[\u0000-\u001f\u007f]/g, " ");
+    page.drawText(key, { x: 52, y, font: bold, size: 10, color: teal });
+    y -= 19;
+    // Draw non-Latin names with the browser font when the built-in PDF font lacks a glyph.
+    const useFont = [...text].every((c) => supported.has(c.codePointAt(0)));
+    const canvas = document.createElement("canvas");
+    canvas.width = 1020;
+    canvas.height = 40;
+    const ctx = canvas.getContext("2d");
+    ctx.font = "26px Inter, sans-serif";
+    const measure = (s) =>
+      useFont ? font.widthOfTextAtSize(s, 13) : ctx.measureText(s).width / 2;
+    const lines = [];
+    let line = "";
+    for (const char of text) {
+      if (line && measure(line + char) > 505) {
+        lines.push(line);
+        line = "";
+      }
+      line += char;
+    }
+    if (line) lines.push(line);
+    for (const s of lines) {
+      if (useFont) page.drawText(s, { x: 52, y, font, size: 13, color: ink });
+      else {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#102020";
+        ctx.fillText(s, 0, 29);
+        const img = await pdf.embedPng(canvas.toDataURL("image/png"));
+        page.drawImage(img, { x: 52, y: y - 5.5, width: 510, height: 20 });
+      }
+      y -= 17;
+    }
+    canvas.width = canvas.height = 0;
+    y -= 10;
+  }
+  return new File([await pdf.save()], "Korlix-Fax-Receipt-" + id + ".pdf", {
+    type: "application/pdf",
+  });
 }
