@@ -2,6 +2,7 @@
 const homeBusinessTools = <String>[
   // Keep CRM first and visible independently of the home tier request.
   'Contacts CRM',
+  'Fax Number by Korlix',
   'Logo Studio',
   'KORLIX 2MEETU',
   'SEO Agent',
@@ -87,6 +88,7 @@ class HomeToolEntry {
 }
 
 const _toolDetails = <String, String>{
+  'Fax Number by Korlix': 'Send, receive and track PDF faxes on your business fax line',
   'Contacts CRM': 'Contacts, leads, follow-ups and autonomous email',
   'Workforce': 'Team tasks, work updates and email reminders',
   'Business Passport':

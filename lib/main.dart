@@ -10083,6 +10083,47 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     });
   }
 
+  bool _openingFaxWorkspace = false;
+
+  Future<void> _openFaxWorkspace() async {
+    if (_openingFaxWorkspace) return;
+    _openingFaxWorkspace = true;
+    final landing = Uri.https('korlix-fax-number.onrender.com', '/');
+    var target = landing;
+    try {
+      final token = kKorlixAccessToken;
+      if (token != null && token.isNotEmpty) {
+        try {
+          final result = await http.post(
+            Uri.https('uxtjzjbwtppjvnsoiijv.supabase.co', '/functions/v1/korlix-fax/hub-handoff'),
+            headers: {'Authorization': 'Bearer $token'},
+          ).timeout(const Duration(seconds: 8));
+          if (result.statusCode == 200) {
+            final body = jsonDecode(result.body);
+            final code = body is Map ? body['code'] : null;
+            if (code is String && RegExp(r'^[a-f0-9]{64}$').hasMatch(code)) {
+              target = landing.replace(fragment: 'handoff=$code');
+            }
+          }
+        } catch (_) {
+          // The standalone workspace can sign the user in when handoff is unavailable.
+        }
+      }
+      if (!mounted || token != kKorlixAccessToken) return;
+      final opened = await launchUrl(target,
+        mode: kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+        webOnlyWindowName: '_self',
+      );
+      if (!opened) throw StateError('Fax workspace could not open.');
+    } catch (_) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('The fax workspace could not open. Please try again.')),
+      );
+    } finally {
+      _openingFaxWorkspace = false;
+    }
+  }
+
   Future<void> _openScheduling() async {
     final client = SchedulingClient(baseUrl: kKorlixBackendBaseUrl,
       headersBuilder: _authHeaders, sessionChanges: kKorlixAuthRevision);
@@ -10166,6 +10207,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
     if (tool == 'Payroll') { unawaited(_openPayroll()); return; }
     if (tool == 'KORLIX 2MEETU' || tool == 'Scheduling') { unawaited(_openScheduling()); return; }
 
+    if (tool == 'Fax Number by Korlix') { unawaited(_openFaxWorkspace()); return; }
     if (tool == 'Business Directory') { unawaited(_openBusinessDirectory()); return; }
     if (tool == 'Business Passport') { unawaited(_openBusinessDirectory(passportMode:true)); return; }
     if (tool == 'AI Receptionist') { unawaited(_openBusinessDirectory(receptionistMode:true)); return; }
@@ -11293,6 +11335,7 @@ Maximum pressure while staying accurate, professional, evidence-based, and compl
       if (tool == 'Payroll') return 'Enterprise US payroll, employee onboarding and payroll tax workflows';
       if (tool == 'KORLIX 2MEETU' || tool == 'Scheduling') return 'Free scheduling, booking pages, group sessions and appointments';
       if (tool == 'Business Passport') return 'Your free business page: services, photos, booking link and shareable QR';
+      if (tool == 'Fax Number by Korlix') return 'Send PDFs, receive faxes and check delivery';
       if (tool == 'Business Directory') return 'Find businesses and explore their public Business Passports';
       if (tool == 'AI Receptionist') return 'K-Nova answers your business calls and books appointments · Enterprise';
       if (tool == 'Workforce') return 'Your business, team tasks, shifts and Rici voice assistance';

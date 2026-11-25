@@ -41,6 +41,7 @@ void main() {
         ).map((entry) => entry.label).toList();
         for (final tools in [home, finder]) {
           expect(tools, contains('KORLIX 2MEETU'));
+          expect(tools.where((tool) => tool == 'Fax Number by Korlix'), hasLength(1));
           for (final feature in [
             'AI Receptionist',
             'FieldProof',
