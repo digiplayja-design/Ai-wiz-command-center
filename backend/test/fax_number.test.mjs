@@ -151,6 +151,7 @@ test('late queued or sending events cannot regress a delivered fax', () => {
 test('user history and file links are restricted to the signed-in owner, and operators have a separate gate', async () => {
   const seen = [];
   const svc = {
+    customerEnrollmentOpen: true,
     identity: async () => user,
     db: async (t, filters) => {
       seen.push(filters);

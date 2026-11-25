@@ -67,6 +67,7 @@ export function resolveFaxServices(env, http = fetch, clock = Date.now) {
 export function services(env, http = fetch, settings = {}) {
   const base = env('SUPABASE_URL'),
     serviceKey = env('SUPABASE_SERVICE_ROLE_KEY');
+  const customerEnrollmentOpen = env('KORLIX_FAX_CUSTOMER_ENROLLMENT') === 'true';
   const carrierKey = env('TELNYX_API_KEY')?.trim(),
     connection = settings.connection || env('TELNYX_FAX_CONNECTION_ID');
   const publicKey = settings.publicKey || env('TELNYX_PUBLIC_KEY'),
@@ -129,6 +130,11 @@ export function services(env, http = fetch, settings = {}) {
       n.toString(16).padStart(2, '0')
     ).join('');
   }
+  async function requireCompanyAccess(userId) {
+    if (customerEnrollmentOpen) return;
+    const company = await lineFor({ user_id: 'eq.' + userId, is_company: 'eq.true', select: 'id' });
+    if (!company) fail(403, 'This workspace is for Korlix company use only.');
+  }
   async function hubHandoff(req) {
     const bearer = req.headers.get('authorization') || '';
     if (!/^Bearer [^\s]{20,8192}$/.test(bearer)) fail(401, 'Sign in to Korlix first.');
@@ -147,6 +153,7 @@ export function services(env, http = fetch, settings = {}) {
       Date.parse(member.banned_until) > Date.now()
     )
       fail(403, 'Confirm your Korlix account first.');
+    await requireCompanyAccess(member.id);
     const code = randomToken();
     await db(
       'korlix_fax_handoffs',
@@ -164,9 +171,20 @@ export function services(env, http = fetch, settings = {}) {
   async function redeemHandoff({ code, device }) {
     if (!/^[0-9a-f]{64}$/.test(code || '') || !uuid.test(device))
       fail(401, 'Open Fax Number from Korlix again.');
+    const codeHash = await digest(code);
+    if (!customerEnrollmentOpen) {
+      const [handoff] = await db('korlix_fax_handoffs', {
+        code_hash: 'eq.' + codeHash,
+        select: 'user_id',
+        expires_at: 'gt.' + new Date().toISOString(),
+        limit: '1',
+      });
+      if (!handoff) fail(401, 'Open Fax Number from Korlix again.');
+      await requireCompanyAccess(handoff.user_id);
+    }
     const token = randomToken();
     const ok = await rpc('redeem_handoff', {
-      p_code: await digest(code),
+      p_code: codeHash,
       p_device: device,
       p_hash: await digest(token),
     });
@@ -207,6 +225,7 @@ export function services(env, http = fetch, settings = {}) {
     if (!revoked.ok) fail(503, 'Korlix could not finish sign-in. Please try again.');
     if (!data.user?.email_confirmed_at || !uuid.test(data.user.id))
       fail(403, 'Confirm your Korlix email before signing in.');
+    await requireCompanyAccess(data.user.id);
     const token = randomToken();
     const ok = await rpc('open_session', {
       p_user: data.user.id,
@@ -376,6 +395,7 @@ export function services(env, http = fetch, settings = {}) {
   }
   return {
     base,
+    customerEnrollmentOpen,
     db,
     put,
     signed,

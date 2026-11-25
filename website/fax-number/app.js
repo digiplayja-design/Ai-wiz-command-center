@@ -76,10 +76,6 @@ let draft = { doc: null, number: "", saveName: "" },
   speech = null,
   toastTimer,
   alertText = "";
-const plans = {
-  solo: { name: "Solo", pages: 100, price: "9.99" },
-  business: { name: "Business", pages: 250, price: "19.99" },
-};
 function clearDraft() {
   fileJob++;
   reading = false;
@@ -164,12 +160,15 @@ const stamp = (s) => when(s, { dateStyle: "medium", timeStyle: "short" });
 function numberCard() {
   const l = ws.line,
     active = l?.state === "active" && l.phone;
+  if (!l && ws.customerEnrollmentOpen !== true)
+    return '<div class="line-card"><h1 class="line-number no-line">Company workspace</h1><p>No company number is assigned to this account.</p></div>';
+
   return `<div class="line-card"><div class="stripes" aria-hidden="true"><i></i><i></i><i></i><i></i></div><div class="line-top"><span class="eyebrow">Your fax number</span>${active ? '<span class="line-live"><i class="dot"></i>Active</span>' : ""}</div><h1 class="line-number ${active ? "" : "no-line"}">${active ? esc(displayNumber(l.phone)) : l ? "Activation pending" : "Get a fax number"}</h1><div class="line-tools">${active ? btn("copy", "Copy", "glass-btn", "content-copy") + btn("share", "Share", "glass-btn", "share-variant-outline") : btn("setup", l ? "View request" : "Get my fax number", "glass-btn", "phone-outline")}</div></div>`;
 }
 function usage() {
   const u = ws.usage;
   if (!u) return "";
-  const cap = ws.billing?.active && plans[ws.billing.plan]?.pages;
+  const cap = ws.billing?.active && ws.plans?.[ws.billing.plan]?.pages;
   return `<section class="usage"><div class="row-between"><h2>Monthly pages</h2><span><b>${esc(u.pages)}</b>${cap ? " / " + cap : " used"}</span></div>${cap ? `<progress class="page-meter" aria-label="Monthly pages used" value="${u.pages}" max="${Math.max(cap, u.pages)}"></progress>` : `<p class="usage-detail">${esc(u.inboundPages)} received · ${esc(u.outboundPages)} sent</p>`}${u.pendingReports ? '<p class="usage-detail">Additional page counts are awaiting carrier confirmation.</p>' : ""}</section>`;
 }
 function faxRow(r) {
@@ -292,6 +291,8 @@ function receipt(r) {
 function setup() {
   const line = ws.line,
     active = line?.state === "active";
+  if (!line && ws.customerEnrollmentOpen !== true)
+    return `<div class="flow"><div class="flow-nav">${btn("home", "Back", "back", "chevron-left")}</div><h1 class="title">Company workspace</h1><p class="lead">No company number is assigned to this account.</p></div>`;
   if (line)
     return `<div class="flow"><div class="flow-nav">${btn("home", "Back", "back", "chevron-left")}</div><section class="block"><h1 class="title">${active ? "Your fax number" : "Activation pending"}</h1><p class="lead">${active ? "Use this number to send and receive faxes." : "Korlix has your request. Your number will appear here when activation is complete."}</p></section><div class="block">${details(
       [
@@ -310,12 +311,10 @@ function setup() {
             ? "U.S. toll-free"
             : "Area code " + line.preference,
         ],
-        ["Requested plan", plans[line.requested_plan]?.name],
+        ["Requested plan", ws.plans?.[line.requested_plan]?.name],
       ],
     )}</div><div class="btn-stack">${btn("refresh", "Refresh", "outline-btn", "restart")}</div></div>`;
-  return `<div class="flow"><div class="flow-nav">${btn("home", "Back", "back", "chevron-left")}</div><div class="block"><h1 class="title">Get my fax number</h1><p class="lead">Choose a plan to request your own U.S. fax number.</p></div><div class="block plan-list">${Object.entries(
-    plans,
-  )
+  return `<div class="flow"><div class="flow-nav">${btn("home", "Back", "back", "chevron-left")}</div><div class="block"><h1 class="title">Get my fax number</h1><p class="lead">Choose a plan to request your own U.S. fax number.</p></div><div class="block plan-list">${Object.entries(ws.plans || {})
     .map(
       ([id, p]) =>
         `<button class="plan ${id === selectedPlan ? "selected" : ""}" data-act="plan" data-id="${id}" aria-pressed="${id === selectedPlan}"><span><b>${p.name}</b><small>${p.pages} pages per month</small></span><span class="price">$${p.price}<small> / mo</small></span></button>`,
@@ -440,7 +439,7 @@ async function refresh(force = false) {
     if (
       route === current &&
       !sheet.open &&
-      !(current === "setup" && !ws.line)
+      !(current === "setup" && !ws.line && ws.customerEnrollmentOpen === true)
     ) {
       alertText = "";
       render();
@@ -580,9 +579,9 @@ function account() {
         ws.line?.is_company
           ? "Korlix company line"
           : b?.active
-            ? plans[b.plan]?.name
-            : plans[ws.line?.requested_plan]?.name &&
-              plans[ws.line.requested_plan].name + " requested",
+            ? ws.plans?.[b.plan]?.name
+            : ws.plans?.[ws.line?.requested_plan]?.name &&
+              ws.plans?.[ws.line.requested_plan].name + " requested",
       ],
     ]) +
       `<div class="sheet-actions">${btn("setup", "My number", "outline-btn", "phone-outline")}${ws.operator ? btn("manage", "Line requests", "outline-btn", "account-multiple-outline") : ""}${btn("signout", "Sign out", "soft-link")}</div>`,
@@ -804,6 +803,7 @@ const actions = {
   },
   refresh: () => refresh(true),
   plan: (b) => {
+    if (ws.customerEnrollmentOpen !== true) return;
     selectedPlan = b.dataset.id;
     const pref = $("prefix")?.value,
       area = $("area")?.value;
@@ -815,6 +815,7 @@ const actions = {
     }
   },
   request: async () => {
+    if (ws.customerEnrollmentOpen !== true) return;
     const preference =
       $("prefix").value === "local" ? $("area").value.trim() : "toll_free";
     if (preference !== "toll_free" && !/^[2-9]\d{2}$/.test(preference))

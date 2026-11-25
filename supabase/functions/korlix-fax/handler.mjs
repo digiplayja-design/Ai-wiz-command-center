@@ -1,7 +1,13 @@
 import { boundedBytes, fail, lineNumber, uuid } from './rules.mjs';
 import { send, callback } from './transmissions.mjs';
 
+const customerPlans = {
+  solo: { name: 'Solo', pages: 100, price: '9.99' },
+  business: { name: 'Business', pages: 250, price: '19.99' },
+};
+
 export function createHandler(svc, origin = 'https://korlix-fax-number.onrender.com') {
+  const enrollmentOpen = svc.customerEnrollmentOpen === true;
   const lineFields = 'id,is_company,preference,requested_plan,state,phone,created_at';
   const docFields =
     'id,direction,sender,recipient,name,status,pages,detail,created_at,updated_at,object_path';
@@ -56,6 +62,8 @@ export function createHandler(svc, origin = 'https://korlix-fax-number.onrender.
       if (req.method === 'POST' && path === '/hub-handoff') return json(await svc.hubHandoff(req));
       if (req.method === 'POST' && path === '/redeem')
         return json(await svc.redeemHandoff(await body(req)));
+      if (req.method === 'POST' && path === '/line' && !enrollmentOpen)
+        fail(403, 'Customer fax enrollment is closed.');
       const user = await svc.identity(req);
       const owner = { user_id: 'eq.' + user.user_id };
       if (req.method === 'POST' && path === '/signout') {
@@ -68,6 +76,8 @@ export function createHandler(svc, origin = 'https://korlix-fax-number.onrender.
         );
         return json({ ok: true });
       }
+      if (!enrollmentOpen && !user.operator)
+        fail(403, 'This workspace is for Korlix company use only.');
       if (req.method === 'GET' && path === '/workspace') {
         let line = await svc.lineFor({ ...owner, select: lineFields });
         if (line?.state === 'ordering' && svc.ready) {
@@ -96,11 +106,13 @@ export function createHandler(svc, origin = 'https://korlix-fax-number.onrender.
           operator: user.operator,
           line: line || null,
           carrierReady: svc.ready,
+          customerEnrollmentOpen: enrollmentOpen,
+          ...(enrollmentOpen ? { plans: customerPlans } : {}),
         });
       }
       if (req.method === 'POST' && path === '/line') {
         const { preference, plan } = await body(req);
-        if (plan != null && !['solo', 'business'].includes(plan))
+        if (plan != null && (typeof plan !== 'string' || !Object.hasOwn(customerPlans, plan)))
           fail(400, 'Choose a supported fax plan.');
         if (
           typeof preference !== 'string' ||
@@ -209,6 +221,7 @@ export function createHandler(svc, origin = 'https://korlix-fax-number.onrender.
         if (req.method === 'GET' && path === '/operator/requests') {
           const rows = await svc.db('korlix_fax_lines', {
             state: 'in.(requested,ordering)',
+            ...(enrollmentOpen ? {} : { is_company: 'eq.true' }),
             user_id: 'not.is.null',
             select: lineFields,
             order: 'is_company.desc,created_at.asc',
@@ -222,7 +235,8 @@ export function createHandler(svc, origin = 'https://korlix-fax-number.onrender.
             id: 'eq.' + parts[1],
             user_id: 'not.is.null',
           });
-          if (!line) fail(404, 'Line request unavailable.');
+          if (!line || (!enrollmentOpen && !line.is_company))
+            fail(404, 'Line request unavailable.');
           if (parts[2] === 'options' && req.method === 'GET')
             return json({ items: (await svc.inventory(line)).slice(0, 12) });
           if (parts[2] === 'sync' && req.method === 'POST')

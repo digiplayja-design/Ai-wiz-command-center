@@ -8,7 +8,7 @@ Deno.serve(async (request: Request) => {
   const path = new URL(request.url).pathname;
   if (
     request.method === 'OPTIONS' ||
-    /\/(signin|signout|hub-handoff|redeem|history|contacts|(?:document|file)\/[^/]+)$/.test(path)
+    /\/(signin|signout|hub-handoff|redeem|line|history|contacts|(?:document|file)\/[^/]+)$/.test(path)
   )
     return local(request);
   return createHandler(await resolve(), origin)(request);

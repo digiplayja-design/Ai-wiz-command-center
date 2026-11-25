@@ -96,6 +96,7 @@ async function api(path, { method = 'GET', body, headers = {}, raw = false } = {
   const data = await res.json().catch(() => ({}));
   if (res.status === 401 && state.token && path !== '/signin')
     loginScreen('Your session ended. Sign in again.');
+  if (res.status === 403 && path === '/workspace' && state.token) loginScreen(data.error);
   if (!res.ok) throw Error(data.error || 'Could not complete this request.');
   return data;
 }
@@ -158,7 +159,7 @@ function updateLine() {
       ? formatPhone(line.phone)
       : line
         ? 'Activation pending'
-        : 'Get a number';
+        : w.customerEnrollmentOpen === true ? 'Get a number' : 'Company workspace';
   $('side-detail').textContent = line
     ? line.preference === 'toll_free'
       ? 'U.S. toll-free'
@@ -322,6 +323,10 @@ function showNumber(content) {
     content.append(card);
     if (state.workspace.operator && line.state !== 'active')
       content.append(button('Manage line requests', () => render('ops')));
+    return;
+  }
+  if (state.workspace.customerEnrollmentOpen !== true) {
+    content.append(el('p', 'No company number is assigned to this account.', 'muted'));
     return;
   }
   const box = el('form', undefined, 'surface narrow');
