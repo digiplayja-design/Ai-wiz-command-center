@@ -685,3 +685,13 @@ dialog::backdrop {
     height: 38px;
   }
 }
+
+.intro > .brand-slot,
+#app > header > .brand-slot,
+#app > header > .account {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+body {
+  padding-inline: env(safe-area-inset-left, 0px) env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}

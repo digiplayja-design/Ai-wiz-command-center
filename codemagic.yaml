@@ -190,23 +190,33 @@ workflows:
       node: 24
       xcode: latest
       ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.korlixdeveloper.fax
+        # Codemagic imports the existing team certificate alongside a stored profile.
+        # Only the exact fax profile selected below is applied to the target.
+        certificates:
+          - KORLIX_APP_STORE_CERT
+        provisioning_profiles:
+          - KORLIX_APP_STORE_PROFILE
     scripts:
+      - name: Install the fax app identifier and distribution profile
+        script: python3 ios/prepare-profile.py
       - name: Prepare iPhone and iPad app
         script: npm ci && npm run web && npx cap sync ios
       - name: Build with the fax provisioning profile
         script: |
           cd ios/App
-          xcode-project use-profiles --project App.xcodeproj
-          xcode-project build-ipa --project App.xcodeproj --scheme App
+          xcode-project use-profiles --project App.xcodeproj --profile ../fax.mobileprovision
+          xcode-project build-ipa --project App.xcodeproj --scheme App --ipa-directory "$CM_BUILD_DIR/apps/fax/artifacts"
+      - name: Upload to internal TestFlight when the App Store Connect record exists
+        script: |
+          set -euo pipefail
+          records=$(app-store-connect apps list --bundle-id-identifier com.korlixdeveloper.fax --strict-match-identifier --json --log-stream stderr)
+          if python3 -c 'import json,sys; sys.exit(0 if len(json.load(sys.stdin)) == 1 else 1)' <<< "$records"; then
+            app-store-connect publish --path artifacts/*.ipa
+          else
+            echo "The signed IPA is available. Create the Fax by Korlix record in App Store Connect before uploading."
+          fi
     artifacts:
-      - $CM_BUILD_DIR/apps/fax/ios/App/build/ios/ipa/*.ipa
-    publishing:
-      app_store_connect:
-        auth: integration
-        submit_to_testflight: false
-        submit_to_app_store: false
+      - $CM_BUILD_DIR/apps/fax/artifacts/*.ipa
 
   fax-android-candidate:
     name: Fax by Korlix signed Play bundle
