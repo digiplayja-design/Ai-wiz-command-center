@@ -79,7 +79,7 @@ Review submission: `4ed5701d-c412-4afd-acee-83fc26bb9755`.
 App Store version record: `9789c73d-0707-489d-bda6-a49e06163243`.
 The signed artifact identity is preserved in `apple-verification.json`.
 
-### Android: signed release verified; Google upload pending
+### Android: uploaded and submitted; Google checks/review pending
 
 The original main-app upload key was recovered and reused without modification.
 The signed release was built from
@@ -100,15 +100,25 @@ passed, and official bundletool 1.18.3 validation passed.
 A complete rebuild reproduced the identical SHA-256.
 The exact verified bundle has been retained privately for delivery recovery.
 
-Google Play production is still 12.0.5 (145), fully rolled out to the existing
-178 countries. Production draft 14 is saved as
-`146 (12.0.6) Christmas and AI upgrade` with release notes.
-Google's available-bundle library was checked after the interrupted transfer:
-version 146 was not received. No Google review submission is confirmed yet.
-The remaining delivery step is uploading the retained verified bundle to this
-draft, reviewing Google's validation, and sending the release for review.
-GitHub and Google authentication are resolved; the upload key must not be
-replaced or substituted with another app's key.
+On November 26, 2026, Google Play received the exact verified signed bundle.
+The release preview identified version 146 (12.0.6), API 24+, target SDK 36,
+4 screen layouts, 3 ABIs and 5 required features, and displayed
+`Ready to release`. Google reported zero devices losing support across every
+listed form factor. Estimated new-install download size is 69.3 MB.
+
+Production release 14, `146 (12.0.6) Christmas and AI upgrade`, was saved with
+the reviewed release notes, a 100% rollout, and all existing targeted countries.
+The single production change was submitted through `Send changes for review`.
+[Publishing overview](https://play.google.com/console/u/0/developers/4772708594176030332/app/4974117289022654668/publishing)
+then displayed `Changes in review` and `Start full rollout` for this release.
+Google's quick checks were still running at confirmation; its page states
+that the queued change proceeds to review after those checks pass.
+Managed publishing remains off, so the approved update can publish automatically.
+Approval and public availability of Android 12.0.6 are not yet confirmed;
+12.0.5 (145) remains the last confirmed live Android release across 178 countries.
+
+The upload blocker is resolved. No key replacement, country-distribution
+change, or unrelated app release was performed.
 
 ## Official migration sources
 
