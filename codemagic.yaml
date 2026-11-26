@@ -551,3 +551,97 @@ workflows:
       - apps/receipt_wiz/build/app/outputs/flutter-apk/app-debug.apk
       - apps/receipt_wiz/build/ios/iphonesimulator/ReceiptWiz-Simulator.zip
       - /tmp/xcodebuild_logs/*.log
+
+  korlix-ai-testflight-audit-146:
+    name: KORLIX AI verify internal TestFlight 146
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    scripts:
+      - name: Block cloud metadata before release commands
+        script: |
+          set -euo pipefail
+          rules="$CM_BUILD_DIR/.korlix-metadata-block.pf"
+          cat > "$rules" <<'PF'
+          block drop out quick inet to { 169.254.0.0/16, 100.100.100.200/32 }
+          block drop out quick inet6 to { fe80::/10, fd00:ec2::254/128 }
+          PF
+          # Keep the builder's existing firewall rules and add a scoped anchor.
+          sudo pfctl -s rules | grep -F 'anchor "com.apple/*"' >/dev/null
+          sudo pfctl -a com.apple/korlix_metadata -f "$rules"
+          sudo pfctl -e 2>/dev/null || sudo pfctl -s info | grep -q 'Status: Enabled'
+          sudo pfctl -a com.apple/korlix_metadata -s rules | grep -q '169.254.0.0/16'
+      - name: Verify existing build and internal TestFlight distribution
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.testflight-audit-tools"
+          "$CM_BUILD_DIR/.testflight-audit-tools/bin/pip" install 'codemagic-cli-tools==0.69.0'
+          "$CM_BUILD_DIR/.testflight-audit-tools/bin/python" - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from codemagic.apple.app_store_connect import AppStoreConnectApiClient
+          
+          APP_ID = "6783100102"
+          BUNDLE_ID = "com.korlixdeveloper.korlixai"
+          VERSION = "12.0.6"
+          BUILD = "146"
+          client = AppStoreConnectApiClient(
+              key_identifier=os.environ["APP_STORE_CONNECT_KEY_IDENTIFIER"],
+              issuer_id=os.environ["APP_STORE_CONNECT_ISSUER_ID"],
+              private_key=os.environ["APP_STORE_CONNECT_PRIVATE_KEY"],
+              log_requests=False,
+              enable_jwt_cache=False,
+          )
+          base = client.API_URL
+          app = client.session.get(
+              f"{base}/apps/{APP_ID}",
+              params={"fields[apps]": "bundleId"},
+          ).json()["data"]
+          assert app["id"] == APP_ID and app["attributes"]["bundleId"] == BUNDLE_ID, "Apple app identity mismatch"
+          builds = client.paginate(f"{base}/builds", params={
+              "filter[app]": APP_ID,
+              "filter[version]": BUILD,
+              "filter[preReleaseVersion.version]": VERSION,
+              "filter[preReleaseVersion.platform]": "IOS",
+              "fields[builds]": "version,expired,expirationDate,processingState",
+          })
+          assert len(builds) == 1, "Expected exactly one existing iOS 12.0.6 (146) build"
+          build = builds[0]
+          attrs = build["attributes"]
+          assert attrs["version"] == BUILD, "Build number mismatch"
+          assert attrs["processingState"] == "VALID", "Build processing is not valid"
+          assert attrs["expired"] is False, "Build is expired"
+          expiration = datetime.fromisoformat(attrs["expirationDate"].replace("Z", "+00:00"))
+          assert expiration > datetime.now(timezone.utc), "Build expiration has passed"
+          pre = client.session.get(f"{base}/builds/{build['id']}/preReleaseVersion").json()["data"]
+          assert pre["attributes"]["version"] == VERSION and pre["attributes"]["platform"] == "IOS", "Prerelease identity mismatch"
+          details = client.session.get(f"{base}/builds/{build['id']}/buildBetaDetail").json()["data"]["attributes"]
+          groups = client.paginate(f"{base}/betaGroups", params={
+              "filter[app]": APP_ID,
+              "fields[betaGroups]": "isInternalGroup,hasAccessToAllBuilds",
+          })
+          internal = [g for g in groups if g["attributes"].get("isInternalGroup") is True]
+          assigned = 0
+          for group in internal:
+              identifiers = client.paginate(f"{base}/betaGroups/{group['id']}/relationships/builds")
+              if group["attributes"].get("hasAccessToAllBuilds") is True or any(item["id"] == build["id"] for item in identifiers):
+                  assigned += 1
+          report = {
+              "app_id": APP_ID,
+              "bundle_id": BUNDLE_ID,
+              "version": VERSION,
+              "build": BUILD,
+              "processing_state": attrs["processingState"],
+              "expired": attrs["expired"],
+              "expiration_date": attrs["expirationDate"],
+              "internal_build_state": details["internalBuildState"],
+              "internal_groups": len(internal),
+              "internal_groups_with_build": assigned,
+              "tester_membership_read": False,
+              "changes_made": False,
+          }
+          report["available_to_internal_testers"] = assigned > 0 and details["internalBuildState"] == "IN_BETA_TESTING"
+          print(json.dumps(report, indent=2, sort_keys=True))
+          PY
