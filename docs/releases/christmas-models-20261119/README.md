@@ -149,13 +149,18 @@ build relationship. It did not read tester identities or add tester accounts.
 ran at source `41569f3c7ee45eb598a251fd0bcfe54cb13ab5d9`.
 Existing internal testers can look for **KORLIX AI 12.0.7 (148)** in TestFlight.
 
-The initial November 26 check for older build 146 was canceled before running
-after the newer internal build was found. A fresh **GET-only** check for build
-148 is queued; no new app binary or Apple record changes are involved.
-[Current verification run](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6b08767e83fe00259b6c29e6)
+The fresh **GET-only** November 26 verification completed successfully at
+13:15 EST (one minute duration). Apple reports `VALID`,
+`IN_BETA_TESTING`, `expired: false`, and
+`available_to_internal_testers: true`. The exact build is assigned to the
+one existing internal group; expiration is February 21, 2027.
+
+[Current successful verification](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6b08767e83fe00259b6c29e6?open-step=build-step-3)
 uses source `b5162de51047941a5f9770e771036ad9f1f2f2d2`.
-It resolves the existing named Apple integration and reports only build status
-and internal-group counts, without reading tester membership.
+The run resolved the existing named Apple integration and read only build
+status and internal-group build relationships. It did not read tester
+membership, add accounts, send invitations, upload a binary, or change any
+Apple records.
 
 ## Official migration sources
 
