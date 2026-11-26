@@ -122,6 +122,30 @@ Approval and public availability of Android 12.0.6 are not yet confirmed;
 The upload blocker is resolved. No key replacement, country-distribution
 change, or unrelated app release was performed.
 
+## Internal testing
+
+### Android: available
+
+On November 26, 2026, internal track `4701415604792469412` published release
+50, `146 (12.0.6) Christmas internal test`, using the same verified signed
+bundle already in Google Play's artifact library. The track is active and
+Google displays `Available to internal testers` for version code 146.
+The existing selected tester lists were retained. An additional owner account
+has not been enrolled; its access change is awaiting explicit authorization.
+
+[Android internal test opt-in](https://play.google.com/apps/internaltest/4701415604792469412)
+requires an enrolled Google account. Public production review remains separate.
+
+### Apple: verification in progress
+
+A read-only check of existing 12.0.6 (146), its processing/expiration status,
+and its assignment to existing internal TestFlight groups is running through
+the already configured Apple integration. It does not read tester memberships
+or change Apple records.
+
+[Internal TestFlight verification](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6b08756c83fe00259b6c2992)
+uses source `1613b02cf81b4572de9b33194a88cc6b07ebd2be`.
+
 ## Official migration sources
 
 - https://developers.openai.com/api/docs/guides/latest-model
