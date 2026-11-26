@@ -63,46 +63,52 @@ builder's existing firewall rules.
 
 ## Store delivery status
 
-Google Play was inspected on November 19, 2026. Production is version 12.0.5
-(145), fully rolled out to the existing 178 countries. The new source version is
-12.0.6 (146); no Google release has been created or uploaded in this update yet.
+### Apple: live
 
-The original main-app upload key is in the existing Codespace, not the Brain
-or Copybox keystores shown in Codemagic. Required main-app upload certificate:
-`c1d051456057e6d813f0d4e82892b856c3e67852b05cd78d302adc5da8162f7f`.
-The Codespace requires GitHub authentication. Automatic approval review rejected
-that sign-in pending explicit user authorization. Do not change or replace the
-upload key, and do not reuse another app's signing identity.
+Version 12.0.6 is publicly available on the [App Store](https://apps.apple.com/us/app/korlix-ai/id6783100102).
+Apple's public lookup reports `currentVersionReleaseDate=2026-11-20T17:54:06Z`
+and the Christmas/model release notes for the correct bundle ID.
 
-Before the signed Android build, recheck all Play tracks/drafts for the highest
-version code and preserve the existing public client definitions and optional
-Firebase client configuration from the signing workspace. Version 146 is
-already in `pubspec.yaml`; the older `build-google-play-billing.sh` wrapper
-rejects an equal next version, so build this release directly with the verified
-version rather than silently incrementing it. Install the Gradle init script
-described above, resolve the locked dependencies, prepare the existing Firebase
-client file, and use `flutter build appbundle --release --build-name=12.0.6
---build-number=146 --dart-define-from-file=<existing-public-client-json>`.
-Verify the resulting bundle's application ID, version, and upload certificate
-before uploading. Recheck the version if the Play state changes meanwhile.
-
-Apple build: https://codemagic.io/app/6a32198d2d0806059c3df062/build/6affbdcf8f52ca275129275e
-
-The build verified existing Apple app `6783100102`, bundle ID, and latest Apple
-build 136/version 12.0.4, then selected 12.0.6 (146). It uses the existing
-KORLIX_APP_STORE_PROFILE and KORLIX_APP_STORE_CERT. Its workflow tests,
-compiles, signs and verifies the IPA before attempting App Store submission.
-The signed IPA passed verification: 84,427,275 bytes, SHA-256
+[Codemagic release build](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6affbdcf8f52ca275129275e)
+produced the signed 12.0.6 (146) IPA using the existing
+KORLIX_APP_STORE_PROFILE and KORLIX_APP_STORE_CERT.
+Verified IPA: 84,427,275 bytes, SHA-256
 `dddf3be7a92182c77d6a0503b2b1774b5ace9fae7abc22410c60abdcc6db78a7`.
-Apple upload succeeded without errors on November 19, 2026 (New York), delivery
-UUID `6707a875-9d8b-4209-b97c-c74a7155437b`. Processing completed and the release
-was submitted to App Review at 10:38 PM New York on November 19, 2026
-(`2026-11-20T03:38:15.461Z`). Final observed state: `WAITING_FOR_REVIEW`.
-This confirms submission, not Apple approval or public availability.
-
+Upload delivery UUID: `6707a875-9d8b-4209-b97c-c74a7155437b`.
 Review submission: `4ed5701d-c412-4afd-acee-83fc26bb9755`.
-App Store version: `9789c73d-0707-489d-bda6-a49e06163243`.
+App Store version record: `9789c73d-0707-489d-bda6-a49e06163243`.
 The signed artifact identity is preserved in `apple-verification.json`.
+
+### Android: signed release verified; Google upload pending
+
+The original main-app upload key was recovered and reused without modification.
+The signed release was built from
+`667968e87a4037ad25a002dff4a930cef636ab43` with Flutter 3.47.7
+(`abaf9c523780a608bd46686fd5e53740a07077f8`) and locked dependencies.
+Build caches and SDK were isolated from the original working tree.
+The existing Firebase client configuration and the main project's public client
+definitions were retained. Eleven Firebase preparation tests passed.
+
+Verified artifact: `Korlix-AI-12.0.6-146.aab`, 165,005,481 bytes.
+SHA-256: `bede93e0e439d7694ff4b9d16d527a9b95a70439811a1baad20264edaf43d657`.
+Upload certificate SHA-256:
+`c1d051456057e6d813f0d4e82892b856c3e67852b05cd78d302adc5da8162f7f`.
+Package: `com.korlixdeveloper.korlixai`; version: `12.0.6` / `146`;
+minimum SDK: `24`; target SDK: `36`; debuggable: `false`.
+The certificate matches the original main-app key, JAR signature verification
+passed, and official bundletool 1.18.3 validation passed.
+A complete rebuild reproduced the identical SHA-256.
+The exact verified bundle has been retained privately for delivery recovery.
+
+Google Play production is still 12.0.5 (145), fully rolled out to the existing
+178 countries. Production draft 14 is saved as
+`146 (12.0.6) Christmas and AI upgrade` with release notes.
+Google's available-bundle library was checked after the interrupted transfer:
+version 146 was not received. No Google review submission is confirmed yet.
+The remaining delivery step is uploading the retained verified bundle to this
+draft, reviewing Google's validation, and sending the release for review.
+GitHub and Google authentication are resolved; the upload key must not be
+replaced or substituted with another app's key.
 
 ## Official migration sources
 
