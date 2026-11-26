@@ -136,15 +136,26 @@ has not been enrolled; its access change is awaiting explicit authorization.
 [Android internal test opt-in](https://play.google.com/apps/internaltest/4701415604792469412)
 requires an enrolled Google account. Public production review remains separate.
 
-### Apple: verification in progress
+### Apple: newer internal build already verified
 
-A read-only check of existing 12.0.6 (146), its processing/expiration status,
-and its assignment to existing internal TestFlight groups is running through
-the already configured Apple integration. It does not read tester memberships
-or change Apple records.
+The main app's newer **12.0.7 (148)** iOS build was uploaded on November 23,
+2026. The existing verification run completed successfully and its sanitized
+result states: `Verified the exact build is in the existing internal group and
+in beta testing.` The verifier checked the exact app/bundle/version/build,
+valid processing, non-expired status, and the existing internal group's actual
+build relationship. It did not read tester identities or add tester accounts.
 
-[Internal TestFlight verification](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6b08756c83fe00259b6c2992)
-uses source `1613b02cf81b4572de9b33194a88cc6b07ebd2be`.
+[Successful internal TestFlight verification](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6b048b81d17d55100e0f670c?open-step=build-step-3)
+ran at source `41569f3c7ee45eb598a251fd0bcfe54cb13ab5d9`.
+Existing internal testers can look for **KORLIX AI 12.0.7 (148)** in TestFlight.
+
+The initial November 26 check for older build 146 was canceled before running
+after the newer internal build was found. A fresh **GET-only** check for build
+148 is queued; no new app binary or Apple record changes are involved.
+[Current verification run](https://codemagic.io/app/6a32198d2d0806059c3df062/build/6b08767e83fe00259b6c29e6)
+uses source `b5162de51047941a5f9770e771036ad9f1f2f2d2`.
+It resolves the existing named Apple integration and reports only build status
+and internal-group counts, without reading tester membership.
 
 ## Official migration sources
 
