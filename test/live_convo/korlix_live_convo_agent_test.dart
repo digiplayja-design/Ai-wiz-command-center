@@ -11,6 +11,15 @@ void main() {
       expect(KorlixLiveConvoAgentModelProof.fromJson(value).provesAstraDocumentReasoning, isFalse);
     }
   });
+  test('document proof accepts both models during the server rollout', () {
+    for (final model in ['gpt-6-astra', 'gpt-6.2-astra']) {
+      final proof = KorlixLiveConvoAgentModelProof.fromJson({
+        'liveDocsDocumentModel': model,
+        'liveDocsReasoningEffort': 'max',
+      });
+      expect(proof.provesAstraDocumentReasoning, isTrue);
+    }
+  });
   group('Korlix LIVE CONVO Agent Hub model', () {
     test('provides the five built-in trainable fallback agents', () {
       final agents =

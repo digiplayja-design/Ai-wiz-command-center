@@ -162,6 +162,7 @@ class KorlixScreenSkinPainter extends CustomPainter {
     );
     canvas.save();
     canvas.clipRect(rect);
+    if (palette.id == 'christmas_red') _christmasSnow(canvas, size);
     switch (korlixNormalizeScreenSkin(skinId)) {
       case 'glass':
         _glass(canvas, size);
@@ -185,6 +186,32 @@ class KorlixScreenSkinPainter extends CustomPainter {
         break;
     }
     canvas.restore();
+  }
+
+  void _christmasSnow(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = palette.primary.withValues(alpha: .09)
+      ..strokeWidth = 1.4
+      ..strokeCap = StrokeCap.round;
+    // Stationary decoration at the edges keeps content and touch targets clear.
+    for (var i = 0; i < 8; i++) {
+      final center = Offset(
+        i.isEven ? 18 + (i % 3) * 12 : size.width - 18 - (i % 3) * 12,
+        38 + i * size.height / 8,
+      );
+      final radius = i.isEven ? 9.0 : 6.0;
+      for (var ray = 0; ray < 6; ray++) {
+        final angle = ray * math.pi / 3;
+        final tip = center + Offset(math.cos(angle), math.sin(angle)) * radius;
+        canvas.drawLine(center, tip, paint);
+        final branch = center + (tip - center) * .62;
+        for (final turn in [-.7, .7]) {
+          canvas.drawLine(branch,
+            branch + Offset(math.cos(angle + turn), math.sin(angle + turn)) * (radius * .32),
+            paint);
+        }
+      }
+    }
   }
 
   void _glass(Canvas canvas, Size s) {

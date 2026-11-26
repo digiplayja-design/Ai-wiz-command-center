@@ -74,7 +74,7 @@ class _KorlixThemePickerState extends State<KorlixThemePicker> {
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        'Preview a palette, then apply it. Buttons stay colorful in every theme, and your conversation stays right where you left it.',
+                        'Preview a palette, then apply it. Your conversation stays right where you left it.',
                         style: TextStyle(color: skin.mutedText, height: 1.5),
                       ),
                     ),
@@ -305,14 +305,14 @@ class KorlixThemePreview extends StatelessWidget {
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               colors: korlixButtonColorsFor(
-                                'Send',
+                                'Send', themeId: skin.id,
                               ).gradientColors,
                             ),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Icon(
                             Icons.arrow_upward,
-                            color: korlixButtonColorsFor('Send').foreground,
+                            color: korlixButtonColorsFor('Send', themeId: skin.id).foreground,
                             size: 18,
                           ),
                         ),
@@ -388,6 +388,7 @@ class KorlixThemeShortcuts extends StatelessWidget {
               alignment: WrapAlignment.center,
               children:
                   [
+                    'christmas_red',
                     'pure_white',
                     'pure_black',
                     'korlix_blue',
@@ -448,7 +449,7 @@ class KorlixThemeShortcuts extends StatelessWidget {
               onPressed: onPreview,
               icon: const Icon(Icons.palette_outlined, size: 17),
               label: Text(
-                '${active.label} · 12 color themes',
+                '${active.label} · ${korlixThemeIds.length} color themes',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: active.text, fontSize: 12),
               ),

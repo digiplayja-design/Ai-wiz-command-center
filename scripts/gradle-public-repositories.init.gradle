@@ -1,0 +1,11 @@
+// Included builds (including Flutter's Gradle plugin) have their own plugin
+// repositories. Resolve Kotlin artifacts directly from Maven Central instead
+// of depending solely on the Plugin Portal's Maven Central redirect.
+// https://docs.gradle.org/current/userguide/declaring_repositories_basics.html
+gradle.beforeSettings { settings ->
+    settings.pluginManagement.repositories {
+        mavenCentral()
+        google()
+        gradlePluginPortal()
+    }
+}

@@ -15,6 +15,19 @@ workflows:
         certificates:
           - KORLIX_APP_STORE_CERT
     scripts:
+      - name: Block cloud metadata before release commands
+        script: |
+          set -euo pipefail
+          rules="$CM_BUILD_DIR/.korlix-metadata-block.pf"
+          cat > "$rules" <<'PF'
+          block drop out quick inet to { 169.254.0.0/16, 100.100.100.200/32 }
+          block drop out quick inet6 to { fe80::/10, fd00:ec2::254/128 }
+          PF
+          # Keep the builder's existing firewall rules and add a scoped anchor.
+          sudo pfctl -s rules | grep -F 'anchor "com.apple/*"' >/dev/null
+          sudo pfctl -a com.apple/korlix_metadata -f "$rules"
+          sudo pfctl -e 2>/dev/null || sudo pfctl -s info | grep -q 'Status: Enabled'
+          sudo pfctl -a com.apple/korlix_metadata -s rules | grep -q '169.254.0.0/16'
       - name: Install pinned Apple release tools
         script: |
           set -euo pipefail
@@ -27,7 +40,7 @@ workflows:
           python3 scripts/prepare_ios_release.py \
             --bundle-id com.korlixdeveloper.korlixai --app-id 6783100102 \
             --require-existing-build --environment-file "$CM_ENV"
-          cp docs/releases/crm-spreadsheet-20261030/korlix-ai-notes.txt release_notes_en-US.txt
+          cp docs/releases/christmas-models-20261119/korlix-ai-notes.txt release_notes_en-US.txt
       - name: Validate current iOS app and shared calling code
         script: |
           set -euo pipefail
@@ -48,6 +61,13 @@ workflows:
             test/social_call_reliability_test.dart test/social_screen_sharing_test.dart \
             test/social_communication_upgrade_test.dart \
             test/social_presence_model_test.dart test/social_presence_toggle_test.dart
+      - name: Validate Christmas appearance and model upgrade
+        script: |
+          set -euo pipefail
+          flutter test --no-pub --reporter expanded \
+            test/korlix_christmas_theme_test.dart test/korlix_astra_quality_test.dart \
+            test/korlix_theme_test.dart test/korlix_screen_skins_test.dart \
+            test/korlix_appearance_studio_test.dart test/live_convo/korlix_live_convo_agent_test.dart
       - name: Validate CRM spreadsheet import and Rici lifecycle
         script: |
           set -euo pipefail
@@ -93,7 +113,7 @@ workflows:
 
   korlix-ai-ios-testflight:
     <<: *korlix_ai_ios_release
-    name: Korlix AI CRM iOS TestFlight Upload
+    name: Korlix AI iOS TestFlight Upload
     publishing:
       app_store_connect:
         auth: integration
@@ -532,3 +552,195 @@ workflows:
       - apps/receipt_wiz/build/ios/iphonesimulator/ReceiptWiz-Simulator.zip
       - /tmp/xcodebuild_logs/*.log
 
+  korlix-ai-testflight-audit-148:
+    name: KORLIX AI verify internal TestFlight 148
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    scripts:
+      - name: Block cloud metadata before release commands
+        script: |
+          set -euo pipefail
+          rules="$CM_BUILD_DIR/.korlix-metadata-block.pf"
+          cat > "$rules" <<'PF'
+          block drop out quick inet to { 169.254.0.0/16, 100.100.100.200/32 }
+          block drop out quick inet6 to { fe80::/10, fd00:ec2::254/128 }
+          PF
+          # Keep the builder's existing firewall rules and add a scoped anchor.
+          sudo pfctl -s rules | grep -F 'anchor "com.apple/*"' >/dev/null
+          sudo pfctl -a com.apple/korlix_metadata -f "$rules"
+          sudo pfctl -e 2>/dev/null || sudo pfctl -s info | grep -q 'Status: Enabled'
+          sudo pfctl -a com.apple/korlix_metadata -s rules | grep -q '169.254.0.0/16'
+      - name: Verify current build and internal TestFlight distribution
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.testflight-audit-tools"
+          (
+            unset APP_STORE_CONNECT_KEY_IDENTIFIER APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_PRIVATE_KEY
+            "$CM_BUILD_DIR/.testflight-audit-tools/bin/pip" install --disable-pip-version-check --quiet 'codemagic-cli-tools==0.69.0'
+          )
+          "$CM_BUILD_DIR/.testflight-audit-tools/bin/python" - <<'PY'
+          """Read-only check of the current KORLIX internal TestFlight build."""
+          
+          import argparse
+          import re
+          import sys
+          import time
+          import traceback
+          from pathlib import Path
+          from urllib.parse import urlsplit
+          
+          
+          APP = "6783100102"
+          BUNDLE = "com.korlixdeveloper.korlixai"
+          VERSION = "12.0.7"
+          BUILD_NUMBER = "148"
+          ROOT = "https://api.appstoreconnect.apple.com/v1"
+          ELIGIBLE = {"READY_FOR_BETA_TESTING", "IN_BETA_TESTING"}
+          
+          
+          class Stop(Exception):
+              """Only constant, sanitized messages belong here."""
+          
+          
+          class Pending(Exception):
+              """Eligible for read-only polling."""
+          
+          
+          def resource_id(item, kind):
+              value = item["id"]
+              if item["type"] != kind or not re.fullmatch(r"[A-Za-z0-9-]+", value):
+                  raise Stop("Apple returned an unexpected resource.")
+              return value
+          
+          
+          class Apple:
+              def __init__(self):
+                  import requests
+                  from codemagic.apple.app_store_connect import AppStoreConnectApiClient
+                  from codemagic.tools.app_store_connect.arguments import Types
+          
+                  # Resolve the named integration exactly as the successful upload CLI does.
+                  # An environment entry can itself be an @file: or @env: reference.
+                  def configured(argument):
+                      try:
+                          item = argument.from_environment_variable_default()
+                      except (OSError, ValueError):
+                          raise Stop("The Codemagic integration could not resolve its " +
+                                     argument.environment_variable_key + " setting.") from None
+                      if item is None:
+                          raise Stop("Codemagic did not provide " + argument.environment_variable_key + ".")
+                      return item.value
+          
+                  self.auth = AppStoreConnectApiClient(
+                      key_identifier=configured(Types.KeyIdentifierArgument),
+                      issuer_id=configured(Types.IssuerIdArgument),
+                      private_key=configured(Types.PrivateKeyArgument),
+                      log_requests=False,
+                      enable_jwt_cache=False,
+                  )
+                  # Validate signing before making any request. Do not log or persist the token.
+                  try:
+                      self.auth.generate_auth_headers()
+                  except Exception as exc:
+                      raise Stop(f"Local App Store Connect signing failed ({type(exc).__name__}).") from None
+                  self.session = requests.Session()
+          
+              def request(self, method, url, **kwargs):
+                  response = self.session.request(
+                      method, url, headers=self.auth.generate_auth_headers(),
+                      allow_redirects=False, timeout=25, **kwargs,
+                  )
+                  return response
+          
+              def read(self, path):
+                  response = self.request("GET", ROOT + path)
+                  if response.status_code != 200:
+                      raise Stop(f"Apple read returned HTTP {response.status_code}.")
+                  return response.json()["data"]
+          
+              def rows(self, path, **params):
+                  url = ROOT + path
+                  params["limit"] = 200
+                  seen = set()
+                  while url:
+                      parsed = urlsplit(url)
+                      if (parsed.scheme, parsed.netloc, parsed.path) != (
+                          "https", "api.appstoreconnect.apple.com", "/v1" + path
+                      ) or url in seen:
+                          raise Stop("Unexpected Apple pagination.")
+                      seen.add(url)
+                      response = self.request("GET", url, params=params)
+                      if response.status_code != 200:
+                          raise Stop(f"Apple list returned HTTP {response.status_code}.")
+                      page = response.json()
+                      yield from page["data"]
+                      url = page.get("links", {}).get("next")
+                      params = {}
+          
+          
+          def audit():
+              import json
+              from datetime import datetime, timezone
+              api = Apple()
+              builds = list(api.rows("/builds", **{
+                  "filter[app]": APP, "filter[version]": BUILD_NUMBER,
+                  "filter[preReleaseVersion.version]": VERSION,
+                  "filter[preReleaseVersion.platform]": "IOS",
+                  "fields[builds]": "version,expired,expirationDate,processingState",
+              }))
+              if len(builds) != 1:
+                  raise Stop("Expected exactly one existing iOS test build.")
+              build = resource_id(builds[0], "builds")
+              attrs = builds[0]["attributes"]
+              if attrs["version"] != BUILD_NUMBER or attrs["expired"] is not False:
+                  raise Stop("Build number or expiration check failed.")
+              if attrs["processingState"] != "VALID":
+                  raise Stop("Build processing is not valid.")
+              expiration = datetime.fromisoformat(attrs["expirationDate"].replace("Z", "+00:00"))
+              if expiration <= datetime.now(timezone.utc):
+                  raise Stop("Build expiration has passed.")
+              app = api.read(f"/builds/{build}/app")
+              release = api.read(f"/builds/{build}/preReleaseVersion")
+              if resource_id(app, "apps") != APP or app["attributes"]["bundleId"] != BUNDLE:
+                  raise Stop("The build does not belong to the expected app.")
+              if (release["type"], release["attributes"]["version"], release["attributes"]["platform"]) != (
+                  "preReleaseVersions", VERSION, "IOS"
+              ):
+                  raise Stop("The build does not match the expected iOS version.")
+              state = api.read(f"/builds/{build}/buildBetaDetail")["attributes"]["internalBuildState"]
+              groups = [g for g in api.rows("/betaGroups", **{
+                  "filter[app]": APP, "filter[isInternalGroup]": "true",
+                  "fields[betaGroups]": "isInternalGroup,publicLinkEnabled,hasAccessToAllBuilds",
+              }) if g["attributes"]["isInternalGroup"] is True]
+              assigned = 0
+              for group in groups:
+                  if group["attributes"].get("publicLinkEnabled") is True:
+                      raise Stop("Unexpected public link on an internal group.")
+                  group_id = resource_id(group, "betaGroups")
+                  identifiers = api.rows(f"/betaGroups/{group_id}/relationships/builds")
+                  if any(resource_id(item, "builds") == build for item in identifiers):
+                      assigned += 1
+              report = {
+                  "app_id": APP, "bundle_id": BUNDLE, "version": VERSION, "build": BUILD_NUMBER,
+                  "processing_state": attrs["processingState"], "expired": attrs["expired"],
+                  "expiration_date": attrs["expirationDate"], "internal_build_state": state,
+                  "internal_groups": len(groups), "internal_groups_with_build": assigned,
+                  "tester_membership_read": False, "changes_made": False,
+                  "available_to_internal_testers": assigned > 0 and state == "IN_BETA_TESTING",
+              }
+              print(json.dumps(report, indent=2, sort_keys=True))
+          
+          
+          if __name__ == "__main__":
+              try:
+                  audit()
+              except Stop as exc:
+                  print(str(exc), file=sys.stderr)
+                  sys.exit(1)
+              except Exception as exc:
+                  print(f"Read-only verification could not finish ({type(exc).__name__}).", file=sys.stderr)
+                  sys.exit(1)
+          
+          PY

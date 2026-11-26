@@ -14,7 +14,7 @@ void main() {
     'Pure White has white surfaces and Classic paints an entirely white backdrop',
     () async {
       final palette = korlixSkinPaletteFor('pure_white');
-      expect(korlixThemeIds.length, 12);
+      expect(korlixThemeIds.length, 13);
       expect(korlixScreenSkinIds.length, 10);
       for (final color in [
         palette.backgroundTop,
@@ -164,7 +164,7 @@ void main() {
   );
 
   testWidgets(
-    'all 120 combinations paint and preserve interactive controls and drafts',
+    'all 130 combinations paint and preserve interactive controls and drafts',
     (tester) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
@@ -209,7 +209,7 @@ void main() {
           expect(tester.takeException(), isNull);
         }
       }
-      expect(taps, 120);
+      expect(taps, 130);
     },
   );
 

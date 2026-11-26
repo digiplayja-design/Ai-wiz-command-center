@@ -1,0 +1,10 @@
+{
+  "CFBundleIdentifier": "com.korlixdeveloper.korlixai",
+  "CFBundleShortVersionString": "12.0.6",
+  "CFBundleVersion": "146",
+  "bytes": 84427275,
+  "sha256": "dddf3be7a92182c77d6a0503b2b1774b5ace9fae7abc22410c60abdcc6db78a7",
+  "profile_type": "app_store",
+  "signature_verified": true,
+  "production_push_required": false
+}

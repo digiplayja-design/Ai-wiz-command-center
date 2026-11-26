@@ -57,6 +57,7 @@ class KorlixActionButton extends StatelessWidget {
       colorIdentity ?? label,
       icon: icon,
       destructive: accent == skin.danger,
+      themeId: skin.id,
     );
     final tint = palette.start;
     final ink = enabled
@@ -466,7 +467,7 @@ class KorlixLiveConvoButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final skin = korlixSkinOf(context);
-    final voiceColors = korlixButtonColorsFor('Voice');
+    final voiceColors = korlixButtonColorsFor('Voice', themeId: skin.id);
     return KorlixActionButton(
       label: 'Live Convo',
       eyebrow: 'Rici · LIVE VOICE',
