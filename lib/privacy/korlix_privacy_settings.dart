@@ -14,12 +14,14 @@ class KorlixPrivacySettings extends StatefulWidget {
     required this.isSessionCurrent,
     this.openLink,
     this.resetChoices,
+    this.subscriptionAdMeasurement,
   });
 
   final Listenable sessionChanges;
   final bool Function() isSessionCurrent;
   final Future<bool> Function(Uri)? openLink;
   final Future<void> Function()? resetChoices;
+  final Widget? subscriptionAdMeasurement;
 
   @override
   State<KorlixPrivacySettings> createState() => _KorlixPrivacySettingsState();
@@ -176,6 +178,7 @@ class _KorlixPrivacySettingsState extends State<KorlixPrivacySettings> {
                         onTap: _openingLink ? null : () => _open(entry.key),
                       ),
                     const KorlixAppInformation(),
+                    if (current && widget.subscriptionAdMeasurement != null) widget.subscriptionAdMeasurement!,
                     ListTile(contentPadding: EdgeInsets.zero,
                       leading: const Icon(Icons.accessibility_new),
                       title: const Text('Accessibility'),

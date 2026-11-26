@@ -3958,6 +3958,10 @@ class _KorlixAccountButtonState extends State<KorlixAccountButton> {
     await Navigator.of(context).push<void>(
       MaterialPageRoute<void>(
         builder: (_) => KorlixPrivacySettings(
+          subscriptionAdMeasurement: !kIsWeb &&
+              (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android)
+              ? KorlixStoreMeasurementChoice(service: KorlixAppleBillingService.instance)
+              : null,
           sessionChanges: kKorlixAuthRevision,
           isSessionCurrent: () => mounted &&
               revision == kKorlixAuthRevision.value &&

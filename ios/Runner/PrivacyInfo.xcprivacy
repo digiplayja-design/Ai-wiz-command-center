@@ -5,6 +5,28 @@
     <!-- KorlixSoundEffects uses systemUptime only for local preparation and
          playback deadlines. Boot time is never transmitted off the device.
          SDK disclosures remain in the SDKs' own bundled privacy manifests. -->
+    <key>NSPrivacyTracking</key><true/>
+    <key>NSPrivacyTrackingDomains</key><array><string>app-measurement.com</string><string>google-analytics.com</string></array>
+    <key>NSPrivacyCollectedDataTypes</key><array>
+        <dict>
+            <key>NSPrivacyCollectedDataType</key><string>NSPrivacyCollectedDataTypeDeviceID</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key><true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key><true/>
+            <key>NSPrivacyCollectedDataTypePurposes</key><array><string>NSPrivacyCollectedDataTypePurposeAnalytics</string><string>NSPrivacyCollectedDataTypePurposeDeveloperAdvertising</string></array>
+        </dict>
+        <dict>
+            <key>NSPrivacyCollectedDataType</key><string>NSPrivacyCollectedDataTypePurchaseHistory</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key><true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key><true/>
+            <key>NSPrivacyCollectedDataTypePurposes</key><array><string>NSPrivacyCollectedDataTypePurposeAnalytics</string><string>NSPrivacyCollectedDataTypePurposeDeveloperAdvertising</string></array>
+        </dict>
+        <dict>
+            <key>NSPrivacyCollectedDataType</key><string>NSPrivacyCollectedDataTypeProductInteraction</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key><true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key><true/>
+            <key>NSPrivacyCollectedDataTypePurposes</key><array><string>NSPrivacyCollectedDataTypePurposeAnalytics</string><string>NSPrivacyCollectedDataTypePurposeDeveloperAdvertising</string></array>
+        </dict>
+    </array>
     <key>NSPrivacyAccessedAPITypes</key>
     <array>
         <dict>
