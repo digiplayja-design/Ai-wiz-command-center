@@ -79,7 +79,7 @@ Review submission: `4ed5701d-c412-4afd-acee-83fc26bb9755`.
 App Store version record: `9789c73d-0707-489d-bda6-a49e06163243`.
 The signed artifact identity is preserved in `apple-verification.json`.
 
-### Android: uploaded and submitted; Google checks/review pending
+### Android: quick checks complete; Google review underway
 
 The original main-app upload key was recovered and reused without modification.
 The signed release was built from
@@ -111,8 +111,10 @@ the reviewed release notes, a 100% rollout, and all existing targeted countries.
 The single production change was submitted through `Send changes for review`.
 [Publishing overview](https://play.google.com/console/u/0/developers/4772708594176030332/app/4974117289022654668/publishing)
 then displayed `Changes in review` and `Start full rollout` for this release.
-Google's quick checks were still running at confirmation; its page states
-that the queued change proceeds to review after those checks pass.
+A subsequent check on November 26 confirmed the quick-check phase had ended.
+Publishing overview now states `Your changes are now in review. We may find
+additional issues when reviewing your app.` No new issue or required action
+was displayed for the submitted release.
 Managed publishing remains off, so the approved update can publish automatically.
 Approval and public availability of Android 12.0.6 are not yet confirmed;
 12.0.5 (145) remains the last confirmed live Android release across 178 countries.
