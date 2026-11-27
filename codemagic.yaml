@@ -241,3 +241,136 @@ workflows:
           keytool -printcert -jarfile app/build/outputs/bundle/release/app-release.aab > /dev/null
     artifacts:
       - $CM_BUILD_DIR/apps/fax/android/app/build/outputs/bundle/release/*.aab
+
+  fax-testflight-invitation:
+    name: Fax TestFlight invitation resend
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: feature/fax-mobile-20261125
+          include: true
+          source: true
+    when:
+      condition: event.before == "cbd3a888dca7beee68a5fac7ca0a57549fa2602e"
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    environment:
+      groups:
+        - fax_testflight
+    scripts:
+      - name: Load the Apple release tools
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.fax-lookup"
+          (
+            unset APP_STORE_CONNECT_KEY_IDENTIFIER APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_PRIVATE_KEY FAX_TESTFLIGHT_TESTER_EMAIL
+            "$CM_BUILD_DIR/.fax-lookup/bin/python" -m pip install --quiet --disable-pip-version-check 'codemagic-cli-tools==0.69.0'
+          )
+      - name: Request Apple to resend the private Fax invitation
+        script: |
+          set -euo pipefail
+          "$CM_BUILD_DIR/.fax-lookup/bin/python" - <<'PY'
+          import os
+          import time
+          import requests
+          from codemagic.apple.app_store_connect import AppStoreConnectApiClient
+          from codemagic.tools.app_store_connect.arguments import Types
+
+          def configured(arg):
+              return arg.from_environment_variable_default().value
+
+          client = AppStoreConnectApiClient(
+              key_identifier=configured(Types.KeyIdentifierArgument),
+              issuer_id=configured(Types.IssuerIdArgument),
+              private_key=configured(Types.PrivateKeyArgument),
+              log_requests=False, enable_jwt_cache=False,
+          )
+          recipient = os.environ["FAX_TESTFLIGHT_TESTER_EMAIL"].strip().casefold()
+          if not recipient or "@" not in recipient:
+              raise ValueError("The private Fax tester setting is missing.")
+
+          class AppleError(Exception):
+              def __init__(self, r):
+                  try:
+                      errors = r.json().get("errors", [])
+                  except ValueError:
+                      errors = []
+                  details = " | ".join(e.get("code","")+" "+e.get("detail", e.get("title","")) for e in errors)
+                  super().__init__("HTTP "+str(r.status_code)+" "+details.replace(recipient,"[designated tester]")[:780])
+
+          def call(method, path, *, params=None, data=None):
+              response = requests.request(method, "https://api.appstoreconnect.apple.com/v1/"+path,
+                                          headers=client.generate_auth_headers(), params=params,
+                                          json={"data": data} if data is not None else None,
+                                          allow_redirects=False, timeout=30)
+              if not 200 <= response.status_code < 300:
+                  raise AppleError(response)
+              return response
+
+          def get(path, params=None):
+              return call("GET",path,params=params).json()["data"]
+
+          def unique(items, what):
+              if len(items) != 1:
+                  raise ValueError(f"Expected one {what}, found {len(items)}.")
+              return items[0]
+
+          def link(kind, identifier):
+              return {"type":kind,"id":identifier}
+
+          bundle = "com.korlixdeveloper.fax"
+          rows = get("apps",{"filter[bundleId]":bundle,"fields[apps]":"bundleId,name","limit":2})
+          app = unique([a for a in rows if a["attributes"]["bundleId"] == bundle], "Fax app")
+          app_id = app["id"]
+          group = unique([g for g in get("apps/"+app_id+"/betaGroups",{"limit":200}) if g["attributes"]["name"]=="Fax by Korlix Internal" and g["attributes"]["isInternalGroup"]], "private Fax group")
+          gp="betaGroups/"+group["id"]
+          def group_tester():
+              members=get(gp+"/betaTesters",{"fields[betaTesters]":"email,state","limit":200})
+              target=unique([u for u in members if (u["attributes"].get("email") or "").casefold()==recipient],"requested group member")
+              return target,len(members)
+
+          tester,count=group_tester()
+          expected_build_id="05071f83-0758-49f5-9dae-a79d2a1b44d0"
+          builds = get("builds", {"filter[app]":app_id,"filter[version]":"2","limit":200})
+          build=unique([b for b in builds if b["id"]==expected_build_id and b["attributes"].get("version")=="2"],"Fax build 2")
+          bid=build["id"]
+          def internal_state():
+              return get("builds/"+bid+"/buildBetaDetail")["attributes"].get("internalBuildState")
+          def assigned():
+              return any(b["id"]==bid for b in get(gp+"/relationships/builds",{"limit":200}))
+          state=internal_state()
+          print("Build processing:",build["attributes"].get("processingState"),"Internal status before resend:",state,flush=True)
+          print("Designated tester in private group. Apple tester state before resend:",tester["attributes"].get("state"),flush=True)
+          if not assigned() and state in {"READY_FOR_BETA_TESTING","IN_BETA_TESTING"} and not build["attributes"].get("expired") and count==1:
+              try:
+                  call("POST",gp+"/relationships/builds",data=[link("builds",bid)])
+                  print("Apple accepted the build assignment to the private group.",flush=True)
+              except AppleError as error:
+                  print("Apple build assignment:",error,flush=True)
+          request={"type":"betaTesterInvitations","relationships":{"app":{"data":link("apps",app_id)},"betaTester":{"data":link("betaTesters",tester["id"])}}}
+          sent=False
+          try:
+              reply=call("POST","betaTesterInvitations",data=request)
+              print("APPLE INVITATION EMAIL REQUEST ACCEPTED: HTTP",reply.status_code,flush=True)
+              sent=True
+          except AppleError as error:
+              print("APPLE INVITATION EMAIL REQUEST DECLINED:",error,flush=True)
+          for attempt in range(3):
+              account,_=group_tester()
+              tester_state=account["attributes"].get("state")
+              if not sent or tester_state in {"INVITED","ACCEPTED","INSTALLED"} or attempt==2:
+                  break
+              time.sleep(4)
+          print("VERIFIED TESTER STATE:",tester_state,flush=True)
+          print("VERIFIED BUILD IN PRIVATE GROUP:",assigned(), flush=True)
+          print("VERIFIED INTERNAL BUILD STATE:",internal_state(),flush=True)
+          if state=="MISSING_EXPORT_COMPLIANCE":
+              try:
+                  declarations=get("apps/"+app_id+"/appEncryptionDeclarations",{"limit":200})
+                  print("Previously recorded encryption declarations for Fax:",len(declarations),flush=True)
+              except AppleError as error:
+                  print("Existing declaration lookup:",error,flush=True)
+          PY
