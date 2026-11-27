@@ -181,15 +181,6 @@ workflows:
 
   fax-ios-testflight:
     name: Fax by Korlix internal TestFlight
-    triggering:
-      events:
-        - push
-      branch_patterns:
-        - pattern: feature/fax-mobile-20261125
-          include: true
-          source: true
-    when:
-      condition: event.before == "468e1df91b82c7c438b039a7f24ebe61fbbd974e"
     instance_type: mac_mini_m2
     max_build_duration: 60
     working_directory: apps/fax
@@ -206,25 +197,6 @@ workflows:
         provisioning_profiles:
           - KORLIX_APP_STORE_PROFILE
     scripts:
-      - name: Query Apple for com.korlixdeveloper.fax
-        script: |
-          set -euo pipefail
-          app-store-connect apps list --bundle-id-identifier com.korlixdeveloper.fax --strict-match-identifier --json --log-stream stderr > "$CM_BUILD_DIR/fax-record.json"
-          python3 - "$CM_BUILD_DIR/fax-record.json" <<'PY'
-          import json, sys
-          from pathlib import Path
-          records = json.loads(Path(sys.argv[1]).read_text())
-          if not isinstance(records, list) or len(records) > 1 or any(not item.get("id") for item in records):
-              raise SystemExit("Unexpected response for the Fax bundle identifier")
-          PY
-      - name: Require the Fax app record before uploading
-        script: |
-          python3 - "$CM_BUILD_DIR/fax-record.json" <<'PY'
-          import json, sys
-          from pathlib import Path
-          if not json.loads(Path(sys.argv[1]).read_text()):
-              raise SystemExit("Apple returned no app record for com.korlixdeveloper.fax. Create it in App Store Connect.")
-          PY
       - name: Install the fax app identifier and distribution profile
         script: python3 ios/prepare-profile.py
       - name: Prepare iPhone and iPad app
@@ -234,32 +206,15 @@ workflows:
           cd ios/App
           xcode-project use-profiles --project App.xcodeproj --profile ../fax.mobileprovision
           xcode-project build-ipa --project App.xcodeproj --scheme App --ipa-directory "$CM_BUILD_DIR/apps/fax/artifacts"
-      - name: Upload customer build 2 if Apple does not already have it
+      - name: Upload to internal TestFlight when the App Store Connect record exists
         script: |
           set -euo pipefail
-          app_id=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))[0]["id"])' "$CM_BUILD_DIR/fax-record.json")
-          builds=$(app-store-connect builds list --app-id "$app_id" --platform IOS --pre-release-version 1.0.0 --build-version-number 2 --json --log-stream stderr)
-          count=$(python3 -c 'import json, sys; rows=json.load(sys.stdin); assert isinstance(rows, list); print(len(rows))' <<< "$builds")
-          if [ "$count" = 0 ]; then
+          records=$(app-store-connect apps list --bundle-id-identifier com.korlixdeveloper.fax --strict-match-identifier --json --log-stream stderr)
+          if python3 -c 'import json,sys; sys.exit(0 if len(json.load(sys.stdin)) == 1 else 1)' <<< "$records"; then
             app-store-connect publish --path artifacts/*.ipa
           else
-            echo "Apple already has build 2."
+            echo "The signed IPA is available. Create the Fax by Korlix record in App Store Connect before uploading."
           fi
-      - name: Confirm Apple processed version 1.0.0 build 2
-        script: |
-          set -euo pipefail
-          app_id=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))[0]["id"])' "$CM_BUILD_DIR/fax-record.json")
-          for attempt in $(seq 1 30); do
-            builds=$(app-store-connect builds list --app-id "$app_id" --platform IOS --pre-release-version 1.0.0 --build-version-number 2 --not-expired --processing-state VALID --json --log-stream stderr)
-            count=$(python3 -c 'import json, sys; rows=json.load(sys.stdin); assert isinstance(rows, list); print(len(rows))' <<< "$builds")
-            if [ "$count" = 1 ]; then
-              echo "Apple lists the unexpired Fax build as valid."
-              exit 0
-            fi
-            sleep 20
-          done
-          echo "Apple has not yet listed build 2 as valid." >&2
-          exit 1
     artifacts:
       - $CM_BUILD_DIR/apps/fax/artifacts/*.ipa
 
@@ -286,3 +241,225 @@ workflows:
           keytool -printcert -jarfile app/build/outputs/bundle/release/app-release.aab > /dev/null
     artifacts:
       - $CM_BUILD_DIR/apps/fax/android/app/build/outputs/bundle/release/*.aab
+
+  fax-us-listing-and-internal-test:
+    name: Fax U.S. listing and internal TestFlight invitation
+    instance_type: mac_mini_m2
+    max_build_duration: 15
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: feature/fax-mobile-20261125
+          include: true
+          source: true
+    when:
+      condition: event.before == "dd7620e740c0b9244121797226622e9200b18673"
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    environment:
+      groups:
+        - fax_testflight
+    scripts:
+      - name: Load the Apple release tools
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.fax-lookup"
+          (
+            unset APP_STORE_CONNECT_KEY_IDENTIFIER APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_PRIVATE_KEY FAX_TESTFLIGHT_TESTER_EMAIL
+            "$CM_BUILD_DIR/.fax-lookup/bin/python" -m pip install --quiet --disable-pip-version-check 'codemagic-cli-tools==0.69.0'
+          )
+      - name: Apply the U.S. localization and enable the private test
+        script: |
+          set -euo pipefail
+          "$CM_BUILD_DIR/.fax-lookup/bin/python" - <<'PY'
+          import os
+          import sys
+          import time
+
+          import requests
+          from codemagic.apple.app_store_connect import AppStoreConnectApiClient
+          from codemagic.tools.app_store_connect.arguments import Types
+
+          BUNDLE = "com.korlixdeveloper.fax"
+          LOCALE = "en-US"
+          GROUP = "Fax by Korlix Internal"
+          RELEASE_COPY = {"APP NAME":"Fax by Korlix","SUBTITLE":"Scan, send and track faxes","PRIVACY POLICY URL":"https://uxtjzjbwtppjvnsoiijv.supabase.co/functions/v1/korlix-fax/privacy","DESCRIPTION":"Send and receive faxes from your own Korlix workspace. Scan paper with the camera or choose a PDF, review the pages, and confirm the destination fax number before sending.\n\nYour Inbox and Sent folders keep documents and delivery receipts together. Save frequently used recipients, check the carrier’s delivery status, and download a receipt when you need a record. Monthly activity shows sent and received page counts and lets you export a CSV.\n\nSign in with your Korlix account or create one in the app. You can request a U.S. local or toll-free fax number. Requesting a number is free. Live fax service begins after Korlix activates your line.\n\nTo explore the app before requesting service, tap “Explore a sample workspace” on the sign-in screen. The sample includes fictional documents and simulates fax delivery on your device.","SUPPORT URL":"https://www.korlixdeveloper.com/support.html","KEYWORDS":"fax,pdf,scanner,document,mailbox,receipt,delivery,send,receive,business,scan"}
+          recipient = os.environ["FAX_TESTFLIGHT_TESTER_EMAIL"].strip().casefold()
+          if not recipient or "@" not in recipient:
+              raise SystemExit("Private tester configuration is missing.")
+
+          def configured(argument):
+              return argument.from_environment_variable_default().value
+
+          client = AppStoreConnectApiClient(
+              key_identifier=configured(Types.KeyIdentifierArgument),
+              issuer_id=configured(Types.IssuerIdArgument),
+              private_key=configured(Types.PrivateKeyArgument),
+              log_requests=False, enable_jwt_cache=False,
+          )
+
+          class AppleError(Exception):
+              def __init__(self, response):
+                  self.status = response.status_code
+                  try:
+                      errors = response.json().get("errors", [])
+                  except ValueError:
+                      errors = []
+                  details = " | ".join(row.get("code", "") + " " + row.get("detail", "") for row in errors)
+                  super().__init__(f"Apple HTTP {self.status}: " + details.replace(recipient, "[private tester]")[:800])
+
+          def apple(method, path, *, params=None, data=None):
+              response = requests.request(method, "https://api.appstoreconnect.apple.com/v1/" + path,
+                                          headers=client.generate_auth_headers(), params=params,
+                                          json={"data":data} if data is not None else None,
+                                          allow_redirects=False, timeout=35)
+              if not (200 <= response.status_code < 300):
+                  raise AppleError(response)
+              if not response.content:
+                  return {}
+              return response.json()
+
+          def link(kind, item):
+              return {"type":kind, "id":item}
+
+          def rel(kind, item):
+              return {"data":link(kind, item)}
+
+          def rows(path, params=None):
+              result = apple("GET", path, params=params)
+              if result.get("links", {}).get("next"):
+                  raise RuntimeError("The expected result set was larger than one page.")
+              return result["data"]
+
+          def only(values, label):
+              if len(values) != 1:
+                  raise RuntimeError(f"Expected one {label}, found {len(values)}.")
+              return values[0]
+
+          def ensure_localization(parent, parent_type, collection, attributes):
+              endpoint = f"{parent_type}/{parent}/{collection}"
+              localizations = rows(endpoint, {"limit":50})
+              existing = [item for item in localizations if item["attributes"]["locale"] == LOCALE]
+              if existing:
+                  record = only(existing, collection)
+                  missing = {k:v for k,v in attributes.items() if not record["attributes"].get(k)}
+                  if missing:
+                      apple("PATCH", f"{collection}/{record['id']}", data={**link(collection, record["id"]), "attributes":missing})
+              else:
+                  relationship = {"appInfos":"appInfo","appStoreVersions":"appStoreVersion"}[parent_type]
+                  apple("POST", collection, data={"type":collection, "attributes":{"locale":LOCALE, **attributes},
+                        "relationships":{relationship:rel(parent_type,parent)}})
+              confirmed = only([item for item in rows(endpoint, {"limit":50}) if item["attributes"]["locale"] == LOCALE], collection)
+              print(f"Verified {LOCALE} {collection}; saved fields: " + ", ".join(k for k in attributes if confirmed["attributes"].get(k)), flush=True)
+
+          apps = rows("apps", {"filter[bundleId]":BUNDLE, "fields[apps]":"bundleId,name,primaryLocale", "limit":2})
+          app = only([item for item in apps if item["attributes"]["bundleId"] == BUNDLE], "Fax record")
+          app_id = app["id"]
+          print("Confirmed Fax record", app_id, "with initial primary locale", app["attributes"]["primaryLocale"], flush=True)
+          versions = rows(f"apps/{app_id}/appStoreVersions", {"filter[platform]":"IOS","limit":50})
+          drafts = [item for item in versions if item["attributes"]["versionString"] in {"1.0","1.0.0"}
+                    and (item["attributes"].get("appStoreState") or item["attributes"].get("appVersionState"))
+                    in {"PREPARE_FOR_SUBMISSION","DEVELOPER_REJECTED","METADATA_REJECTED","REJECTED"}]
+
+          def update_language():
+              infos = rows(f"apps/{app_id}/appInfos")
+              if len(infos) > 1:
+                  infos = [i for i in infos if (i["attributes"].get("appStoreState") or i["attributes"].get("state"))
+                           in {"PREPARE_FOR_SUBMISSION","DEVELOPER_REJECTED","METADATA_REJECTED","REJECTED"}]
+              info = only(infos, "editable app information")
+              draft = only(drafts, "initial iOS draft")
+              print("iOS draft", draft["attributes"]["versionString"], flush=True)
+              ensure_localization(info["id"], "appInfos", "appInfoLocalizations",
+                                  {"name":RELEASE_COPY["APP NAME"], "subtitle":RELEASE_COPY["SUBTITLE"],
+                                   "privacyPolicyUrl":RELEASE_COPY["PRIVACY POLICY URL"]})
+              ensure_localization(draft["id"], "appStoreVersions", "appStoreVersionLocalizations",
+                                  {"description":RELEASE_COPY["DESCRIPTION"], "keywords":RELEASE_COPY["KEYWORDS"],
+                                   "supportUrl":RELEASE_COPY["SUPPORT URL"]})
+              if app["attributes"]["primaryLocale"] != LOCALE:
+                  try:
+                      apple("PATCH","apps/"+app_id, data={**link("apps",app_id),"attributes":{"primaryLocale":LOCALE}})
+                  except AppleError as error:
+                      print("Primary language change response:",error, flush=True)
+              current = apple("GET","apps/"+app_id, params={"fields[apps]":"primaryLocale"})["data"]
+              print("VERIFIED PRIMARY LANGUAGE:",current["attributes"]["primaryLocale"], flush=True)
+              return current["attributes"]["primaryLocale"] == LOCALE
+
+          def live_build():
+              for attempt in range(30):
+                  page = apple("GET", "builds", params={"filter[app]":app_id, "filter[version]":"2","include":"preReleaseVersion",
+                                                      "limit":50})
+                  trains = {item["id"] for item in page.get("included", []) if item["type"] == "preReleaseVersions"
+                            and item["attributes"].get("version") == "1.0.0" and item["attributes"].get("platform") == "IOS"}
+                  matches = [item for item in page["data"]
+                             if (item["relationships"].get("preReleaseVersion",{}).get("data") or {}).get("id") in trains]
+                  if matches:
+                      build = only(matches, "iOS 1.0.0 (2) build")
+                      state = build["attributes"]["processingState"]
+                      if state == "VALID" and not build["attributes"]["expired"]:
+                          return build
+                      if state in {"FAILED","INVALID"} or build["attributes"]["expired"]:
+                          raise RuntimeError("Build unavailable: "+state)
+                  if attempt == 0:
+                      print("Waiting for Apple to process iOS 1.0.0 (2).",flush=True)
+                  time.sleep(15)
+              raise RuntimeError("Apple has not listed an unexpired processed build 2.")
+
+          def testing():
+              build = live_build()
+              build_id = build["id"]
+              status = apple("GET", f"builds/{build_id}/buildBetaDetail")["data"]["attributes"]
+              print("Build processed VALID. Internal TestFlight status:",status.get("internalBuildState"),
+                    "usesNonExemptEncryption:", build["attributes"].get("usesNonExemptEncryption"), flush=True)
+              testers = rows("betaTesters", {"filter[email]":recipient,"fields[betaTesters]":"email","limit":2})
+              tester = only([i for i in testers if i["attributes"]["email"].casefold() == recipient], "requested tester")["id"]
+              groups = [i for i in rows(f"apps/{app_id}/betaGroups",{"limit":100}) if i["attributes"]["name"] == GROUP]
+              if not groups:
+                  groups = [apple("POST","betaGroups",data={"type":"betaGroups",
+                            "attributes":{"name":GROUP,"isInternalGroup":True,"hasAccessToAllBuilds":False},
+                            "relationships":{"app":rel("apps",app_id)}})["data"]]
+              group = only(groups, "private Fax beta group")
+              if group["attributes"].get("isInternalGroup") is not True or group["attributes"].get("publicLinkEnabled"):
+                  raise RuntimeError("Expected a private internal group.")
+              group_id = group["id"]
+              def members(kind):
+                  return {row["id"] for row in rows(f"betaGroups/{group_id}/relationships/{kind}",{"limit":100})}
+              previous = members("betaTesters")
+              if previous - {tester}:
+                  raise RuntimeError("The named group already has other testers.")
+              if build_id not in members("builds"):
+                  apple("POST", f"betaGroups/{group_id}/relationships/builds", data=[link("builds",build_id)])
+              if tester not in previous:
+                  apple("POST", f"betaGroups/{group_id}/relationships/betaTesters", data=[link("betaTesters",tester)])
+                  print("Apple accepted the internal tester invitation.",flush=True)
+              elif build_id in members("builds"):
+                  print("The requested tester already belonged to the internal group.", flush=True)
+              verified = tester in members("betaTesters") and build_id in members("builds")
+              print("VERIFIED PRIVATE BUILD AND TESTER MEMBERSHIP:",verified,flush=True)
+              status = apple("GET", f"builds/{build_id}/buildBetaDetail")["data"]["attributes"]
+              print("VERIFIED INTERNAL TESTFLIGHT STATE:",status.get("internalBuildState"),flush=True)
+              try:
+                  if len(drafts) == 1:
+                      draft_id = drafts[0]["id"]
+                      current = apple("GET", f"appStoreVersions/{draft_id}/relationships/build")["data"]
+                      if current is None:
+                          apple("PATCH", f"appStoreVersions/{draft_id}/relationships/build", data=link("builds",build_id))
+                          current = apple("GET", f"appStoreVersions/{draft_id}/relationships/build")["data"]
+                      print("Build 2 selected on the draft:", bool(current and current["id"] == build_id), flush=True)
+              except (AppleError, RuntimeError, KeyError) as error:
+                  print("Draft build selection:", error, flush=True)
+              return verified
+
+          localization_ok = False
+          testing_ok = False
+          try:
+              localization_ok = update_language()
+          except (AppleError, RuntimeError, KeyError) as error:
+              print("Language update:", error, flush=True)
+          try:
+              testing_ok = testing()
+          except (AppleError, RuntimeError, KeyError) as error:
+              print("TestFlight delivery:", error, flush=True)
+          if not localization_ok or not testing_ok:
+              sys.exit("One or more Apple operations require follow-up.")
+          PY
