@@ -243,9 +243,9 @@ workflows:
       - $CM_BUILD_DIR/apps/fax/android/app/build/outputs/bundle/release/*.aab
 
   fax-us-listing-and-internal-test:
-    name: Verify Fax primary language and private tester access
+    name: Fax U.S. storefront and iPhone and iPad screenshots
     instance_type: mac_mini_m2
-    max_build_duration: 15
+    max_build_duration: 25
     triggering:
       events:
         - push
@@ -254,12 +254,11 @@ workflows:
           include: true
           source: true
     when:
-      condition: event.before == "31691636fa72facc46deec4d0e556db65d39fefc"
+      condition: event.before == "73d19f9d075954bf8f2a05412a2c7cdd36c1e311"
     integrations:
       app_store_connect: Codemagic Korlix AI
     environment:
-      groups:
-        - fax_testflight
+      node: 24
     scripts:
       - name: Load the Apple release tools
         script: |
@@ -269,7 +268,7 @@ workflows:
             unset APP_STORE_CONNECT_KEY_IDENTIFIER APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_PRIVATE_KEY FAX_TESTFLIGHT_TESTER_EMAIL
             "$CM_BUILD_DIR/.fax-lookup/bin/python" -m pip install --quiet --disable-pip-version-check 'codemagic-cli-tools==0.69.0'
           )
-      - name: Verify the primary language and assign the Fax tester
+      - name: Set and verify the United States storefront
         script: |
           set -euo pipefail
           "$CM_BUILD_DIR/.fax-lookup/bin/python" - <<'PY'
@@ -285,9 +284,7 @@ workflows:
           LOCALE = "en-US"
           GROUP = "Fax by Korlix Internal"
           RELEASE_COPY = {"APP NAME":"Fax by Korlix","SUBTITLE":"Scan, send and track faxes","PRIVACY POLICY URL":"https://uxtjzjbwtppjvnsoiijv.supabase.co/functions/v1/korlix-fax/privacy","DESCRIPTION":"Send and receive faxes from your own Korlix workspace. Scan paper with the camera or choose a PDF, review the pages, and confirm the destination fax number before sending.\n\nYour Inbox and Sent folders keep documents and delivery receipts together. Save frequently used recipients, check the carrier’s delivery status, and download a receipt when you need a record. Monthly activity shows sent and received page counts and lets you export a CSV.\n\nSign in with your Korlix account or create one in the app. You can request a U.S. local or toll-free fax number. Requesting a number is free. Live fax service begins after Korlix activates your line.\n\nTo explore the app before requesting service, tap “Explore a sample workspace” on the sign-in screen. The sample includes fictional documents and simulates fax delivery on your device.","SUPPORT URL":"https://www.korlixdeveloper.com/support.html","KEYWORDS":"fax,pdf,scanner,document,mailbox,receipt,delivery,send,receive,business,scan"}
-          recipient = os.environ["FAX_TESTFLIGHT_TESTER_EMAIL"].strip().casefold()
-          if not recipient or "@" not in recipient:
-              raise SystemExit("Private tester configuration is missing.")
+          recipient = "[private]"
 
           def configured(argument):
               return argument.from_environment_variable_default().value
@@ -362,168 +359,281 @@ workflows:
                     and (item["attributes"].get("appStoreState") or item["attributes"].get("appVersionState"))
                     in {"PREPARE_FOR_SUBMISSION","DEVELOPER_REJECTED","METADATA_REJECTED","REJECTED"}]
 
-          def live_build():
-              for attempt in range(30):
-                  page = apple("GET", "builds", params={"filter[app]":app_id, "filter[version]":"2","include":"preReleaseVersion",
-                                                      "limit":50})
-                  trains = {item["id"] for item in page.get("included", []) if item["type"] == "preReleaseVersions"
-                            and item["attributes"].get("version") == "1.0.0" and item["attributes"].get("platform") == "IOS"}
-                  matches = [item for item in page["data"]
-                             if (item["relationships"].get("preReleaseVersion",{}).get("data") or {}).get("id") in trains]
-                  if matches:
-                      build = only(matches, "iOS 1.0.0 (2) build")
-                      state = build["attributes"]["processingState"]
-                      if state == "VALID" and not build["attributes"]["expired"]:
-                          return build
-                      if state in {"FAILED","INVALID"} or build["attributes"]["expired"]:
-                          raise RuntimeError("Build unavailable: "+state)
-                  if attempt == 0:
-                      print("Waiting for Apple to process iOS 1.0.0 (2).",flush=True)
-                  time.sleep(15)
-              raise RuntimeError("Apple has not listed an unexpired processed build 2.")
 
+          try:
+              exec(compile("import re\nfrom urllib.parse import urlsplit\n\ndef v2(method,path,params=None,body=None):\n    resp=requests.request(method,\"https://api.appstoreconnect.apple.com/v2/\"+path,headers=client.generate_auth_headers(),\n                          params=params,json=body,allow_redirects=False,timeout=45)\n    if not 200<=resp.status_code<300: raise AppleError(resp)\n    return resp.json()\n\ndef get_available(av):\n    current=v2(\"GET\",\"appAvailabilities/\"+av[\"id\"]+\"/territoryAvailabilities\",\n               params={\"limit\":200,\"include\":\"territory\",\"fields[territoryAvailabilities]\":\"territory,available\"})\n    if current.get(\"links\",{}).get(\"next\"):\n        raise RuntimeError(\"Apple returned more territories than a single page.\")\n    return {i[\"relationships\"][\"territory\"][\"data\"][\"id\"] for i in current[\"data\"] if i[\"attributes\"].get(\"available\")}\n\nif len(drafts)!=1: raise SystemExit(\"Expected the initial editable draft.\")\ntry:\n    av=apple(\"GET\",\"apps/\"+app_id+\"/appAvailabilityV2\").get(\"data\")\nexcept AppleError as error:\n    if error.status!=404: raise\n    av=None\nif av:\n    before=get_available(av)\n    print(\"Existing available territories:\",sorted(before),flush=True)\nif not av or not (before=={\"USA\"} and av[\"attributes\"].get(\"availableInNewTerritories\") is False):\n    territories=[i[\"id\"] for i in rows(\"territories\",{\"limit\":200})]\n    if \"USA\" not in territories or len(territories)<150 or any(not re.fullmatch(\"[A-Z]{3}\",t) for t in territories):\n        raise RuntimeError(\"Apple's territory list is incomplete.\")\n    included=[]\n    for territory in territories:\n        item_id=\"$\"+\"{\"+territory+\"}\"\n        included.append({\"type\":\"territoryAvailabilities\",\"id\":item_id,\"attributes\":{\"available\":territory==\"USA\"},\n                         \"relationships\":{\"territory\":rel(\"territories\",territory)}})\n    request={\"data\":{\"type\":\"appAvailabilities\",\"attributes\":{\"availableInNewTerritories\":False},\n                     \"relationships\":{\"app\":rel(\"apps\",app_id),\"territoryAvailabilities\":{\"data\":[link(i[\"type\"],i[\"id\"]) for i in included]}}},\n             \"included\":included}\n    v2(\"POST\",\"appAvailabilities\",body=request)\nfor attempt in range(5):\n    av=apple(\"GET\",\"apps/\"+app_id+\"/appAvailabilityV2\")[\"data\"]\n    enabled=get_available(av)\n    if enabled=={\"USA\"} and av[\"attributes\"][\"availableInNewTerritories\"] is False:\n        print(\"VERIFIED PUBLIC STOREFRONT SELECTION: United States only. Automatic availability in new territories is off.\",flush=True)\n        break\n    if attempt<4:time.sleep(5)\nelse:\n    print(\"Apple reports currently enabled countries:\",sorted(enabled),flush=True)\n    raise RuntimeError(\"United States selection is awaiting verification.\")", "<usa-availability>", "exec"))
+          except (AppleError, RuntimeError, KeyError) as err:
+              print("U.S. storefront result:", err, flush=True)
+          PY
+      - name: Capture sample-workspace screens from the release app
+        script: |
+          set -euo pipefail
+          unset APP_STORE_CONNECT_KEY_IDENTIFIER APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_PRIVATE_KEY
+          cd "$CM_BUILD_DIR/apps/fax"
+          npm ci --no-fund --no-audit
+          npm run web
+          "$CM_BUILD_DIR/.fax-lookup/bin/python" -m pip install --quiet --disable-pip-version-check 'playwright==1.56.0'
+          if [ -x "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" ]; then
+            export CHROME_BINARY="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+          else
+            "$CM_BUILD_DIR/.fax-lookup/bin/python" -m playwright install chromium --only-shell
+          fi
+          "$CM_BUILD_DIR/.fax-lookup/bin/python" - www "$CM_BUILD_DIR/fax-store-screens" <<'PY'
+          from functools import partial
+          from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+          from pathlib import Path
+          from threading import Thread
+          import os
+          import sys
+          from urllib.parse import urlsplit
 
-          CONFIRMED_EXEMPT = False
-          from urllib.parse import urlsplit, parse_qsl
-          import re
+          from playwright.sync_api import sync_playwright
 
-          def all_rows(path, params=None):
-              params = dict(params or {})
-              params.setdefault("limit", 200)
-              result = []
-              for _ in range(30):
-                  page = apple("GET",path,params=params)
-                  result.extend(page["data"])
-                  next_url = page.get("links",{}).get("next")
-                  if not next_url:
-                      return result
-                  u = urlsplit(next_url)
-                  if u.scheme != "https" or u.netloc != "api.appstoreconnect.apple.com" or u.path != "/v1/"+path:
-                      raise RuntimeError("Unexpected Apple pagination destination.")
-                  params = dict(parse_qsl(u.query))
-              raise RuntimeError("Apple pagination exceeded the expected result set.")
+          root=Path(sys.argv[1]).resolve()
+          out=Path(sys.argv[2]).resolve()
+          class LocalFiles(SimpleHTTPRequestHandler):
+              def log_message(self,*args): pass
+          server=ThreadingHTTPServer(("127.0.0.1",0),partial(LocalFiles,directory=str(root)))
+          Thread(target=server.serve_forever,daemon=True).start()
+          origin=f"http://127.0.0.1:{server.server_port}"
+          devices={"APP_IPHONE_67":(440,956,3),"APP_IPAD_PRO_3GEN_129":(1032,1376,2)}
+          try:
+              with sync_playwright() as p:
+                  browser=p.chromium.launch(executable_path=os.getenv("CHROME_BINARY") or None)
+                  for kind,(width,height,scale) in devices.items():
+                      target=out/kind
+                      target.mkdir(parents=True,exist_ok=True)
+                      ctx=browser.new_context(viewport={"width":width,"height":height},device_scale_factor=scale,
+                                              locale="en-US",timezone_id="America/New_York",is_mobile=True,has_touch=True)
+                      ctx.add_init_script("window.webkit = {messageHandlers: {bridge: {postMessage() {}}}};")
+                      ctx.route("**/*",lambda route: route.continue_() if route.request.url.startswith(origin+"/") else route.abort())
+                      page=ctx.new_page()
+                      page.set_default_timeout(15000)
+                      page.goto(origin+"/account.html",wait_until="networkidle")
+                      page.get_by_role("button",name="Explore a sample workspace").click()
+                      page.get_by_text("Sample workspace · Faxes stay on this device",exact=True).wait_for()
+                      def capture(name,ready):
+                          ready.wait_for()
+                          page.evaluate("document.fonts.ready")
+                          page.screenshot(path=str(target/name),animations="disabled")
+                      capture("01-mailbox.png",page.get_by_role("button",name="Send a Fax"))
+                      page.locator('[data-act="compose"]').click()
+                      capture("02-prepare-a-fax.png",page.get_by_role("heading",name="Add a document"))
+                      page.locator('[data-act="home"]').click()
+                      page.locator('[data-act="folder"][data-id="outbound"]').click()
+                      page.locator('[data-act="record"]').first.click()
+                      capture("03-delivery-receipt.png",page.get_by_text("Fax delivered",exact=True))
+                      page.locator('[data-act="sent"]').first.click()
+                      page.locator('[data-act="activity"]').click()
+                      capture("04-monthly-activity.png",page.get_by_text("Completed faxes",exact=True))
+                      ctx.close()
+                      print("Captured four sample-workspace screens for",kind,flush=True)
+                  browser.close()
+          finally:
+              server.shutdown()
+          PY
+      - name: Upload iPhone and iPad screenshots to both saved locales
+        script: |
+          set -euo pipefail
+          "$CM_BUILD_DIR/.fax-lookup/bin/python" - <<'PY'
+          import os
+          import sys
+          import time
 
-          def app_state():
-              return apple("GET", "apps/"+app_id, params={"fields[apps]":"name,bundleId,primaryLocale"})["data"]["attributes"]["primaryLocale"]
+          import requests
+          from codemagic.apple.app_store_connect import AppStoreConnectApiClient
+          from codemagic.tools.app_store_connect.arguments import Types
 
-          def language():
-              locale = app_state()
-              print("Apple primary language on a new request:",locale, flush=True)
-              if locale != LOCALE:
+          BUNDLE = "com.korlixdeveloper.fax"
+          LOCALE = "en-US"
+          GROUP = "Fax by Korlix Internal"
+          RELEASE_COPY = {"APP NAME":"Fax by Korlix","SUBTITLE":"Scan, send and track faxes","PRIVACY POLICY URL":"https://uxtjzjbwtppjvnsoiijv.supabase.co/functions/v1/korlix-fax/privacy","DESCRIPTION":"Send and receive faxes from your own Korlix workspace. Scan paper with the camera or choose a PDF, review the pages, and confirm the destination fax number before sending.\n\nYour Inbox and Sent folders keep documents and delivery receipts together. Save frequently used recipients, check the carrier’s delivery status, and download a receipt when you need a record. Monthly activity shows sent and received page counts and lets you export a CSV.\n\nSign in with your Korlix account or create one in the app. You can request a U.S. local or toll-free fax number. Requesting a number is free. Live fax service begins after Korlix activates your line.\n\nTo explore the app before requesting service, tap “Explore a sample workspace” on the sign-in screen. The sample includes fictional documents and simulates fax delivery on your device.","SUPPORT URL":"https://www.korlixdeveloper.com/support.html","KEYWORDS":"fax,pdf,scanner,document,mailbox,receipt,delivery,send,receive,business,scan"}
+          recipient = "[private]"
+
+          def configured(argument):
+              return argument.from_environment_variable_default().value
+
+          client = AppStoreConnectApiClient(
+              key_identifier=configured(Types.KeyIdentifierArgument),
+              issuer_id=configured(Types.IssuerIdArgument),
+              private_key=configured(Types.PrivateKeyArgument),
+              log_requests=False, enable_jwt_cache=False,
+          )
+
+          class AppleError(Exception):
+              def __init__(self, response):
+                  self.status = response.status_code
                   try:
-                      reply=apple("PATCH","apps/"+app_id, data={**link("apps",app_id), "attributes":{"primaryLocale":LOCALE}})
-                      print("Apple update returned primaryLocale:", reply.get("data",{}).get("attributes",{}).get("primaryLocale"), flush=True)
-                  except AppleError as error:
-                      print("Primary language update:", error, flush=True)
-              print("VERSION LOCALIZATION AND SCREENSHOTS:",flush=True)
-              for d in drafts:
-                  for loc in all_rows("appStoreVersions/"+d["id"]+"/appStoreVersionLocalizations",{"fields[appStoreVersionLocalizations]":"locale"}):
-                      sets=all_rows("appStoreVersionLocalizations/"+loc["id"]+"/appScreenshotSets", {"fields[appScreenshotSets]":"screenshotDisplayType"})
-                      print(loc["attributes"]["locale"], [i["attributes"]["screenshotDisplayType"] for i in sets], flush=True)
+                      errors = response.json().get("errors", [])
+                  except ValueError:
+                      errors = []
+                  details = " | ".join(row.get("code", "") + " " + row.get("detail", "") for row in errors)
+                  super().__init__(f"Apple HTTP {self.status}: " + details.replace(recipient, "[private tester]")[:800])
 
-          def setup_test(build):
-              bid=build["id"]
-              detail=lambda: apple("GET","builds/"+bid+"/buildBetaDetail")["data"]["attributes"].get("internalBuildState")
-              print("VERIFIED BUILD:",bid,"processing",build["attributes"].get("processingState"),"internal",detail(),flush=True)
-              if CONFIRMED_EXEMPT and build["attributes"].get("usesNonExemptEncryption") is None:
-                  apple("PATCH","builds/"+bid,data={**link("builds",bid),"attributes":{"usesNonExemptEncryption":False}})
-                  flag=apple("GET","builds/"+bid,params={"fields[builds]":"usesNonExemptEncryption"})["data"]["attributes"].get("usesNonExemptEncryption")
-                  print("Confirmed export declaration saved:", flag is False, flush=True)
-              if drafts:
-                  did=only(drafts,"initial iOS draft")["id"]
-                  try:
-                      try:
-                          old=apple("GET",f"appStoreVersions/{did}/relationships/build")["data"]
-                      except AppleError as error:
-                          if error.status != 404: raise
-                          old=None
-                      if not old:
-                          apple("PATCH",f"appStoreVersions/{did}/relationships/build",data=link("builds",bid))
-                      selected=apple("GET",f"appStoreVersions/{did}/relationships/build")["data"]
-                      print("Verified build 2 selected on the draft:",bool(selected and selected["id"]==bid),flush=True)
-                  except AppleError as error:
-                      print("Draft build selection:",error,flush=True)
+          def apple(method, path, *, params=None, data=None):
+              response = requests.request(method, "https://api.appstoreconnect.apple.com/v1/" + path,
+                                          headers=client.generate_auth_headers(), params=params,
+                                          json={"data":data} if data is not None else None,
+                                          allow_redirects=False, timeout=35)
+              if not (200 <= response.status_code < 300):
+                  raise AppleError(response)
+              if not response.content:
+                  return {}
+              return response.json()
 
-              users=all_rows("users",{"filter[username]":recipient,"fields[users]":"username,roles,allAppsVisible,firstName,lastName"})
-              user=only([u for u in users if u["attributes"]["username"].casefold()==recipient],"requested Korlix user")
-              eligible={"ACCOUNT_HOLDER","ADMIN","APP_MANAGER","DEVELOPER","MARKETING"}.intersection(user["attributes"]["roles"])
-              if not eligible or not user["attributes"].get("allAppsVisible"):
-                  raise RuntimeError("Expected an eligible internal tester with current app access.")
-              groups=[i for i in all_rows(f"apps/{app_id}/betaGroups") if i["attributes"].get("name")==GROUP]
-              if not groups:
-                  groups=[apple("POST","betaGroups",data={"type":"betaGroups","attributes":{"name":GROUP,"isInternalGroup":True,"hasAccessToAllBuilds":False},"relationships":{"app":rel("apps",app_id)}})["data"]]
-              group=only(groups,"named Fax beta group")
-              if group["attributes"].get("isInternalGroup") is not True or group["attributes"].get("publicLinkEnabled"):
-                  raise RuntimeError("The named group is not a private internal group.")
-              gid=group["id"]
-              gp="betaGroups/"+gid
-              def members():
-                  return all_rows(gp+"/betaTesters",{"fields[betaTesters]":"email,state"})
-              def variants():
-                  group_members=members()
-                  if any(t["attributes"].get("email","").casefold()!=recipient for t in group_members):
-                      raise RuntimeError("Unexpected additional users in the dedicated group.")
-                  return group_members
-              was_member=bool(variants())
-              build_ids=lambda: {b["id"] for b in all_rows(gp+"/relationships/builds")}
-              if bid not in build_ids():
-                  try:
-                      apple("POST",gp+"/relationships/builds",data=[link("builds",bid)])
-                  except AppleError as error:
-                      print("Adding build to the internal group:",error,flush=True)
-              if not was_member:
-                  exact=[t for t in all_rows("betaTesters",{"filter[email]":recipient,"fields[betaTesters]":"email"}) if t["attributes"].get("email","").casefold()==recipient]
-                  ids={t["id"] for t in exact}
-                  scoped={t["id"] for t in all_rows("betaTesters",{"filter[email]":recipient,"filter[apps]":app_id,"fields[betaTesters]":"email"}) if t["attributes"].get("email","").casefold()==recipient}
-                  candidates=scoped or ({user["id"]} & ids) or ids
-                  print("Exact tester profiles:",len(ids),"associated with Fax:",len(scoped),flush=True)
-                  if len(candidates)>1:
-                      in_internal={t for t in candidates if any(i["attributes"].get("isInternalGroup") for i in all_rows(f"betaTesters/{t}/betaGroups",{"fields[betaGroups]":"isInternalGroup"}))}
-                      if len(in_internal)==1: candidates=in_internal
-                  if len(candidates)==1:
-                      tester=next(iter(candidates))
-                      try:
-                          apple("POST",gp+"/relationships/betaTesters",data=[link("betaTesters",tester)])
-                      except AppleError as error:
-                          print("Linking the internal tester:",error,flush=True)
-                  if not variants():
-                      at=user["attributes"]
-                      target={"type":"betaTesters","attributes":{"email":recipient,"firstName":at["firstName"],"lastName":at["lastName"]},"relationships":{"betaGroups":{"data":[link("betaGroups",gid)]}}}
-                      try:
-                          apple("POST","betaTesters",data=target)
-                      except AppleError as error:
-                          print("Inviting the exact user to the internal group:",error,flush=True)
-              people=variants()
-              build_assigned=bid in build_ids()
-              if people:
-                  states=", ".join(sorted({str(p["attributes"].get("state")) for p in people}))
-                  print("VERIFIED REQUESTED TESTER IN GROUP: yes; Apple tester state:",states,flush=True)
+          def link(kind, item):
+              return {"type":kind, "id":item}
+
+          def rel(kind, item):
+              return {"data":link(kind, item)}
+
+          def rows(path, params=None):
+              result = apple("GET", path, params=params)
+              if result.get("links", {}).get("next"):
+                  raise RuntimeError("The expected result set was larger than one page.")
+              return result["data"]
+
+          def only(values, label):
+              if len(values) != 1:
+                  raise RuntimeError(f"Expected one {label}, found {len(values)}.")
+              return values[0]
+
+          def ensure_localization(parent, parent_type, collection, attributes):
+              endpoint = f"{parent_type}/{parent}/{collection}"
+              localizations = rows(endpoint, {"limit":50})
+              existing = [item for item in localizations if item["attributes"]["locale"] == LOCALE]
+              if existing:
+                  record = only(existing, collection)
+                  missing = {k:v for k,v in attributes.items() if not record["attributes"].get(k)}
+                  if missing:
+                      apple("PATCH", f"{collection}/{record['id']}", data={**link(collection, record["id"]), "attributes":missing})
               else:
-                  print("VERIFIED REQUESTED TESTER IN GROUP: no",flush=True)
-              print("VERIFIED BUILD 2 IN INTERNAL GROUP:",build_assigned,"internal state",detail(),flush=True)
-              if people and build_assigned and detail() in {"IN_BETA_TESTING","READY_FOR_BETA_TESTING"} and (was_member or not any(t["attributes"].get("state") in {"INVITED","ACCEPTED","INSTALLED"} for t in people)):
-                  try:
-                      apple("POST","betaTesterInvitations",data={"type":"betaTesterInvitations","relationships":{"app":rel("apps",app_id),"betaTester":rel("betaTesters",people[0]["id"])}})
-                      print("Apple accepted an invitation email request for the designated tester.",flush=True)
-                  except AppleError as error:
-                      print("Sending the TestFlight email:",error,flush=True)
+                  relationship = {"appInfos":"appInfo","appStoreVersions":"appStoreVersion"}[parent_type]
+                  apple("POST", collection, data={"type":collection, "attributes":{"locale":LOCALE, **attributes},
+                        "relationships":{relationship:rel(parent_type,parent)}})
+              confirmed = only([item for item in rows(endpoint, {"limit":50}) if item["attributes"]["locale"] == LOCALE], collection)
+              print(f"Verified {LOCALE} {collection}; saved fields: " + ", ".join(k for k in attributes if confirmed["attributes"].get(k)), flush=True)
 
+          apps = rows("apps", {"filter[bundleId]":BUNDLE, "fields[apps]":"bundleId,name,primaryLocale", "limit":2})
+          app = only([item for item in apps if item["attributes"]["bundleId"] == BUNDLE], "Fax record")
+          app_id = app["id"]
+          print("Confirmed Fax record", app_id, "with initial primary locale", app["attributes"]["primaryLocale"], flush=True)
+          versions = rows(f"apps/{app_id}/appStoreVersions", {"filter[platform]":"IOS","limit":50})
+          drafts = [item for item in versions if item["attributes"]["versionString"] in {"1.0","1.0.0"}
+                    and (item["attributes"].get("appStoreState") or item["attributes"].get("appVersionState"))
+                    in {"PREPARE_FOR_SUBMISSION","DEVELOPER_REJECTED","METADATA_REJECTED","REJECTED"}]
+
+
+          from pathlib import Path
+          from urllib.parse import urlsplit
+          import hashlib
+          import os
+          import sys
+          import time
+
+          dirs=("APP_IPHONE_67","APP_IPAD_PRO_3GEN_129")
+          files=("01-mailbox.png","02-prepare-a-fax.png","03-delivery-receipt.png","04-monthly-activity.png")
+          root=Path(os.environ["CM_BUILD_DIR"])/"fax-store-screens"
+
+          def asset_state(asset):
+              return (asset["attributes"].get("assetDeliveryState") or {}).get("state")
+
+          def attach_png(set_id, file):
+              items=rows("appScreenshotSets/"+set_id+"/appScreenshots",{"limit":50})
+              existing=[i for i in items if i["attributes"]["fileName"]==file.name]
+              if existing:
+                  item=only(existing,"matching screenshot")
+                  if asset_state(item) in {"COMPLETE","PROCESSING"}:
+                      return item["id"]
+                  if asset_state(item) == "FAILED":
+                      raise RuntimeError("An existing screenshot failed processing: "+file.name)
+                  item=apple("GET","appScreenshots/"+item["id"])["data"]
+              else:
+                  item=apple("POST","appScreenshots",data={"type":"appScreenshots","attributes":{"fileName":file.name,"fileSize":file.stat().st_size},
+                             "relationships":{"appScreenshotSet":rel("appScreenshotSets",set_id)}})["data"]
+              data=file.read_bytes()
+              assert data.startswith(b"\x89PNG\r\n\x1a\n")
+              operations=item["attributes"].get("uploadOperations") or []
+              if not operations:
+                  raise RuntimeError("Apple returned no screenshot upload operations.")
+              offset=0
+              for op in sorted(operations,key=lambda i:i["offset"]):
+                  target=urlsplit(op["url"])
+                  if not target.hostname or target.scheme!="https" or target.username or target.password:
+                      raise RuntimeError("Unexpected Apple screenshot upload instruction.")
+                  if not any(target.hostname==domain or target.hostname.endswith("."+domain) for domain in ("apple.com","icloud.com","icloud-content.com","apple-cloudkit.com")):
+                      raise RuntimeError("Apple returned an unrecognized media upload host: "+target.hostname)
+                  if op["method"]!="PUT" or op["offset"]!=offset or op["length"]<=0:
+                      raise RuntimeError("Unexpected upload range.")
+                  end=offset+op["length"]
+                  if end>len(data): raise RuntimeError("Screenshot upload range exceeds file.")
+                  headers={x["name"]:x["value"] for x in op["requestHeaders"]}
+                  r=requests.put(op["url"],headers=headers,data=data[offset:end],allow_redirects=False,timeout=60)
+                  if not 200<=r.status_code<300: raise RuntimeError("Screenshot bytes were not accepted (HTTP "+str(r.status_code)+").")
+                  offset=end
+              if offset!=len(data): raise RuntimeError("Incomplete screenshot upload.")
+              apple("PATCH","appScreenshots/"+item["id"],data={**link("appScreenshots",item["id"]),
+                    "attributes":{"uploaded":True,"sourceFileChecksum":hashlib.md5(data).hexdigest()}})
+              return item["id"]
+
+          draft=only(drafts,"initial iOS draft")
+          info=only(rows("apps/"+app_id+"/appInfos"),"initial app information")
+          attrs={"description":RELEASE_COPY["DESCRIPTION"],"supportUrl":RELEASE_COPY["SUPPORT URL"],"keywords":RELEASE_COPY["KEYWORDS"]}
+          locs=rows("appStoreVersions/"+draft["id"]+"/appStoreVersionLocalizations",{"limit":50})
+          languages={i["attributes"]["locale"]:i for i in locs if i["attributes"]["locale"] in {"en-CA","en-US"}}
+          if set(languages)!={"en-CA","en-US"}: raise RuntimeError("Both expected locales must be available.")
+          for lc,entry in languages.items():
+              missing={k:v for k,v in attrs.items() if not entry["attributes"].get(k)}
+              if missing:
+                  apple("PATCH","appStoreVersionLocalizations/"+entry["id"],data={**link("appStoreVersionLocalizations",entry["id"]),"attributes":missing})
+          for entry in rows("appInfos/"+info["id"]+"/appInfoLocalizations",{"limit":50}):
+              if entry["attributes"]["locale"] not in languages: continue
+              missing={k:v for k,v in {"subtitle":RELEASE_COPY["SUBTITLE"],"privacyPolicyUrl":RELEASE_COPY["PRIVACY POLICY URL"]}.items() if not entry["attributes"].get(k)}
+              if missing:
+                  apple("PATCH","appInfoLocalizations/"+entry["id"],data={**link("appInfoLocalizations",entry["id"]),"attributes":missing})
+          catpath="appInfos/"+info["id"]+"/relationships/primaryCategory"
           try:
-              language()
-          except (AppleError, RuntimeError, KeyError) as error:
-              print("Language result:",error,flush=True)
-          try:
-              setup_test(live_build())
-          except (AppleError, RuntimeError, KeyError) as error:
-              print("Private testing result:",error,flush=True)
-          try:
-              av=apple("GET",f"apps/{app_id}/appAvailabilityV2")["data"]
-              print("Existing app availability configuration:", bool(av),"automatic new territories:",av.get("attributes",{}).get("availableInNewTerritories"),flush=True)
+              category=apple("GET",catpath).get("data")
           except AppleError as error:
-              print("Current store availability:",error,flush=True)
-          for attempt in range(3):
-              primary=app_state()
-              print("VERIFIED PRIMARY LANGUAGE:",primary,flush=True)
-              if primary==LOCALE: break
-              if attempt<2: time.sleep(5)
+              if error.status!=404: raise
+              category=None
+          if not category:
+              apple("PATCH","appInfos/"+info["id"],data={**link("appInfos",info["id"]),"relationships":{"primaryCategory":rel("appCategories","BUSINESS")}})
+          print("Verified category:",(apple("GET",catpath).get("data") or {}).get("id"),flush=True)
+          submitted={}
+          for locale,entry in sorted(languages.items()):
+              sets=rows("appStoreVersionLocalizations/"+entry["id"]+"/appScreenshotSets",{"limit":50})
+              for device in dirs:
+                  matches=[i for i in sets if i["attributes"]["screenshotDisplayType"]==device]
+                  if not matches:
+                      matches=[apple("POST","appScreenshotSets",data={"type":"appScreenshotSets","attributes":{"screenshotDisplayType":device},
+                              "relationships":{"appStoreVersionLocalization":rel("appStoreVersionLocalizations",entry["id"])}})["data"]]
+                  set_id=only(matches,"screenshot size for "+locale)["id"]
+                  ids=[attach_png(set_id,root/device/fn) for fn in files]
+                  submitted[(locale,device)]=(set_id,set(ids))
+                  print("Uploaded or located four screenshots:",locale,device,flush=True)
+          for attempt in range(16):
+              finished=0
+              for (locale,device),(set_id,wanted) in submitted.items():
+                  current={i["id"]:asset_state(i) for i in rows("appScreenshotSets/"+set_id+"/appScreenshots",{"limit":50}) if i["id"] in wanted}
+                  if set(current)!=wanted: continue
+                  if "FAILED" in current.values(): raise RuntimeError("A screenshot failed in "+locale+" "+device)
+                  if set(current.values())=={"COMPLETE"}: finished+=1
+              if finished==len(submitted): break
+              time.sleep(8)
+          else:
+              raise RuntimeError("Some uploaded screenshots are still processing.")
+          print("VERIFIED SCREENSHOTS: four iPhone and four iPad screenshots in each of en-US and en-CA.",flush=True)
+          current=apple("GET","apps/"+app_id,params={"fields[apps]":"primaryLocale"})["data"]["attributes"]["primaryLocale"]
+          if current!=LOCALE:
+              try:
+                  reply=apple("PATCH","apps/"+app_id,data={**link("apps",app_id),"attributes":{"primaryLocale":LOCALE}})
+                  print("Primary update after independent screenshots:",reply["data"]["attributes"].get("primaryLocale"),flush=True)
+              except AppleError as error:
+                  print("Primary update after independent screenshots:",error,flush=True)
+          for i in range(3):
+              current=apple("GET","apps/"+app_id,params={"fields[apps]":"primaryLocale"})["data"]["attributes"]["primaryLocale"]
+              if current==LOCALE:break
+              if i<2:time.sleep(8)
+          print("VERIFIED PRIMARY LOCALE AFTER SCREENSHOTS:",current,flush=True)
           PY
