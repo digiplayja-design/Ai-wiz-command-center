@@ -241,3 +241,213 @@ workflows:
           keytool -printcert -jarfile app/build/outputs/bundle/release/app-release.aab > /dev/null
     artifacts:
       - $CM_BUILD_DIR/apps/fax/android/app/build/outputs/bundle/release/*.aab
+
+  fax-published-privacy-submit:
+    name: Fax build 2 US App Store submission
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: feature/fax-mobile-20261125
+          include: true
+          source: true
+    when:
+      condition: event.before == "53fb744a9c1d7a2f539aa40b90e7c2af5cd43cb8"
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    scripts:
+      - name: Load the Apple release tools
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.fax-lookup"
+          (
+            unset APP_STORE_CONNECT_KEY_IDENTIFIER APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_PRIVATE_KEY FAX_TESTFLIGHT_TESTER_EMAIL
+            "$CM_BUILD_DIR/.fax-lookup/bin/python" -m pip install --quiet --disable-pip-version-check 'codemagic-cli-tools==0.69.0'
+          )
+      - name: Submit build 2 and verify the Apple review queue
+        script: |
+          set -euo pipefail
+          "$CM_BUILD_DIR/.fax-lookup/bin/python" - <<'PY'
+          import os
+          import time
+          import requests
+          from codemagic.apple.app_store_connect import AppStoreConnectApiClient
+          from codemagic.tools.app_store_connect.arguments import Types
+          
+          def configured(arg):
+              return arg.from_environment_variable_default().value
+          
+          client = AppStoreConnectApiClient(
+              key_identifier=configured(Types.KeyIdentifierArgument),
+              issuer_id=configured(Types.IssuerIdArgument),
+              private_key=configured(Types.PrivateKeyArgument),
+              log_requests=False, enable_jwt_cache=False,
+          )
+          class AppleError(Exception):
+              def __init__(self, r):
+                  try:
+                      errors = r.json().get("errors", [])
+                  except ValueError:
+                      errors = []
+                  details = " | ".join(e.get("code","")+" "+e.get("detail", e.get("title","")) for e in errors)
+                  super().__init__("HTTP "+str(r.status_code)+" "+details[:780])
+          
+          def call(method, path, *, params=None, data=None):
+              response = requests.request(method, "https://api.appstoreconnect.apple.com/v1/"+path,
+                                          headers=client.generate_auth_headers(), params=params,
+                                          json={"data": data} if data is not None else None,
+                                          allow_redirects=False, timeout=30)
+              if not 200 <= response.status_code < 300:
+                  raise AppleError(response)
+              return response
+          
+          def get(path, params=None):
+              return call("GET",path,params=params).json()["data"]
+          
+          def unique(items, what):
+              if len(items) != 1:
+                  raise ValueError(f"Expected one {what}, found {len(items)}.")
+              return items[0]
+          
+          def link(kind, identifier):
+              return {"type":kind,"id":identifier}
+          
+          
+          from datetime import datetime, timezone
+          from decimal import Decimal
+          from urllib.parse import urlsplit, parse_qsl
+          
+          def apple_request(method, path, *, params=None, payload=None, version="v1"):
+              response=requests.request(method, "https://api.appstoreconnect.apple.com/"+version+"/"+path,
+                                        headers=client.generate_auth_headers(), params=params, json=payload,
+                                        allow_redirects=False, timeout=35)
+              if not 200 <= response.status_code < 300:
+                  try:
+                      errors=response.json().get("errors",[])
+                      details=[]
+                      for row in errors:
+                          details.append([row.get("code"),row.get("detail"),row.get("source",{}).get("pointer")])
+                          for group in row.get("meta",{}).get("associatedErrors",{}).values():
+                              details.extend([[x.get("code"),x.get("detail")] for x in group])
+                      print("APPLE VALIDATION:",str(details)[:2400],flush=True)
+                  except (ValueError,TypeError,AttributeError): pass
+                  raise AppleError(response)
+              return response.json() if response.content else {}
+          
+          def each_page(path, params):
+              for attempt in range(18):
+                  page=apple_request("GET",path,params=params)
+                  yield page
+                  url=page.get("links",{}).get("next")
+                  if not url:
+                      return
+                  split=urlsplit(url)
+                  if split.scheme!="https" or split.netloc!="api.appstoreconnect.apple.com" or split.path!="/v1/"+path:
+                      raise ValueError("Unexpected Apple pagination link.")
+                  params=dict(parse_qsl(split.query))
+              raise ValueError("Apple results exceeded the expected pagination limit.")
+          
+          def relationship(kind, identifier):
+              return {"data":link(kind,identifier)}
+          
+          def us_prices(schedule_id):
+              path="appPriceSchedules/"+schedule_id+"/manualPrices"
+              prices=[]
+              for page in each_page(path,{"filter[territory]":"USA","include":"territory,appPricePoint","limit":200}):
+                  points={r["id"]:r["attributes"]["customerPrice"] for r in page.get("included",[]) if r["type"]=="appPricePoints"}
+                  for p in page["data"]:
+                      rels=p["relationships"]
+                      if rels["territory"]["data"]["id"]!="USA":
+                          raise ValueError("Apple price filter returned a different territory.")
+                      prices.append((p["attributes"].get("startDate"),p["attributes"].get("endDate"),points[rels["appPricePoint"]["data"]["id"]]))
+              return prices
+          
+          
+          def add_and_submit():
+              version=get("appStoreVersions/"+vid)
+              state=version["attributes"].get("appStoreState") or version["attributes"].get("appVersionState")
+              print("BEFORE REVIEW:",state,"APPLE RELEASE MODE:",version["attributes"].get("releaseType"),flush=True)
+              if state in {"WAITING_FOR_REVIEW","IN_REVIEW","PENDING_DEVELOPER_RELEASE","PENDING_APPLE_RELEASE","READY_FOR_SALE","READY_FOR_DISTRIBUTION"}:
+                  return
+              if state not in {"PREPARE_FOR_SUBMISSION","READY_FOR_REVIEW","DEVELOPER_REJECTED","METADATA_REJECTED","REJECTED"}:
+                  raise ValueError("Apple version is not in an editable submission state.")
+              attached=get("appStoreVersions/"+vid+"/relationships/build")
+              if not attached or attached["id"]!="05071f83-0758-49f5-9dae-a79d2a1b44d0":
+                  raise ValueError("Expected Fax build 2.")
+              av=get("apps/"+app_id+"/appAvailabilityV2")
+              data=apple_request("GET","appAvailabilities/"+av["id"]+"/territoryAvailabilities",version="v2",
+                                 params={"limit":200,"include":"territory","fields[territoryAvailabilities]":"territory,available"})
+              visible={r["relationships"]["territory"]["data"]["id"] for r in data["data"] if r["attributes"]["available"]}
+              if visible!={"USA"} or av["attributes"].get("availableInNewTerritories") or data.get("links",{}).get("next"):
+                  raise ValueError("The U.S.-only territory selection requires review.")
+              prior=get("apps/"+app_id+"/reviewSubmissions",{"limit":100})
+              pending=[s for s in prior if s["attributes"].get("state")=="READY_FOR_REVIEW" and s["attributes"].get("platform") in {None,"IOS"}]
+              if not pending:
+                  sub=apple_request("POST","reviewSubmissions",payload={"data":{"type":"reviewSubmissions","attributes":{"platform":"IOS"},"relationships":{"app":relationship("apps",app_id)}}})["data"]
+              else:
+                  sub=unique(pending,"editable iOS review submission")
+              group_path="reviewSubmissions/"+sub["id"]
+              def items():
+                  page=apple_request("GET",group_path+"/items",params={"include":"appStoreVersion","limit":200})
+                  if page.get("links",{}).get("next"):
+                      raise ValueError("Review submission contains unexpectedly many items.")
+                  return page["data"]
+              def is_version(item):
+                  rels=item.get("relationships",{}).get("appStoreVersion",{}).get("data")
+                  return bool(rels and rels["id"]==vid)
+              current=items()
+              if any(not is_version(x) for x in current):
+                  raise ValueError("The existing submission includes another item. Left it alone.")
+              if not current:
+                  apple_request("POST","reviewSubmissionItems",payload={"data":{"type":"reviewSubmissionItems","relationships":{
+                      "reviewSubmission":relationship("reviewSubmissions",sub["id"]),"appStoreVersion":relationship("appStoreVersions",vid)}}})
+              for attempt in range(6):
+                  current=items()
+                  if len(current)==1 and is_version(current[0]):
+                      break
+                  time.sleep(3)
+              if len(current)!=1 or not is_version(current[0]):
+                  raise ValueError("Could not confirm the sole review item.")
+              current_state=get(group_path)["attributes"].get("state")
+              if current_state=="READY_FOR_REVIEW":
+                  apple_request("PATCH",group_path,payload={"data":{**link("reviewSubmissions",sub["id"]),"attributes":{"submitted":True}}})
+              latest=get(group_path)["attributes"]
+              print("VERIFIED REVIEW SUBMISSION:",latest.get("state"),"submitted",latest.get("submittedDate"), "review ID",sub["id"],flush=True)
+              print("VERIFIED VERSION STATE:", get("appStoreVersions/"+vid)["attributes"].get("appStoreState"),flush=True)
+          
+          
+          entity=unique(get("apps",{"filter[bundleId]":"com.korlixdeveloper.fax","fields[apps]":"name,bundleId","limit":2}),"Fax app")
+          app_id=entity["id"]
+          if app_id!="6840053512" or entity["attributes"]["bundleId"]!="com.korlixdeveloper.fax":
+              raise ValueError("Unexpected app record.")
+          ver=unique([v for v in get("apps/"+app_id+"/appStoreVersions",{"limit":80}) if v["attributes"].get("platform")=="IOS" and v["attributes"].get("versionString")=="1.0"], "iOS Fax 1.0")
+          vid=ver["id"]
+          
+          
+          build_ref=get("appStoreVersions/"+vid+"/relationships/build")
+          if not build_ref or build_ref["id"]!="05071f83-0758-49f5-9dae-a79d2a1b44d0":
+              raise ValueError("The selected build differs from the tested Fax build.")
+          build=get("builds/"+build_ref["id"])
+          if build["attributes"].get("version")!="2" or build["attributes"].get("processingState")!="VALID" or build["attributes"].get("expired"):
+              raise ValueError("The selected Fax build is not current.")
+          app_values=get("apps/"+app_id,{"fields[apps]":"bundleId,primaryLocale,contentRightsDeclaration"})["attributes"]
+          print("ATTACHED iOS BUILD:",build["attributes"]["version"],"locale",app_values.get("primaryLocale"),flush=True)
+          schedule=get("apps/"+app_id+"/appPriceSchedule")
+          today=datetime.now(timezone.utc).date().isoformat()
+          price_ok=any(Decimal(price)==0 and (not start or start<=today) and (not end or end>today) for start,end,price in us_prices(schedule["id"]))
+          if not price_ok:
+              raise ValueError("The current U.S. download price differs from the approved free price.")
+          print("VERIFIED U.S. DOWNLOAD PRICE: USD 0.00",flush=True)
+          add_and_submit()
+          final_state=None
+          for attempt in range(9):
+              version_result=get("appStoreVersions/"+vid)["attributes"]
+              final_state=version_result.get("appStoreState") or version_result.get("appVersionState")
+              if final_state in {"WAITING_FOR_REVIEW","IN_REVIEW","PENDING_DEVELOPER_RELEASE","PENDING_APPLE_RELEASE","PROCESSING_FOR_APP_STORE","READY_FOR_SALE","READY_FOR_DISTRIBUTION"}:
+                  break
+              if attempt<8:
+                  time.sleep(3)
+          print("APPLE'S FINAL VERSION STATUS:",final_state,"VERSION:",version_result.get("versionString"),"BUILD:",build["attributes"].get("version"),"RELEASE MODE:",version_result.get("releaseType"),flush=True)
+          PY
