@@ -243,7 +243,7 @@ workflows:
       - $CM_BUILD_DIR/apps/fax/android/app/build/outputs/bundle/release/*.aab
 
   fax-us-listing-and-internal-test:
-    name: Fax U.S. listing and internal TestFlight invitation
+    name: Verify Fax primary language and private tester access
     instance_type: mac_mini_m2
     max_build_duration: 15
     triggering:
@@ -254,7 +254,7 @@ workflows:
           include: true
           source: true
     when:
-      condition: event.before == "dd7620e740c0b9244121797226622e9200b18673"
+      condition: event.before == "31691636fa72facc46deec4d0e556db65d39fefc"
     integrations:
       app_store_connect: Codemagic Korlix AI
     environment:
@@ -269,7 +269,7 @@ workflows:
             unset APP_STORE_CONNECT_KEY_IDENTIFIER APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_PRIVATE_KEY FAX_TESTFLIGHT_TESTER_EMAIL
             "$CM_BUILD_DIR/.fax-lookup/bin/python" -m pip install --quiet --disable-pip-version-check 'codemagic-cli-tools==0.69.0'
           )
-      - name: Apply the U.S. localization and enable the private test
+      - name: Verify the primary language and assign the Fax tester
         script: |
           set -euo pipefail
           "$CM_BUILD_DIR/.fax-lookup/bin/python" - <<'PY'
@@ -362,29 +362,6 @@ workflows:
                     and (item["attributes"].get("appStoreState") or item["attributes"].get("appVersionState"))
                     in {"PREPARE_FOR_SUBMISSION","DEVELOPER_REJECTED","METADATA_REJECTED","REJECTED"}]
 
-          def update_language():
-              infos = rows(f"apps/{app_id}/appInfos")
-              if len(infos) > 1:
-                  infos = [i for i in infos if (i["attributes"].get("appStoreState") or i["attributes"].get("state"))
-                           in {"PREPARE_FOR_SUBMISSION","DEVELOPER_REJECTED","METADATA_REJECTED","REJECTED"}]
-              info = only(infos, "editable app information")
-              draft = only(drafts, "initial iOS draft")
-              print("iOS draft", draft["attributes"]["versionString"], flush=True)
-              ensure_localization(info["id"], "appInfos", "appInfoLocalizations",
-                                  {"name":RELEASE_COPY["APP NAME"], "subtitle":RELEASE_COPY["SUBTITLE"],
-                                   "privacyPolicyUrl":RELEASE_COPY["PRIVACY POLICY URL"]})
-              ensure_localization(draft["id"], "appStoreVersions", "appStoreVersionLocalizations",
-                                  {"description":RELEASE_COPY["DESCRIPTION"], "keywords":RELEASE_COPY["KEYWORDS"],
-                                   "supportUrl":RELEASE_COPY["SUPPORT URL"]})
-              if app["attributes"]["primaryLocale"] != LOCALE:
-                  try:
-                      apple("PATCH","apps/"+app_id, data={**link("apps",app_id),"attributes":{"primaryLocale":LOCALE}})
-                  except AppleError as error:
-                      print("Primary language change response:",error, flush=True)
-              current = apple("GET","apps/"+app_id, params={"fields[apps]":"primaryLocale"})["data"]
-              print("VERIFIED PRIMARY LANGUAGE:",current["attributes"]["primaryLocale"], flush=True)
-              return current["attributes"]["primaryLocale"] == LOCALE
-
           def live_build():
               for attempt in range(30):
                   page = apple("GET", "builds", params={"filter[app]":app_id, "filter[version]":"2","include":"preReleaseVersion",
@@ -405,61 +382,148 @@ workflows:
                   time.sleep(15)
               raise RuntimeError("Apple has not listed an unexpired processed build 2.")
 
-          def testing():
-              build = live_build()
-              build_id = build["id"]
-              status = apple("GET", f"builds/{build_id}/buildBetaDetail")["data"]["attributes"]
-              print("Build processed VALID. Internal TestFlight status:",status.get("internalBuildState"),
-                    "usesNonExemptEncryption:", build["attributes"].get("usesNonExemptEncryption"), flush=True)
-              testers = rows("betaTesters", {"filter[email]":recipient,"fields[betaTesters]":"email","limit":2})
-              tester = only([i for i in testers if i["attributes"]["email"].casefold() == recipient], "requested tester")["id"]
-              groups = [i for i in rows(f"apps/{app_id}/betaGroups",{"limit":100}) if i["attributes"]["name"] == GROUP]
-              if not groups:
-                  groups = [apple("POST","betaGroups",data={"type":"betaGroups",
-                            "attributes":{"name":GROUP,"isInternalGroup":True,"hasAccessToAllBuilds":False},
-                            "relationships":{"app":rel("apps",app_id)}})["data"]]
-              group = only(groups, "private Fax beta group")
-              if group["attributes"].get("isInternalGroup") is not True or group["attributes"].get("publicLinkEnabled"):
-                  raise RuntimeError("Expected a private internal group.")
-              group_id = group["id"]
-              def members(kind):
-                  return {row["id"] for row in rows(f"betaGroups/{group_id}/relationships/{kind}",{"limit":100})}
-              previous = members("betaTesters")
-              if previous - {tester}:
-                  raise RuntimeError("The named group already has other testers.")
-              if build_id not in members("builds"):
-                  apple("POST", f"betaGroups/{group_id}/relationships/builds", data=[link("builds",build_id)])
-              if tester not in previous:
-                  apple("POST", f"betaGroups/{group_id}/relationships/betaTesters", data=[link("betaTesters",tester)])
-                  print("Apple accepted the internal tester invitation.",flush=True)
-              elif build_id in members("builds"):
-                  print("The requested tester already belonged to the internal group.", flush=True)
-              verified = tester in members("betaTesters") and build_id in members("builds")
-              print("VERIFIED PRIVATE BUILD AND TESTER MEMBERSHIP:",verified,flush=True)
-              status = apple("GET", f"builds/{build_id}/buildBetaDetail")["data"]["attributes"]
-              print("VERIFIED INTERNAL TESTFLIGHT STATE:",status.get("internalBuildState"),flush=True)
-              try:
-                  if len(drafts) == 1:
-                      draft_id = drafts[0]["id"]
-                      current = apple("GET", f"appStoreVersions/{draft_id}/relationships/build")["data"]
-                      if current is None:
-                          apple("PATCH", f"appStoreVersions/{draft_id}/relationships/build", data=link("builds",build_id))
-                          current = apple("GET", f"appStoreVersions/{draft_id}/relationships/build")["data"]
-                      print("Build 2 selected on the draft:", bool(current and current["id"] == build_id), flush=True)
-              except (AppleError, RuntimeError, KeyError) as error:
-                  print("Draft build selection:", error, flush=True)
-              return verified
 
-          localization_ok = False
-          testing_ok = False
+          CONFIRMED_EXEMPT = False
+          from urllib.parse import urlsplit, parse_qsl
+          import re
+
+          def all_rows(path, params=None):
+              params = dict(params or {})
+              params.setdefault("limit", 200)
+              result = []
+              for _ in range(30):
+                  page = apple("GET",path,params=params)
+                  result.extend(page["data"])
+                  next_url = page.get("links",{}).get("next")
+                  if not next_url:
+                      return result
+                  u = urlsplit(next_url)
+                  if u.scheme != "https" or u.netloc != "api.appstoreconnect.apple.com" or u.path != "/v1/"+path:
+                      raise RuntimeError("Unexpected Apple pagination destination.")
+                  params = dict(parse_qsl(u.query))
+              raise RuntimeError("Apple pagination exceeded the expected result set.")
+
+          def app_state():
+              return apple("GET", "apps/"+app_id, params={"fields[apps]":"name,bundleId,primaryLocale"})["data"]["attributes"]["primaryLocale"]
+
+          def language():
+              locale = app_state()
+              print("Apple primary language on a new request:",locale, flush=True)
+              if locale != LOCALE:
+                  try:
+                      reply=apple("PATCH","apps/"+app_id, data={**link("apps",app_id), "attributes":{"primaryLocale":LOCALE}})
+                      print("Apple update returned primaryLocale:", reply.get("data",{}).get("attributes",{}).get("primaryLocale"), flush=True)
+                  except AppleError as error:
+                      print("Primary language update:", error, flush=True)
+              print("VERSION LOCALIZATION AND SCREENSHOTS:",flush=True)
+              for d in drafts:
+                  for loc in all_rows("appStoreVersions/"+d["id"]+"/appStoreVersionLocalizations",{"fields[appStoreVersionLocalizations]":"locale"}):
+                      sets=all_rows("appStoreVersionLocalizations/"+loc["id"]+"/appScreenshotSets", {"fields[appScreenshotSets]":"screenshotDisplayType"})
+                      print(loc["attributes"]["locale"], [i["attributes"]["screenshotDisplayType"] for i in sets], flush=True)
+
+          def setup_test(build):
+              bid=build["id"]
+              detail=lambda: apple("GET","builds/"+bid+"/buildBetaDetail")["data"]["attributes"].get("internalBuildState")
+              print("VERIFIED BUILD:",bid,"processing",build["attributes"].get("processingState"),"internal",detail(),flush=True)
+              if CONFIRMED_EXEMPT and build["attributes"].get("usesNonExemptEncryption") is None:
+                  apple("PATCH","builds/"+bid,data={**link("builds",bid),"attributes":{"usesNonExemptEncryption":False}})
+                  flag=apple("GET","builds/"+bid,params={"fields[builds]":"usesNonExemptEncryption"})["data"]["attributes"].get("usesNonExemptEncryption")
+                  print("Confirmed export declaration saved:", flag is False, flush=True)
+              if drafts:
+                  did=only(drafts,"initial iOS draft")["id"]
+                  try:
+                      try:
+                          old=apple("GET",f"appStoreVersions/{did}/relationships/build")["data"]
+                      except AppleError as error:
+                          if error.status != 404: raise
+                          old=None
+                      if not old:
+                          apple("PATCH",f"appStoreVersions/{did}/relationships/build",data=link("builds",bid))
+                      selected=apple("GET",f"appStoreVersions/{did}/relationships/build")["data"]
+                      print("Verified build 2 selected on the draft:",bool(selected and selected["id"]==bid),flush=True)
+                  except AppleError as error:
+                      print("Draft build selection:",error,flush=True)
+
+              users=all_rows("users",{"filter[username]":recipient,"fields[users]":"username,roles,allAppsVisible,firstName,lastName"})
+              user=only([u for u in users if u["attributes"]["username"].casefold()==recipient],"requested Korlix user")
+              eligible={"ACCOUNT_HOLDER","ADMIN","APP_MANAGER","DEVELOPER","MARKETING"}.intersection(user["attributes"]["roles"])
+              if not eligible or not user["attributes"].get("allAppsVisible"):
+                  raise RuntimeError("Expected an eligible internal tester with current app access.")
+              groups=[i for i in all_rows(f"apps/{app_id}/betaGroups") if i["attributes"].get("name")==GROUP]
+              if not groups:
+                  groups=[apple("POST","betaGroups",data={"type":"betaGroups","attributes":{"name":GROUP,"isInternalGroup":True,"hasAccessToAllBuilds":False},"relationships":{"app":rel("apps",app_id)}})["data"]]
+              group=only(groups,"named Fax beta group")
+              if group["attributes"].get("isInternalGroup") is not True or group["attributes"].get("publicLinkEnabled"):
+                  raise RuntimeError("The named group is not a private internal group.")
+              gid=group["id"]
+              gp="betaGroups/"+gid
+              def members():
+                  return all_rows(gp+"/betaTesters",{"fields[betaTesters]":"email,state"})
+              def variants():
+                  group_members=members()
+                  if any(t["attributes"].get("email","").casefold()!=recipient for t in group_members):
+                      raise RuntimeError("Unexpected additional users in the dedicated group.")
+                  return group_members
+              was_member=bool(variants())
+              build_ids=lambda: {b["id"] for b in all_rows(gp+"/relationships/builds")}
+              if bid not in build_ids():
+                  try:
+                      apple("POST",gp+"/relationships/builds",data=[link("builds",bid)])
+                  except AppleError as error:
+                      print("Adding build to the internal group:",error,flush=True)
+              if not was_member:
+                  exact=[t for t in all_rows("betaTesters",{"filter[email]":recipient,"fields[betaTesters]":"email"}) if t["attributes"].get("email","").casefold()==recipient]
+                  ids={t["id"] for t in exact}
+                  scoped={t["id"] for t in all_rows("betaTesters",{"filter[email]":recipient,"filter[apps]":app_id,"fields[betaTesters]":"email"}) if t["attributes"].get("email","").casefold()==recipient}
+                  candidates=scoped or ({user["id"]} & ids) or ids
+                  print("Exact tester profiles:",len(ids),"associated with Fax:",len(scoped),flush=True)
+                  if len(candidates)>1:
+                      in_internal={t for t in candidates if any(i["attributes"].get("isInternalGroup") for i in all_rows(f"betaTesters/{t}/betaGroups",{"fields[betaGroups]":"isInternalGroup"}))}
+                      if len(in_internal)==1: candidates=in_internal
+                  if len(candidates)==1:
+                      tester=next(iter(candidates))
+                      try:
+                          apple("POST",gp+"/relationships/betaTesters",data=[link("betaTesters",tester)])
+                      except AppleError as error:
+                          print("Linking the internal tester:",error,flush=True)
+                  if not variants():
+                      at=user["attributes"]
+                      target={"type":"betaTesters","attributes":{"email":recipient,"firstName":at["firstName"],"lastName":at["lastName"]},"relationships":{"betaGroups":{"data":[link("betaGroups",gid)]}}}
+                      try:
+                          apple("POST","betaTesters",data=target)
+                      except AppleError as error:
+                          print("Inviting the exact user to the internal group:",error,flush=True)
+              people=variants()
+              build_assigned=bid in build_ids()
+              if people:
+                  states=", ".join(sorted({str(p["attributes"].get("state")) for p in people}))
+                  print("VERIFIED REQUESTED TESTER IN GROUP: yes; Apple tester state:",states,flush=True)
+              else:
+                  print("VERIFIED REQUESTED TESTER IN GROUP: no",flush=True)
+              print("VERIFIED BUILD 2 IN INTERNAL GROUP:",build_assigned,"internal state",detail(),flush=True)
+              if people and build_assigned and detail() in {"IN_BETA_TESTING","READY_FOR_BETA_TESTING"} and (was_member or not any(t["attributes"].get("state") in {"INVITED","ACCEPTED","INSTALLED"} for t in people)):
+                  try:
+                      apple("POST","betaTesterInvitations",data={"type":"betaTesterInvitations","relationships":{"app":rel("apps",app_id),"betaTester":rel("betaTesters",people[0]["id"])}})
+                      print("Apple accepted an invitation email request for the designated tester.",flush=True)
+                  except AppleError as error:
+                      print("Sending the TestFlight email:",error,flush=True)
+
           try:
-              localization_ok = update_language()
+              language()
           except (AppleError, RuntimeError, KeyError) as error:
-              print("Language update:", error, flush=True)
+              print("Language result:",error,flush=True)
           try:
-              testing_ok = testing()
+              setup_test(live_build())
           except (AppleError, RuntimeError, KeyError) as error:
-              print("TestFlight delivery:", error, flush=True)
-          if not localization_ok or not testing_ok:
-              sys.exit("One or more Apple operations require follow-up.")
+              print("Private testing result:",error,flush=True)
+          try:
+              av=apple("GET",f"apps/{app_id}/appAvailabilityV2")["data"]
+              print("Existing app availability configuration:", bool(av),"automatic new territories:",av.get("attributes",{}).get("availableInNewTerritories"),flush=True)
+          except AppleError as error:
+              print("Current store availability:",error,flush=True)
+          for attempt in range(3):
+              primary=app_state()
+              print("VERIFIED PRIMARY LANGUAGE:",primary,flush=True)
+              if primary==LOCALE: break
+              if attempt<2: time.sleep(5)
           PY
