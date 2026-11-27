@@ -243,7 +243,7 @@ workflows:
       - $CM_BUILD_DIR/apps/fax/android/app/build/outputs/bundle/release/*.aab
 
   fax-approved-store-review:
-    name: Fax approved US listing and App Review
+    name: Fax public review verification
     instance_type: mac_mini_m2
     max_build_duration: 10
     triggering:
@@ -254,7 +254,7 @@ workflows:
           include: true
           source: true
     when:
-      condition: event.before == "86981b7f84eadcff198af9fb047c385566e38e88"
+      condition: event.before == "1313827ff4e457bf0a0dd8dde1f26f07ab497c19"
     integrations:
       app_store_connect: Codemagic Korlix AI
     environment:
@@ -269,7 +269,7 @@ workflows:
             unset APP_STORE_CONNECT_KEY_IDENTIFIER APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_PRIVATE_KEY FAX_TESTFLIGHT_TESTER_EMAIL
             "$CM_BUILD_DIR/.fax-lookup/bin/python" -m pip install --quiet --disable-pip-version-check 'codemagic-cli-tools==0.69.0'
           )
-      - name: Save approved fields and submit Fax for App Review
+      - name: Verify app rights and check submission with Apple
         script: |
           set -euo pipefail
           "$CM_BUILD_DIR/.fax-lookup/bin/python" - <<'PY'
@@ -361,13 +361,27 @@ workflows:
           
           def expect_field(kind, ident, key, approved):
               path=kind+"/"+ident
-              before=get(path,{"fields["+kind+"]":key})["attributes"].get(key)
+              def inspect():
+                  result=get(path,{"fields["+kind+"]":key})
+                  detail=result["attributes"].get(key)
+                  if kind=="apps" and detail is None:
+                      app_list=get("apps",{"filter[bundleId]":"com.korlixdeveloper.fax","fields[apps]":"bundleId,contentRightsDeclaration,primaryLocale","limit":2})
+                      checked=unique([r for r in app_list if r["id"]==ident],"target app in lookup")
+                      detail=checked["attributes"].get(key)
+                  return detail
+              before=inspect()
+              print("EXISTING",key,before,flush=True)
               if before!=approved:
-                  apple_request("PATCH",path,payload={"data":{**link(kind,ident),"attributes":{key:approved}}})
-              after=get(path,{"fields["+kind+"]":key})["attributes"].get(key)
-              if after!=approved:
-                  raise ValueError("Apple has not confirmed "+key)
-              print("VERIFIED",key,after,flush=True)
+                  reply=apple_request("PATCH",path,payload={"data":{**link(kind,ident),"attributes":{key:approved}}})
+                  print("APPLE PATCH RESPONSE",key,reply.get("data",{}).get("attributes",{}).get(key),flush=True)
+              for attempt in range(6):
+                  after=inspect()
+                  if after==approved:
+                      print("VERIFIED",key,after,flush=True)
+                      return True
+                  if attempt<5: time.sleep(4)
+              print("Current Apple value for",key,after,flush=True)
+              return False
           
           def us_prices(schedule_id):
               path="appPriceSchedules/"+schedule_id+"/manualPrices"
@@ -416,7 +430,7 @@ workflows:
                   if attempt<5: time.sleep(4)
               raise ValueError("Waiting for Apple to show the approved free price.")
           
-          def add_and_submit():
+          def add_and_submit(allow_submit=True):
               version=get("appStoreVersions/"+vid)
               state=version["attributes"].get("appStoreState") or version["attributes"].get("appVersionState")
               print("BEFORE REVIEW:",state,flush=True)
@@ -458,6 +472,9 @@ workflows:
               if len(current)!=1 or not is_version(current[0]):
                   raise ValueError("Could not confirm the sole review item.")
               current_state=get(group_path)["attributes"].get("state")
+              if not allow_submit:
+                  print("Review item staged. Content rights is still pending verification.",flush=True)
+                  return
               if current_state=="READY_FOR_REVIEW":
                   apple_request("PATCH",group_path,payload={"data":{**link("reviewSubmissions",sub["id"]),"attributes":{"submitted":True}}})
               print("VERIFIED REVIEW SUBMISSION:",get(group_path)["attributes"].get("state"),flush=True)
@@ -469,16 +486,12 @@ workflows:
               raise ValueError("Unexpected app record.")
           ver=unique([v for v in get("apps/"+app_id+"/appStoreVersions",{"limit":80}) if v["attributes"].get("platform")=="IOS" and v["attributes"].get("versionString")=="1.0"], "iOS Fax 1.0")
           vid=ver["id"]
-          ok=True
-          for label,action in [("COPYRIGHT",lambda:expect_field("appStoreVersions",vid,"copyright","2026 Korlix LLC")),
-                               ("RIGHTS",lambda:expect_field("apps",app_id,"contentRightsDeclaration","USES_THIRD_PARTY_CONTENT")),
-                               ("DOWNLOAD PRICE",set_free_price)]:
+          copyright_ok=expect_field("appStoreVersions",vid,"copyright","2026 Korlix LLC")
+          rights_ok=expect_field("apps",app_id,"contentRightsDeclaration","USES_THIRD_PARTY_CONTENT")
+          set_free_price()
+          if copyright_ok:
               try:
-                  action()
+                  add_and_submit(allow_submit=rights_ok)
               except (AppleError,KeyError,ValueError) as error:
-                  print(label,"RESULT:",error,flush=True)
-                  ok=False
-          if ok:
-              try: add_and_submit()
-              except (AppleError,KeyError,ValueError) as error: print("REVIEW RESULT:",error,flush=True)
+                  print("REVIEW RESULT:",error,flush=True)
           PY
