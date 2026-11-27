@@ -1,6 +1,7 @@
 import { boundedBytes, fail, lineNumber, uuid } from './rules.mjs';
 import { send, callback } from './transmissions.mjs';
 import { activity, monthlyUsage, reportPeriod } from './activity.mjs';
+import { publicNotice } from './public-notices.mjs';
 
 const customerPlans = {
   solo: { name: 'Solo', pages: 100, price: '9.99' },
@@ -8,7 +9,7 @@ const customerPlans = {
 };
 
 export function createHandler(svc, origin = 'https://korlix-fax-number.onrender.com') {
-  const enrollmentOpen = svc.customerEnrollmentOpen === true;
+  const webEnrollment = svc.customerEnrollmentOpen === true;
   const lineFields = 'id,is_company,preference,requested_plan,state,phone,created_at';
   const docFields =
     'id,direction,sender,recipient,name,status,pages,detail,created_at,updated_at,object_path';
@@ -19,6 +20,7 @@ export function createHandler(svc, origin = 'https://korlix-fax-number.onrender.
   ]);
   const mobileOrigins = new Set(['https://fax.localhost', 'capacitor://fax.localhost']);
   const mobileRoutes = new Set(['/health', '/signin', '/signout', '/workspace', '/contacts', '/send', '/history', '/activity', '/operator/requests']);
+  const customerRoutes = new Set([...mobileRoutes, '/signup', '/line', '/account/delete-request']);
   function visibleDoc({ object_path, ...item }) {
     return { ...item, hasFile: !!object_path };
   }
@@ -31,8 +33,17 @@ export function createHandler(svc, origin = 'https://korlix-fax-number.onrender.
     }
   }
   return async (req) => {
-    const url = new URL(req.url),
-      path = url.pathname.replace(/^.*?\/korlix-fax(?=\/|$)/, '') || '/';
+    const url = new URL(req.url);
+    const route = url.pathname.replace(/^.*?\/korlix-fax(?=\/|$)/, '') || '/';
+    if (req.method === 'GET' || req.method === 'HEAD') {
+      const notice = publicNotice(route);
+      if (notice) return new Response(req.method === 'HEAD' ? null : notice, {
+        headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=300',
+          'X-Content-Type-Options': 'nosniff' }
+      });
+    }
+    const mobileCustomer = route.startsWith('/mobile/');
+    const path = mobileCustomer ? route.slice('/mobile'.length) : route;
     const headers = {
       'Content-Type': 'application/json',
       'Cache-Control': 'no-store',
@@ -40,7 +51,12 @@ export function createHandler(svc, origin = 'https://korlix-fax-number.onrender.
       Vary: 'Origin',
     };
     const rqOrigin = req.headers.get('origin');
-    const allowedOrigin =
+    const enrollmentOpen = webEnrollment || mobileCustomer;
+    const documentRoute = /^\/(?:file|document)\/[a-f0-9-]+$/i.test(path);
+    const operatorRoute = /^\/operator\/[a-f0-9-]{36}\/(?:options|order|sync|attach)$/i.test(path);
+    const allowedOrigin = mobileCustomer
+      ? mobileOrigins.has(rqOrigin) && (customerRoutes.has(path) || documentRoute || operatorRoute)
+      :
       rqOrigin === origin ||
       (path === '/hub-handoff' && hubOrigins.has(rqOrigin)) ||
       (mobileOrigins.has(rqOrigin) && (mobileRoutes.has(path) || /^\/(?:file|document)\/[a-f0-9-]+$/i.test(path)));
@@ -51,7 +67,7 @@ export function createHandler(svc, origin = 'https://korlix-fax-number.onrender.
     headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS';
     const json = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers });
     try {
-      if (rqOrigin && !allowedOrigin) fail(403, 'This origin cannot access the fax workspace.');
+      if ((mobileCustomer || rqOrigin) && !allowedOrigin) fail(403, 'This origin cannot access the fax workspace.');
       if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers });
       if (req.method === 'GET' && path === '/health')
         return json({
@@ -62,8 +78,10 @@ export function createHandler(svc, origin = 'https://korlix-fax-number.onrender.
         await callback(req, svc);
         return json({ received: true });
       }
+      if (req.method === 'POST' && mobileCustomer && path === '/signup')
+        return json(await svc.signup(await body(req)));
       if (req.method === 'POST' && path === '/signin')
-        return json(await svc.login(await body(req)));
+        return json(await svc.login(await body(req), { mobileCustomer }));
       if (req.method === 'POST' && path === '/hub-handoff') return json(await svc.hubHandoff(req));
       if (req.method === 'POST' && path === '/redeem')
         return json(await svc.redeemHandoff(await body(req)));
@@ -83,6 +101,13 @@ export function createHandler(svc, origin = 'https://korlix-fax-number.onrender.
       }
       if (!enrollmentOpen && !user.operator)
         fail(403, 'This workspace is for Korlix company use only.');
+      if (req.method === 'POST' && mobileCustomer && path === '/account/delete-request') {
+        if ((await body(req)).confirm !== true) fail(400, 'Confirm the account deletion request.');
+        await svc.db('rpc/korlix_request_account_deletion', {}, 'POST', {
+          p_user_id: user.user_id, p_email: user.email, p_reason: 'Requested in Fax by Korlix.'
+        });
+        return json({ requested: true });
+      }
       if (req.method === 'GET' && path === '/workspace') {
         let line = await svc.lineFor({ ...owner, select: lineFields });
         if (line?.state === 'ordering' && svc.ready) {

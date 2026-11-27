@@ -1,4 +1,5 @@
-const API = 'https://uxtjzjbwtppjvnsoiijv.supabase.co/functions/v1/korlix-fax';
+const API = 'https://uxtjzjbwtppjvnsoiijv.supabase.co/functions/v1/korlix-fax' +
+  (window.KorlixFaxNative ? '/mobile' : '');
 const $ = (id) => document.getElementById(id);
 const storeKey = 'korlixFaxSession';
 const labels = {

@@ -1,3 +1,4 @@
+import { sampleWorkspace } from "./sample-workspace.js";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { Directory, Filesystem } from "@capacitor/filesystem";
@@ -89,6 +90,7 @@ if (Capacitor.isNativePlatform()) {
     return controller.signal;
   };
   window.KorlixFaxNative = {
+    sample: sessionStorage.getItem('korlixFaxSession') === 'sample' ? sampleWorkspace : null,
     scan, saveFile, hash: bytes => sha256(new Uint8Array(bytes)),
     shareNumber: text => share({title: "Fax number", text})
   };

@@ -11,8 +11,18 @@ await rm(out, { recursive: true, force: true });
 await cp(source, out, { recursive: true });
 for (const page of ["index.html", "account.html"]) {
   const file = join(out, page);
-  const html = await readFile(file, "utf8");
+  let html = await readFile(file, "utf8");
+  if (page === "account.html") {
+    const form = await readFile(join(root, "signup-form.html"), "utf8");
+    html = html.replace("<!-- Packaged account controls -->", form)
+      .replace("https://korlixdeveloper.com/privacy-policy.html", "./privacy.html")
+      .replace("</head>", '<link rel="stylesheet" href="mobile-account.css"><script type="module" src="mobile-account.js"></script></head>')
+      .replace("Korlix company sign-in", "Fax by Korlix");
+  }
   await writeFile(file, html.replace("</head>", '<script src="fax-mobile.js"></script>\n  </head>'));
+}
+for (const asset of ["mobile-account.js", "mobile-account.css"]) {
+  await cp(join(root, asset), join(out, asset));
 }
 // WKWebView and Android's asset handler both serve .js files with a module-compatible MIME type.
 for (const name of ["pdf.min", "pdf.worker.min"]) {

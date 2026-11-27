@@ -191,7 +191,31 @@ export function services(env, http = fetch, settings = {}) {
     if (!ok) fail(401, 'The Korlix sign-in link expired or the device limit was reached.');
     return { token };
   }
-  async function login(body) {
+  async function signup(body) {
+    if (typeof body?.email !== 'string' || body.email.length > 254 ||
+        typeof body.password !== 'string' || body.password.length < 6 || body.password.length > 2048)
+      fail(400, 'Enter your email and a password of at least six characters.');
+    // The shared Korlix service enforces the age, policy and email-confirmation rules.
+    const response = await http('https://chee-chai-chee-backend.onrender.com/api/auth/signup', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: body.email.trim(), password: body.password,
+        signup_eligibility: body.signup_eligibility, client_app: 'fax_by_korlix', signup_plan: 'basic' }),
+      redirect: 'error', signal: AbortSignal.timeout(20000)
+    });
+    const result = await response.json();
+    if (!response.ok && response.status !== 409) {
+      if (response.status === 429) fail(429, 'Too many sign-up attempts. Try again later.');
+      if (response.status >= 500) fail(503, 'Korlix registration is temporarily unavailable.');
+      fail(400, typeof result.error === 'string' ? result.error.slice(0, 240) : 'Check your registration details.');
+    }
+    if (response.ok && result.session?.access_token) {
+      const closed = await http(base + '/auth/v1/logout?scope=local', { method: 'POST',
+        headers: { apikey: env('SUPABASE_ANON_KEY'), Authorization: 'Bearer ' + result.session.access_token } });
+      if (!closed.ok) fail(503, 'Your account was created. Sign in to continue.');
+    }
+    return { message: 'Check your email for any confirmation link, then sign in. If you already have a Korlix account, use your existing password.' };
+  }
+  async function login(body, { mobileCustomer = false } = {}) {
     if (
       !uuid.test(body.device) ||
       typeof body.email !== 'string' ||
@@ -225,7 +249,7 @@ export function services(env, http = fetch, settings = {}) {
     if (!revoked.ok) fail(503, 'Korlix could not finish sign-in. Please try again.');
     if (!data.user?.email_confirmed_at || !uuid.test(data.user.id))
       fail(403, 'Confirm your Korlix email before signing in.');
-    await requireCompanyAccess(data.user.id);
+    if (!mobileCustomer) await requireCompanyAccess(data.user.id);
     const token = randomToken();
     const ok = await rpc('open_session', {
       p_user: data.user.id,
@@ -399,6 +423,7 @@ export function services(env, http = fetch, settings = {}) {
     db,
     put,
     signed,
+    signup,
     login,
     identity,
     rpc,

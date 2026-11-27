@@ -8,7 +8,8 @@ Deno.serve(async (request: Request) => {
   const path = new URL(request.url).pathname;
   if (
     request.method === 'OPTIONS' ||
-    /\/(signin|signout|hub-handoff|redeem|line|history|activity|contacts|(?:document|file)\/[^/]+)$/.test(path)
+    /\/korlix-fax\/(privacy|account-deletion)$/.test(path) ||
+    /\/(signup|signin|signout|delete-request|hub-handoff|redeem|line|history|activity|contacts|(?:document|file)\/[^/]+)$/.test(path)
   )
     return local(request);
   return createHandler(await resolve(), origin)(request);

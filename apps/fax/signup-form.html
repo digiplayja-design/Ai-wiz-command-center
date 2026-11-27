@@ -1,0 +1,20 @@
+<template id="native-signin-actions">
+  <button type="button" class="secondary wide account-mode" id="create-account">Create an account</button>
+  <button type="button" class="textbtn wide account-mode" id="try-sample">Explore a sample workspace</button>
+</template>
+<p id="registration-notice" role="status" hidden></p>
+<div id="customer-registration" hidden>
+  <h2>Create your Korlix account</h2>
+  <p class="sub">Use this account to open your private fax workspace.</p>
+  <form id="register-form">
+    <label for="new-email">Email address</label><input id="new-email" type="email" autocomplete="username" required maxlength="254">
+    <label for="new-password">Password</label><input id="new-password" type="password" autocomplete="new-password" minlength="6" maxlength="2048" required>
+    <label for="age-band">Age range</label>
+    <select id="age-band" required><option value="">Choose your age range</option><option value="under_16">Under 16</option><option value="16_17">16–17</option><option value="18_plus">18 or older</option></select>
+    <label class="consent" id="guardian-row" hidden><input type="checkbox" id="guardian">I have permission from a parent or guardian.</label>
+    <label class="consent"><input type="checkbox" id="terms-consent" required><span>I accept the <a href="https://korlixdeveloper.com/terms.html" target="_blank" rel="noopener">Korlix Terms of Use</a> and acknowledge the <a href="privacy.html" target="_blank" rel="noopener">privacy policy</a>.</span></label>
+    <p class="alert" id="register-error" role="alert" hidden></p>
+    <button class="primary wide" type="submit">Create account</button>
+  </form>
+  <button type="button" class="textbtn wide account-mode" id="back-to-signin">Back to sign-in</button>
+</div>

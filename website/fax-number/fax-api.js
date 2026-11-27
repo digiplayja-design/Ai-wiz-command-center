@@ -1,5 +1,6 @@
 export const origin = "https://uxtjzjbwtppjvnsoiijv.supabase.co";
-const endpoint = origin + "/functions/v1/korlix-fax";
+const native = globalThis.window?.KorlixFaxNative;
+const endpoint = origin + "/functions/v1/korlix-fax" + (native ? "/mobile" : "");
 const key = "korlixFaxSession";
 export const currentSession = () => sessionStorage.getItem(key);
 export function openLogin(message = "") {
@@ -20,6 +21,7 @@ export async function api(
   path,
   { method = "GET", body, headers = {}, raw = false, anonymous = false } = {},
 ) {
+  if (native?.sample) return native.sample.request(path, { method, body });
   const token = currentSession();
   const h = new Headers(headers);
   if (token && !anonymous) h.set("x-fax-session", token);
@@ -84,6 +86,7 @@ export function checkFileUrl(url) {
   return target.href;
 }
 export async function dispatch(doc, recipient, owner) {
+  if (native?.sample) return native.sample.send(doc, recipient);
   const bytes = await doc.file.arrayBuffer();
   const hash = Array.from(
     crypto.subtle ? new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)) : window.KorlixFaxNative.hash(bytes),

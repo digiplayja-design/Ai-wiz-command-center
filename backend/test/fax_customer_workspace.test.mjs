@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { createHandler } from '../../supabase/functions/korlix-fax/handler.mjs';
 import { services } from '../../supabase/functions/korlix-fax/services.mjs';
 import { fail } from '../../supabase/functions/korlix-fax/rules.mjs';
@@ -12,6 +13,23 @@ const app = 'https://korlix-fax-number.onrender.com';
 const hub = 'https://korlixdeveloper.com';
 const phone = '+12125550101';
 const user = { user_id: account, email: 'member@example.test', operator: false };
+test('public store notices match the packaged privacy text and never access a mailbox', async () => {
+  const handle = createHandler({});
+  const url = 'https://edge.example.test/functions/v1/korlix-fax';
+  const full = await handle(new Request(url + '/privacy'));
+  assert.equal(full.status, 200);
+  assert.match(full.headers.get('content-type'), /text\/plain/);
+  const page = await readFile(new URL('../../website/fax-number/privacy.html', import.meta.url), 'utf8');
+  const expected = [...page.matchAll(/<(header|h1|h2|p)\b[^>]*>(.*?)<\/\1>/gs)]
+    .map(match => match[2].replace(/<[^>]+>/g, ''));
+  assert.equal((await full.text()).trim(), expected.join('\n\n'));
+  const removal = await handle(new Request(url + '/account-deletion'));
+  assert.equal(removal.status, 200);
+  assert.match(await removal.text(), /support@korlixdeveloper\.com.*72 hours/s);
+  const head = await handle(new Request(url + '/privacy', { method: 'HEAD' }));
+  assert.equal(head.status, 200);
+  assert.equal(await head.text(), '');
+});
 const request = (path, method = 'GET', body, headers = {}) =>
   new Request('https://edge.example.test/functions/v1/korlix-fax' + path, {
     method, headers, body: body && JSON.stringify(body),
@@ -217,4 +235,88 @@ test('packaged apps can use the company mailbox only with a valid session', asyn
   for (const origin of ['https://fax.localhost.example.com', 'http://fax.localhost', 'null']) {
     assert.equal((await handler(request('/workspace', 'OPTIONS', null, { origin }))).status, 403);
   }
+});
+
+test('store customers have owner-scoped workspaces and can request lines without opening the public website', async () => {
+  const pending = [];
+  const handler = createHandler({
+    identity: async req => {
+      if (req.headers.get('x-fax-session') !== 'test-session') fail(401, 'Sign in.');
+      return user;
+    },
+    lineFor: async where => { assert.equal(where.user_id, 'eq.' + account); return pending[0]; },
+    rpc: async (name,args) => {
+      assert.equal(name,'monthly_usage');
+      assert.equal(args.p_user,account);
+      return {pages:0,inboundPages:0,outboundPages:0,pendingReports:0};
+    },
+    db: async (table, where, method, value) => {
+      assert.equal(value.user_id,account);
+      assert.equal(table,'korlix_fax_lines');
+      assert.equal(method,'POST');
+      pending.push({...value,state:'requested'});
+    }
+  });
+  for (const origin of ['https://fax.localhost','capacitor://fax.localhost']) {
+    const headers = {origin,'x-fax-session':'test-session'};
+    const ws = await handler(request('/mobile/workspace','GET',null,headers));
+    assert.equal(ws.status,200);
+    assert.equal((await ws.json()).customerEnrollmentOpen,true);
+    assert.equal((await handler(request('/mobile/workspace','GET',null,{origin}))).status,401);
+    assert.equal((await handler(request('/mobile/operator/requests','GET',null,headers))).status,403);
+  }
+  const result = await handler(request('/mobile/line','POST',{preference:'212',plan:'solo',user_id:other},
+    {origin:'https://fax.localhost','x-fax-session':'test-session'}));
+  assert.equal(result.status,200);
+  assert.equal((await result.json()).line.user_id,account);
+  for (const origin of [app,hub,'https://unrelated.example']) {
+    assert.equal((await handler(request('/mobile/line','POST',{preference:'212'},{origin}))).status,403);
+  }
+  assert.equal((await handler(request('/mobile/line','POST',{preference:'212'}))).status,403);
+  assert.equal((await handler(request('/workspace','GET',null,{origin:app,'x-fax-session':'test-session'}))).status,403);
+  assert.equal(pending.length,1);
+});
+
+test('mobile sign-in uses a verified Korlix user and registrations never return shared account tokens', async () => {
+  const origins = { origin: 'https://fax.localhost' };
+  const usr = {id:account,email_confirmed_at:new Date().toISOString()};
+  let registered = false;
+  const svc = services(name => ({
+    SUPABASE_URL:'https://project.example.test',SUPABASE_ANON_KEY:'test-anon',SUPABASE_SERVICE_ROLE_KEY:'test-role'
+  })[name] || '', async (url,options) => {
+    const path = new URL(url).pathname;
+    if (path === '/api/auth/signup') {
+      assert.equal(JSON.parse(options.body).client_app,'fax_by_korlix');
+      registered = true;
+      return Response.json({success:true,session:{access_token:'test-account-token'}});
+    }
+    if (path === '/auth/v1/token') return Response.json({user:usr,access_token:'test-account-token'});
+    if (path === '/auth/v1/logout') return new Response(null,{status:204});
+    if (path.endsWith('/korlix_fax_open_session')) {
+      assert.equal(JSON.parse(options.body).p_user,account); return Response.json(true);
+    }
+    assert.fail('Unexpected account request: '+path);
+  });
+  const handler = createHandler(svc);
+  const credentials = {email:'new@example.test',password:'fixture123',device};
+  const registeredResponse = await handler(request('/mobile/signup','POST',credentials,origins));
+  assert.equal(registeredResponse.status,200);
+  assert.deepEqual(Object.keys(await registeredResponse.json()),['message']);
+  assert.equal(registered,true);
+  const session = await handler(request('/mobile/signin','POST',credentials,origins));
+  assert.match((await session.json()).token,/^[a-f0-9]{64}$/);
+  usr.email_confirmed_at=null;
+  assert.equal((await handler(request('/mobile/signin','POST',credentials,origins))).status,403);
+});
+
+test('mobile deletion requests require confirmation and use only the signed-in account', async () => {
+  let writes=0;
+  const handler=createHandler({identity:async()=>user,db:async (table,where,method,body)=>{
+    assert.equal(table,'rpc/korlix_request_account_deletion');
+    assert.equal(body.p_user_id,account); assert.equal(body.p_email,user.email); writes++;
+  }});
+  const call=confirm=>handler(request('/mobile/account/delete-request','POST',{user_id:other,confirm},{origin:'capacitor://fax.localhost'}));
+  assert.equal((await call(false)).status,400);
+  assert.equal((await call(true)).status,200);
+  assert.equal(writes,1);
 });

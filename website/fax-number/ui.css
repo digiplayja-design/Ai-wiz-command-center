@@ -1247,3 +1247,5 @@ dialog img {
   margin-top: 17px;
 }
 .activity-list-head .small-title { margin: 0; }
+
+.sample-notice { margin: 0; padding: .55rem 1rem; background: #dff4ed; color: #094c40; text-align: center; font-weight: 600; }

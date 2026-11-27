@@ -24,6 +24,10 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Scan paper pages to add them to a fax you review before sending.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Use the microphone when you choose to dictate a fax request.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Convert your spoken fax request to text for you to review.</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>

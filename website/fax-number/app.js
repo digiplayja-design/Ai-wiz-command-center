@@ -369,7 +369,9 @@ function setup() {
         ],
         ["Requested plan", ws.plans?.[line.requested_plan]?.name],
       ],
-    )}</div><div class="btn-stack">${btn("refresh", "Refresh", "outline-btn", "restart")}</div></div>`;
+    )}</div><div class="btn-stack">${btn("refresh", "Refresh", "outline-btn", "restart")}${ws.sample ? (active
+      ? btn("sample-request", "Try requesting a number", "soft-link")
+      : btn("sample-activate", "Activate sample line", "primary full")) : ""}</div></div>`;
   return `<div class="flow"><div class="flow-nav">${btn("home", "Back", "back", "chevron-left")}</div><div class="block"><h1 class="title">Get my fax number</h1><p class="lead">Choose a plan to request your own U.S. fax number.</p></div><div class="block plan-list">${Object.entries(ws.plans || {})
     .map(
       ([id, p]) =>
@@ -377,7 +379,7 @@ function setup() {
     )
     .join(
       "",
-    )}</div><label class="field-label" for="prefix">Number preference</label><select class="control" id="prefix"><option value="toll_free">U.S. toll-free</option><option value="local">Local U.S. area code</option></select><input id="area" class="control area" inputmode="numeric" maxlength="3" aria-label="Three-digit area code" placeholder="Three-digit area code" hidden><div class="btn-stack">${btn("request", "Request my fax number", "primary full", "phone-outline")}</div><p class="small-note block">Submitting a request is free. Pricing applies when you activate a paid plan.</p></div>`;
+    )}</div><label class="field-label" for="prefix">Number preference</label><select class="control" id="prefix"><option value="toll_free">U.S. toll-free</option><option value="local">Local U.S. area code</option></select><input id="area" class="control area" inputmode="numeric" maxlength="3" aria-label="Three-digit area code" placeholder="Three-digit area code" hidden><div class="btn-stack">${btn("request", "Request my fax number", "primary full", "phone-outline")}</div><p class="small-note block">${ws.sample ? "This example stays on your device. No number is ordered or billed." : "Submitting a request is free. Pricing applies when you activate a paid plan."}</p></div>`;
 }
 function render() {
   if (!ws) return;
@@ -550,6 +552,12 @@ async function start() {
   try {
     ws = await api("/workspace");
     $("app-header").hidden = false;
+    if (ws.sample) {
+      const banner = document.createElement("p");
+      banner.className = "sample-notice";
+      banner.textContent = "Sample workspace · Faxes stay on this device";
+      $("app-header").after(banner);
+    }
     await navigate();
     const results = await Promise.allSettled([
       getFolder("inbound"),
@@ -573,6 +581,13 @@ async function start() {
   }
 }
 async function storedDoc(r, forViewing = false) {
+  if (ws.sample) {
+    const selected = window.KorlixFaxNative.sample.file(r.id);
+    const sample = selected || await receiptPdf("Sample document", [
+      ["Document", r.name], ["Workspace", "Harbor Studio"], ["Purpose", "Explore how to preview and send a fax."]
+    ], r.id);
+    return readPdf(new File([sample], r.name, {type: "application/pdf"}), forViewing);
+  }
   const data = await api("/file/" + r.id);
   const url = checkFileUrl(data.url);
   const response = await fetch(url, {
@@ -664,7 +679,7 @@ function account() {
               ws.plans?.[ws.line.requested_plan].name + " requested",
       ],
     ]) +
-      `<div class="sheet-actions">${btn("setup", "My number", "outline-btn", "phone-outline")}${ws.operator ? btn("manage", "Line requests", "outline-btn", "account-multiple-outline") : ""}${btn("signout", "Sign out", "soft-link")}</div>`,
+      `<div class="sheet-actions">${btn("setup", "My number", "outline-btn", "phone-outline")}${ws.operator ? btn("manage", "Line requests", "outline-btn", "account-multiple-outline") : ""}${window.KorlixFaxNative ? btn("delete-account", "Request account deletion", "soft-link") : ""}${btn("signout", ws.sample ? "Leave sample workspace" : "Sign out", "soft-link")}</div>`,
   );
 }
 async function copyNumber() {
@@ -912,6 +927,18 @@ const actions = {
     }
   },
   refresh: () => refresh(true),
+  "sample-request": async () => {
+    if (!ws.sample) return;
+    window.KorlixFaxNative.sample.previewLineRequest();
+    ws = await api("/workspace");
+    render();
+  },
+  "sample-activate": async () => {
+    if (!ws.sample) return;
+    window.KorlixFaxNative.sample.activateRequestedLine();
+    ws = await api("/workspace");
+    render();
+  },
   plan: (b) => {
     if (ws.customerEnrollmentOpen !== true) return;
     selectedPlan = b.dataset.id;
@@ -937,6 +964,13 @@ const actions = {
     ws.line = result.line;
     render();
     toast("Your fax number request was saved");
+  },
+  "delete-account": () => modal("Delete your Korlix account?", '<p>This requests deletion of your Korlix account and associated data, including your fax mailbox. Other Korlix apps using this account are affected.</p><div class="btn-stack">' + btn("cancel-delete", "Keep my account", "primary full") + btn("confirm-delete", "Request deletion", "soft-link") + "</div>"),
+  "cancel-delete": closeSheet,
+  "confirm-delete": async () => {
+    await api("/account/delete-request", { method: "POST", body: { confirm: true } });
+    if (ws.sample) modal("Sample deletion request", "<p>You completed the deletion flow in the sample workspace. Your real Korlix account is unaffected.</p>");
+    else modal("Deletion requested", "<p>Korlix received your request. Contact support@korlixdeveloper.com for help with your request.</p>");
   },
   manage: () => location.assign("account.html"),
   signout: async () => {
