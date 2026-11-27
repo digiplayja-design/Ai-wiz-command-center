@@ -242,8 +242,8 @@ workflows:
     artifacts:
       - $CM_BUILD_DIR/apps/fax/android/app/build/outputs/bundle/release/*.aab
 
-  fax-store-review-check:
-    name: Fax iOS review fields and private invitation
+  fax-approved-store-review:
+    name: Fax approved US listing and App Review
     instance_type: mac_mini_m2
     max_build_duration: 10
     triggering:
@@ -254,7 +254,7 @@ workflows:
           include: true
           source: true
     when:
-      condition: event.before == "872e598a49464fbaf151afbacbc1b2cb6605dcd1"
+      condition: event.before == "86981b7f84eadcff198af9fb047c385566e38e88"
     integrations:
       app_store_connect: Codemagic Korlix AI
     environment:
@@ -269,7 +269,7 @@ workflows:
             unset APP_STORE_CONNECT_KEY_IDENTIFIER APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_PRIVATE_KEY FAX_TESTFLIGHT_TESTER_EMAIL
             "$CM_BUILD_DIR/.fax-lookup/bin/python" -m pip install --quiet --disable-pip-version-check 'codemagic-cli-tools==0.69.0'
           )
-      - name: Check the Fax listing and private TestFlight invitation
+      - name: Save approved fields and submit Fax for App Review
         script: |
           set -euo pipefail
           "$CM_BUILD_DIR/.fax-lookup/bin/python" - <<'PY'
@@ -321,116 +321,164 @@ workflows:
           def link(kind, identifier):
               return {"type":kind,"id":identifier}
           
-          bundle = "com.korlixdeveloper.fax"
-          rows = get("apps",{"filter[bundleId]":bundle,"fields[apps]":"bundleId,name","limit":2})
-          app = unique([a for a in rows if a["attributes"]["bundleId"] == bundle], "Fax app")
-          app_id = app["id"]
-          group = unique([g for g in get("apps/"+app_id+"/betaGroups",{"limit":200}) if g["attributes"]["name"]=="Fax by Korlix Internal" and g["attributes"]["isInternalGroup"]], "private Fax group")
-          gp="betaGroups/"+group["id"]
-          def group_tester():
-              members=get(gp+"/betaTesters",{"fields[betaTesters]":"email,state","limit":200})
-              target=unique([u for u in members if (u["attributes"].get("email") or "").casefold()==recipient],"requested group member")
-              return target,len(members)
           
-          tester,count=group_tester()
-          expected_build_id="05071f83-0758-49f5-9dae-a79d2a1b44d0"
-          builds = get("builds", {"filter[app]":app_id,"filter[version]":"2","limit":200})
-          build=unique([b for b in builds if b["id"]==expected_build_id and b["attributes"].get("version")=="2"],"Fax build 2")
-          bid=build["id"]
-          def internal_state():
-              return get("builds/"+bid+"/buildBetaDetail")["attributes"].get("internalBuildState")
-          def assigned():
-              return any(b["id"]==bid for b in get(gp+"/relationships/builds",{"limit":200}))
+          from datetime import datetime, timezone
+          from decimal import Decimal
+          from urllib.parse import urlsplit, parse_qsl
           
-          def tester_state():
-              member, member_count = group_tester()
-              if member_count != 1:
-                  raise ValueError("Private Fax group membership changed. No invitation was requested.")
-              return member["attributes"].get("state")
+          def apple_request(method, path, *, params=None, payload=None, version="v1"):
+              response=requests.request(method, "https://api.appstoreconnect.apple.com/"+version+"/"+path,
+                                        headers=client.generate_auth_headers(), params=params, json=payload,
+                                        allow_redirects=False, timeout=35)
+              if not 200 <= response.status_code < 300:
+                  try:
+                      errors=response.json().get("errors",[])
+                      details=[]
+                      for row in errors:
+                          details.append([row.get("code"),row.get("detail"),row.get("source",{}).get("pointer")])
+                          for group in row.get("meta",{}).get("associatedErrors",{}).values():
+                              details.extend([[x.get("code"),x.get("detail")] for x in group])
+                      print("APPLE VALIDATION:",str(details)[:2400],flush=True)
+                  except (ValueError,TypeError,AttributeError): pass
+                  raise AppleError(response)
+              return response.json() if response.content else {}
           
-          def deliver_invitation():
-              if app_id != "6840053512" or count != 1:
-                  raise ValueError("Unexpected app or membership.")
-              before = tester_state()
-              state = internal_state()
-              in_group = assigned()
-              print("TESTFLIGHT START:", state, "group assignment", in_group, "tester", before, flush=True)
-              if build["attributes"].get("processingState") != "VALID" or build["attributes"].get("expired"):
-                  print("TESTFLIGHT: Build is not installable.", flush=True)
-                  return
-              if state not in {"READY_FOR_BETA_TESTING", "IN_BETA_TESTING"}:
-                  print("TESTFLIGHT: Apple is holding the build. No email requested.", flush=True)
-                  return
-              if not in_group:
-                  call("POST", gp + "/relationships/builds", data=[link("builds", bid)])
-                  for attempt in range(5):
-                      if assigned():
+          def each_page(path, params):
+              for attempt in range(18):
+                  page=apple_request("GET",path,params=params)
+                  yield page
+                  url=page.get("links",{}).get("next")
+                  if not url:
+                      return
+                  split=urlsplit(url)
+                  if split.scheme!="https" or split.netloc!="api.appstoreconnect.apple.com" or split.path!="/v1/"+path:
+                      raise ValueError("Unexpected Apple pagination link.")
+                  params=dict(parse_qsl(split.query))
+              raise ValueError("Apple results exceeded the expected pagination limit.")
+          
+          def relationship(kind, identifier):
+              return {"data":link(kind,identifier)}
+          
+          def expect_field(kind, ident, key, approved):
+              path=kind+"/"+ident
+              before=get(path,{"fields["+kind+"]":key})["attributes"].get(key)
+              if before!=approved:
+                  apple_request("PATCH",path,payload={"data":{**link(kind,ident),"attributes":{key:approved}}})
+              after=get(path,{"fields["+kind+"]":key})["attributes"].get(key)
+              if after!=approved:
+                  raise ValueError("Apple has not confirmed "+key)
+              print("VERIFIED",key,after,flush=True)
+          
+          def us_prices(schedule_id):
+              path="appPriceSchedules/"+schedule_id+"/manualPrices"
+              prices=[]
+              for page in each_page(path,{"filter[territory]":"USA","include":"territory,appPricePoint","limit":200}):
+                  points={r["id"]:r["attributes"]["customerPrice"] for r in page.get("included",[]) if r["type"]=="appPricePoints"}
+                  for p in page["data"]:
+                      rels=p["relationships"]
+                      if rels["territory"]["data"]["id"]!="USA":
+                          raise ValueError("Apple price filter returned a different territory.")
+                      prices.append((p["attributes"].get("startDate"),p["attributes"].get("endDate"),points[rels["appPricePoint"]["data"]["id"]]))
+              return prices
+          
+          def set_free_price():
+              schedule=get("apps/"+app_id+"/appPriceSchedule")
+              schedule_id=schedule["id"]
+              old=us_prices(schedule_id)
+              today=datetime.now(timezone.utc).date().isoformat()
+              print("CURRENT USA PRICE PERIODS:",old,flush=True)
+              def active_free(items):
+                  return any(Decimal(price)==0 and (not start or start<=today) and (not end or today<end) for start,end,price in items)
+              if not active_free(old):
+                  if any(start and start>today for start,_,_ in old):
+                      raise ValueError("An existing future price needs reconciliation before replacing the schedule.")
+                  free=None
+                  for page in each_page("apps/"+app_id+"/appPricePoints",
+                                        {"filter[territory]":"USA","include":"territory","limit":200}):
+                      match=[p for p in page["data"] if Decimal(p["attributes"]["customerPrice"])==0 and p["relationships"]["territory"]["data"]["id"]=="USA"]
+                      if match:
+                          free=unique(match,"U.S. free price point")["id"]
                           break
-                      time.sleep(3)
-                  if not assigned():
-                      raise ValueError("Apple has not confirmed the group assignment.")
-                  for attempt in range(4):
-                      if tester_state() != before:
-                          break
-                      time.sleep(3)
-              after = tester_state()
-              if after in {"ACCEPTED", "INSTALLED"}:
-                  print("TESTFLIGHT: Invitation already accepted; build available.", flush=True)
-              elif not in_group and before == "NOT_INVITED" and after == "INVITED":
-                  print("TESTFLIGHT: Apple issued the initial invitation on build assignment.", flush=True)
+                  if not free:
+                      raise ValueError("Apple returned no free U.S. price point.")
+                  temp_id="$"+"{freeUS}"
+                  body={"data":{"type":"appPriceSchedules","relationships":{
+                      "app":relationship("apps",app_id), "baseTerritory":relationship("territories","USA"),
+                      "manualPrices":{"data":[link("appPrices",temp_id)]}}},
+                      "included":[{**link("appPrices",temp_id),"attributes":{"startDate":None},
+                                   "relationships":{"appPricePoint":relationship("appPricePoints",free)}}]}
+                  apple_request("POST","appPriceSchedules",payload=body)
+              for attempt in range(6):
+                  current=us_prices(get("apps/"+app_id+"/appPriceSchedule")["id"])
+                  if active_free(current):
+                      print("VERIFIED USA DOWNLOAD PRICE: USD 0.00",flush=True)
+                      return
+                  if attempt<5: time.sleep(4)
+              raise ValueError("Waiting for Apple to show the approved free price.")
+          
+          def add_and_submit():
+              version=get("appStoreVersions/"+vid)
+              state=version["attributes"].get("appStoreState") or version["attributes"].get("appVersionState")
+              print("BEFORE REVIEW:",state,flush=True)
+              if state in {"WAITING_FOR_REVIEW","IN_REVIEW","PENDING_DEVELOPER_RELEASE","PENDING_APPLE_RELEASE","READY_FOR_SALE","READY_FOR_DISTRIBUTION"}:
+                  return
+              if state not in {"PREPARE_FOR_SUBMISSION","READY_FOR_REVIEW","DEVELOPER_REJECTED","METADATA_REJECTED","REJECTED"}:
+                  raise ValueError("Apple version is not in an editable submission state.")
+              attached=get("appStoreVersions/"+vid+"/relationships/build")
+              if not attached or attached["id"]!="05071f83-0758-49f5-9dae-a79d2a1b44d0":
+                  raise ValueError("Expected Fax build 2.")
+              av=get("apps/"+app_id+"/appAvailabilityV2")
+              data=apple_request("GET","appAvailabilities/"+av["id"]+"/territoryAvailabilities",version="v2",
+                                 params={"limit":200,"include":"territory","fields[territoryAvailabilities]":"territory,available"})
+              visible={r["relationships"]["territory"]["data"]["id"] for r in data["data"] if r["attributes"]["available"]}
+              if visible!={"USA"} or av["attributes"].get("availableInNewTerritories") or data.get("links",{}).get("next"):
+                  raise ValueError("The U.S.-only territory selection requires review.")
+              prior=get("apps/"+app_id+"/reviewSubmissions",{"limit":100})
+              pending=[s for s in prior if s["attributes"].get("state")=="READY_FOR_REVIEW" and s["attributes"].get("platform") in {None,"IOS"}]
+              if not pending:
+                  sub=apple_request("POST","reviewSubmissions",payload={"data":{"type":"reviewSubmissions","attributes":{"platform":"IOS"},"relationships":{"app":relationship("apps",app_id)}}})["data"]
               else:
-                  req = {"type":"betaTesterInvitations", "relationships":{"app":{"data":link("apps",app_id)}, "betaTester":{"data":link("betaTesters",tester["id"])}}}
-                  response = call("POST","betaTesterInvitations",data=req)
-                  print("APPLE INVITATION REQUEST ACCEPTED:", response.status_code, flush=True)
-                  for attempt in range(4):
-                      if tester_state() in {"INVITED","ACCEPTED","INSTALLED"}:
-                          break
-                      time.sleep(2)
-              print("TESTFLIGHT VERIFIED:", internal_state(), "group assignment", assigned(), "tester", tester_state(), flush=True)
+                  sub=unique(pending,"editable iOS review submission")
+              group_path="reviewSubmissions/"+sub["id"]
+              def items():
+                  page=apple_request("GET",group_path+"/items",params={"include":"appStoreVersion","limit":200})
+                  if page.get("links",{}).get("next"):
+                      raise ValueError("Review submission contains unexpectedly many items.")
+                  return page["data"]
+              def is_version(item):
+                  rels=item.get("relationships",{}).get("appStoreVersion",{}).get("data")
+                  return bool(rels and rels["id"]==vid)
+              current=items()
+              if any(not is_version(x) for x in current):
+                  raise ValueError("The existing submission includes another item. Left it alone.")
+              if not current:
+                  apple_request("POST","reviewSubmissionItems",payload={"data":{"type":"reviewSubmissionItems","relationships":{
+                      "reviewSubmission":relationship("reviewSubmissions",sub["id"]),"appStoreVersion":relationship("appStoreVersions",vid)}}})
+              current=items()
+              if len(current)!=1 or not is_version(current[0]):
+                  raise ValueError("Could not confirm the sole review item.")
+              current_state=get(group_path)["attributes"].get("state")
+              if current_state=="READY_FOR_REVIEW":
+                  apple_request("PATCH",group_path,payload={"data":{**link("reviewSubmissions",sub["id"]),"attributes":{"submitted":True}}})
+              print("VERIFIED REVIEW SUBMISSION:",get(group_path)["attributes"].get("state"),flush=True)
+              print("VERIFIED VERSION STATE:", get("appStoreVersions/"+vid)["attributes"].get("appStoreState"),flush=True)
           
-          def fax_rating():
-              infos = get("apps/"+app_id+"/appInfos", {"limit":50})
-              info = unique([i for i in infos if len(infos)==1 or (i["attributes"].get("appStoreState") or i["attributes"].get("state")) in {"PREPARE_FOR_SUBMISSION","DEVELOPER_REJECTED","METADATA_REJECTED","REJECTED"}], "editable Fax app information")
-              path = "appInfos/"+info["id"]+"/ageRatingDeclaration"
-              attrs = get(path)
-              existing = attrs["attributes"]
-              absent = ["advertising","gambling","healthOrWellnessTopics","lootBox","parentalControls","ageAssurance","unrestrictedWebAccess","userGeneratedContent","socialMedia","sharedLocation","datingAndRelationships"]
-              none = ["alcoholTobaccoOrDrugUseOrReferences","contests","gamblingSimulated","gunsOrOtherWeapons","medicalOrTreatmentInformation","profanityOrCrudeHumor","sexualContentGraphicAndNudity","sexualContentOrNudity","horrorOrFearThemes","matureOrSuggestiveThemes","violenceCartoonOrFantasy","violenceRealisticProlongedGraphicOrSadistic","violenceRealistic"]
-              supported = {k:False for k in absent if k in existing}
-              supported.update({k:"NONE" for k in none if k in existing})
-              supported.update({"messagingAndChat":True, "ageRatingOverrideV2":"SIXTEEN_PLUS"})
-              changes = {k:v for k,v in supported.items() if existing.get(k) is None or existing.get(k) == "NONE" and k == "ageRatingOverrideV2"}
-              conflicts = {k:existing[k] for k,v in supported.items() if existing.get(k) is not None and existing[k]!=v and k not in changes}
-              if conflicts:
-                  print("Existing age-rating choices left in place:", conflicts, flush=True)
-              if changes:
-                  call("PATCH","ageRatingDeclarations/"+attrs["id"], data={**link("ageRatingDeclarations",attrs["id"]), "attributes":changes})
-              verified=get(path)["attributes"]
-              missing=[k for k in supported if verified.get(k) is None]
-              print("AGE RATING:", verified.get("ageRatingOverrideV2"), "direct messaging", verified.get("messagingAndChat"), "unanswered requested fields", missing, flush=True)
-              print("AGE RATING remaining unset keys:", [k for k,v in verified.items() if v is None], flush=True)
-              updated=get("appInfos/"+info["id"])
-              print("APPLE DISPLAY AGE RATING:",updated["attributes"].get("appStoreAgeRating"),flush=True)
-          
-          def read_listing():
-              entity = get("apps/"+app_id, {"fields[apps]":"contentRightsDeclaration,primaryLocale"})
-              print("LISTING language and rights:", entity["attributes"], flush=True)
-              version = unique([v for v in get("apps/"+app_id+"/appStoreVersions",{"limit":100}) if v["attributes"].get("platform")=="IOS" and v["attributes"].get("versionString")=="1.0"],"Fax iOS 1.0")
-              print("LISTING copyright:", version["attributes"].get("copyright"), "state", version["attributes"].get("appStoreState"), flush=True)
-              try:
-                  detail=get("appStoreVersions/"+version["id"]+"/appStoreReviewDetail")
-                  print("REVIEW fields present:", [k for k,v in detail["attributes"].items() if v], flush=True)
-              except AppleError as error:
-                  print("REVIEW info:", error, flush=True)
-              try:
-                  schedule = get("apps/"+app_id+"/appPriceSchedule")
-                  print("PRICE SCHEDULE:", schedule["id"] if schedule else "unset", flush=True)
-              except AppleError as error:
-                  print("PRICE SCHEDULE:", error, flush=True)
-          
-          for label, action in [("TESTFLIGHT",deliver_invitation),("AGE RATING",fax_rating),("LISTING",read_listing)]:
+          entity=unique(get("apps",{"filter[bundleId]":"com.korlixdeveloper.fax","fields[apps]":"name,bundleId","limit":2}),"Fax app")
+          app_id=entity["id"]
+          if app_id!="6840053512" or entity["attributes"]["bundleId"]!="com.korlixdeveloper.fax":
+              raise ValueError("Unexpected app record.")
+          ver=unique([v for v in get("apps/"+app_id+"/appStoreVersions",{"limit":80}) if v["attributes"].get("platform")=="IOS" and v["attributes"].get("versionString")=="1.0"], "iOS Fax 1.0")
+          vid=ver["id"]
+          ok=True
+          for label,action in [("COPYRIGHT",lambda:expect_field("appStoreVersions",vid,"copyright","2026 Korlix LLC")),
+                               ("RIGHTS",lambda:expect_field("apps",app_id,"contentRightsDeclaration","USES_THIRD_PARTY_CONTENT")),
+                               ("DOWNLOAD PRICE",set_free_price)]:
               try:
                   action()
-              except (AppleError, ValueError, KeyError) as error:
-                  print(label, "RESULT:", str(error), flush=True)
+              except (AppleError,KeyError,ValueError) as error:
+                  print(label,"RESULT:",error,flush=True)
+                  ok=False
+          if ok:
+              try: add_and_submit()
+              except (AppleError,KeyError,ValueError) as error: print("REVIEW RESULT:",error,flush=True)
           PY
