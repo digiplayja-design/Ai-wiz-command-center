@@ -181,6 +181,15 @@ workflows:
 
   fax-ios-testflight:
     name: Fax by Korlix internal TestFlight
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: feature/fax-mobile-20261125
+          include: true
+          source: true
+    when:
+      condition: event.before == "f8f83e1abfc48aadf7513be1b7a5f67e0ddc712d"
     instance_type: mac_mini_m2
     max_build_duration: 60
     working_directory: apps/fax
@@ -197,6 +206,25 @@ workflows:
         provisioning_profiles:
           - KORLIX_APP_STORE_PROFILE
     scripts:
+      - name: Query Apple for com.korlixdeveloper.fax
+        script: |
+          set -euo pipefail
+          app-store-connect apps list --bundle-id-identifier com.korlixdeveloper.fax --strict-match-identifier --json --log-stream stderr > "$CM_BUILD_DIR/fax-record.json"
+          python3 - "$CM_BUILD_DIR/fax-record.json" <<'PY'
+          import json, sys
+          from pathlib import Path
+          records = json.loads(Path(sys.argv[1]).read_text())
+          if not isinstance(records, list) or len(records) > 1 or any(not item.get("id") for item in records):
+              raise SystemExit("Unexpected response for the Fax bundle identifier")
+          PY
+      - name: Require the Fax app record before uploading
+        script: |
+          python3 - "$CM_BUILD_DIR/fax-record.json" <<'PY'
+          import json, sys
+          from pathlib import Path
+          if not json.loads(Path(sys.argv[1]).read_text()):
+              raise SystemExit("Apple returned no app record for com.korlixdeveloper.fax. Create it in App Store Connect.")
+          PY
       - name: Install the fax app identifier and distribution profile
         script: python3 ios/prepare-profile.py
       - name: Prepare iPhone and iPad app
@@ -206,15 +234,32 @@ workflows:
           cd ios/App
           xcode-project use-profiles --project App.xcodeproj --profile ../fax.mobileprovision
           xcode-project build-ipa --project App.xcodeproj --scheme App --ipa-directory "$CM_BUILD_DIR/apps/fax/artifacts"
-      - name: Upload to internal TestFlight when the App Store Connect record exists
+      - name: Upload customer build 2 if Apple does not already have it
         script: |
           set -euo pipefail
-          records=$(app-store-connect apps list --bundle-id-identifier com.korlixdeveloper.fax --strict-match-identifier --json --log-stream stderr)
-          if python3 -c 'import json,sys; sys.exit(0 if len(json.load(sys.stdin)) == 1 else 1)' <<< "$records"; then
+          app_id=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))[0]["id"])' "$CM_BUILD_DIR/fax-record.json")
+          builds=$(app-store-connect builds list --app-id "$app_id" --platform IOS --pre-release-version 1.0.0 --build-version-number 2 --json --log-stream stderr)
+          count=$(python3 -c 'import json, sys; rows=json.load(sys.stdin); assert isinstance(rows, list); print(len(rows))' <<< "$builds")
+          if [ "$count" = 0 ]; then
             app-store-connect publish --path artifacts/*.ipa
           else
-            echo "The signed IPA is available. Create the Fax by Korlix record in App Store Connect before uploading."
+            echo "Apple already has build 2."
           fi
+      - name: Confirm Apple processed version 1.0.0 build 2
+        script: |
+          set -euo pipefail
+          app_id=$(python3 -c 'import json, sys; print(json.load(open(sys.argv[1]))[0]["id"])' "$CM_BUILD_DIR/fax-record.json")
+          for attempt in $(seq 1 30); do
+            builds=$(app-store-connect builds list --app-id "$app_id" --platform IOS --pre-release-version 1.0.0 --build-version-number 2 --not-expired --processing-state VALID --json --log-stream stderr)
+            count=$(python3 -c 'import json, sys; rows=json.load(sys.stdin); assert isinstance(rows, list); print(len(rows))' <<< "$builds")
+            if [ "$count" = 1 ]; then
+              echo "Apple lists the unexpired Fax build as valid."
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "Apple has not yet listed build 2 as valid." >&2
+          exit 1
     artifacts:
       - $CM_BUILD_DIR/apps/fax/artifacts/*.ipa
 
