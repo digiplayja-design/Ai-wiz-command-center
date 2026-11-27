@@ -243,7 +243,7 @@ workflows:
       - $CM_BUILD_DIR/apps/fax/android/app/build/outputs/bundle/release/*.aab
 
   fax-us-listing-and-internal-test:
-    name: Fax U.S. storefront and iPhone and iPad screenshots
+    name: Fax iPhone and iPad screenshot delivery
     instance_type: mac_mini_m2
     max_build_duration: 25
     triggering:
@@ -254,7 +254,7 @@ workflows:
           include: true
           source: true
     when:
-      condition: event.before == "73d19f9d075954bf8f2a05412a2c7cdd36c1e311"
+      condition: event.before == "720392883c7bd3eb5b4c396d7d26c2b724399201"
     integrations:
       app_store_connect: Codemagic Korlix AI
     environment:
@@ -365,7 +365,7 @@ workflows:
           except (AppleError, RuntimeError, KeyError) as err:
               print("U.S. storefront result:", err, flush=True)
           PY
-      - name: Capture sample-workspace screens from the release app
+      - name: Capture the release screens on independent phone and tablet sessions
         script: |
           set -euo pipefail
           unset APP_STORE_CONNECT_KEY_IDENTIFIER APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_PRIVATE_KEY
@@ -373,10 +373,9 @@ workflows:
           npm ci --no-fund --no-audit
           npm run web
           "$CM_BUILD_DIR/.fax-lookup/bin/python" -m pip install --quiet --disable-pip-version-check 'playwright==1.56.0'
-          if [ -x "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" ]; then
+          if ! "$CM_BUILD_DIR/.fax-lookup/bin/python" -m playwright install chromium --only-shell; then
             export CHROME_BINARY="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-          else
-            "$CM_BUILD_DIR/.fax-lookup/bin/python" -m playwright install chromium --only-shell
+            test -x "$CHROME_BINARY"
           fi
           "$CM_BUILD_DIR/.fax-lookup/bin/python" - www "$CM_BUILD_DIR/fax-store-screens" <<'PY'
           from functools import partial
@@ -399,8 +398,8 @@ workflows:
           devices={"APP_IPHONE_67":(440,956,3),"APP_IPAD_PRO_3GEN_129":(1032,1376,2)}
           try:
               with sync_playwright() as p:
-                  browser=p.chromium.launch(executable_path=os.getenv("CHROME_BINARY") or None)
                   for kind,(width,height,scale) in devices.items():
+                      browser=p.chromium.launch(executable_path=os.getenv("CHROME_BINARY") or None)
                       target=out/kind
                       target.mkdir(parents=True,exist_ok=True)
                       ctx=browser.new_context(viewport={"width":width,"height":height},device_scale_factor=scale,
@@ -428,7 +427,7 @@ workflows:
                       capture("04-monthly-activity.png",page.get_by_text("Completed faxes",exact=True))
                       ctx.close()
                       print("Captured four sample-workspace screens for",kind,flush=True)
-                  browser.close()
+                      browser.close()
           finally:
               server.shutdown()
           PY
