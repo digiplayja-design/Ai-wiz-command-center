@@ -241,3 +241,89 @@ workflows:
           keytool -printcert -jarfile app/build/outputs/bundle/release/app-release.aab > /dev/null
     artifacts:
       - $CM_BUILD_DIR/apps/fax/android/app/build/outputs/bundle/release/*.aab
+
+  fax-testflight-tester-check:
+    name: Fax TestFlight tester lookup
+    instance_type: mac_mini_m2
+    max_build_duration: 10
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: feature/fax-mobile-20261125
+          include: true
+          source: true
+    when:
+      condition: event.before == "b7e8b01d2fc5f6cbac37595dd8d8e7a848c57f58"
+    integrations:
+      app_store_connect: Codemagic Korlix AI
+    environment:
+      groups:
+        - fax_testflight
+    scripts:
+      - name: Load the Apple release tools
+        script: |
+          set -euo pipefail
+          python3 -m venv "$CM_BUILD_DIR/.fax-lookup"
+          (
+            unset APP_STORE_CONNECT_KEY_IDENTIFIER APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_PRIVATE_KEY FAX_TESTFLIGHT_TESTER_EMAIL
+            "$CM_BUILD_DIR/.fax-lookup/bin/python" -m pip install --quiet --disable-pip-version-check 'codemagic-cli-tools==0.69.0'
+          )
+      - name: Check the requested recipient with App Store Connect
+        script: |
+          set -euo pipefail
+          "$CM_BUILD_DIR/.fax-lookup/bin/python" - <<'PY'
+          import os
+          import sys
+          import requests
+          from codemagic.apple.app_store_connect import AppStoreConnectApiClient
+          from codemagic.tools.app_store_connect.arguments import Types
+          
+          recipient = os.environ["FAX_TESTFLIGHT_TESTER_EMAIL"].strip().casefold()
+          if not recipient or "@" not in recipient:
+              sys.exit("The private Fax tester recipient is missing.")
+          
+          def configured(argument):
+              return argument.from_environment_variable_default().value
+          
+          client = AppStoreConnectApiClient(
+              key_identifier=configured(Types.KeyIdentifierArgument),
+              issuer_id=configured(Types.IssuerIdArgument),
+              private_key=configured(Types.PrivateKeyArgument),
+              log_requests=False,
+              enable_jwt_cache=False,
+          )
+          
+          def matching(resource, field, attributes):
+              result = requests.get(
+                  "https://api.appstoreconnect.apple.com/v1/" + resource,
+                  headers=client.generate_auth_headers(),
+                  params={"filter[" + field + "]": recipient,
+                          "fields[" + resource + "]": ",".join(attributes),
+                          "limit": 2},
+                  allow_redirects=False,
+                  timeout=25,
+              )
+              if result.status_code != 200:
+                  print(f"{resource} lookup unavailable (HTTP {result.status_code}).")
+                  return None
+              return [row["attributes"] for row in result.json()["data"]
+                      if row["attributes"].get(field, "").casefold() == recipient]
+          
+          testers = matching("betaTesters", "email", ["email"])
+          if testers is not None:
+              print("Existing TestFlight tester profile:", "yes" if testers else "no")
+          users = matching("users", "username", ["username", "roles", "allAppsVisible"])
+          if users is not None:
+              print("Existing App Store Connect team user:", "yes" if users else "no")
+              if users:
+                  accepted = {"ACCOUNT_HOLDER", "ADMIN", "APP_MANAGER", "DEVELOPER", "MARKETING"}
+                  print("Eligible internal testing role:", "yes" if any(accepted.intersection(u["roles"]) for u in users) else "no")
+                  print("User already has access to all apps:", "yes" if any(u["allAppsVisible"] for u in users) else "no")
+              else:
+                  pending = matching("userInvitations", "email", ["email"])
+                  if pending is not None:
+                      print("Existing team invitation:", "yes" if pending else "no")
+          if testers is None and users is None:
+              sys.exit("Apple did not return either recipient lookup.")
+          PY
