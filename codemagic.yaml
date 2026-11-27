@@ -241,3 +241,57 @@ workflows:
           keytool -printcert -jarfile app/build/outputs/bundle/release/app-release.aab > /dev/null
     artifacts:
       - $CM_BUILD_DIR/apps/fax/android/app/build/outputs/bundle/release/*.aab
+
+  fax-android-stage-two:
+    name: Fax Android build 2 for Play signing
+    instance_type: linux_x2
+    max_build_duration: 25
+    working_directory: apps/fax
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: feature/fax-mobile-20261125
+          include: true
+          source: true
+    when:
+      condition: event.before == "9f8a4812a9ea0f1774e38ba69b818ff1cb8306fb"
+    environment:
+      node: 24
+      java: 21
+    scripts:
+      - name: Prepare the Android customer-workspace app
+        script: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm run web
+          npx --no-install cap sync android
+      - name: Build and verify Android version code 2
+        script: |
+          set -euo pipefail
+          cd android
+          unset CM_KEYSTORE_PATH
+          bash gradlew --no-daemon --console=plain :app:bundleRelease
+          python3 - <<'PY'
+          import hashlib
+          import re
+          import shutil
+          import zipfile
+          from pathlib import Path
+
+          config = Path("app/build.gradle").read_text()
+          assert re.search(r'\bversionCode\s+2\b', config)
+          assert re.search(r'\bapplicationId\s+["\x27]com\.korlixdeveloper\.fax["\x27]', config)
+          bundle = Path("app/build/outputs/bundle/release/app-release.aab")
+          with zipfile.ZipFile(bundle) as package:
+              assert package.testzip() is None
+              files = set(package.namelist())
+              assert {"BundleConfig.pb", "base/manifest/AndroidManifest.xml", "base/assets/public/mobile-account.js"} <= files
+              assert not any(re.match(r"^META-INF/[^/]+\.(RSA|DSA|EC)$", path, re.I) for path in files)
+          dest = Path("../artifacts/Fax-by-Korlix-1.0.0-build-2-unsigned.aab")
+          dest.parent.mkdir(exist_ok=True)
+          shutil.copyfile(bundle, dest)
+          print("VERIFIED ANDROID BUNDLE", dest.name, "versionCode=2", "sha256=" + hashlib.sha256(dest.read_bytes()).hexdigest())
+          PY
+    artifacts:
+      - $CM_BUILD_DIR/apps/fax/artifacts/Fax-by-Korlix-1.0.0-build-2-unsigned.aab
