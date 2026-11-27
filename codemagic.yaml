@@ -244,7 +244,7 @@ workflows:
 
   fax-android-stage-two:
     name: Fax Android build 2 for Play signing
-    instance_type: linux_x2
+    instance_type: mac_mini_m2
     max_build_duration: 25
     working_directory: apps/fax
     triggering:
@@ -255,7 +255,7 @@ workflows:
           include: true
           source: true
     when:
-      condition: event.before == "9f8a4812a9ea0f1774e38ba69b818ff1cb8306fb"
+      condition: event.before == "d7e9e300aa74906b5182019ddf665eecec42d2ae"
     environment:
       node: 24
       java: 21
