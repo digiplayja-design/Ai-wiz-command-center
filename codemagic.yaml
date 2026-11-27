@@ -243,7 +243,7 @@ workflows:
       - $CM_BUILD_DIR/apps/fax/android/app/build/outputs/bundle/release/*.aab
 
   fax-testflight-invitation:
-    name: Fax TestFlight invitation resend
+    name: Fax TestFlight encryption review and private invitation
     instance_type: mac_mini_m2
     max_build_duration: 10
     triggering:
@@ -254,7 +254,7 @@ workflows:
           include: true
           source: true
     when:
-      condition: event.before == "cbd3a888dca7beee68a5fac7ca0a57549fa2602e"
+      condition: event.before == "948207433b9675ab56261097126be5ed6dfdb890"
     integrations:
       app_store_connect: Codemagic Korlix AI
     environment:
@@ -269,7 +269,7 @@ workflows:
             unset APP_STORE_CONNECT_KEY_IDENTIFIER APP_STORE_CONNECT_ISSUER_ID APP_STORE_CONNECT_PRIVATE_KEY FAX_TESTFLIGHT_TESTER_EMAIL
             "$CM_BUILD_DIR/.fax-lookup/bin/python" -m pip install --quiet --disable-pip-version-check 'codemagic-cli-tools==0.69.0'
           )
-      - name: Request Apple to resend the private Fax invitation
+      - name: Submit verified encryption details and invite the private tester
         script: |
           set -euo pipefail
           "$CM_BUILD_DIR/.fax-lookup/bin/python" - <<'PY'
@@ -341,36 +341,126 @@ workflows:
               return get("builds/"+bid+"/buildBetaDetail")["attributes"].get("internalBuildState")
           def assigned():
               return any(b["id"]==bid for b in get(gp+"/relationships/builds",{"limit":200}))
+          # Resolve the one iOS build and recipient from the private project configuration.
+          description = ("Send and receive faxes in a private workspace. Network requests use system HTTPS. "
+                         "The bundled PDF reader implements standard AES and RC4 for PDF documents. "
+                         "The app also uses standard SHA-256 hashing.")
+          facts = {"containsProprietaryCryptography":False, "containsThirdPartyCryptography":True,
+                   "availableOnFrenchStore":False}
+          def check_storefront():
+              settings=get("apps/"+app_id+"/appAvailabilityV2")
+              response=requests.get("https://api.appstoreconnect.apple.com/v2/appAvailabilities/"+settings["id"]+"/territoryAvailabilities",
+                                    headers=client.generate_auth_headers(),params={"limit":200,"include":"territory","fields[territoryAvailabilities]":"available,territory"},
+                                    allow_redirects=False,timeout=35)
+              if not response.ok:
+                  raise AppleError(response)
+              result=response.json()
+              enabled={t["relationships"]["territory"]["data"]["id"] for t in result["data"] if t["attributes"].get("available")}
+              if result.get("links",{}).get("next") or enabled!={"USA"} or settings["attributes"].get("availableInNewTerritories") is not False:
+                  raise RuntimeError("Country selection changed. Recheck the French storefront answer.")
+              print("Verified U.S.-only storefront and the exact Fax build.",flush=True)
+
+          def matching_declarations():
+              result=call("GET","appEncryptionDeclarations",params={"filter[app]":app_id,"limit":200}).json()
+              if result.get("links",{}).get("next"):
+                  raise RuntimeError("The app has additional declarations to inspect.")
+              return [d for d in result["data"] if all(d["attributes"].get(k) is v for k,v in facts.items())
+                      and d["attributes"].get("platform") in {None,"IOS"}]
+
+          def complete_with_apple():
+              check_storefront()
+              candidates=matching_declarations()
+              print("Existing same-app declarations matching the verified technical answers:",len(candidates),flush=True)
+              if len(candidates)>1:
+                  ok=[d for d in candidates if d["attributes"].get("appEncryptionDeclarationState")=="APPROVED"]
+                  candidates=ok if len(ok)==1 else candidates
+              explicit_apple_direction=False
+              if not candidates:
+                  request={"type":"appEncryptionDeclarations","attributes":{"appDescription":description,**facts},
+                           "relationships":{"app":{"data":link("apps",app_id)}}}
+                  try:
+                      reply=call("POST","appEncryptionDeclarations",data=request)
+                      declaration=reply.json()["data"]
+                      print("Apple accepted the build's technical encryption answers:",reply.status_code,flush=True)
+                  except AppleError as error:
+                      print("Apple technical assessment response:",error,flush=True)
+                      import re
+                      message=str(error)
+                      directed=re.search(r'(?:set|specify|provide|mark|update|should be|must be).{0,80}usesNonExemptEncryption.{0,45}(?:false|NO)\b|usesNonExemptEncryption.{0,35}(?:should be|must be|to) (?:false|NO)\b',message,re.I)
+                      if not directed:
+                          return
+                      declaration=None
+                      explicit_apple_direction=True
+              else:
+                  declaration=unique(candidates,"matching Fax declaration")
+              if declaration:
+                  print("APPLE ASSESSMENT:",declaration["attributes"].get("appEncryptionDeclarationState"),
+                        "Apple exemption field:",declaration["attributes"].get("exempt"),flush=True)
+                  for _ in range(6):
+                      d=get("appEncryptionDeclarations/"+declaration["id"])
+                      attr=d["attributes"]
+                      if attr.get("exempt") is True or attr.get("appEncryptionDeclarationState")=="APPROVED":
+                          break
+                      if attr.get("appEncryptionDeclarationState") not in {"IN_REVIEW","WAITING_FOR_REVIEW"}:
+                          break
+                      time.sleep(10)
+                  state=attr.get("appEncryptionDeclarationState")
+                  print("VERIFIED APPLE DECLARATION STATE:",state,"Apple exemption field:",attr.get("exempt"),flush=True)
+                  if state=="APPROVED":
+                      try:
+                          call("PATCH","builds/"+bid+"/relationships/appEncryptionDeclaration",data=link("appEncryptionDeclarations",d["id"]))
+                          print("Apple linked the approved declaration to Fax build 2.",flush=True)
+                      except AppleError as error:
+                          print("Linking the approved declaration:",error,flush=True)
+                          try:
+                              call("PATCH","builds/"+bid,data={**link("builds",bid),"relationships":{"appEncryptionDeclaration":{"data":link("appEncryptionDeclarations",d["id"])}}})
+                              print("Apple linked the approved declaration on the build resource.",flush=True)
+                          except AppleError as second:
+                              print("Apple build relationship response:",second,flush=True)
+                  explicit_apple_direction=attr.get("exempt") is True
+              if explicit_apple_direction and internal_state()=="MISSING_EXPORT_COMPLIANCE":
+                  current=get("builds/"+bid,{"fields[builds]":"usesNonExemptEncryption"})["attributes"].get("usesNonExemptEncryption")
+                  if current is None:
+                      call("PATCH","builds/"+bid,data={**link("builds",bid),"attributes":{"usesNonExemptEncryption":False}})
+                      print("Applied Apple's exemption determination to Fax build 2.",flush=True)
+
+          initial=internal_state()
+          print("Initial internal testing state:",initial,flush=True)
+          if initial=="MISSING_EXPORT_COMPLIANCE":
+              try:
+                  complete_with_apple()
+              except (AppleError,ValueError,RuntimeError,KeyError) as error:
+                  print("Apple technical assessment:",error,flush=True)
           state=internal_state()
-          print("Build processing:",build["attributes"].get("processingState"),"Internal status before resend:",state,flush=True)
-          print("Designated tester in private group. Apple tester state before resend:",tester["attributes"].get("state"),flush=True)
-          if not assigned() and state in {"READY_FOR_BETA_TESTING","IN_BETA_TESTING"} and not build["attributes"].get("expired") and count==1:
-              try:
-                  call("POST",gp+"/relationships/builds",data=[link("builds",bid)])
-                  print("Apple accepted the build assignment to the private group.",flush=True)
-              except AppleError as error:
-                  print("Apple build assignment:",error,flush=True)
-          request={"type":"betaTesterInvitations","relationships":{"app":{"data":link("apps",app_id)},"betaTester":{"data":link("betaTesters",tester["id"])}}}
-          sent=False
-          try:
-              reply=call("POST","betaTesterInvitations",data=request)
-              print("APPLE INVITATION EMAIL REQUEST ACCEPTED: HTTP",reply.status_code,flush=True)
-              sent=True
-          except AppleError as error:
-              print("APPLE INVITATION EMAIL REQUEST DECLINED:",error,flush=True)
-          for attempt in range(3):
-              account,_=group_tester()
-              tester_state=account["attributes"].get("state")
-              if not sent or tester_state in {"INVITED","ACCEPTED","INSTALLED"} or attempt==2:
+          for _ in range(6):
+              if state!="MISSING_EXPORT_COMPLIANCE":
                   break
-              time.sleep(4)
-          print("VERIFIED TESTER STATE:",tester_state,flush=True)
-          print("VERIFIED BUILD IN PRIVATE GROUP:",assigned(), flush=True)
-          print("VERIFIED INTERNAL BUILD STATE:",internal_state(),flush=True)
-          if state=="MISSING_EXPORT_COMPLIANCE":
-              try:
-                  declarations=get("apps/"+app_id+"/appEncryptionDeclarations",{"limit":200})
-                  print("Previously recorded encryption declarations for Fax:",len(declarations),flush=True)
-              except AppleError as error:
-                  print("Existing declaration lookup:",error,flush=True)
+              time.sleep(5)
+              state=internal_state()
+          print("VERIFIED INTERNAL BUILD STATE:",state,flush=True)
+          ready=state in {"READY_FOR_BETA_TESTING","IN_BETA_TESTING"} and build["attributes"].get("expired") is False
+          if ready and not assigned():
+              if count!=1:
+                  raise SystemExit("The dedicated group has additional testers.")
+              call("POST",gp+"/relationships/builds",data=[link("builds",bid)])
+              print("Added build 2 to the designated private group.",flush=True)
+          has_build=assigned()
+          print("VERIFIED BUILD IN PRIVATE GROUP:",has_build,flush=True)
+          before=tester["attributes"].get("state")
+          after=group_tester()[0]["attributes"].get("state")
+          if ready and has_build:
+              if before=="NOT_INVITED" and after in {"INVITED","ACCEPTED","INSTALLED"}:
+                  print("Apple issued the private invitation when the build became available.",flush=True)
+              else:
+                  inv={"type":"betaTesterInvitations","relationships":{"app":{"data":link("apps",app_id)},"betaTester":{"data":link("betaTesters",tester["id"])}}}
+                  try:
+                      rsp=call("POST","betaTesterInvitations",data=inv)
+                      print("APPLE INVITATION EMAIL REQUEST ACCEPTED: HTTP",rsp.status_code,flush=True)
+                  except AppleError as error:
+                      print("APPLE INVITATION EMAIL REQUEST DECLINED:",error,flush=True)
+              for _ in range(3):
+                  after=group_tester()[0]["attributes"].get("state")
+                  if after in {"INVITED","ACCEPTED","INSTALLED"}:break
+                  time.sleep(4)
+          print("VERIFIED TESTER STATE:",after,flush=True)
           PY
